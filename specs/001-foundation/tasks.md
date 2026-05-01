@@ -38,26 +38,26 @@
 
 Project initialization, configs, dependencies, scripts. No app code yet.
 
-- [ ] T001 Initialize `package.json` with project metadata (name `pos-pulse`, version `0.1.0`, description, license, type `module`, main `dist/main/index.js`, engines.node `>=20`) at `package.json`
-- [ ] T002 [P] Add `.nvmrc` pinning Node 20 LTS at `.nvmrc`
-- [ ] T003 [P] Create base `tsconfig.json` with `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`, `target: ES2022`, `module: ESNext`, `moduleResolution: bundler`, `paths` for `@shared/*` and `@main/*` at `tsconfig.json`
-- [ ] T004 [P] Create `tsconfig.main.json` extending base, `target: node20`, includes `src/main/**`, `src/preload/**`, `src/shared/**` at `tsconfig.main.json`
-- [ ] T005 [P] Create `tsconfig.renderer.json` extending base, `target: ES2022`, `lib: ["ES2022", "DOM"]`, JSX `react-jsx`, includes `src/renderer/**`, `src/shared/**` at `tsconfig.renderer.json`
-- [ ] T006 [P] Configure ESLint flat config (typescript-eslint v8 strict-type-checked, eslint-plugin-react, eslint-plugin-react-hooks, electron-security recommended rules) at `eslint.config.js`
-- [ ] T007 [P] Configure Prettier (single quotes, semicolons, width 100) at `.prettierrc` and ignore patterns at `.prettierignore`
-- [ ] T008 [P] Add `.editorconfig` (LF, UTF-8, 2-space indent, trim trailing whitespace) at `.editorconfig`
-- [ ] T009 [P] Create `.env.example` documenting `SENTRY_DSN`, `VITE_API_BASE_URL`, `ELECTRON_UPDATE_FEED_URL` (all optional in 001) at `.env.example`
-- [ ] T010 Install runtime dependencies in **three batches** (so a failure points at the offending group, not the whole install). Versions verified against the npm registry on 2026-05-01.
+- [X] T001 Initialize `package.json` with project metadata (name `pos-pulse`, version `0.1.0`, description, license, type `module`, main `dist/main/index.js`, engines.node `>=20`) at `package.json`
+- [X] T002 [P] Add `.nvmrc` pinning Node 20 LTS at `.nvmrc`
+- [X] T003 [P] Create base `tsconfig.json` with `strict: true`, `noUncheckedIndexedAccess: true`, `exactOptionalPropertyTypes: true`, `target: ES2022`, `module: ESNext`, `moduleResolution: bundler`, `paths` for `@shared/*` and `@main/*` at `tsconfig.json`
+- [X] T004 [P] Create `tsconfig.main.json` extending base, `target: node20`, includes `src/main/**`, `src/preload/**`, `src/shared/**` at `tsconfig.main.json`
+- [X] T005 [P] Create `tsconfig.renderer.json` extending base, `target: ES2022`, `lib: ["ES2022", "DOM"]`, JSX `react-jsx`, includes `src/renderer/**`, `src/shared/**` at `tsconfig.renderer.json`
+- [X] T006 [P] Configure ESLint flat config (typescript-eslint v8 strict-type-checked, eslint-plugin-react, eslint-plugin-react-hooks, electron-security recommended rules) at `eslint.config.js`
+- [X] T007 [P] Configure Prettier (single quotes, semicolons, width 100) at `.prettierrc` and ignore patterns at `.prettierignore`
+- [X] T008 [P] Add `.editorconfig` (LF, UTF-8, 2-space indent, trim trailing whitespace) at `.editorconfig`
+- [X] T009 [P] Create `.env.example` documenting `SENTRY_DSN`, `VITE_API_BASE_URL`, `ELECTRON_UPDATE_FEED_URL` (all optional in 001) at `.env.example`
+- [X] T010 Install runtime dependencies in **three batches** (so a failure points at the offending group, not the whole install). Versions verified against the npm registry on 2026-05-01.
     - **T010a** Shell: `npm install electron@^40.9 react@^19.2 react-dom@^19.2`
     - **T010b** Data: `npm install better-sqlite3@^12.9`
     - **T010c** Observability + UI util: `npm install pino@^10.3 pino-roll@^4.0 @sentry/electron@^7.13 clsx@^2.1`
-- [ ] T011 Install dev dependencies in **three batches**. Versions verified against the npm registry on 2026-05-01.
+- [X] T011 Install dev dependencies in **three batches**. Versions verified against the npm registry on 2026-05-01.
     - **T011a** Build & test: `npm install --save-dev vite@^8.0 @vitejs/plugin-react@^6.0 typescript@^5.9 vitest@^4.1 @vitest/coverage-v8@^4.1 happy-dom@^20 electron-builder@^26.8 @electron/rebuild@^4.0 concurrently@^9 wait-on@^8 cross-env@^7 tsx@^4`
     - **T011b** Lint & format: `npm install --save-dev eslint@^9.39 typescript-eslint@^8 eslint-plugin-react@^7 eslint-plugin-react-hooks@^5 prettier@^3`
     - **T011c** Codegen, styling, types: `npm install --save-dev openapi-typescript@^7.13 tailwindcss@^4.2 @tailwindcss/postcss@^4.2 postcss@^8 autoprefixer@^10 @types/node@^20 @types/react@^19 @types/react-dom@^19 @types/better-sqlite3@^7`
-- [ ] T012 Add scripts to `package.json`: `dev`, `dev:vite`, `dev:electron`, `build:renderer`, `build:main`, `build`, `codegen:api`, `codegen:verify`, `typecheck`, `lint`, `lint:fix`, `format`, `test`, `test:watch`, `package:dir`, `postinstall` (electron-rebuild for better-sqlite3) at `package.json`
-- [ ] T013 [P] Configure PostCSS to use `@tailwindcss/postcss` at `postcss.config.cjs` and create `tailwind.config.ts` with content paths and dark-mode `class` strategy at `tailwind.config.ts`
-- [ ] T014 [P] Create initial `README.md` (replacing the one-line bootstrap) with quickstart pointing at `specs/001-foundation/quickstart.md` at `README.md`
+- [X] T012 Add scripts to `package.json`: `dev`, `dev:vite`, `dev:electron`, `build:renderer`, `build:main`, `build`, `codegen:api`, `codegen:verify`, `typecheck`, `lint`, `lint:fix`, `format`, `test`, `test:watch`, `package:dir`, `postinstall` (electron-rebuild for better-sqlite3) at `package.json`
+- [X] T013 [P] Configure PostCSS to use `@tailwindcss/postcss` at `postcss.config.cjs` and create `tailwind.config.ts` with content paths and dark-mode `class` strategy at `tailwind.config.ts`
+- [X] T014 [P] Create initial `README.md` (replacing the one-line bootstrap) with quickstart pointing at `specs/001-foundation/quickstart.md` at `README.md`
 
 ---
 
@@ -67,20 +67,20 @@ These tasks MUST complete before any user-story phase begins. They establish the
 the Electron main shell, the typed bridge contract, the test harness, and the build/package config.
 Nothing here proves a user story; it just makes the user-story work runnable.
 
-- [ ] T015 Create renderer entry HTML with strict CSP meta and no inline scripts at `src/renderer/index.html`
-- [ ] T016 [P] Create Tailwind CSS entry (`@import "tailwindcss";`) at `src/renderer/styles/tailwind.css`
-- [ ] T017 [P] Create renderer bootstrap mounting React root at `src/renderer/main.tsx`
-- [ ] T018 [P] Create blank `App` component (single empty `<main>`, no Tailwind classes used yet) at `src/renderer/App.tsx`
-- [ ] T019 [P] Configure Vite for the renderer (`root: 'src/renderer'`, `build.outDir: '../../dist/renderer'`, react plugin, server.port 5173) at `vite.config.ts`
-- [ ] T020 [P] Configure Vitest with `environment: 'happy-dom'`, `coverage.provider: 'v8'`, per-file thresholds for `src/shared/money.ts` (95% line + branch), and reporters at `vitest.config.ts`
-- [ ] T021 [P] Create shared types directory with placeholder `index.ts` at `src/shared/types.ts`
-- [ ] T022 Materialize the `PreloadBridgeAPI` interface at `src/shared/bridge-api.ts` based on `specs/001-foundation/contracts/preload-bridge.ts`. **Policy:** from this point forward, `src/shared/bridge-api.ts` is the canonical contract; the spec file is a planning snapshot and is NOT re-synced. The same policy applies to the SecretStore (T045) and Money (T057) materializations. See plan.md § Phase 1 → "Source-of-truth policy."
-- [ ] T023 Create Electron main entry with secure `BrowserWindow` defaults (`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `webSecurity: true`, preload script wired, devtools open in dev only) and a strict CSP via `session.defaultSession.webRequest.onHeadersReceived` at `src/main/index.ts`
-- [ ] T024 Create preload script using `contextBridge.exposeInMainWorld('api', impl)` matching `PreloadBridgeAPI` (initially an empty stub object; methods land in US1) at `src/preload/index.ts`
-- [ ] T025 Wire `npm run dev`: `concurrently` runs `vite` and (after `wait-on http://localhost:5173`) compiles main+preload via `tsc -p tsconfig.main.json` and launches `electron .` at `package.json` (scripts) + a small `scripts/dev-electron.cjs` if needed
-- [ ] T026 [P] Configure `electron-builder` for Windows: `productName`, `appId` `tech.smartdatapulse.pos`, `win.target: dir`, `directories.output: dist-electron`, `files` includes `dist/**` at `electron-builder.yml`
-- [ ] T027 [P] Add `postinstall` script invoking `@electron/rebuild` (`npx electron-rebuild -f -w better-sqlite3`) so the native module ABI matches Electron's bundled Node at `package.json`
-- [ ] T027a **Phase 2 closing smoke (manual, gating).** Run `npm install` (verifying T010+T011 batches succeed in order), then `npm run dev`. Confirm: (a) the empty Electron window opens; (b) the renderer's devtools console is clean (no errors, no Node-globals warnings); (c) `window.api` exists as an empty object (or whatever stub Phase 2 lands); (d) shutting the app exits cleanly. **Do not declare Phase 2 complete until this manual smoke passes.** No file output; record the verification in the PR description for the Phase 1+2 PR.
+- [X] T015 Create renderer entry HTML with strict CSP meta and no inline scripts at `src/renderer/index.html`
+- [X] T016 [P] Create Tailwind CSS entry (`@import "tailwindcss";`) at `src/renderer/styles/tailwind.css`
+- [X] T017 [P] Create renderer bootstrap mounting React root at `src/renderer/main.tsx`
+- [X] T018 [P] Create blank `App` component (single empty `<main>`, no Tailwind classes used yet) at `src/renderer/App.tsx`
+- [X] T019 [P] Configure Vite for the renderer (`root: 'src/renderer'`, `build.outDir: '../../dist/renderer'`, react plugin, server.port 5173) at `vite.config.ts`
+- [X] T020 [P] Configure Vitest with `environment: 'happy-dom'`, `coverage.provider: 'v8'`, per-file thresholds for `src/shared/money.ts` (95% line + branch), and reporters at `vitest.config.ts`
+- [X] T021 [P] Create shared types directory with placeholder `index.ts` at `src/shared/types.ts`
+- [X] T022 Materialize the `PreloadBridgeAPI` interface at `src/shared/bridge-api.ts` based on `specs/001-foundation/contracts/preload-bridge.ts`. **Policy:** from this point forward, `src/shared/bridge-api.ts` is the canonical contract; the spec file is a planning snapshot and is NOT re-synced. The same policy applies to the SecretStore (T045) and Money (T057) materializations. See plan.md § Phase 1 → "Source-of-truth policy."
+- [X] T023 Create Electron main entry with secure `BrowserWindow` defaults (`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, `webSecurity: true`, preload script wired, devtools open in dev only) and a strict CSP via `session.defaultSession.webRequest.onHeadersReceived` at `src/main/index.ts`
+- [X] T024 Create preload script using `contextBridge.exposeInMainWorld('api', impl)` matching `PreloadBridgeAPI` (initially an empty stub object; methods land in US1) at `src/preload/index.ts`
+- [X] T025 Wire `npm run dev`: `concurrently` runs `vite` and (after `wait-on http://localhost:5173`) compiles main+preload via `tsc -p tsconfig.main.json` and launches `electron .` at `package.json` (scripts) + a small `scripts/dev-electron.cjs` if needed
+- [X] T026 [P] Configure `electron-builder` for Windows: `productName`, `appId` `tech.smartdatapulse.pos`, `win.target: dir`, `directories.output: dist-electron`, `files` includes `dist/**` at `electron-builder.yml`
+- [X] T027 [P] Add `postinstall` script invoking `@electron/rebuild` (`npx electron-rebuild -f -w better-sqlite3`) so the native module ABI matches Electron's bundled Node at `package.json`
+- [X] T027a **Phase 2 closing smoke (manual, gating).** Run `npm install` (verifying T010+T011 batches succeed in order), then `npm run dev`. Confirm: (a) the empty Electron window opens; (b) the renderer's devtools console is clean (no errors, no Node-globals warnings); (c) `window.api` exists as an empty object (or whatever stub Phase 2 lands); (d) shutting the app exits cleanly. **Do not declare Phase 2 complete until this manual smoke passes.** No file output; record the verification in the PR description for the Phase 1+2 PR.
 
 ---
 
