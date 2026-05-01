@@ -1,6 +1,6 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,21 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
     },
   });
+
+  // Renderer origin allow-list. Dev = Vite server; prod = packaged renderer dir on disk.
+  // pathToFileURL produces a normalized file:// URL with forward slashes on Windows.
+  const rendererOrigin = isDev
+    ? 'http://localhost:5173'
+    : pathToFileURL(path.join(__dirname, '../renderer/')).toString();
+
+  // Deny navigation to any URL outside the renderer origin (defense-in-depth against
+  // injected redirects, drag-drop URLs, file:// traversal).
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(rendererOrigin)) event.preventDefault();
+  });
+
+  // Deny all new-window requests. POS terminals have no pop-out windows.
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   // Second CSP layer — Electron session headers (first layer is the HTML meta tag).
   // Dev mode allows localhost:5173 so Vite assets and HMR socket are reachable.
