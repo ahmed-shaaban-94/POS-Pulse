@@ -4,7 +4,7 @@ import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
 export default tsEslint.config(
-  { ignores: ['dist/**', 'dist-electron/**', 'node_modules/**', '*.cjs'] },
+  { ignores: ['dist/**', 'dist-electron/**', 'node_modules/**', '_reference/**', '*.cjs'] },
   tsEslint.configs.strictTypeChecked,
   {
     languageOptions: {
