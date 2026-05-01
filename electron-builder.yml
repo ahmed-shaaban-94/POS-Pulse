@@ -1,0 +1,11 @@
+productName: POS Pulse
+appId: tech.smartdatapulse.pos
+directories:
+  output: dist-electron
+win:
+  target:
+    - target: dir
+files:
+  - dist/**
+  - package.json
+  - node_modules/**

@@ -1,0 +1,11 @@
+dist/
+dist-electron/
+node_modules/
+_reference/
+*.md
+.specify/
+specs/
+*.min.js
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
