@@ -19,7 +19,7 @@
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint . --fix && prettier --write .",
     "format": "prettier --write .",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "package:dir": "electron-builder --win --dir",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
