@@ -1,9 +1,26 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.2.0 → 1.2.1
+Bump rationale: PATCH — non-semantic clarifications. Two wording fixes, no principle added,
+  removed, or redefined.
+
+  - Principle II ("Financial Precision") wording corrected: the prior text prohibited *all*
+    JavaScript `number` arithmetic on currency values, which conflated "no floats" with "no
+    `number`." The intent — and the practice every implementation in the repo follows — is
+    "no floating-point arithmetic." Restated: integer minor units represented as JS `number`
+    under a `Number.isSafeInteger` guard are the canonical representation. (Resolved /speckit-
+    analyze finding C2 against feature 001-foundation.)
+  - Tech Stack: generated API types path corrected from `src/api/types.ts` to
+    `src/shared/api-types.ts`, matching the project layout decided in the Foundation plan
+    (the shared module sits next to other shared utilities; the prior `src/api/` path was
+    a stale draft note). (Resolved /speckit-analyze finding C1.)
+
+History (prior revisions retained for reference):
+
 Version change: 1.1.0 → 1.2.0
-Bump rationale: MINOR — materially expands two existing sections (Hardware, Platform Integration →
-  Auth/Pairing), introduces the new organizational concept of "branch" as a token scope, and pins
+Bump rationale: MINOR — materially expanded two existing sections (Hardware, Platform Integration →
+  Auth/Pairing), introduced the new organizational concept of "branch" as a token scope, and pinned
   the MVP hardware matrix. No principle added, removed, or backward-incompatibly redefined.
 
   - HARDWARE matrix locked for MVP: Windows desktop/laptop only; keyboard-wedge barcode scanners;
@@ -103,17 +120,23 @@ failure. The cashier loses money and the customer leaves.
 ### II. Financial Precision — No Floats for Money
 
 All monetary values (prices, taxes, discounts, totals, change due, tender amounts) MUST be represented
-as integer minor units (e.g., piastres for EGP, cents for USD) in storage and computation. JavaScript
-`number` arithmetic on currency values is PROHIBITED. Conversion to a display string happens only at the
-formatting boundary.
+as integer minor units (e.g., piastres for EGP, cents for USD) in storage and computation.
+**Floating-point arithmetic on currency values is PROHIBITED.** The canonical in-process
+representation is a JavaScript `number` holding an integer minor-unit value, validated at construction
+by `Number.isSafeInteger`; `BigInt` is permitted but not required at this scale. Conversion to a
+display string happens only at the formatting boundary.
 
 - The local SQLite schema MUST use `INTEGER` for all money columns.
 - A single shared `Money` module MUST own arithmetic (add/sub/mul-by-quantity/distribute-rounding).
+- The `Money` constructor MUST reject non-integer, non-safe-integer, and non-finite inputs.
 - Tax and discount rounding rules MUST be specified per receipt line, not per total, to match
   pharmacy/retail audit expectations.
 
 **Rationale:** Float drift in a POS is a cash-drawer discrepancy. Cash-drawer discrepancies are
-investigated by humans, and they erode trust faster than any feature delights it.
+investigated by humans, and they erode trust faster than any feature delights it. Disallowing
+*float* arithmetic is the rule that protects against drift; disallowing *all* `number` arithmetic
+would force `BigInt` for amounts that fit comfortably in the safe-integer range and add JSON,
+ergonomic, and interop costs without a corresponding correctness gain.
 
 ### III. Electron Process-Boundary Discipline (NON-NEGOTIABLE)
 
@@ -408,7 +431,7 @@ within a category, MAJOR bump if it shifts a Core Principle's enforcement).
 - Build & ship: Vite for renderer, `tsc` for main, electron-builder for Windows installers,
   electron-updater pointed at `https://pos.smartdatapulse.tech/updates/` for auto-update.
 - API typings: `openapi-typescript` reading from `https://api.smartdatapulse.tech/openapi.json`,
-  generated into `src/api/types.ts` and committed to the repo.
+  generated into `src/shared/api-types.ts` and committed to the repo.
 
 ## Development Workflow & Quality Gates
 
@@ -484,6 +507,6 @@ document (READMEs, ADRs, comments, agent instructions), this document wins until
 
 ---
 
-**Version:** 1.2.0
+**Version:** 1.2.1
 **Ratified:** 2026-05-01
 **Last Amended:** 2026-05-01

@@ -58,7 +58,7 @@ interface SecretEntry {
 | Layer        | Form                                                    |
 |:-------------|:---------------------------------------------------------|
 | In transit   | `string` at the `SecretStore.set(key, value)` call site. |
-| At rest      | `BLOB` in a `secrets(key TEXT PRIMARY KEY, value BLOB)` SQLite table; ciphertext is the output of Electron `safeStorage.encryptString(value)`. |
+| At rest      | `BLOB` in a `secrets(key TEXT PRIMARY KEY, value BLOB NOT NULL)` SQLite table; ciphertext is the output of Electron `safeStorage.encryptString(value)`. The `NOT NULL` constraint enforces the call-site invariant (`set` rejects empty values; `delete` is the only path that removes a row). |
 | In memory    | Decrypted on demand via `safeStorage.decryptString` and not retained beyond the scope of the caller's `get` call. |
 
 **Backend selection:** the `SecretStore` constructor checks `safeStorage.isEncryptionAvailable()`:

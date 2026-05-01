@@ -87,7 +87,7 @@ shared and TypeScript-enforced.
 returns `"pong"` and `window.api.appVersion()` returns the package version. `window.require`,
 `window.process`, and `window.Buffer` are all `undefined`. (AS-1, AS-2, AS-3 from spec.)
 
-- [ ] T028 [P] [US1] Write failing renderer-isolation Vitest at `src/tests/renderer-isolation.test.ts` asserting `window.require`, `window.process`, `window.Buffer` are all `undefined` in happy-dom (mocking the post-`contextBridge` shape) — fails until preload is wired
+- [ ] T028 [P] [US1] Write a renderer no-Node-globals **regression guard** Vitest at `src/tests/renderer-isolation.test.ts` asserting `window.require`, `window.process`, and `window.Buffer` are all `undefined`. Note: in `happy-dom` these are absent by default, so this test passes from the start; its purpose is to fail loudly if a future change accidentally exposes Node to the renderer. Real packaged-build isolation is verified by the polish-phase smoke step (T079).
 - [ ] T029 [P] [US1] Write failing bridge-typing test at `src/tests/bridge-typing.test.ts` that uses `expectTypeOf` (or equivalent) to assert `window.api` matches `PreloadBridgeAPI`
 - [ ] T030 [P] [US1] Write failing IPC unit test for the `ping` handler at `src/main/ipc/__tests__/ping.test.ts` — fails until handler exists
 - [ ] T031 [US1] Implement `ping` IPC handler returning `"pong"` at `src/main/ipc/ping.ts`

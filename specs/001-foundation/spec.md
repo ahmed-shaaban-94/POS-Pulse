@@ -137,8 +137,10 @@ now ready for the pairing feature.
 ### Functional Requirements
 
 - **FR-1.** The application MUST launch as a Windows desktop application with secure Electron
-  defaults: `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true` enabled wherever
-  practical for the renderer.
+  defaults: `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true` on **every**
+  `BrowserWindow`. Foundation ships exactly one window and zero exceptions; any future window that
+  would require an opt-out from `sandbox: true` MUST be introduced via a constitution amendment, not
+  a per-window override.
 - **FR-2.** The renderer MUST NOT have direct access to Node APIs. All main-process functionality
   reachable from the renderer MUST flow through a typed preload IPC bridge.
 - **FR-3.** The preload bridge MUST exist with at least one stub method that establishes the pattern
