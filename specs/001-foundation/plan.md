@@ -5,7 +5,7 @@
 **Plan Version:** 1.0
 **Created:** 2026-05-01
 **Last Updated:** 2026-05-01
-**Constitution version pinned:** v1.2.0
+**Constitution version pinned:** v1.2.1
 
 ---
 
@@ -16,24 +16,31 @@ v1.2.0 already pins a choice, the table simply restates it. Where the constituti
 to the plan, the rationale + alternatives are recorded in [research.md](./research.md). No
 **NEEDS CLARIFICATION** items remain at this layer.
 
-| Area                       | Choice                                                                                         | Source / detail                              |
-|:---------------------------|:------------------------------------------------------------------------------------------------|:---------------------------------------------|
-| Runtime                    | Electron 33.x, Node 20.x, Windows 10/11 x64                                                     | Constitution Tech Stack                      |
-| Renderer framework         | React 19 + Vite 8 + TypeScript 5.6 (strict)                                                     | Constitution Tech Stack                      |
-| Styling                    | Tailwind 4 (set up; not yet used on UI)                                                         | Constitution Tech Stack                      |
-| Local DB                   | `better-sqlite3` (sync, embedded)                                                               | Constitution Tech Stack                      |
-| Migration runner           | **Custom**, transactional, SQL files in `migrations/`, recorded in `schema_migrations` table   | research.md §1                               |
-| Secret storage             | **Electron `safeStorage` API** (DPAPI on Windows; no native module)                             | research.md §2                               |
-| Money representation       | Plain integer `number` of minor units, guarded by `Number.isSafeInteger`                        | research.md §3                               |
-| Test framework             | **Vitest** for everything (renderer + business + electron main via subprocess driver)           | research.md §4                               |
-| OpenAPI codegen            | `openapi-typescript` v7 CLI; output to `src/shared/api-types.ts`; bootstrap from pinned snapshot | research.md §5                               |
-| Logging                    | `pino` + `pino-roll` writing JSON to `app.getPath('logs')`                                      | Constitution VII                             |
-| Crash reporting            | `@sentry/electron` for both processes; inert when `SENTRY_DSN` unset                            | Constitution VII                             |
-| Linter / formatter         | ESLint (typescript-eslint, electron rules) + Prettier                                           | research.md §6                               |
-| Package / installer        | `electron-builder`; `--win --dir` for unsigned dry-run; signing deferred                        | Constitution Tech Stack                      |
-| CI                         | GitHub Actions on `windows-latest`                                                              | research.md §7                               |
-| State / data fetching libs | NOT in scope for 001 (Zustand / TanStack Query land with 002+)                                  | Spec Out-of-Scope                            |
-| Routing                    | NOT in scope for 001                                                                            | Spec Out-of-Scope                            |
+All majors pinned below were verified against the npm registry on 2026-05-01. Where the latest
+stable major was released within the last few months, the plan deliberately pins **one major
+behind** to let the ecosystem catch up (electron, typescript, eslint). Bleeding-edge Electron and
+TS make native-module rebuild and ESLint plugin support unreliable for an MVP.
+
+| Area                       | Choice                                                                                            | Source / detail                              |
+|:---------------------------|:---------------------------------------------------------------------------------------------------|:---------------------------------------------|
+| Runtime                    | **Electron `^40.9`** (latest 41 deferred — ABI churn risk), Node 20.x LTS, Windows 10/11 x64       | Constitution Tech Stack + version verify     |
+| Renderer framework         | React `^19.2` + Vite `^8.0` + **TypeScript `^5.9`** (latest 6.0 deferred — plugin lag)             | Constitution Tech Stack + version verify     |
+| Styling                    | Tailwind `^4.2` + `@tailwindcss/postcss ^4.2` (set up; not yet used on UI)                         | Constitution Tech Stack                      |
+| Local DB                   | `better-sqlite3 ^12.9` (sync, embedded)                                                            | research.md §1                               |
+| Migration runner           | **Custom**, transactional, SQL files in `migrations/`, recorded in `schema_migrations` table       | research.md §1                               |
+| Secret storage             | **Electron `safeStorage` API** (DPAPI on Windows; no native module)                                | research.md §2                               |
+| Money representation       | Plain integer `number` of minor units, guarded by `Number.isSafeInteger`                           | research.md §3 + Constitution v1.2.1 II      |
+| Test framework             | **Vitest `^4.1`** (`@vitest/coverage-v8` matched to vitest); happy-dom env                         | research.md §4                               |
+| OpenAPI codegen            | `openapi-typescript ^7.13`; output to `src/shared/api-types.ts`; bootstrap from pinned snapshot   | research.md §5 + Constitution v1.2.1         |
+| Logging                    | `pino ^10.3` + `pino-roll ^4.0` writing JSON to `app.getPath('logs')`                              | Constitution VII                             |
+| Crash reporting            | `@sentry/electron ^7.13` for both processes; inert when `SENTRY_DSN` unset                         | Constitution VII                             |
+| Linter / formatter         | **ESLint `^9.39`** (latest 10 deferred — too new) + `typescript-eslint ^8` + Prettier              | research.md §6                               |
+| Package / installer        | `electron-builder ^26.8`; `--win --dir` for unsigned dry-run; signing deferred                     | Constitution Tech Stack                      |
+| Native-module rebuild      | `@electron/rebuild ^4.0` invoked from `postinstall` and CI                                         | Plan Risk R1                                 |
+| Vite plugin (React)        | `@vitejs/plugin-react ^6.0`                                                                        | research.md §4                               |
+| CI                         | GitHub Actions on `windows-latest`                                                                 | research.md §7                               |
+| State / data fetching libs | NOT in scope for 001 (Zustand / TanStack Query land with 002+)                                     | Spec Out-of-Scope                            |
+| Routing                    | NOT in scope for 001                                                                               | Spec Out-of-Scope                            |
 
 ## Constitution Check (Initial)
 
@@ -70,6 +77,14 @@ strategy, lint/format toolchain, CI runner).
   1. **`PreloadBridgeAPI`** — the typed `window.api` surface (one stub method for the pattern).
   2. **`SecretStore`** — `get` / `set` / `delete` for opaque string values.
   3. **`MigrationRecord`** — the SQL/TS shape recorded in `schema_migrations`.
+
+  **Source-of-truth policy.** The files in `specs/001-foundation/contracts/` are the
+  *planning-time* snapshot of these interfaces. Once the Phase 2 transfer task (T022) lands the
+  contracts under `src/shared/`, **`src/shared/` becomes canonical** and the spec copies are NOT
+  re-synced. A contract change ships as a normal source PR; the spec's contracts/ directory is
+  kept as the historical artifact for future readers and is referenced by the tasks file.
+  Drift between the two is expected after Phase 2 and is not a defect — it's the trace of
+  evolution. Any reader needing the current shape MUST look at `src/shared/`.
 - **Quickstart:** [./quickstart.md](./quickstart.md). Developer-onboarding walkthrough: clone →
   install → run dev → run tests → run package dry-run.
 
