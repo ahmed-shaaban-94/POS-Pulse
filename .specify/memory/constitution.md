@@ -1,6 +1,61 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.2.1 → 1.3.0
+Bump rationale: MINOR — two stack substitutions within categories already named in §Tech Stack.
+  No principle is redefined; both substitutions land inside rules that already exist.
+
+  - Testing tool: Jest is removed. Vitest is now the single test runner for both renderer and
+    main-process code; Playwright remains optional for E2E. Reason: Vitest covers main-process
+    modules via the same toolchain that already covers the renderer, eliminating a redundant
+    test-runner installation, configuration, and CI lane. Substitution lands in feature
+    001-foundation as the inaugural usage. (Resolved TODO: TEST_RUNNER.)
+  - Secret storage: `electron-store` is replaced by Electron's built-in `safeStorage`. On
+    Windows, `safeStorage` is backed by DPAPI keyed to the current Windows user account;
+    encrypted blobs cannot be decrypted on a different machine or under a different Windows
+    account, which is at least as strong as the prior "electron-store + hardware-derived key"
+    recipe and removes a third-party dependency plus all custom key-derivation code from the
+    audit surface. Production builds MUST refuse to start if
+    `safeStorage.isEncryptionAvailable()` returns false. (Resolved TODO: SECRET_STORE.)
+
+Modified principles: none redefined.
+  - Principle VI ("Test-First, Coverage-Gated") — testing-tool list updated; rules unchanged.
+  - Principle VIII ("Terminal Identity") — secret-storage mechanism updated; rules unchanged.
+
+Modified sections:
+  - Core Principles → Principle VI — `Jest (electron main)` removed; Vitest covers both
+    processes.
+  - Core Principles → Principle VIII — pairing/storage clause now names `safeStorage` instead
+    of `electron-store`; the "credential not portable across machines" property is preserved
+    (and tightened — DPAPI also fails on a different Windows user account on the same machine).
+  - Additional Constraints → Platform Integration → Storage and revocation — same substitution;
+    added explicit production-startup guard against
+    `safeStorage.isEncryptionAvailable() === false`.
+  - Additional Constraints → Security — same substitution; explicit cross-platform note (DPAPI
+    on Windows, Keychain on macOS, libsecret on Linux).
+  - Additional Constraints → Tech Stack → Testing — Jest removed.
+  - Additional Constraints → Tech Stack → new "Secret storage" line — names `safeStorage` as
+    the canonical secret store; third-party stores not permitted.
+  - Development Workflow → Pre-Push Checklist — `npm run test:electron` removed; `npm test`
+    (Vitest) is the single test command for both processes.
+  - Development Workflow → CI Gates — Jest removed from the required-tests bullet.
+
+Added sections: none.
+Removed sections: none.
+
+Templates requiring updates:
+  - ⚠ pending  .specify/templates/plan-template.md       (not yet scaffolded)
+  - ⚠ pending  .specify/templates/spec-template.md       (not yet scaffolded)
+  - ⚠ pending  .specify/templates/tasks-template.md      (not yet scaffolded)
+
+Follow-up TODOs (open): (none).
+
+Resolved TODOs (this revision):
+  - ✅ TEST_RUNNER — Vitest-only; `npm run test:electron` retired.
+  - ✅ SECRET_STORE — Electron `safeStorage` adopted; `electron-store` removed.
+
+History (prior revisions retained for reference):
+
 Version change: 1.2.0 → 1.2.1
 Bump rationale: PATCH — non-semantic clarifications. Two wording fixes, no principle added,
   removed, or redefined.
@@ -15,8 +70,6 @@ Bump rationale: PATCH — non-semantic clarifications. Two wording fixes, no pri
     `src/shared/api-types.ts`, matching the project layout decided in the Foundation plan
     (the shared module sits next to other shared utilities; the prior `src/api/` path was
     a stale draft note). (Resolved /speckit-analyze finding C1.)
-
-History (prior revisions retained for reference):
 
 Version change: 1.1.0 → 1.2.0
 Bump rationale: MINOR — materially expanded two existing sections (Hardware, Platform Integration →
@@ -184,8 +237,8 @@ for runtime surprises; the type system is the cheapest way to find them at compi
 
 For every new feature or bug fix:
 
-1. Write a failing test (Vitest for renderer/business logic, Jest for Electron main, Playwright for
-   end-to-end flows where applicable).
+1. Write a failing test (Vitest for both renderer and main process / business logic; Playwright
+   for end-to-end flows where applicable).
 2. Implement the minimum code that makes it pass.
 3. Refactor with the test as the safety net.
 
@@ -220,8 +273,8 @@ both MUST be validated server-side.
   machine's identity; it is sent on every request alongside the user JWT.
   - Pairing: an authenticated admin (Clerk session, `admin` role) initiates pairing from the platform
     admin app. The terminal exchanges a short-lived enrollment code for a long-lived device token,
-    which is stored encrypted-at-rest via `electron-store` with a key derived from a hardware-bound
-    identifier.
+    which is stored encrypted-at-rest via Electron's built-in `safeStorage` (DPAPI on Windows, scoped
+    to the current Windows user account; Keychain on macOS; libsecret on Linux).
   - Rotation / revocation: device tokens are revocable from the admin app; the terminal MUST handle
     `401 device_revoked` by clearing local credentials and entering a "needs re-pairing" mode without
     losing offline-queued transactions.
@@ -313,9 +366,12 @@ client MUST expect:
 
 **Storage and revocation.**
 
-- The device token is stored encrypted-at-rest in `electron-store`; the encryption key is derived
-  from a stable hardware identifier (Windows machine GUID) so that copying the user-data directory
-  to another machine does NOT carry the credential.
+- The device token is stored encrypted-at-rest via Electron's `safeStorage`. On Windows this is
+  backed by DPAPI keyed to the current Windows user account; encrypted blobs cannot be decrypted
+  on a different machine or under a different Windows account, so copying the user-data directory
+  does NOT carry the credential. Production builds MUST refuse to start if
+  `safeStorage.isEncryptionAvailable()` returns false (a misconfigured workstation must fail
+  loudly rather than silently fall back to plaintext).
 - Background sync MAY proceed with terminal-only auth (no logged-in cashier); sales MAY NOT.
 - A `401 device_revoked` response MUST clear the device token, retain the offline transaction queue,
   and surface a "Needs re-pairing — contact admin" state without losing pending data.
@@ -324,8 +380,10 @@ client MUST expect:
 
 - The renderer MUST NOT have direct file-system, network, or child-process access. All such access goes
   through the typed preload bridge.
-- Backend authentication tokens MUST be stored encrypted-at-rest via `electron-store` with a per-device
-  key derived from a hardware identifier where available, never plaintext.
+- Backend authentication tokens (and any other persisted secret) MUST be stored encrypted-at-rest
+  via Electron's `safeStorage` — DPAPI on Windows, Keychain on macOS, libsecret on Linux — never
+  plaintext. Production builds MUST refuse to start if `safeStorage.isEncryptionAvailable()` returns
+  false.
 - The auto-updater MUST verify code signatures before applying updates. Unsigned updates are rejected.
 - No card data (PAN, CVV) ever touches POS-Pulse storage or logs. Card capture is delegated to a PCI-DSS
   certified payment terminal; only authorization tokens / last-4 may be persisted.
@@ -421,9 +479,11 @@ within a category, MAJOR bump if it shifts a Core Principle's enforcement).
 - Renderer: React 19, TypeScript 5.6+, Vite 8, Tailwind 4, Radix UI primitives, lucide-react icons.
 - State: Zustand for UI state; TanStack Query (or SWR) for server state.
 - Local DB: better-sqlite3 (synchronous, embedded, fastest for POS workload).
+- Secret storage: Electron `safeStorage` (DPAPI on Windows, Keychain on macOS, libsecret on Linux).
+  No third-party secret store; production refuses to start without it.
 - Routing: react-router-dom 7.
 - Observability: pino + pino-roll (logs), Sentry (crashes).
-- Testing: Vitest (renderer + business logic), Jest (electron main), Playwright (optional E2E).
+- Testing: Vitest (renderer + main + business logic), Playwright (optional E2E).
 - Printing: receipt template engine emitting both an ESC/POS byte stream and a printable
   HTML/canvas fallback (`node-thermal-printer` or equivalent for the direct path; the OS print queue
   for the fallback). The choice is per-printer, not per-feature.
@@ -446,16 +506,15 @@ within a category, MAJOR bump if it shifts a Core Principle's enforcement).
 
 Before pushing any branch, the following MUST pass:
 
-- `npm run typecheck` (both tsconfigs).
-- `npm run lint` (ESLint).
-- `npm test` (Vitest unit suite).
-- `npm run test:electron` (Jest, when main-process code changed).
+- `npm run typecheck` (all tsconfigs).
+- `npm run lint` (ESLint + Prettier).
+- `npm test` (Vitest — covers both renderer and main).
 
 ### CI Gates (Merge to `main`)
 
 Merge to `main` requires:
 
-1. All automated tests passing (Vitest + Jest + Playwright where present).
+1. All automated tests passing (Vitest + Playwright where present).
 2. Coverage gate satisfied (≥ 80% on new code; ≥ 95% on `Money` / offline-queue / receipt modules).
 3. At least one human approval on the PR.
 4. No open CRITICAL or HIGH findings from security-review or code-review agents.
@@ -507,6 +566,6 @@ document (READMEs, ADRs, comments, agent instructions), this document wins until
 
 ---
 
-**Version:** 1.2.1
+**Version:** 1.3.0
 **Ratified:** 2026-05-01
 **Last Amended:** 2026-05-01
