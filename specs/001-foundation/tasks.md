@@ -4,7 +4,7 @@
 **Plan:** [./plan.md](./plan.md)
 **Spec:** [./spec.md](./spec.md)
 **Created:** 2026-05-01
-**Last Updated:** 2026-05-02 (Phase 10)
+**Last Updated:** 2026-05-02 (Phase 11)
 
 ---
 
@@ -282,9 +282,15 @@ tested-models columns left blank for now.
 **Independent test:** A reader opening `docs/hardware-matrix.md` sees the in-scope and out-of-scope
 tables consistent with constitution v1.2.0 § Hardware. (AS-12.)
 
-- [ ] T074 [US9] Create `docs/hardware-matrix.md` with In-Scope and Out-of-Scope tables, headings
-  for tested-model rows under each in-scope category (rows empty until 002+), and a footer pointing
-  back to the constitution at `docs/hardware-matrix.md`
+- [X] T074 [US9] Created `docs/hardware-matrix.md` reproducing constitution v1.3.0 § Hardware
+  (scope originally established at v1.2.0). Contents: Overview / In Scope (MVP) — four
+  sub-sections (Workstation, Barcode scanner, Receipt printer, Cash drawer) each with an empty
+  tested-models table (`Model | Transport | Driver / firmware | Tested in feature | Known
+  caveats`) placeholder-rowed `_None tested yet — first entry lands in feature 002+_` / Out of
+  Scope (MVP) bullet list / four Operational rules from constitution lines 415-427 / How to
+  update this doc (distinguishes incremental tested-model edits from out-of-band In/Out-of-Scope
+  changes that require a constitution amendment) / Source-of-truth footer pointing at
+  `.specify/memory/constitution.md` § Hardware. Satisfies AS-12 + FR-13.
 
 ---
 
