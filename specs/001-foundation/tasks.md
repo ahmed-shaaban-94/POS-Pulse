@@ -94,13 +94,13 @@ shared and TypeScript-enforced.
 returns `"pong"` and `window.api.appVersion()` returns the package version. `window.require`,
 `window.process`, and `window.Buffer` are all `undefined`. (AS-1, AS-2, AS-3 from spec.)
 
-- [ ] T028 [P] [US1] Write a renderer no-Node-globals **regression guard** Vitest at `src/tests/renderer-isolation.test.ts` asserting `window.require`, `window.process`, and `window.Buffer` are all `undefined`. Note: in `happy-dom` these are absent by default, so this test passes from the start; its purpose is to fail loudly if a future change accidentally exposes Node to the renderer. Real packaged-build isolation is verified by the polish-phase smoke step (T079).
-- [ ] T029 [P] [US1] Write failing bridge-typing test at `src/tests/bridge-typing.test.ts` that uses `expectTypeOf` (or equivalent) to assert `window.api` matches `PreloadBridgeAPI`
-- [ ] T030 [P] [US1] Write failing IPC unit test for the `ping` handler at `src/main/ipc/__tests__/ping.test.ts` — fails until handler exists
-- [ ] T031 [US1] Implement `ping` IPC handler returning `"pong"` at `src/main/ipc/ping.ts`
-- [ ] T032 [US1] Implement `appVersion` IPC handler reading `app.getVersion()` at `src/main/ipc/app-version.ts`
-- [ ] T033 [US1] Register both handlers in `app.whenReady()` and update preload bridge implementation to call them via `ipcRenderer.invoke` at `src/main/index.ts` and `src/preload/index.ts`
-- [ ] T034 [US1] Run `npm run dev` locally; verify window opens, devtools confirm `window.api.ping()` resolves to `"pong"` and Node globals are unreachable. Capture the verification in the PR description.
+- [X] T028 [P] [US1] Write a renderer no-Node-globals **regression guard** Vitest at `src/tests/renderer-isolation.test.ts` asserting `window.require`, `window.process`, and `window.Buffer` are all `undefined`. Note: in `happy-dom` these are absent by default, so this test passes from the start; its purpose is to fail loudly if a future change accidentally exposes Node to the renderer. Real packaged-build isolation is verified by the polish-phase smoke step (T079). **Implementation note:** happy-dom v20 exposes `Buffer`/`process` as Node-compatibility shims, so the test was implemented as a static-source guard verifying `nodeIntegration:false`, `contextIsolation:true`, `sandbox:true`, `webSecurity:true` remain set in `src/main/index.ts`. Real renderer isolation is verified by T034 + T079.
+- [X] T029 [P] [US1] Write failing bridge-typing test at `src/tests/bridge-typing.test.ts` that uses `expectTypeOf` (or equivalent) to assert `window.api` matches `PreloadBridgeAPI`
+- [X] T030 [P] [US1] Write failing IPC unit test for the `ping` handler at `src/main/ipc/__tests__/ping.test.ts` — fails until handler exists. **Extension (D1):** matching test added at `src/main/ipc/__tests__/app-version.test.ts` to close the TDD gap before T032.
+- [X] T031 [US1] Implement `ping` IPC handler returning `"pong"` at `src/main/ipc/ping.ts`
+- [X] T032 [US1] Implement `appVersion` IPC handler reading `app.getVersion()` at `src/main/ipc/app-version.ts`
+- [X] T033 [US1] Register both handlers in `app.whenReady()` and update preload bridge implementation to call them via `ipcRenderer.invoke` at `src/main/index.ts` and `src/preload/index.ts`
+- [X] T034 [US1] Run `npm run dev` locally; verify window opens, devtools confirm `window.api.ping()` resolves to `"pong"` and Node globals are unreachable. Capture the verification in the PR description.
 
 ---
 
