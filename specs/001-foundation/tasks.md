@@ -173,13 +173,9 @@ codegen:verify`, verify non-zero exit. (AS-6.)
 `src/shared/money.ts`. Sample assertions: `multiply(of(99999900, 'EGP'), 1000)` is rejected as out
 of safe range (illustrative); `allocate(of(100, 'EGP'), 3)` returns `[34, 33, 33]`. (AS-9.)
 
-- [ ] T056 [P] [US5] Write failing exhaustive Money test suite covering: construction validation
-  (non-integer rejected, non-safe-integer rejected, unsupported currency rejected); add and subtract
-  including zero, negatives, currency mismatch; multiply by zero, one, negative quantity, non-integer
-  quantity; allocate for `n=1`, `n=2`, `n=3`, `n=10` over various amounts including `0`; equals and
-  compare cross-currency throws; format output for sample values at `src/shared/__tests__/money.test.ts`
-- [ ] T057 [US5] Implement `Money` value type and `MoneyModule` per `contracts/money.ts` at `src/shared/money.ts`
-- [ ] T058 [US5] Verify tests pass and coverage gate is green: `npm test -- --coverage src/shared/money`. If any branch is uncovered, add a targeted test rather than reducing the gate.
+- [X] T056 [P] [US5] Write failing exhaustive Money test suite at `src/shared/__tests__/money.test.ts`. 90 cases across 9 operations: construction validation (non-integer, NaN, ±Infinity, non-safe-integer, unsupported currency); zero; add/subtract including overflow detection; multiply by 0/1/negative/non-integer/overflow; allocate for n=1/2/3/10/zero/negative/n≤0/non-integer with sum-equals-original invariant; equals/compare; format. RED state observed before T057.
+- [X] T057 [US5] Implement `Money` value type and module functions per `specs/001-foundation/contracts/money.ts` at `src/shared/money.ts`. Source-of-truth policy: `src/shared/money.ts` is canonical from this point on. **D10 drift note:** the spec contract says `equals` returns true/false based on (currency, amount) equality; tasks.md text said "equals cross-currency throws". We implement per the contract — `equals` returns false on currency mismatch (does NOT throw); `compare` throws on currency mismatch.
+- [X] T058 [US5] Coverage gate green: 100% statements / 100% branches / 100% functions / 100% lines on `src/shared/money.ts` (exceeds the ≥95% gate enforced via per-file threshold in `vitest.config.ts`). Full suite: 176 tests passing across 13 files.
 
 ---
 

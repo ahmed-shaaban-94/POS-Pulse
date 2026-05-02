@@ -30,7 +30,15 @@ export default defineConfig({
         branches: 80,
         functions: 80,
         statements: 80,
-        // src/shared/money.ts gate: ≥95% enforced by T056-T058 (Phase 7)
+        // T058 — Money module strict gate per Constitution II + spec NFR-2.
+        // Vitest v4.1 per-glob thresholds layer on top of the globals; this
+        // entry raises the bar to ≥95% on src/shared/money.ts only.
+        'src/shared/money.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
       },
     },
   },
