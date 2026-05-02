@@ -4,7 +4,7 @@
 **Plan:** [./plan.md](./plan.md)
 **Spec:** [./spec.md](./spec.md)
 **Created:** 2026-05-01
-**Last Updated:** 2026-05-02
+**Last Updated:** 2026-05-02 (Phase 9)
 
 ---
 
@@ -216,17 +216,29 @@ logged once; the app launches and runs normally.
 **Independent test:** (a) Launch with no env: app opens, no Sentry traffic in devtools network tab.
 (b) Launch with `SENTRY_DSN=invalid`: app opens, one warning in main log, no recurring errors. (AS-8.)
 
-- [ ] T064 [P] [US7] Write failing test asserting `initSentryMain()` is a no-op (no `Sentry.init`
-  call) when `SENTRY_DSN` is unset at `src/main/observability/__tests__/sentry-main.test.ts`
-- [ ] T065 [P] [US7] Write failing test asserting `initSentryMain()` does NOT throw when
-  `SENTRY_DSN` is set to a syntactically invalid value at `src/main/observability/__tests__/sentry-main.test.ts`
-- [ ] T066 [US7] Implement `initSentryMain()` that reads `process.env.SENTRY_DSN`, returns early
-  when missing, wraps `Sentry.init` in try/catch otherwise at `src/main/observability/sentry-main.ts`
-- [ ] T067 [US7] Implement `initSentryRenderer()` mirroring the main behavior (DSN passed via
-  preload bridge or `import.meta.env.VITE_SENTRY_DSN`) at `src/renderer/observability/sentry-renderer.ts`
-- [ ] T068 [US7] Call `initSentryMain()` after the main logger is up but before any other init in
-  `src/main/index.ts`; call `initSentryRenderer()` at the top of `src/renderer/main.tsx`
-- [ ] T069 [US7] Smoke-test both DSN scenarios (unset and invalid); verify no crashes.
+- [X] T064 [P] [US7] Failing test asserting `initSentryMain()` is a no-op (no `sentryInit` call)
+  when `SENTRY_DSN` is unset/empty/whitespace at `src/main/observability/__tests__/sentry-main.test.ts`.
+  **R9 DI seam:** `sentryInit` is injected (`vi.fn()` in tests; defaults to `Sentry.init` in prod).
+- [X] T065 [P] [US7] Failing test asserting `initSentryMain()` does NOT throw when `sentryInit`
+  itself throws (DSN set but malformed). Logs a single warn line via the injected pino-shaped
+  logger; warning message does NOT echo the DSN to disk. Same file as T064.
+- [X] T066 [US7] Implemented `initSentryMain()` reading DSN from injected `env`, returning early
+  when empty, wrapping `sentryInit` in try/catch otherwise at `src/main/observability/sentry-main.ts`.
+  **D1 (PII at init time):** `sendDefaultPii: false`, `integrations: []`, `tracesSampleRate: 0`,
+  `beforeSend: scrubEvent` strips `request`, `user`, and denylist keys
+  (`/secret|token|password|credential|card|pii|cvv|pan|email|phone/i`) from `extra` and `contexts`.
+- [X] T067 [US7] Implemented `initSentryRenderer()` mirroring main at
+  `src/renderer/observability/sentry-renderer.ts`. **D3:** DSN sourced via the typed preload bridge
+  (`window.api.appConfig()`), NOT `import.meta.env.VITE_*` (which would inline the DSN into the
+  bundle at build time). Adds `app:config` IPC handler at `src/main/ipc/app-config.ts` and shared
+  `AppConfig` contract at `src/shared/app-config.ts`; bridge surface at `src/shared/bridge-api.ts`
+  gains `appConfig(): Promise<AppConfig>`; preload at `src/preload/index.ts` wires the invoke;
+  `src/tests/bridge-typing.test.ts` extended to cover the new method.
+- [X] T068 [US7] Wired `initSentryMain()` in `src/main/index.ts` AFTER `mainLogger.info('app:logger-ready')`
+  and BEFORE migrations / window creation. Wired `initSentryRenderer()` at the top of
+  `src/renderer/main.tsx` BEFORE `ReactDOM.createRoot`. Sentry init failure NEVER halts launch.
+- [X] T069 [US7] Manual Electron smoke recipe (DSN unset / DSN invalid scenarios) documented in the
+  Phase 9 PR description for reviewer verification — same posture as T041/T049/T063.
 
 ---
 
