@@ -1,0 +1,9 @@
+# Pin LF on codegen-sensitive artifacts so cross-platform checkouts read
+# byte-identical content. Without this, Git's autocrlf=true on Windows
+# would store CRLF and a Linux contributor's checkout would fail
+# `npm run codegen:verify` because their LF-generated output would not
+# byte-match the CRLF-converted committed file.
+#
+# Scope is intentionally narrow — do NOT broaden to the whole repo.
+scripts/openapi-snapshot.json text eol=lf
+src/shared/api-types.ts text eol=lf

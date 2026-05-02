@@ -155,12 +155,12 @@ to a temp file and fails if the committed file drifts.
 recreated identically (byte-equal to git's HEAD copy). Modify the file by hand, run `npm run
 codegen:verify`, verify non-zero exit. (AS-6.)
 
-- [ ] T050 [P] [US4] Commit a minimal pinned OpenAPI snapshot (one stub path, fillable later) at `scripts/openapi-snapshot.json`
-- [ ] T051 [P] [US4] Write failing test asserting `codegen:api` produces deterministic output (run twice, byte-compare) at `scripts/__tests__/codegen.test.ts`
-- [ ] T052 [US4] Implement codegen runner using `openapi-typescript` programmatically: read `scripts/openapi-snapshot.json` (or live URL when `--source=live` flag is passed), write to `src/shared/api-types.ts` at `scripts/codegen-api.ts`
-- [ ] T053 [US4] Implement verify script: regenerate to temp, `diff` against committed file, exit non-zero on drift with a message instructing the user to run `npm run codegen:api` and commit at `scripts/verify-codegen.ts`
-- [ ] T054 [US4] Wire `codegen:api` and `codegen:verify` scripts in `package.json` (using `tsx scripts/...`) at `package.json`
-- [ ] T055 [US4] Run `npm run codegen:api`; commit the generated `src/shared/api-types.ts`
+- [X] T050 [P] [US4] Commit a pinned OpenAPI snapshot at `scripts/openapi-snapshot.json`. **Note:** the live URL `https://api.smartdatapulse.tech/openapi.json` was reachable as of 2026-05-02, so the snapshot is the *real* live doc (493 KB, OpenAPI 3.1.0, "DataPulse API"), not a stub.
+- [X] T051 [P] [US4] Write failing test asserting `codegen:api` produces deterministic output + drift detection at `scripts/__tests__/codegen.test.ts`. Three groups: determinism (byte-equal across two runs, header sentinel, LF-only), verify (match/drifted/missing exit codes + temp-file cleanup), snapshot precondition. RED state observed before T052/T053.
+- [X] T052 [US4] Implement codegen runner using `openapi-typescript` programmatically at `scripts/codegen-api.ts`. Reads `scripts/openapi-snapshot.json` by default; `--source=live` opt-in fetches the live URL. **Determinism:** every `OpenAPITSOptions` field pinned explicitly; output normalized to LF-only line endings; header sentinel prepended.
+- [X] T053 [US4] Implement verify script at `scripts/verify-codegen.ts`. Regenerates to a temp file (cleaned up in `finally`), byte-compares with the committed file. Three outcomes: `match` (exit 0), `drifted` (exit 1 + first-diff-line preview), `missing` (exit 1 + "run codegen:api" hint).
+- [X] T054 [US4] Wire `codegen:api` and `codegen:verify` scripts in `package.json` (using `tsx scripts/...`).
+- [X] T055 [US4] Ran `npm run codegen:api`; committed the generated `src/shared/api-types.ts` (705 KB, 23 316 lines). `npm run codegen:verify` exits zero. AS-6 sanity smoke (delete-recreate, hand-edit-detect, restore) verified end-to-end.
 
 ---
 
