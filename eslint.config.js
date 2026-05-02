@@ -9,6 +9,7 @@ export default tsEslint.config(
       'dist/**',
       'dist-electron/**',
       'node_modules/**',
+      'coverage/**',
       '_reference/**',
       '**/*.cjs',
       'eslint.config.js',
