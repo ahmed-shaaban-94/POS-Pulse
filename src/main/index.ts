@@ -3,6 +3,8 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
+import { openDatabase } from './db/client.js';
+import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,9 +74,32 @@ function createWindow(): void {
   }
 }
 
+/**
+ * Resolve the directory where migration *.sql files live.
+ *   - Dev (`npm run dev`): repo-root `./migrations` (cwd is the repo root).
+ *   - Packaged: electron-builder ships them via `extraResources` (wiring
+ *     deferred — see PR description). For 001 the dev path is the gating
+ *     surface for T041's manual smoke.
+ */
+function resolveMigrationsDir(): string {
+  return path.join(process.cwd(), 'migrations');
+}
+
 app
   .whenReady()
   .then(() => {
+    // T040 — apply pending migrations BEFORE creating any window.
+    // Failure rethrows out of runMigrations into the .catch below, which
+    // calls app.exit(1) per R3 (halt-launch semantics).
+    const dbPath = path.join(app.getPath('userData'), 'pos-pulse.db');
+    const handle = openDatabase(dbPath);
+    try {
+      const files = readMigrationsFromDisk(resolveMigrationsDir());
+      runMigrations({ db: bindMigrationsDb(handle), files });
+    } finally {
+      handle.close();
+    }
+
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
     registerPingHandler(ipcMain);
@@ -85,7 +110,13 @@ app
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   })
-  .catch(console.error);
+  .catch((err: unknown) => {
+    // R3: any failure here (migrations or otherwise) halts launch.
+    // Logger integration deferred to US6; for 001 we use console.error
+    // so the failure is at least visible in dev/CI.
+    console.error('[pos-pulse] fatal startup error:', err);
+    app.exit(1);
+  });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
