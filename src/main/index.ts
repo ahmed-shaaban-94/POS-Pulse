@@ -1,13 +1,17 @@
 import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
+import * as Sentry from '@sentry/electron/main';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
 import { registerLogHandler } from './ipc/log.js';
+import { registerAppConfigHandler } from './ipc/app-config.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger } from './logging/logger.js';
+import { initSentryMain } from './observability/sentry-main.js';
+import type { AppConfig } from '../shared/app-config.js';
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -118,6 +122,19 @@ app
     });
     mainLogger.info({ logsDir, appVersion }, 'app:logger-ready');
 
+    // T068 — initialise Sentry AFTER the main logger is up but BEFORE
+    // migrations / window creation. Sentry's `init` is wrapped in
+    // try/catch inside `initSentryMain`; a thrown init logs one warn
+    // line via `mainLogger` and the app continues. With `SENTRY_DSN`
+    // unset (the default in `.env.example`), Sentry stays inert — no
+    // network calls, no crashes (AS-8).
+    initSentryMain({
+      sentryInit: Sentry.init,
+      logger: mainLogger,
+      env: process.env,
+      appVersion,
+    });
+
     // T040 + R9 — open ONE shared DB handle, run migrations, then keep
     // the handle alive for the SecretStore. Failure during migrations
     // rethrows into the .catch below, which calls app.exit(1).
@@ -148,6 +165,19 @@ app
     registerPingHandler(ipcMain);
     registerAppVersionHandler(ipcMain);
     registerLogHandler(ipcMain, rendererLogger);
+    // T067 + D3 — renderer pulls its DSN over the bridge; never via
+    // `import.meta.env.VITE_*` (which would inline it into the
+    // renderer bundle at build time). The closure resolves the DSN
+    // per-call, so a future restart-free DSN rotation works without
+    // re-architecting the handler.
+    const getAppConfig = (): AppConfig => {
+      const dsn = process.env['SENTRY_DSN'];
+      if (typeof dsn === 'string' && dsn.trim().length > 0) {
+        return { sentryDsn: dsn };
+      }
+      return {};
+    };
+    registerAppConfigHandler(ipcMain, getAppConfig);
 
     createWindow();
     mainLogger.info('app:ready');

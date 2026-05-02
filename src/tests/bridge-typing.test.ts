@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
+import type { AppConfig } from '../shared/app-config';
 
 // Side-effect import keeps the global Window augmentation in scope for this file.
 import '../shared/bridge-api';
@@ -9,6 +10,9 @@ import '../shared/bridge-api';
  *
  * Asserts that `window.api` and `PreloadBridgeAPI` are the same shape, so any
  * preload implementation that drifts from the contract fails typecheck (and CI).
+ *
+ * T067 extension: covers `appConfig()` so a future drift of the renderer-
+ * facing config shape is caught by typecheck.
  */
 describe('window.api typing matches PreloadBridgeAPI', () => {
   it('Window["api"] equals PreloadBridgeAPI', () => {
@@ -21,5 +25,9 @@ describe('window.api typing matches PreloadBridgeAPI', () => {
 
   it('PreloadBridgeAPI.appVersion returns Promise<string>', () => {
     expectTypeOf<PreloadBridgeAPI['appVersion']>().returns.resolves.toEqualTypeOf<string>();
+  });
+
+  it('PreloadBridgeAPI.appConfig returns Promise<AppConfig>', () => {
+    expectTypeOf<PreloadBridgeAPI['appConfig']>().returns.resolves.toEqualTypeOf<AppConfig>();
   });
 });
