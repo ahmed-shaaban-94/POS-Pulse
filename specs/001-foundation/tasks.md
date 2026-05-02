@@ -4,7 +4,7 @@
 **Plan:** [./plan.md](./plan.md)
 **Spec:** [./spec.md](./spec.md)
 **Created:** 2026-05-01
-**Last Updated:** 2026-05-02 (Phase 11)
+**Last Updated:** 2026-05-02 (Phase Final — 001-foundation closed)
 
 ---
 
@@ -296,18 +296,42 @@ tables consistent with constitution v1.2.0 § Hardware. (AS-12.)
 
 ## Phase Final — Polish & Cross-Cutting
 
-- [ ] T075 Confirm `npm run codegen:verify` is green after generated file is committed (T055)
-- [ ] T076 [P] Confirm `npm run lint` is clean across the whole repo
-- [ ] T077 [P] Confirm `npm run typecheck` is clean for both tsconfigs
-- [ ] T078 [P] Confirm `npm test -- --coverage` is green and Money coverage threshold (≥ 95%) is met
-- [ ] T079 [P] Confirm `npm run package:dir` produces a runnable `dist-electron/win-unpacked/` whose
-  entrypoint launches the empty window on a fresh Windows machine
-- [ ] T080 Update `specs/001-foundation/quickstart.md` with any deviations discovered during
-  implementation
-- [ ] T081 Walk through `specs/001-foundation/spec.md` § Acceptance Scenarios one-by-one and tick
-  each off in the PR description
-- [ ] T082 Update `CLAUDE.md` SPECKIT block to mark 001-foundation status `complete` and to point at
-  `specs/002-terminal-pairing` once that feature exists at `CLAUDE.md`
+- [X] T075 `npm run codegen:verify` confirmed green — exit 0, `api-types.ts is up to date`.
+- [X] T076 [P] `npm run lint` confirmed clean — eslint + prettier across the whole repo.
+- [X] T077 [P] `npm run typecheck` confirmed clean — renderer + main + preload tsconfigs.
+- [X] T078 [P] `npm test -- --coverage` confirmed green — 281/281 tests across 19 files;
+  global coverage 100% statements, 95.27% branches, 100% functions, 100% lines; per-file 80%
+  gates green; Money at 100% (≥95% gate preserved).
+- [X] T079 [P] `npm run build && npm run package:dir` confirmed locally — exit 0; produced
+  `dist-electron/win-unpacked/POS Pulse.exe` (407 MB). Non-fatal symlink warnings during 7z
+  extraction of the macOS codesign cache (libcrypto.dylib / libssl.dylib) are irrelevant to
+  Windows packaging. **Fresh Windows-VM smoke** is documented in the Phase Final PR body as a
+  reviewer follow-up step (same T041/T049/T063/T069/T073 posture); the CI artifacts from PR
+  #11 (`pos-pulse-win-unpacked-ff98f554...`) and PR #12 are the authoritative `windows-latest`
+  evidence.
+- [X] T080 `specs/001-foundation/quickstart.md` updated with four targeted clarifications
+  (D3): `codegen:api` clarified as optional, `npm run build` required before `package:dir`,
+  Electron version reference 33 → 40, and a new "Where to find logs" section pointing at
+  `app.getPath('logs')` with a citation to `data-model.md` § LogRecord and the no-PII policy.
+- [X] T081 AS-1 through AS-12 walked end-to-end in the Phase Final PR body; every cited proof
+  path verified with `git ls-files`. Mapping: AS-1 → `src/main/index.ts:18-29` + T034 manual;
+  AS-2 → `src/tests/renderer-isolation.test.ts`; AS-3 → `src/shared/bridge-api.ts` +
+  `src/tests/bridge-typing.test.ts`; AS-4 → `src/main/db/__tests__/migrate.test.ts` +
+  `migrations/0001_init.sql`; AS-5 → `src/main/secrets/__tests__/{safe-storage,backend-selection}.test.ts`;
+  AS-6 → `scripts/__tests__/codegen.test.ts` + `npm run codegen:verify`; AS-7 →
+  `src/main/logging/__tests__/logger.test.ts` + `src/renderer/logging/__tests__/logger.test.ts`;
+  AS-8 → `src/main/observability/__tests__/sentry-main.test.ts`; AS-9 →
+  `src/shared/__tests__/money.test.ts`; AS-10 → `.github/workflows/ci.yml`; AS-11 → CI artifact
+  `pos-pulse-win-unpacked-<sha>` + this PR's local re-run; AS-12 → `docs/hardware-matrix.md`.
+- [X] T082 `CLAUDE.md` SPECKIT block flipped to status `complete` for 001-foundation; HTML
+  comment placeholder added for `specs/002-terminal-pairing` (no live link — directory does
+  not exist yet); constitution version reference updated v1.2.0 → v1.3.0; stack reference
+  updated Electron 33 → 40.
+
+---
+
+**Feature 001-foundation: complete.** Next feature (`002-terminal-pairing`) requires
+`/speckit-specify` to begin and is NOT in the Phase Final PR.
 
 ---
 
