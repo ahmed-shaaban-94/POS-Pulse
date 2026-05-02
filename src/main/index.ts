@@ -1,6 +1,8 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { registerPingHandler } from './ipc/ping.js';
+import { registerAppVersionHandler } from './ipc/app-version.js';
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -73,6 +75,11 @@ function createWindow(): void {
 app
   .whenReady()
   .then(() => {
+    // Register IPC handlers BEFORE the first window loads so the renderer's
+    // first call cannot race the registration.
+    registerPingHandler(ipcMain);
+    registerAppVersionHandler(ipcMain);
+
     createWindow();
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
