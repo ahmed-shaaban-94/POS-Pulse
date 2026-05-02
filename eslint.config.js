@@ -13,6 +13,10 @@ export default tsEslint.config(
       '_reference/**',
       '**/*.cjs',
       'eslint.config.js',
+      // Generated file (T055): output of `npm run codegen:api`. Linting it is
+      // pointless — its shape is dictated by openapi-typescript, not project
+      // conventions, and every regeneration would otherwise trip strict rules.
+      'src/shared/api-types.ts',
     ],
   },
   tsEslint.configs.strictTypeChecked,

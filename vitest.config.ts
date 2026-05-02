@@ -7,7 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     environment: 'happy-dom',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // T051: scripts/__tests__/* contains codegen tooling tests; add the
+    // pattern so vitest collects them.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
@@ -17,6 +19,9 @@ export default defineConfig({
         'src/**/*.test.tsx',
         'src/main/index.ts',
         'src/renderer/main.tsx',
+        // T055 generated file: pure types, no runtime — coverage of it
+        // is meaningless and would always show 0/0.
+        'src/shared/api-types.ts',
         'node_modules/**',
       ],
       thresholds: {
