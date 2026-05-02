@@ -24,7 +24,9 @@ release/
 .env.*
 !.env.example
 *.local
-secrets/
+# Block any literal secrets dir at the repo root, but NOT the SecretStore
+# source directory at src/main/secrets/.
+/secrets/
 
 # Tooling caches
 .vite/

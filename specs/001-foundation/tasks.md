@@ -134,14 +134,14 @@ in-memory backend in dev/test. Production builds refuse to start when `safeStora
 deletes it, reads again (expecting `null`). On Windows, the persisted SQLite blob is opaque (not
 plaintext). (AS-5.)
 
-- [ ] T042 [US3] Add migration `migrations/0002_secrets.sql` creating `secrets(key TEXT PRIMARY KEY, value BLOB NOT NULL)` at `migrations/0002_secrets.sql`
-- [ ] T043 [P] [US3] Write failing `SecretStore` round-trip tests (in-memory backend) covering set→get, overwrite, delete, missing-key returns null, key-validation errors at `src/main/secrets/__tests__/safe-storage.test.ts`
-- [ ] T044 [P] [US3] Write failing test asserting production builds refuse to start when `safeStorage.isEncryptionAvailable()` returns false (mock `app.isPackaged: true`) at `src/main/secrets/__tests__/backend-selection.test.ts`
-- [ ] T045 [US3] Define `SecretKey` brand type and `SecretStore` interface at `src/shared/secret-store.ts` (mirrors `contracts/secret-store.ts`; one-shot transfer)
-- [ ] T046 [US3] Implement production `safeStorage`-backed `SecretStore`: `set` calls `safeStorage.encryptString` and writes `BLOB` row; `get` reads + `decryptString`; `delete` removes row at `src/main/secrets/safe-storage.ts`
-- [ ] T047 [US3] Implement in-memory dev/test backend (Map<string, string>) selected when `safeStorage.isEncryptionAvailable()` is false AND `app.isPackaged === false` at `src/main/secrets/in-memory.ts`
-- [ ] T048 [US3] Implement `createSecretStore()` factory that picks backend based on availability and `app.isPackaged`; production refusal raises a fatal error logged via the main logger at `src/main/secrets/index.ts`
-- [ ] T049 [US3] Run all secret-store tests; confirm they pass.
+- [X] T042 [US3] Add migration `migrations/0002_secrets.sql` creating `secrets(key TEXT PRIMARY KEY, value BLOB NOT NULL)` at `migrations/0002_secrets.sql`
+- [X] T043 [P] [US3] Write failing `SecretStore` round-trip tests (in-memory backend) covering set→get, overwrite, delete, missing-key returns null, key-validation errors at `src/main/secrets/__tests__/safe-storage.test.ts`. **Note:** the same shared suite runs against both backends via a `describeSecretStore` helper; safe-storage backend uses a `SafeStorageLike` fake (R5) so unit tests do not load Electron.
+- [X] T044 [P] [US3] Write failing test asserting production builds refuse to start when `safeStorage.isEncryptionAvailable()` returns false (mock `app.isPackaged: true`) at `src/main/secrets/__tests__/backend-selection.test.ts`. Includes all four cells of the (`available`, `packaged`) matrix plus a regression test that the fatal log message contains no caller-supplied secret data.
+- [X] T045 [US3] Define `SecretKey` brand type and `SecretStore` interface at `src/shared/secret-store.ts` (mirrors `contracts/secret-store.ts`; one-shot transfer). Adds `makeSecretKey(raw)` validating constructor + `SECRET_KEY_PATTERN` so backends share the same predicate.
+- [X] T046 [US3] Implement production `safeStorage`-backed `SecretStore`: `set` calls `safeStorage.encryptString` and writes `BLOB` row; `get` reads + `decryptString`; `delete` removes row at `src/main/secrets/safe-storage.ts`. **R5:** `SafeStorageLike` interface DI'd. **Lazy prep:** statements deferred until first call (same lesson as Phase 4's `bindMigrationsDb`).
+- [X] T047 [US3] Implement in-memory dev/test backend (Map<string, string>) selected when `safeStorage.isEncryptionAvailable()` is false AND `app.isPackaged === false` at `src/main/secrets/in-memory.ts`
+- [X] T048 [US3] Implement `createSecretStore()` factory that picks backend based on availability and `app.isPackaged`; production refusal raises a fatal error logged via the main logger at `src/main/secrets/index.ts`. **R8:** until US6 lands, log sinks default to `console.warn` / `console.error`; sinks are injectable for tests.
+- [X] T049 [US3] All secret-store tests pass (44 cases across two files). Coverage 100% on `src/main/secrets/`. **R9:** `src/main/index.ts` now opens a single shared DB handle, runs migrations, instantiates the SecretStore on the same handle, and closes the handle on `window-all-closed` / `quit`.
 
 ---
 

@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
-import { openDatabase } from './db/client.js';
+import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
+import { createSecretStore } from './secrets/index.js';
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -85,20 +86,35 @@ function resolveMigrationsDir(): string {
   return path.join(process.cwd(), 'migrations');
 }
 
+/**
+ * Process-lifetime DB handle. Opened once in `app.whenReady()`, used by
+ * the migration runner and the SecretStore, closed on app quit (R9).
+ * Accessed only from the main process — never exposed to the renderer.
+ */
+let dbHandle: DatabaseHandle | null = null;
+
 app
   .whenReady()
   .then(() => {
-    // T040 — apply pending migrations BEFORE creating any window.
-    // Failure rethrows out of runMigrations into the .catch below, which
-    // calls app.exit(1) per R3 (halt-launch semantics).
+    // T040 + R9 — open ONE shared DB handle, run migrations, then keep
+    // the handle alive for the SecretStore. Failure during migrations
+    // rethrows into the .catch below, which calls app.exit(1).
     const dbPath = path.join(app.getPath('userData'), 'pos-pulse.db');
-    const handle = openDatabase(dbPath);
-    try {
-      const files = readMigrationsFromDisk(resolveMigrationsDir());
-      runMigrations({ db: bindMigrationsDb(handle), files });
-    } finally {
-      handle.close();
-    }
+    dbHandle = openDatabase(dbPath);
+
+    const files = readMigrationsFromDisk(resolveMigrationsDir());
+    runMigrations({ db: bindMigrationsDb(dbHandle), files });
+
+    // T048 wire-in: construct the SecretStore on the same long-lived
+    // handle to validate factory wiring (production refusal will throw
+    // into .catch below per R8). The reference is discarded — feature
+    // 002+ will retain it when an actual caller exists. Not exposed to
+    // the renderer in 001 (no IPC surface for secrets yet).
+    createSecretStore({
+      handle: dbHandle,
+      safeStorage,
+      isPackaged: app.isPackaged,
+    });
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
@@ -111,13 +127,34 @@ app
     });
   })
   .catch((err: unknown) => {
-    // R3: any failure here (migrations or otherwise) halts launch.
-    // Logger integration deferred to US6; for 001 we use console.error
-    // so the failure is at least visible in dev/CI.
+    // R3: any failure here (migrations or SecretStore production refusal)
+    // halts launch. Logger integration deferred to US6; for 001 we use
+    // console.error so the failure is at least visible in dev/CI.
     console.error('[pos-pulse] fatal startup error:', err);
+    closeDbHandle();
     app.exit(1);
   });
 
+function closeDbHandle(): void {
+  if (dbHandle !== null) {
+    try {
+      dbHandle.close();
+    } catch (err) {
+      console.error('[pos-pulse] failed to close DB handle:', err);
+    }
+    dbHandle = null;
+  }
+}
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    closeDbHandle();
+    app.quit();
+  }
+});
+
+// Defensive cleanup on quit for the macOS path (no-op on Windows but
+// keeps invariants symmetric: handle never outlives the app process).
+app.on('quit', () => {
+  closeDbHandle();
 });
