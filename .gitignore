@@ -52,3 +52,7 @@ Thumbs.db
 
 # Sentry
 .sentryclirc
+
+# Claude Code — personal, per-user local state (permissions, settings).
+# Never commit; not project configuration.
+.claude/
