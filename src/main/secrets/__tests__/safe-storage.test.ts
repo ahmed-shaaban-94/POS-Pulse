@@ -140,9 +140,7 @@ function describeSecretStore(name: string, makeStore: () => SecretStore): void {
 
     it('rejects non-string value at the type-runtime boundary', async () => {
       // A renderer or future caller might pass a non-string; defense-in-depth.
-      await expect(
-        store.set(TEST_KEY, undefined as unknown as string),
-      ).rejects.toThrow();
+      await expect(store.set(TEST_KEY, undefined as unknown as string)).rejects.toThrow();
     });
   });
 }
