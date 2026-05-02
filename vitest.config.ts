@@ -19,9 +19,16 @@ export default defineConfig({
         'src/**/*.test.tsx',
         'src/main/index.ts',
         'src/renderer/main.tsx',
+        // Phase 8: preload is a thin contextBridge wire-up file with no
+        // logic worth unit-testing; correctness is proven by the
+        // bridge-typing test and the manual Electron smoke. Same posture
+        // as src/main/index.ts.
+        'src/preload/index.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',
+        // Phase 8: type-only ambient declaration for pino-roll.
+        'src/main/logging/pino-roll.d.ts',
         'node_modules/**',
       ],
       thresholds: {

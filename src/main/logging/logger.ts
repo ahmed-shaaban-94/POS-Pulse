@@ -1,0 +1,129 @@
+import path from 'path';
+import pino, { type Logger } from 'pino';
+import pinoRoll from 'pino-roll';
+
+/**
+ * T060 — main-process logger.
+ *
+ * Wraps `pino` + `pino-roll` to produce JSON-per-line records under the
+ * injected `logsDir`, rotated daily and retained for 14 days. Two
+ * instances live in main: one tagged `process: 'main'` writing to
+ * `main-YYYYMMDD.log`, one tagged `process: 'renderer'` writing to
+ * `renderer-YYYYMMDD.log` (renderer logs flow over IPC; see
+ * src/main/ipc/log.ts).
+ *
+ * SECURITY POLICY (Constitution VII + data-model.md § LogRecord):
+ * Callers MUST NOT log secrets, tokens, plaintext credentials,
+ * passwords, card data, PII, or any value retrieved from the
+ * SecretStore. A redaction layer is deferred to a later feature; in
+ * 001 enforcement is by code review.
+ *
+ * R9 mitigation: a `pinoRollFactory` is injectable so unit tests can
+ * substitute a `PassThrough` stream and avoid touching the real
+ * filesystem.
+ *
+ * R4 mitigation: if the rolling-stream factory throws (e.g.,
+ * unwritable logs dir), we surface the error to console once and
+ * return a degraded-but-functional pino instance writing to stderr,
+ * so the app continues launching per spec.md:130.
+ */
+
+export type LogProcess = 'main' | 'renderer';
+
+/**
+ * Narrow surface of `pino-roll` we depend on. `pino-roll`'s default
+ * export is async-factory: it returns a `WritableStream` (technically a
+ * `SonicBoom` instance). The interface keeps tests free of the real lib.
+ */
+export type PinoRollFactory = (options: PinoRollFactoryOptions) => Promise<NodeJS.WritableStream>;
+
+export interface PinoRollFactoryOptions {
+  /** Filename prefix; pino-roll appends the date stamp + extension. */
+  file: string;
+  /** Rotation cadence. */
+  frequency: 'daily';
+  /** Date format for the rolled filename. */
+  dateFormat: string;
+  /** Filename extension. */
+  extension: string;
+  /** Retention policy. */
+  limit: { count: number };
+  /** Create the directory if it doesn't exist. */
+  mkdir: boolean;
+}
+
+export interface CreateLoggerOptions {
+  process: LogProcess;
+  appVersion: string;
+  /** Absolute path to the logs directory. Injected (R2 + R9). */
+  logsDir: string;
+  /**
+   * Override the rolling-stream factory in tests. Defaults to the real
+   * `pino-roll`.
+   */
+  pinoRollFactory?: PinoRollFactory;
+}
+
+const DEFAULT_LIMIT_DAYS = 14;
+const DATE_FORMAT = 'yyyyMMdd';
+const FILE_EXTENSION = '.log';
+
+/**
+ * Create a structured logger writing JSON-per-line records to a
+ * daily-rotating file under `opts.logsDir`. On stream-creation failure
+ * (R4), returns a console-fallback logger so the app still launches.
+ */
+export async function createLogger(opts: CreateLoggerOptions): Promise<Logger> {
+  // The default-factory branch fires only in production — tests inject
+  // pinoRollFactory (R9). v8-ignore the right side of the nullish
+  // coalesce to keep coverage honest about what's actually exercised.
+  /* v8 ignore next */
+  const factory = opts.pinoRollFactory ?? defaultPinoRollFactory;
+  const filePrefix = path.join(opts.logsDir, `${opts.process}-`);
+
+  const baseOptions: pino.LoggerOptions = {
+    base: { process: opts.process, app_version: opts.appVersion },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    formatters: {
+      // Emit `"level":"warn"` instead of pino's default `"level":40`. Keeps
+      // the on-disk shape readable without a translation table downstream.
+      level(label) {
+        return { level: label };
+      },
+    },
+    level: 'info',
+  };
+
+  let stream: NodeJS.WritableStream;
+  try {
+    stream = await factory({
+      file: filePrefix,
+      frequency: 'daily',
+      dateFormat: DATE_FORMAT,
+      extension: FILE_EXTENSION,
+      limit: { count: DEFAULT_LIMIT_DAYS },
+      mkdir: true,
+    });
+  } catch (err) {
+    // R4: log to console once, then return a stderr-backed pino. The
+    // returned logger remains fully functional; the only loss is the
+    // rotated file. We deliberately do NOT include the logsDir in
+    // detail — paths are unlikely to leak secrets, but keeping error
+    // text minimal aligns with the "stable error message" pattern from
+    // Phase 5/7.
+    console.error('[pos-pulse] logger: rolling-stream init failed; falling back to stderr.', err);
+    return pino(baseOptions);
+  }
+
+  return pino(baseOptions, stream);
+}
+
+/**
+ * Default factory: the real `pino-roll`. Tests always inject a fake
+ * factory (R9), so the body of this arrow is unreachable from unit
+ * tests and is excluded from v8 coverage. Production correctness is
+ * proven by the manual Electron smoke (T063): observing log files
+ * appear at `app.getPath('logs')` after `npm run dev`.
+ */
+/* v8 ignore next 2 */
+const defaultPinoRollFactory: PinoRollFactory = (opts) => pinoRoll(opts);
