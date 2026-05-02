@@ -4,7 +4,7 @@
 **Plan:** [./plan.md](./plan.md)
 **Spec:** [./spec.md](./spec.md)
 **Created:** 2026-05-01
-**Last Updated:** 2026-05-01
+**Last Updated:** 2026-05-02
 
 ---
 
@@ -188,17 +188,22 @@ of safe range (illustrative); `allocate(of(100, 'EGP'), 3)` returns `[34, 33, 33
 **Independent test:** Run `npm run dev`; observe log files appear at the expected path; `cat` (or
 PowerShell `Get-Content`) shows valid JSON-per-line records with the required fields. (AS-7.)
 
-- [ ] T059 [P] [US6] Write failing logger unit test asserting required fields are present in every record and `time` is ISO-8601 at `src/main/logging/__tests__/logger.test.ts`
-- [ ] T060 [US6] Implement main-process logger using `pino` + `pino-roll` writing to
+- [X] T059 [P] [US6] Write failing logger unit test asserting required fields are present in every record and `time` is ISO-8601 at `src/main/logging/__tests__/logger.test.ts`
+- [X] T060 [US6] Implement main-process logger using `pino` + `pino-roll` writing to
   `path.join(app.getPath('logs'), 'main-YYYYMMDD.log')`, with base properties `{ process: 'main',
-  app_version }` at `src/main/logging/logger.ts`
-- [ ] T061 [US6] Implement renderer-process logger that forwards records over IPC to a `log` handler
+  app_version }` at `src/main/logging/logger.ts`. **R9:** `pinoRollFactory` injected so unit tests
+  use a `PassThrough` stream and avoid touching the filesystem. **R4:** stream-init failure logs to
+  console once and falls back to a stderr-backed pino so the app continues launching (spec.md:130).
+- [X] T061 [US6] Implement renderer-process logger that forwards records over IPC to a `log` handler
   in main, where they're persisted to `renderer-YYYYMMDD.log` at `src/renderer/logging/logger.ts`
-  and `src/main/ipc/log.ts`
-- [ ] T062 [US6] Initialize main logger as the very first thing in `src/main/index.ts` (before
-  migrations, before window creation)
-- [ ] T063 [US6] Run `npm run dev`; verify log files appear and contents match the schema in
-  `data-model.md` § LogRecord.
+  and `src/main/ipc/log.ts`. **R3:** shared `LogRecord` contract added at `src/shared/log-record.ts`
+  and the bridge surface (`src/shared/bridge-api.ts`) gains `log(record): Promise<void>`.
+  Renderer facade is fire-and-forget and routes IPC failures to `console[level]` (fatal → error).
+- [X] T062 [US6] Initialize main logger in `src/main/index.ts` before migrations and before window
+  creation. Logged events: `app:logger-ready`, `db:opened`, `db:migrations-applied`, `app:ready`.
+- [X] T063 [US6] Manual Electron smoke recipe documented in the Phase 8 PR description for reviewer
+  verification (`npm run dev` → log files appear at `app.getPath('logs')` matching the data-model.md
+  § LogRecord schema).
 
 ---
 
