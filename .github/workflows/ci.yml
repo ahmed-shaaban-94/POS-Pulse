@@ -1,0 +1,75 @@
+# Phase 10 / US8 — CI pipeline + package dry-run artifact.
+#
+# Single job on windows-latest exercising the full validation gate stack
+# on every PR plus pushes to main. Constitution v1.2.x principles upheld:
+#   - VI Test-First: full vitest suite + coverage thresholds enforced
+#     per-file (80% global, 95% Money) — failure blocks merge.
+#   - VII Observability: package:dir uploads the unsigned --dir build
+#     for manual smoke. Sentry stays inert (no SENTRY_DSN secret wired).
+#   - Tech Stack (research.md §7): windows-latest runner, Node 20, npm
+#     cache, electron-rebuild via package.json postinstall.
+#
+# Pre-flight decisions for this workflow are documented in the Phase 10
+# PR body (D1–D7). Two are load-bearing inside this file:
+#   D1 — `npm run build` runs as its own step BEFORE `npm run package:dir`.
+#        electron-builder.yml's `files: [dist/**, ...]` requires `dist/`
+#        to be populated by `vite build` + `tsc -p tsconfig.{main,preload}`
+#        first, and the `package:dir` script does NOT chain `build`.
+#   D2 — Native rebuild for `better-sqlite3` is handled implicitly by
+#        `package.json`'s `postinstall` hook (electron-rebuild). We do
+#        NOT add an explicit `npx @electron/rebuild` step.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # `postinstall` runs `electron-rebuild -f -w better-sqlite3` to
+      # match the native module's ABI to Electron's bundled Node (D2).
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify OpenAPI codegen drift
+        run: npm run codegen:verify
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test with coverage
+        run: npm test -- --coverage
+
+      # `npm run package:dir` packs whatever sits under `dist/` per
+      # electron-builder.yml's `files` glob; the `package:dir` script
+      # does NOT chain `build`. CI must populate `dist/` first (D1).
+      - name: Build (renderer + main + preload)
+        run: npm run build
+
+      - name: Package (Windows --dir, unsigned)
+        run: npm run package:dir
+
+      - name: Upload unpacked Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pos-pulse-win-unpacked-${{ github.sha }}
+          path: dist-electron/win-unpacked
