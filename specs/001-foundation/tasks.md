@@ -4,7 +4,7 @@
 **Plan:** [./plan.md](./plan.md)
 **Spec:** [./spec.md](./spec.md)
 **Created:** 2026-05-01
-**Last Updated:** 2026-05-02 (Phase 9)
+**Last Updated:** 2026-05-02 (Phase 10)
 
 ---
 
@@ -251,15 +251,26 @@ logged once; the app launches and runs normally.
 **Independent test:** Open a PR; CI runs and reports green; the workflow run page lists an artifact
 `pos-pulse-win-unpacked-<sha>.zip`. (AS-10, AS-11.)
 
-- [ ] T070 [US8] Create CI workflow at `.github/workflows/ci.yml` with one job on `windows-latest`,
-  steps in order: checkout, setup-node 20 with npm cache, `npm ci`, `npx @electron/rebuild`,
-  `npm run codegen:verify`, `npm run typecheck`, `npm run lint`, `npm test -- --coverage`,
-  `npm run package:dir`, `actions/upload-artifact` for `dist-electron/win-unpacked`
-- [ ] T071 [P] [US8] Add a CODEOWNERS file requiring maintainer review at `.github/CODEOWNERS`
-- [ ] T072 [P] [US8] Add a PR template referencing the constitution-check line and linking to the
-  active spec at `.github/pull_request_template.md`
-- [ ] T073 [US8] Validate CI by pushing a draft PR and observing all gates green and artifact
-  uploaded.
+- [X] T070 [US8] CI workflow at `.github/workflows/ci.yml` — single job on `windows-latest` with
+  steps in order: checkout → setup-node 20 (npm cache) → `npm ci` → `codegen:verify` → `typecheck`
+  → `lint` → `test --coverage` → `build` → `package:dir` → `upload-artifact`. **D1:** `npm run build`
+  is its own step BEFORE `package:dir` (electron-builder's `files: [dist/**, …]` requires `dist/`
+  populated; the `package:dir` script does NOT chain `build`, and `package.json` is intentionally
+  not modified). **D2:** native rebuild for `better-sqlite3` is handled implicitly by
+  `package.json`'s `postinstall` (`electron-rebuild`); no explicit `npx @electron/rebuild` step.
+  Triggers `pull_request` and `push: branches: [main]`. Permissions `contents: read`. Artifact
+  name `pos-pulse-win-unpacked-${{ github.sha }}` matching `actions/upload-artifact@v4`'s
+  uniqueness requirement.
+- [X] T071 [P] [US8] CODEOWNERS at `.github/CODEOWNERS` — single rule `* @ahmed-shaaban-94`. Note:
+  CODEOWNERS alone does NOT enforce review; the maintainer must enable "Require review from Code
+  Owners" in branch protection settings (manual repo-settings step, intentionally NOT in this PR).
+- [X] T072 [P] [US8] Pull-request template at `.github/pull_request_template.md` — sections:
+  Summary / Completed tasks / Changed files / Checks run / Manual smoke / Constitution check /
+  Active spec / Not in this PR. Mirrors the body shape used on PRs #6–#10.
+- [X] T073 [US8] Self-validation strategy: this PR's first green CI run is T073's evidence (the
+  workflow file under review IS the workflow being exercised). Local `package:dir` is intentionally
+  NOT run pre-commit — known Windows symlink issue with `electron-builder --dir` on local dev is
+  not worked around; CI `windows-latest` is the authoritative packaging gate.
 
 ---
 

@@ -1,0 +1,10 @@
+# T071 — Code owners.
+#
+# CODEOWNERS alone does NOT enforce anything; it just suggests reviewers
+# on every PR. To make ownership BLOCKING, the maintainer must enable
+# branch protection on `main` in repo Settings → Branches → Branch
+# protection rules with "Require review from Code Owners" turned on.
+# That repo-settings step is intentionally NOT in this PR — only a
+# maintainer with admin rights can apply it.
+
+* @ahmed-shaaban-94
