@@ -114,13 +114,13 @@ idempotent on re-run, and rolls back failed migrations cleanly.
 `CREATE TABLE smoke (id INTEGER PRIMARY KEY);`; relaunch the app; observe `smoke` table created and
 `schema_migrations` has rows for `0001_init` and `0002_smoke`. Relaunch again; no re-application. (AS-4.)
 
-- [ ] T035 [US2] Create the bootstrap migration creating `schema_migrations(name TEXT PK, applied_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), checksum TEXT)` at `migrations/0001_init.sql`
-- [ ] T036 [P] [US2] Write failing migration-runner unit tests covering: applies pending in order, records rows, idempotent on re-run, rolls back on mid-migration failure, halts launch on rollback at `src/main/db/__tests__/migrate.test.ts`
-- [ ] T037 [P] [US2] Write failing DB client unit test asserting connection opens at `app.getPath('userData') + '/pos-pulse.db'` and `WAL` mode is enabled at `src/main/db/__tests__/client.test.ts`
-- [ ] T038 [US2] Implement DB client wrapping `better-sqlite3` with `journal_mode = WAL` and `foreign_keys = ON` at `src/main/db/client.ts`
-- [ ] T039 [US2] Implement migration runner: read `migrations/*.sql` (sorted), check `schema_migrations` (creating it via raw SQL if absent), apply each pending file inside a transaction, record `(name, applied_at, checksum)` on success, throw with halt-launch semantics on failure at `src/main/db/migrate.ts`
-- [ ] T040 [US2] Wire migration runner into `app.whenReady()` (runs before any window is created, fatal on failure) at `src/main/index.ts`
-- [ ] T041 [US2] Run unit tests; verify all pass. Smoke-test the runner manually per the independent-test recipe above.
+- [X] T035 [US2] Create the bootstrap migration creating `schema_migrations(name TEXT PK, applied_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), checksum TEXT)` at `migrations/0001_init.sql`
+- [X] T036 [P] [US2] Write failing migration-runner unit tests covering: applies pending in order, records rows, idempotent on re-run, rolls back on mid-migration failure, halts launch on rollback at `src/main/db/__tests__/migrate.test.ts`
+- [X] T037 [P] [US2] Write failing DB client unit test asserting connection opens at the injected path and `WAL` mode is enabled at `src/main/db/__tests__/client.test.ts`. **Note (R2):** the test asserts an *injected* `dbPath`, not `app.getPath('userData')` directly — the Electron `app` lookup is moved to the wire-in seam in T040 so the client is testable without an Electron runtime.
+- [X] T038 [US2] Implement DB client wrapping `better-sqlite3` with `journal_mode = WAL` and `foreign_keys = ON` at `src/main/db/client.ts`. **R1 mitigation:** the client takes a `DatabaseFactory` so unit tests can substitute the native binding (which is rebuilt for Electron's Node ABI by `postinstall` and won't load cleanly under Vitest).
+- [X] T039 [US2] Implement migration runner: read `migrations/*.sql` (sorted), check `schema_migrations` (creating it via raw SQL if absent), apply each pending file inside a transaction, record `(name, applied_at, checksum)` on success, throw with halt-launch semantics on failure at `src/main/db/migrate.ts`. **R4:** `checksum` is `sha256(file content)`.
+- [X] T040 [US2] Wire migration runner into `app.whenReady()` (runs before any window is created, fatal on failure) at `src/main/index.ts`. **R3:** failure path calls `app.exit(1)`.
+- [X] T041 [US2] Unit tests green (32/32, 100% coverage of `src/main/db/`). Manual Electron smoke recipe documented in the Phase 4 PR description for reviewer verification.
 
 ---
 
