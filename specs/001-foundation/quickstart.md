@@ -13,7 +13,7 @@ This file ships with the feature so the acceptance walkthrough is reproducible.
 | Tool                  | Version            | Why                                              |
 |:----------------------|:-------------------|:--------------------------------------------------|
 | Windows 10 or 11 x64  | —                  | Production target; `better-sqlite3` + DPAPI.     |
-| Node.js               | 20.x LTS           | Electron 33 ABI; OpenAPI codegen.                |
+| Node.js               | 20.x LTS           | Electron 40 ABI; OpenAPI codegen.                |
 | npm                   | 10.x (bundled)     | Lock-file fidelity.                              |
 | Git                   | any recent         | clone.                                            |
 | (Optional) VS Code    | latest             | TypeScript + ESLint integration out of the box. |
@@ -31,8 +31,11 @@ cd POS-Pulse
 # 2. Install
 npm install
 
-# 3. Generate API types from the pinned OpenAPI snapshot
-#    (this writes src/shared/api-types.ts)
+# 3. (Optional) regenerate API types from the pinned OpenAPI snapshot.
+#    `src/shared/api-types.ts` is already committed; new contributors
+#    can skip this and rely on `codegen:verify` (run later) to confirm
+#    the committed file matches what regeneration would produce.
+#    Run this only when refreshing the snapshot itself.
 npm run codegen:api
 
 # 4. Run the app in development
@@ -58,6 +61,12 @@ npm test -- --coverage
 # Verify the committed api-types match what regeneration produces
 npm run codegen:verify
 
+# Build the renderer + main + preload BEFORE packaging.
+# `package:dir` only zips the existing `dist/` tree — it does NOT chain
+# `build`. Skipping this step packs an empty `dist/` and produces an
+# artifact that does not run.
+npm run build
+
 # Package dry-run — produces an unsigned, unpacked Windows build at dist-electron/
 npm run package:dir
 ```
@@ -69,6 +78,15 @@ Expected outcomes:
 - `npm run codegen:verify`: exit code 0 (committed file matches regen).
 - `npm run package:dir`: exit code 0; `dist-electron/win-unpacked/` (or similarly named) exists and
   contains an executable that launches the same empty window.
+
+## Where to find logs
+
+Phase 8's structured logger writes to `app.getPath('logs')`. On Windows that resolves to
+`%APPDATA%\pos-pulse\logs\`. Two daily-rotated files appear there: `main-YYYYMMDD.log` for the
+main process and `renderer-YYYYMMDD.log` for renderer records that flowed over the IPC bridge.
+Records are JSON-per-line (`{ level, time (ISO-8601), process, app_version, msg, … }`); see
+`specs/001-foundation/data-model.md` § LogRecord for the exact shape. SECURITY: callers MUST NOT
+log secrets, tokens, plaintext credentials, passwords, card data, PII, or `SecretStore` values.
 
 ## Adding a migration (smoke test for the runner)
 

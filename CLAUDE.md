@@ -8,13 +8,13 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 
 | Document | Purpose |
 |:--|:--|
-| `.specify/memory/constitution.md` | Project constitution (v1.2.0). Highest-priority document; principles, hardware matrix, platform integration, governance. |
+| `.specify/memory/constitution.md` | Project constitution (v1.3.0). Highest-priority document; principles, hardware matrix, platform integration, governance. |
 | `_reference/Data-Pulse/` | Read-only legacy reference. Gitignored. **Never copy-paste from here** (Constitution Principle IX). |
 
 ## Active feature
 
 <!-- SPECKIT START -->
-**Active feature:** `specs/001-foundation`
+**Active feature:** `specs/001-foundation` — **status: complete** (closed by Phase Final / Polish PR)
 - Spec: [specs/001-foundation/spec.md](specs/001-foundation/spec.md)
 - Plan: [specs/001-foundation/plan.md](specs/001-foundation/plan.md)
 - Research: [specs/001-foundation/research.md](specs/001-foundation/research.md)
@@ -22,6 +22,13 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 - Contracts: [specs/001-foundation/contracts/](specs/001-foundation/contracts/)
 - Quickstart: [specs/001-foundation/quickstart.md](specs/001-foundation/quickstart.md)
 - Checklist: [specs/001-foundation/checklists/requirements.md](specs/001-foundation/checklists/requirements.md)
+
+<!--
+Next feature: `specs/002-terminal-pairing` (NOT yet scaffolded — directory does
+not exist). To begin feature 002, run `/speckit-specify` and follow the Spec Kit
+workflow below; that will materialise spec.md / plan.md / tasks.md under the new
+directory and an agent should re-point this SPECKIT block to the new feature.
+-->
 <!-- SPECKIT END -->
 
 ## Spec Kit workflow
@@ -39,7 +46,7 @@ Trivial fixes (typos, log-message tweaks, dependency bumps) MAY skip the pipelin
 
 ## Key technical decisions (locked)
 
-- Stack: Electron 33 + React 19 + Vite 8 + TypeScript 5.6 (strict) + Tailwind 4.
+- Stack: Electron 40 + React 19 + Vite 8 + TypeScript 5.6 (strict) + Tailwind 4.
 - Local DB: `better-sqlite3` with a custom transactional migration runner.
 - Secrets: Electron `safeStorage` (DPAPI on Windows). Production refuses to start without it.
 - Money: integer minor units, `Number.isSafeInteger` guarded; ≥ 95% coverage on the module.
