@@ -3,9 +3,11 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
+import { registerLogHandler } from './ipc/log.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
+import { createLogger } from './logging/logger.js';
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,15 +97,37 @@ let dbHandle: DatabaseHandle | null = null;
 
 app
   .whenReady()
-  .then(() => {
+  .then(async () => {
+    // T062 — initialize loggers FIRST inside whenReady, before any
+    // other subsystem. `app.getPath('logs')` is only available after
+    // `whenReady` fires, so this is the earliest possible site.
+    // Two pino instances: one tagged `process: 'main'` writes to
+    // main-YYYYMMDD.log; one tagged `process: 'renderer'` writes to
+    // renderer-YYYYMMDD.log (records arrive via the app:log IPC).
+    const logsDir = app.getPath('logs');
+    const appVersion = app.getVersion();
+    const mainLogger = await createLogger({
+      process: 'main',
+      appVersion,
+      logsDir,
+    });
+    const rendererLogger = await createLogger({
+      process: 'renderer',
+      appVersion,
+      logsDir,
+    });
+    mainLogger.info({ logsDir, appVersion }, 'app:logger-ready');
+
     // T040 + R9 — open ONE shared DB handle, run migrations, then keep
     // the handle alive for the SecretStore. Failure during migrations
     // rethrows into the .catch below, which calls app.exit(1).
     const dbPath = path.join(app.getPath('userData'), 'pos-pulse.db');
     dbHandle = openDatabase(dbPath);
+    mainLogger.info({ dbPath }, 'db:opened');
 
     const files = readMigrationsFromDisk(resolveMigrationsDir());
     runMigrations({ db: bindMigrationsDb(dbHandle), files });
+    mainLogger.info({ count: files.length }, 'db:migrations-applied');
 
     // T048 wire-in: construct the SecretStore on the same long-lived
     // handle to validate factory wiring (production refusal will throw
@@ -115,21 +139,27 @@ app
       safeStorage,
       isPackaged: app.isPackaged,
     });
+    // Note (Phase 5 R8): SecretStore still uses console.warn/error
+    // placeholders. Swap to mainLogger is a deferred follow-up — out
+    // of Phase 8 scope.
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
     registerPingHandler(ipcMain);
     registerAppVersionHandler(ipcMain);
+    registerLogHandler(ipcMain, rendererLogger);
 
     createWindow();
+    mainLogger.info('app:ready');
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   })
   .catch((err: unknown) => {
-    // R3: any failure here (migrations or SecretStore production refusal)
-    // halts launch. Logger integration deferred to US6; for 001 we use
-    // console.error so the failure is at least visible in dev/CI.
+    // R3 + R4: any failure here (logger init, migrations, or
+    // SecretStore production refusal) halts launch. We deliberately
+    // keep `console.error` here rather than the logger because the
+    // logger itself may have failed to initialize.
     console.error('[pos-pulse] fatal startup error:', err);
     closeDbHandle();
     app.exit(1);
