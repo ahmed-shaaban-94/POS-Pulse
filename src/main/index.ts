@@ -13,8 +13,25 @@ import { createSecretStore } from './secrets/index.js';
 import { createLogger } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
+import { createNetwork } from './pairing/network.js';
+import { createPairingService } from './pairing/service.js';
+import { createPairingLog } from './pairing/log.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
+
+/**
+ * 002-terminal-pairing US2: API base URL for the pair endpoint. Reads
+ * `VITE_API_BASE_URL` from `process.env` (Vite does NOT prefix-filter
+ * the main bundle — main is built with tsc, not Vite). Falls back to
+ * the constitution-blessed production host when unset.
+ */
+const DEFAULT_API_BASE_URL = 'https://api.smartdatapulse.tech';
+
+function resolveApiBaseUrl(): string {
+  const fromEnv = process.env['VITE_API_BASE_URL'];
+  if (typeof fromEnv === 'string' && fromEnv.trim().length > 0) return fromEnv;
+  return DEFAULT_API_BASE_URL;
+}
 
 /**
  * 002-terminal-pairing US1: SecretStore key under which the device
@@ -172,13 +189,27 @@ app
 
     // 002-terminal-pairing T011/T013 — construct the pairing store on
     // the shared DB handle + SecretStore. The store is the only module
-    // that touches both halves of pairing state; the IPC handler below
-    // exposes its `getStatus()` to the renderer. `persist()` and
-    // `clear()` are not yet called by any application path in US1.
+    // that touches both halves of pairing state.
     const pairingStore = createPairingStore({
       secretStore,
       db: bindPairingStoreDb(dbHandle),
       deviceTokenKey: DEVICE_TOKEN_KEY,
+    });
+
+    // 002-terminal-pairing T021/T023/T025 — construct the pairing
+    // service. The service composes network.pair() + pairingStore.persist()
+    // + a schema-restricted pairingLog. Resolve-on-reachable, reject-only-
+    // on-transport network contract is locked from PR #17. The IPC
+    // handler below routes `pairing:submit` here.
+    const pairingNetwork = createNetwork({
+      fetch: globalThis.fetch.bind(globalThis),
+      baseUrl: resolveApiBaseUrl(),
+    });
+    const pairingService = createPairingService({
+      store: pairingStore,
+      network: pairingNetwork,
+      pairingLog: createPairingLog(mainLogger),
+      clock: () => new Date(),
     });
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
@@ -200,10 +231,10 @@ app
     };
     registerAppConfigHandler(ipcMain, getAppConfig);
 
-    // 002-terminal-pairing T013 — wire `pairing:get-status`. The
-    // `pairing:submit` channel is a US2 task and is deliberately NOT
-    // registered here yet.
-    registerPairingHandlers(ipcMain, pairingStore);
+    // 002-terminal-pairing T013 + T025 — wire BOTH pairing channels.
+    // T025 lands `pairing:submit`; the SUBMIT handler validates the
+    // argument shape and forwards the service result unchanged.
+    registerPairingHandlers(ipcMain, { store: pairingStore, service: pairingService });
 
     createWindow();
     mainLogger.info('app:ready');

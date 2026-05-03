@@ -2,7 +2,11 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../shared/bridge-api';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
-import { PAIRING_IPC_CHANNELS, type PairingStatus } from '../shared/pairing-types';
+import {
+  PAIRING_IPC_CHANNELS,
+  type PairingStatus,
+  type PairingSubmitResult,
+} from '../shared/pairing-types';
 
 /**
  * T033 + T061 + T067 — preload bridge wired to ipcRenderer.invoke.
@@ -13,18 +17,20 @@ import { PAIRING_IPC_CHANNELS, type PairingStatus } from '../shared/pairing-type
  * unhandled-promise / "no handler for channel" error in DevTools,
  * caught by the manual smoke gate.
  *
- * 002-terminal-pairing US1 (T014): `pairing.getStatus()` is wired to
- * `ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS)`. The
- * `pairing.submit` method REMAINS a "not implemented" placeholder until
- * US2 (T026) lands the matching IPC handler — the typed surface stays
- * honest while preventing accidental use before the handler exists.
+ * 002-terminal-pairing US1 (T014): `pairing.getStatus()` wired to
+ * `ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS)`.
+ * 002-terminal-pairing US2 (T026): `pairing.submit()` wired to
+ * `ipcRenderer.invoke(PAIRING_IPC_CHANNELS.SUBMIT, code)`. The
+ * placeholder rejection from PR #16 is gone; the main-side handler
+ * (T025) validates the argument shape and forwards the result of the
+ * `PairingService.submit` orchestrator (PR #17). The result is a
+ * typed `PairingSubmitResult` whose success branch omits
+ * `device_token` by design — the renderer never sees the token.
  */
-const notImplementedError = (method: string): Error =>
-  new Error(`pairing.${method} not implemented yet — wired in 002-terminal-pairing US2.`);
-
 const pairing: PairingBridgeAPI = {
   getStatus: () => ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS) as Promise<PairingStatus>,
-  submit: () => Promise.reject(notImplementedError('submit')),
+  submit: (pairing_code: string) =>
+    ipcRenderer.invoke(PAIRING_IPC_CHANNELS.SUBMIT, pairing_code) as Promise<PairingSubmitResult>,
 };
 
 const api: PreloadBridgeAPI = {

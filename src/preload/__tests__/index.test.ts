@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PreloadBridgeAPI } from '../../shared/bridge-api';
-import { PAIRING_IPC_CHANNELS, type PairingStatus } from '../../shared/pairing-types';
+import {
+  PAIRING_IPC_CHANNELS,
+  type PairingStatus,
+  type PairingSubmitResult,
+} from '../../shared/pairing-types';
 
 const exposeInMainWorld = vi.fn<(name: string, api: unknown) => void>();
 const ipcRendererInvoke = vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>();
@@ -85,7 +89,20 @@ describe('preload bridge', () => {
     expect(result).toEqual(expected);
   });
 
-  it('pairing.submit() still rejects with "not implemented" until US2', async () => {
+  /**
+   * 002-terminal-pairing T026: pairing.submit() is now wired to
+   * ipcRenderer.invoke(PAIRING_IPC_CHANNELS.SUBMIT, code). The
+   * placeholder rejection from PR #16 has been replaced.
+   */
+  it('pairing.submit() invokes ipcRenderer with PAIRING_IPC_CHANNELS.SUBMIT and forwards the result', async () => {
+    const expected: PairingSubmitResult = {
+      outcome: 'success',
+      tenant_id: 'tenant-A',
+      branch_id: 'branch-B',
+      terminal_id: 'terminal-C',
+      terminal_label: 'Counter 1',
+    };
+    ipcRendererInvoke.mockResolvedValueOnce(expected);
     await import('../index');
 
     const call = exposeInMainWorld.mock.calls[0];
@@ -93,10 +110,25 @@ describe('preload bridge', () => {
     const [, api] = call as [string, PreloadBridgeAPI];
 
     expect(typeof api.pairing.submit).toBe('function');
-    await expect(api.pairing.submit('any-code')).rejects.toThrow(/not implemented/i);
-    // submit MUST NOT call ipcRenderer — there is no handler registered yet
-    // for PAIRING_IPC_CHANNELS.SUBMIT, and a leaked invoke would surface as
-    // "no handler for channel" in production.
-    expect(ipcRendererInvoke).not.toHaveBeenCalled();
+    const result = await api.pairing.submit('VALIDCODE');
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(PAIRING_IPC_CHANNELS.SUBMIT, 'VALIDCODE');
+    expect(PAIRING_IPC_CHANNELS.SUBMIT).toBe('pairing:submit');
+    expect(result).toEqual(expected);
+  });
+
+  it('pairing.submit() forwards each catch-all outcome (network_error, unknown_error) unchanged', async () => {
+    for (const outcome of ['network_error', 'unknown_error'] as const) {
+      vi.clearAllMocks();
+      vi.resetModules();
+      const expected: PairingSubmitResult = { outcome };
+      ipcRendererInvoke.mockResolvedValueOnce(expected);
+      await import('../index');
+
+      const call = exposeInMainWorld.mock.calls[0];
+      expect(call).toBeDefined();
+      const [, api] = call as [string, PreloadBridgeAPI];
+      const result = await api.pairing.submit('CODE');
+      expect(result).toEqual(expected);
+    }
   });
 });
