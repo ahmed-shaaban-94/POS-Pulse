@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../shared/bridge-api';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
+import { PAIRING_IPC_CHANNELS, type PairingStatus } from '../shared/pairing-types';
 
 /**
  * T033 + T061 + T067 — preload bridge wired to ipcRenderer.invoke.
@@ -12,17 +13,17 @@ import type { AppConfig } from '../shared/app-config';
  * unhandled-promise / "no handler for channel" error in DevTools,
  * caught by the manual smoke gate.
  *
- * 002-terminal-pairing T006: the `pairing` namespace is declared at the
- * foundational layer with placeholder methods that reject with a typed
- * Error. Real wiring against PAIRING_IPC_CHANNELS lands in US1
- * (getStatus) and US2 (submit). Rejecting keeps the typed surface honest
- * while preventing accidental use before the handlers exist.
+ * 002-terminal-pairing US1 (T014): `pairing.getStatus()` is wired to
+ * `ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS)`. The
+ * `pairing.submit` method REMAINS a "not implemented" placeholder until
+ * US2 (T026) lands the matching IPC handler — the typed surface stays
+ * honest while preventing accidental use before the handler exists.
  */
 const notImplementedError = (method: string): Error =>
-  new Error(`pairing.${method} not implemented yet — wired in 002-terminal-pairing US1/US2.`);
+  new Error(`pairing.${method} not implemented yet — wired in 002-terminal-pairing US2.`);
 
 const pairing: PairingBridgeAPI = {
-  getStatus: () => Promise.reject(notImplementedError('getStatus')),
+  getStatus: () => ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS) as Promise<PairingStatus>,
   submit: () => Promise.reject(notImplementedError('submit')),
 };
 
