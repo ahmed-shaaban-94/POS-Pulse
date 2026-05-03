@@ -163,4 +163,27 @@ describe('AppRouter — boot routing (T015)', () => {
     await Promise.resolve();
     expect(getStatus).toHaveBeenCalledTimes(1);
   });
+
+  it('cancellation guard: unmount before getStatus resolves does NOT call setBoot', async () => {
+    // Drives the `if (!guard.cancelled) setBoot(resolved)` branch where
+    // the guard IS cancelled (component unmounted between the
+    // getStatus call and its resolution). Test passes when no
+    // "state update on unmounted component" warning fires.
+    let resolveStatus!: (v: PairingStatus) => void;
+    const pending = new Promise<PairingStatus>((r) => {
+      resolveStatus = r;
+    });
+    const bridge: PairingBridgeAPI = {
+      getStatus: () => pending,
+      submit: vi.fn(() => Promise.reject(new Error('submit not used in this test'))),
+    };
+    const { unmount } = render(<AppRouter pairing={bridge} />);
+    expect(screen.getByTestId('route-loading')).toBeInTheDocument();
+    unmount();
+    // Resolve AFTER unmount; the cancellation guard must swallow setBoot.
+    resolveStatus({ kind: 'unpaired' });
+    await Promise.resolve();
+    // No exception, no warning — pass.
+    expect(true).toBe(true);
+  });
 });

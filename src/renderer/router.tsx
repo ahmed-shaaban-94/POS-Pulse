@@ -13,30 +13,33 @@ import type { PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
 /**
- * 002-terminal-pairing T016 — boot router.
+ * 002-terminal-pairing T016 + T034 — boot router.
  *
- * Calls the injected `pairing.getStatus()` exactly once on mount and
- * decides the start route from the discriminated PairingStatus:
+ * Calls the injected `pairing.getStatus()` exactly once on mount to
+ * decide the START route, then routes are purely path-based:
  *
- *   getStatus() → 'unpaired'              → /pairing
- *   getStatus() → 'paired' (with fields)  → /paired
- *   getStatus() → 'invalid'               → /pairing with reason flag
- *   getStatus() rejects                   → /pairing with reason='decrypt_failed'
+ *   getStatus() → 'unpaired'              → start at /pairing
+ *   getStatus() → 'paired' (with fields)  → start at /paired
+ *   getStatus() → 'invalid'               → start at /pairing with reason flag
+ *   getStatus() rejects                   → start at /pairing with reason='decrypt_failed'
  *                                            (defensive — bridge failure
  *                                            is most likely an unhealthy
  *                                            SecretStore; operator action
  *                                            is the same: re-pair)
  *
- * The TanStack Query / Zustand stack from PR#15 is reserved for US2's
- * submit mutation — boot is a single one-shot fetch, so a plain
- * useEffect is the smaller surface (R2 from tasks.md § Risks).
+ * After the initial routing decision, navigation is path-driven. The
+ * `/paired` route mounts PairedScreen which self-fetches via
+ * `getStatus()` and redirects back to `/pairing` on a non-paired
+ * status — so a stale boot state cannot strand the operator. T034:
+ * after a successful submit, PairingForm calls `navigate('/paired')`,
+ * PairedScreen mounts, re-fetches, and shows the fresh assignment.
  *
- * The router is INJECTED with `pairing` so tests can render against a
- * fake bridge without touching `window.api`. The application entry
- * point (`src/renderer/main.tsx`) wires the real bridge.
+ * The pairing bridge is INJECTED so tests can render against a fake
+ * bridge without touching `window.api`. The application entry point
+ * (`src/renderer/main.tsx`) wires the real bridge.
  *
- * `useMemoryRouter` lets unit tests start at a known initial entry; the
- * application uses createHashRouter to avoid file:// → server-side
+ * `createMemoryRouter` lets unit tests start at a known initial entry;
+ * the application uses createHashRouter to avoid file:// → server-side
  * routing conflicts in packaged builds.
  */
 
@@ -53,9 +56,9 @@ export interface AppRouterProps {
 
 type BootStatus =
   | { phase: 'loading' }
-  | { phase: 'paired'; status: Extract<PairingStatus, { kind: 'paired' }> }
   | {
-      phase: 'pairing';
+      phase: 'ready';
+      startPath: '/pairing' | '/paired';
       invalidReason?: Extract<PairingStatus, { kind: 'invalid' }>['reason'];
     };
 
@@ -72,11 +75,11 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       try {
         const status = await props.pairing.getStatus();
         if (status.kind === 'paired') {
-          resolved = { phase: 'paired', status };
+          resolved = { phase: 'ready', startPath: '/paired' };
         } else if (status.kind === 'invalid') {
-          resolved = { phase: 'pairing', invalidReason: status.reason };
+          resolved = { phase: 'ready', startPath: '/pairing', invalidReason: status.reason };
         } else {
-          resolved = { phase: 'pairing' };
+          resolved = { phase: 'ready', startPath: '/pairing' };
         }
       } catch {
         // Defensive fallback: any rejection from the bridge lands the
@@ -84,7 +87,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         // We deliberately do NOT include the rejection's value in any
         // log emission here — Constitution VII (no secret-shaped data
         // through the logger from a typed error path).
-        resolved = { phase: 'pairing', invalidReason: 'decrypt_failed' };
+        resolved = { phase: 'ready', startPath: '/pairing', invalidReason: 'decrypt_failed' };
       }
       if (!guard.cancelled) setBoot(resolved);
     })();
@@ -97,46 +100,29 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
     return <main data-testid="route-loading" />;
   }
 
+  // T034: routes are purely path-based after the initial decision.
+  // PairingForm.navigate('/paired') on success lands on PairedScreen,
+  // which self-fetches and shows the fresh assignment. PairedScreen
+  // redirects back to /pairing on its own if the status it reads is
+  // not 'paired' — so a stale boot state cannot strand the operator.
+  const pairingScreenElement =
+    boot.invalidReason !== undefined ? (
+      <PairingScreen pairing={props.pairing} invalidReason={boot.invalidReason} />
+    ) : (
+      <PairingScreen pairing={props.pairing} />
+    );
   const routes: RouteObject[] = [
-    {
-      path: '/',
-      element:
-        boot.phase === 'paired' ? (
-          <Navigate to="/paired" replace />
-        ) : (
-          <Navigate to="/pairing" replace />
-        ),
-    },
-    {
-      path: '/pairing',
-      element:
-        boot.phase === 'pairing' ? (
-          // exactOptionalPropertyTypes: only forward the prop when defined.
-          boot.invalidReason !== undefined ? (
-            <PairingScreen invalidReason={boot.invalidReason} />
-          ) : (
-            <PairingScreen />
-          )
-        ) : (
-          <Navigate to="/paired" replace />
-        ),
-    },
-    {
-      path: '/paired',
-      element:
-        boot.phase === 'paired' ? (
-          <PairedScreen status={boot.status} />
-        ) : (
-          <Navigate to="/pairing" replace />
-        ),
-    },
+    { path: '/', element: <Navigate to={boot.startPath} replace /> },
+    { path: '/pairing', element: pairingScreenElement },
+    { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
   ];
 
   // Tests use a memory router so window.location.pathname remains
   // controllable; production uses hash-routing to survive file://.
   if (typeof props.initialEntry === 'string' || isUnderTestEnvironment()) {
+    const initialEntry = props.initialEntry ?? '/';
     const router = createMemoryRouter(routes, {
-      initialEntries: [props.initialEntry ?? '/'],
+      initialEntries: [initialEntry],
     });
     // The memory router does NOT update window.location, so we mirror
     // the path back into history for tests that assert on
@@ -147,8 +133,15 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       </PathMirrorBridge>
     );
   }
+  // Production-only branch — covered by the manual Electron smoke (T035)
+  // and by the CI package:dir build. Vitest always returns true from
+  // isUnderTestEnvironment(), so this branch is never exercised in unit
+  // tests; v8-ignore to keep coverage honest about what unit tests
+  // actually cover.
+  /* v8 ignore start */
   const router = createHashRouter(routes);
   return <RouterProvider router={router} />;
+  /* v8 ignore stop */
 }
 
 /**
@@ -165,9 +158,14 @@ function PathMirrorBridge(props: {
   useEffect(() => {
     const sync = (): void => {
       const current = props.router.state.location.pathname;
-      if (current !== window.location.pathname) {
-        window.history.replaceState(null, '', current);
+      // Guard against an infinite update loop if the memory router and
+      // the DOM history are already in sync (e.g., on the very first
+      // sync call after mount).
+      /* v8 ignore next 3 */
+      if (current === window.location.pathname) {
+        return;
       }
+      window.history.replaceState(null, '', current);
     };
     sync();
     const unsubscribe = props.router.subscribe(sync);
@@ -186,6 +184,10 @@ function PathMirrorBridge(props: {
  */
 function isUnderTestEnvironment(): boolean {
   // import.meta.env is provided by Vite-side tooling; read it defensively.
+  // The `?? process.env.NODE_ENV` fallback is a production-only safety
+  // net — under Vitest, `import.meta.env.MODE` is always set, so the
+  // right side of the `??` never executes in tests.
+  /* v8 ignore next 4 */
   const mode =
     (import.meta as unknown as { env?: { MODE?: string } }).env?.MODE ??
     (typeof process !== 'undefined' ? process.env['NODE_ENV'] : undefined);
