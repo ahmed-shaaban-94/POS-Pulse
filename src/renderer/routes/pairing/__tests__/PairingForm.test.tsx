@@ -5,6 +5,13 @@ import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { PairingForm } from '../PairingForm';
+import {
+  INVALID_CODE_MESSAGE,
+  EXPIRED_CODE_MESSAGE,
+  ALREADY_PAIRED_MESSAGE,
+  GENERIC_FAILURE_MESSAGE,
+  EMPTY_INPUT_MESSAGE,
+} from '../messages';
 import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
 import type { PairingSubmitResult } from '../../../../shared/pairing-types';
 
@@ -378,5 +385,268 @@ describe('PairingForm — navigation on success (T034)', () => {
     if (!form) throw new Error('form not found in test DOM');
     const allText = (form.parentElement ?? form).textContent;
     expect(allText).not.toContain(sentinel);
+  });
+});
+
+/* ------------------------- T042 ------------------------- */
+
+describe('PairingForm — recoverable failure messages (T042)', () => {
+  // The three US3 outcomes each surface a distinct user-visible message.
+  // Form remains editable; no navigation; the input value is preserved
+  // so the operator can correct and retry. No outcome-specific copy
+  // for branch_mismatch (US4), rate_limited (US5), or the generic
+  // network_error / unknown_error categories (T074 / Phase Final).
+
+  it('on outcome=invalid_code: renders the INVALID_CODE message via role="status"', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'BADCODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
+    });
+  });
+
+  it('on outcome=expired_code: renders the EXPIRED_CODE message', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'expired_code' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'OLDCODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(EXPIRED_CODE_MESSAGE);
+    });
+  });
+
+  it('on outcome=already_paired: renders the ALREADY_PAIRED message', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'already_paired' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'USEDCODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(ALREADY_PAIRED_MESSAGE);
+    });
+  });
+
+  it('the three US3 messages are pairwise distinct', () => {
+    // Pin the "distinct messages" requirement at the dictionary level so
+    // a future copy edit cannot accidentally collapse two outcomes onto
+    // the same string.
+    const set = new Set([INVALID_CODE_MESSAGE, EXPIRED_CODE_MESSAGE, ALREADY_PAIRED_MESSAGE]);
+    expect(set.size).toBe(3);
+  });
+
+  it('the three US3 messages are also distinct from the generic failure fallback', () => {
+    // The generic fallback (used for unknown_error / network_error /
+    // any future-unrecognised outcome until T074 lands per-category copy)
+    // MUST NOT collide with any US3-owned message.
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      GENERIC_FAILURE_MESSAGE,
+    ]);
+    expect(set.size).toBe(4);
+  });
+
+  it('on a US3 failure: form remains editable (input + button enabled)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button')).not.toBeDisabled();
+    });
+    expect(screen.getByRole('textbox')).toBeEnabled();
+  });
+
+  it('on a US3 failure: does NOT navigate away from /pairing', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'expired_code' } });
+    const { locations } = renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(locations).not.toContain('/paired');
+  });
+
+  it('preserves the input value across a US3 failure (operator can retry)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    renderInRouter(bridge);
+
+    const input = screen.getByRole<HTMLInputElement>('textbox');
+    await user.type(input, 'TYPED-VALUE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    // The value the operator typed must still be in the input so they
+    // can correct one character rather than retype the whole code.
+    expect(input.value).toBe('TYPED-VALUE');
+  });
+
+  it('clears the failure message when the operator submits again successfully', async () => {
+    // After a failed submit, the message persists in the DOM until the
+    // next submit. On a successful subsequent submit (which navigates),
+    // the form unmounts, so we just assert the message disappears
+    // before navigation by using a re-emitting bridge.
+    const user = userEvent.setup();
+    let nextResult: PairingSubmitResult = { outcome: 'invalid_code' };
+    const submit = vi.fn(() => Promise.resolve(nextResult));
+    const bridge: PairingBridgeAPI = {
+      submit,
+      getStatus: vi.fn(() => Promise.reject(new Error('not used'))),
+    };
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
+    });
+
+    // Switch to a different failure outcome and submit again — the
+    // message must update, not stack.
+    nextResult = { outcome: 'expired_code' };
+    await user.click(screen.getByRole('button'));
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(EXPIRED_CODE_MESSAGE);
+    });
+    expect(screen.queryByText(INVALID_CODE_MESSAGE)).not.toBeInTheDocument();
+  });
+
+  it('on outcome=network_error: shows the generic failure message (T074 will refine)', async () => {
+    // network_error is NOT a US3 outcome — but the form must still
+    // surface SOME message so the operator knows the submit failed.
+    // Use the generic fallback until T074 lands per-category copy.
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'network_error' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(GENERIC_FAILURE_MESSAGE);
+    });
+  });
+
+  it('on outcome=unknown_error: shows the generic failure message', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'unknown_error' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(GENERIC_FAILURE_MESSAGE);
+    });
+  });
+
+  it('does NOT echo the pairing_code into the rendered message tree', async () => {
+    // The status region renders a fixed message string; the operator's
+    // typed code MUST NOT appear in the message body even on failure.
+    const user = userEvent.setup();
+    const sentinel = 'TOP-SECRET-PAIR-CODE-9876';
+    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), `${sentinel}{Enter}`);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    // The status region's text MUST NOT contain the sentinel — only the
+    // input element holds the value (for retry).
+    expect(screen.getByRole('status').textContent).not.toContain(sentinel);
+  });
+
+  it('does NOT render any device_token field name (PairingSubmitResult omits it by type)', async () => {
+    // Belt-and-braces: even if a future force-cast bridge surfaced
+    // device_token in the result, the form must not place it in the DOM.
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(document.body.textContent).not.toContain('device_token');
+  });
+});
+
+/* ------------------------- T044 ------------------------- */
+
+describe('PairingForm — empty / whitespace validation (T044)', () => {
+  it('empty Enter performs no bridge call AND surfaces a visible validation message', async () => {
+    const user = userEvent.setup();
+    const { bridge, submit } = makeBridge();
+    renderInRouter(bridge);
+
+    await user.keyboard('{Enter}');
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(EMPTY_INPUT_MESSAGE);
+  });
+
+  it('whitespace-only Enter performs no bridge call AND surfaces the validation message', async () => {
+    const user = userEvent.setup();
+    const { bridge, submit } = makeBridge();
+    renderInRouter(bridge);
+
+    await user.keyboard('    {Enter}');
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(EMPTY_INPUT_MESSAGE);
+  });
+
+  it('whitespace-only click on submit performs no bridge call AND surfaces the validation message', async () => {
+    const user = userEvent.setup();
+    const { bridge, submit } = makeBridge();
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), '   ');
+    await user.click(screen.getByRole('button'));
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent(EMPTY_INPUT_MESSAGE);
+  });
+
+  it('client-side validation message is distinct from the three US3 failure messages', () => {
+    const set = new Set([
+      EMPTY_INPUT_MESSAGE,
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+    ]);
+    expect(set.size).toBe(4);
+  });
+
+  it('clears the validation message once the operator types and submits non-empty content', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'invalid_code' } });
+    renderInRouter(bridge);
+
+    // First: empty Enter -> validation message visible.
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('status')).toHaveTextContent(EMPTY_INPUT_MESSAGE);
+
+    // Now: type a code and submit — the validation message must be
+    // replaced (not stacked) by whatever the bridge returns.
+    await user.type(screen.getByRole('textbox'), 'GOODCODE{Enter}');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
+    });
+    expect(screen.queryByText(EMPTY_INPUT_MESSAGE)).not.toBeInTheDocument();
   });
 });

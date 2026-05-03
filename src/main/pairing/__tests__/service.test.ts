@@ -283,6 +283,216 @@ describe('PairingService.submit — unknown-envelope catch-all (T023c)', () => {
   });
 });
 
+/* ------------------------- T040 ------------------------- */
+
+describe('PairingService.submit — recoverable failure outcomes (T040)', () => {
+  // Each test pre-populates the store fake's getStatus with a paired
+  // state so the "prior state untouched" assertion is meaningful: the
+  // service must NOT call persist() or clear() on any of the three
+  // recoverable-failure paths (FR-8).
+  const PRIOR_PAIRED_STATUS = {
+    kind: 'paired',
+    tenant_id: 'prior-tenant',
+    branch_id: 'prior-branch',
+    terminal_id: 'prior-terminal',
+    terminal_label: 'Prior Counter',
+    paired_at: 1700000000,
+  } as const;
+
+  function makeHarnessWithPriorPair(opts: HarnessOpts = {}): Harness {
+    const h = makeHarness(opts);
+    h.store.getStatus.mockResolvedValue(PRIOR_PAIRED_STATUS);
+    return h;
+  }
+
+  /* ----- INVALID_CODE ----- */
+
+  describe('INVALID_CODE -> outcome=invalid_code', () => {
+    it('resolves with { outcome: "invalid_code" }', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE', message: 'x' } },
+      });
+      const result = await h.service.submit('CODE');
+      expect(result).toEqual({ outcome: 'invalid_code' });
+    });
+
+    it('does NOT call store.persist() (failure path = log only)', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.persist).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call store.clear() (prior state preserved per FR-8)', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.clear).not.toHaveBeenCalled();
+    });
+
+    it('emits exactly ONE log record with outcome=invalid_code (no code/token in payload)', async () => {
+      const code = 'SECRET-INVALID-CODE-9999';
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+      });
+      await h.service.submit(code);
+
+      expect(h.logRecords).toHaveLength(1);
+      expect(h.logRecords[0]).toMatchObject({
+        event: 'pairing_attempt',
+        outcome: 'invalid_code',
+      });
+      expect(h.logRecords[0]?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      const dump = JSON.stringify(h.logRecords);
+      expect(dump).not.toContain(code);
+      expect(dump).not.toContain('SECRET-INVALID-CODE-9999');
+    });
+  });
+
+  /* ----- EXPIRED_CODE ----- */
+
+  describe('EXPIRED_CODE -> outcome=expired_code', () => {
+    it('resolves with { outcome: "expired_code" }', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE', message: 'x' } },
+      });
+      const result = await h.service.submit('CODE');
+      expect(result).toEqual({ outcome: 'expired_code' });
+    });
+
+    it('does NOT call store.persist()', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.persist).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call store.clear()', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.clear).not.toHaveBeenCalled();
+    });
+
+    it('emits exactly ONE log record with outcome=expired_code (no code/token)', async () => {
+      const code = 'SECRET-EXPIRED-CODE-1234';
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+      });
+      await h.service.submit(code);
+
+      expect(h.logRecords).toHaveLength(1);
+      expect(h.logRecords[0]).toMatchObject({
+        event: 'pairing_attempt',
+        outcome: 'expired_code',
+      });
+      const dump = JSON.stringify(h.logRecords);
+      expect(dump).not.toContain(code);
+    });
+  });
+
+  /* ----- ALREADY_PAIRED ----- */
+
+  describe('ALREADY_PAIRED -> outcome=already_paired', () => {
+    it('resolves with { outcome: "already_paired" }', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED', message: 'x' } },
+      });
+      const result = await h.service.submit('CODE');
+      expect(result).toEqual({ outcome: 'already_paired' });
+    });
+
+    it('does NOT call store.persist()', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.persist).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call store.clear()', async () => {
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.clear).not.toHaveBeenCalled();
+    });
+
+    it('emits exactly ONE log record with outcome=already_paired (no code/token)', async () => {
+      const code = 'SECRET-ALREADY-PAIRED-2025';
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+      });
+      await h.service.submit(code);
+
+      expect(h.logRecords).toHaveLength(1);
+      expect(h.logRecords[0]).toMatchObject({
+        event: 'pairing_attempt',
+        outcome: 'already_paired',
+      });
+      const dump = JSON.stringify(h.logRecords);
+      expect(dump).not.toContain(code);
+    });
+  });
+
+  /* ----- cross-cutting invariants for the three US3 outcomes ----- */
+
+  it('the three US3 outcomes share the same "no state mutation" invariant (FR-8)', async () => {
+    // Drive all three outcomes back-to-back through fresh harnesses and
+    // assert NEITHER persist NOR clear was called for any of them. This
+    // is the single explicit "failure path = log only" cross-test.
+    for (const code of ['INVALID_CODE', 'EXPIRED_CODE', 'ALREADY_PAIRED'] as const) {
+      const status = code === 'INVALID_CODE' ? 400 : code === 'EXPIRED_CODE' ? 410 : 409;
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status, body: { code } },
+      });
+      await h.service.submit('CODE');
+      expect(h.store.persist).not.toHaveBeenCalled();
+      expect(h.store.clear).not.toHaveBeenCalled();
+    }
+  });
+
+  it('the three US3 log records carry NO terminal_id (success-only field)', async () => {
+    // The PairingAttemptLogRecord schema scopes terminal_id to the
+    // success branch. Failure records MUST NOT carry it — the field
+    // would expose post-pair identity on a path where no pair occurred.
+    for (const code of ['INVALID_CODE', 'EXPIRED_CODE', 'ALREADY_PAIRED'] as const) {
+      const status = code === 'INVALID_CODE' ? 400 : code === 'EXPIRED_CODE' ? 410 : 409;
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status, body: { code } },
+      });
+      await h.service.submit('CODE');
+      expect(h.logRecords[0]).not.toHaveProperty('terminal_id');
+    }
+  });
+
+  it('the three US3 log records carry NO retry_after_s or timed_out (US5/transport-only fields)', async () => {
+    for (const code of ['INVALID_CODE', 'EXPIRED_CODE', 'ALREADY_PAIRED'] as const) {
+      const status = code === 'INVALID_CODE' ? 400 : code === 'EXPIRED_CODE' ? 410 : 409;
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status, body: { code } },
+      });
+      await h.service.submit('CODE');
+      expect(h.logRecords[0]).not.toHaveProperty('retry_after_s');
+      expect(h.logRecords[0]).not.toHaveProperty('timed_out');
+    }
+  });
+
+  it('NEVER rejects for any of the three US3 outcomes (bridge contract)', async () => {
+    for (const code of ['INVALID_CODE', 'EXPIRED_CODE', 'ALREADY_PAIRED'] as const) {
+      const status = code === 'INVALID_CODE' ? 400 : code === 'EXPIRED_CODE' ? 410 : 409;
+      const h = makeHarnessWithPriorPair({
+        pairResult: { ok: false, status, body: { code } },
+      });
+      await expect(h.service.submit('CODE')).resolves.toBeDefined();
+    }
+  });
+});
+
 /* ------------------------- contract invariants ------------------------- */
 
 describe('PairingService.submit — contract invariants (T023a)', () => {

@@ -1,24 +1,34 @@
 import type { PairingOutcome } from '../../shared/pairing-types.js';
 
 /**
- * 002-terminal-pairing T020 — pure mapping from a non-2xx HTTP envelope
- * to a `PairingOutcome` category.
+ * 002-terminal-pairing T020 + T037 — pure mapping from a non-2xx HTTP
+ * envelope to a `PairingOutcome` category.
  *
- * US2 ships ONLY:
+ * US2 (T020) shipped:
  *   - the success-path guard ("called with 2xx is a programmer error"),
  *   - a defensive default of `'unknown_error'` for any non-2xx whose
  *     body code is not yet recognised.
  *
- * US3 / US4 / US5 extend this function with per-outcome branches:
- *   - INVALID_CODE   -> 'invalid_code'    (US3)
- *   - EXPIRED_CODE   -> 'expired_code'    (US3)
- *   - ALREADY_PAIRED -> 'already_paired'  (US3)
+ * US3 (T037) adds the recoverable-failure branches documented in
+ * `contracts/pairing-http.md`:
+ *   - INVALID_CODE   -> 'invalid_code'
+ *   - EXPIRED_CODE   -> 'expired_code'
+ *   - ALREADY_PAIRED -> 'already_paired'
+ *
+ * Still deferred (intentionally — the catch-all keeps the door open):
  *   - BRANCH_MISMATCH-> 'branch_mismatch' (US4)
- *   - RATE_LIMITED   -> 'rate_limited'    (US5)
+ *   - RATE_LIMITED   -> 'rate_limited'    (US5; will also surface
+ *                                          retry_after_s on the failure
+ *                                          envelope, parsed by network.ts)
+ *
+ * Discriminator policy: the function reads `body.code` only. HTTP status
+ * is NOT the routing key — `409` is shared between `ALREADY_PAIRED` (US3)
+ * and the future `BRANCH_MISMATCH` (US4), so a status-based switch would
+ * conflate them. Routing on `body.code` keeps the two branches distinct
+ * and lets US4 land cleanly without touching this function's contract.
  *
  * The function is pure: same input -> same output, no side effects, no
- * I/O. That makes it trivial to test exhaustively per case once the
- * branches land.
+ * I/O. That makes it trivial to test exhaustively per case.
  *
  * Security: this function never receives the `pairing_code` and does not
  * log. The body argument is structurally typed and only the `code`
@@ -54,10 +64,19 @@ export function mapFailure(status: number, body: FailureBody): PairingOutcome {
     );
   }
 
-  // US3 / US4 / US5 will extend this switch. US2 ships only the
-  // defensive default so the bridge contract holds from MVP onward.
-  // `body` is reserved for the future per-outcome branches (it carries
-  // `code` for the typed envelope); ignored at this stage.
-  void body;
-  return 'unknown_error';
+  // Body-code switch (NOT a status switch). US3 lands the three
+  // recoverable-failure branches; US4/US5 extend this list without
+  // changing the function's contract. The catch-all 'unknown_error'
+  // covers every unrecognised body code, including BRANCH_MISMATCH
+  // (US4) and RATE_LIMITED (US5) until those tasks land.
+  switch (body.code) {
+    case 'INVALID_CODE':
+      return 'invalid_code';
+    case 'EXPIRED_CODE':
+      return 'expired_code';
+    case 'ALREADY_PAIRED':
+      return 'already_paired';
+    default:
+      return 'unknown_error';
+  }
 }
