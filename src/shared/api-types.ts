@@ -5607,6 +5607,28 @@ export interface paths {
         patch: operations["patch_tenant_api_v1_tenants_me_patch"];
         trace?: never;
     };
+    "/api/v1/terminals/pair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pair Terminal
+         * @description Exchange a one-shot pairing_code for a long-lived device_token + assignment tuple. The only POS endpoint where X-Terminal-Token is absent. The pairing_code is the sole credential; it is consumed on success and rejected on reuse.
+         *
+         *     [fallback-snapshot] Hand-authored from specs/002-terminal-pairing/contracts/pairing-http.md because the live OpenAPI at https://api.smartdatapulse.tech/openapi.json does not yet publish this operation. Backend coordination ticket required to align the live spec.
+         */
+        post: operations["pair_terminal_api_v1_terminals_pair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/upload/confirm": {
         parameters: {
             query?: never;
@@ -12804,6 +12826,54 @@ export interface components {
              * @default Terminal-1
              */
             terminal_name: string;
+        };
+        /**
+         * TerminalPairErrorResponse
+         * @description Failure envelope for POST /api/v1/terminals/pair. The code discriminates the recoverable failure modes (INVALID_CODE, EXPIRED_CODE, ALREADY_PAIRED, BRANCH_MISMATCH, RATE_LIMITED). message is logged but never shown verbatim - UI uses its own message family.
+         */
+        TerminalPairErrorResponse: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "INVALID_CODE" | "EXPIRED_CODE" | "ALREADY_PAIRED" | "BRANCH_MISMATCH" | "RATE_LIMITED";
+            /** Message */
+            message: string;
+        };
+        /**
+         * TerminalPairRequest
+         * @description Request body for POST /api/v1/terminals/pair. The pairing_code is a short-lived secret; clients MUST NOT log it. Format and length are server-defined.
+         */
+        TerminalPairRequest: {
+            /**
+             * Pairing Code
+             * @description Short-lived one-shot pairing code. SECRET - never logged.
+             */
+            pairing_code: string;
+        };
+        /**
+         * TerminalPairResponse
+         * @description Successful pairing envelope. The device_token is a SECRET - stored only via SecretStore, never logged or echoed to the renderer. tenant_id / branch_id / terminal_id / terminal_label populate the single-row terminal_assignment table.
+         */
+        TerminalPairResponse: {
+            /** Branch Id */
+            branch_id: string;
+            /**
+             * Device Token
+             * @description Long-lived device token. SECRET - stored exclusively via SecretStore.
+             */
+            device_token: string;
+            /**
+             * Expires At
+             * @description Optional ISO-8601 expiry hint. Ignored by 002-terminal-pairing.
+             */
+            expires_at?: string | null;
+            /** Tenant Id */
+            tenant_id: string;
+            /** Terminal Id */
+            terminal_id: string;
+            /** Terminal Label */
+            terminal_label: string;
         };
         /**
          * TerminalSessionResponse
@@ -22746,6 +22816,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pair_terminal_api_v1_terminals_pair_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TerminalPairRequest"];
+            };
+        };
+        responses: {
+            /** @description Pairing succeeded - device_token + assignment tuple returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalPairResponse"];
+                };
+            };
+            /** @description INVALID_CODE - pairing code not recognised. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalPairErrorResponse"];
+                };
+            };
+            /** @description ALREADY_PAIRED or BRANCH_MISMATCH - see body.code. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalPairErrorResponse"];
+                };
+            };
+            /** @description EXPIRED_CODE - pairing code is past its TTL. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalPairErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description RATE_LIMITED - too many attempts. Carries Retry-After header (delta-seconds or HTTP-date). */
+            429: {
+                headers: {
+                    /** @description Seconds (or HTTP-date) the client MUST wait before retrying. Client clamps to [1, 300]; default 30 on parse failure. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TerminalPairErrorResponse"];
                 };
             };
         };

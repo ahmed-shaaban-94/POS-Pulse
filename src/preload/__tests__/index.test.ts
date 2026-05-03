@@ -61,4 +61,29 @@ describe('preload bridge', () => {
     expect(ipcRendererInvoke).toHaveBeenCalledWith('app:version');
     expect(result).toBe('0.1.0');
   });
+
+  /**
+   * 002-terminal-pairing T006: the pairing namespace is declared at the
+   * foundational layer but its methods MUST throw "not implemented" until
+   * US1 / US2 wire real handlers. The test guards against accidental early
+   * wiring (which would slip past type-checking).
+   */
+  it('exposes a pairing namespace whose methods reject with "not implemented" until US1/US2', async () => {
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    expect(api.pairing).toBeDefined();
+    expect(typeof api.pairing.getStatus).toBe('function');
+    expect(typeof api.pairing.submit).toBe('function');
+
+    await expect(api.pairing.getStatus()).rejects.toThrow(/not implemented/i);
+    await expect(api.pairing.submit('any-code')).rejects.toThrow(/not implemented/i);
+    // Bridge MUST NOT call ipcRenderer for placeholder methods — there is no
+    // handler registered yet, and a leaked invoke would surface as
+    // "no handler for channel" in production.
+    expect(ipcRendererInvoke).not.toHaveBeenCalled();
+  });
 });
