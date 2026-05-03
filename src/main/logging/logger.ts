@@ -69,6 +69,30 @@ const DATE_FORMAT = 'yyyyMMdd';
 const FILE_EXTENSION = '.log';
 
 /**
+ * 002-terminal-pairing T009a — base redaction list.
+ *
+ * Belt-and-braces scrubbing for known-secret field names that MUST never
+ * appear in any log line, at any level, in any process (Constitution VII +
+ * spec NFR-4 / FR-9 / FR-10). The schema-restricted `pairingLog` emitter
+ * (US6, T058+) is the canonical path for pairing log records; this list
+ * is the safety net for any non-pairing log line that happens to include
+ * one of these key names.
+ *
+ * Coverage strategy: pino's `redact` supports `*` for exactly one path
+ * segment, so we enumerate top-level + a small fixed depth of wildcard
+ * segments. The cross-process redaction test (T062) is the load-bearing
+ * guarantee — this list keeps the common case clean even if a future
+ * contributor logs a request/response object directly.
+ */
+const PAIRING_REDACTED_KEYS = ['pairing_code', 'device_token'] as const;
+const REDACTION_PATHS: string[] = PAIRING_REDACTED_KEYS.flatMap((key) => [
+  key,
+  `*.${key}`,
+  `*.*.${key}`,
+  `*.*.*.${key}`,
+]);
+
+/**
  * Create a structured logger writing JSON-per-line records to a
  * daily-rotating file under `opts.logsDir`. On stream-creation failure
  * (R4), returns a console-fallback logger so the app still launches.
@@ -92,6 +116,9 @@ export async function createLogger(opts: CreateLoggerOptions): Promise<Logger> {
       },
     },
     level: 'info',
+    // 002-terminal-pairing T009a: scrub known-secret keys at every reachable
+    // depth in any structured payload. See PAIRING_REDACTED_KEYS above.
+    redact: { paths: REDACTION_PATHS },
   };
 
   let stream: NodeJS.WritableStream;

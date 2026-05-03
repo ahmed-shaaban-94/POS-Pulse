@@ -227,6 +227,105 @@ describe('createLogger', () => {
 });
 
 /**
+ * 002-terminal-pairing T009 — pino redaction extension for pairing secrets.
+ *
+ * The schema-restricted `pairingLog` emitter (US6, T058+) is the canonical
+ * path for pairing log records, but the foundational layer ALSO extends the
+ * base pino redaction list so that any non-pairing log line that happens to
+ * mention `pairing_code` or `device_token` is scrubbed automatically. This
+ * is belt-and-braces: even a future contributor who logs `{ pairing_code:
+ * '...' }` from somewhere outside the pairing module gets redaction for
+ * free. Per Constitution VII (logging policy) + spec NFR-4 / FR-9 / FR-10.
+ */
+describe('createLogger — pairing-secret redaction (T009)', () => {
+  const PAIR_CODE_VALUE = 'SECRET-PAIR-CODE-1234';
+  const DEVICE_TOKEN_VALUE = 'opaque-device-token-abcdef';
+
+  it('redacts top-level pairing_code field', async () => {
+    const { factory, read } = makeCapturingFactory();
+    const logger = await createLogger({
+      process: 'main',
+      appVersion: APP_VERSION,
+      logsDir: '/tmp/x',
+      pinoRollFactory: factory,
+    });
+    logger.info({ pairing_code: PAIR_CODE_VALUE }, 'sample');
+    await flush();
+
+    const lines = read();
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    const raw = lines.join('\n');
+    expect(raw).not.toContain(PAIR_CODE_VALUE);
+    const record = parseRecord(firstLine(lines));
+    // pino's default redaction substitutes "[Redacted]"; we assert the value
+    // is not present rather than asserting a specific substitute, so a future
+    // tightening (e.g., remove: true) does not require touching this test.
+    expect(record['pairing_code']).not.toBe(PAIR_CODE_VALUE);
+  });
+
+  it('redacts top-level device_token field', async () => {
+    const { factory, read } = makeCapturingFactory();
+    const logger = await createLogger({
+      process: 'main',
+      appVersion: APP_VERSION,
+      logsDir: '/tmp/x',
+      pinoRollFactory: factory,
+    });
+    logger.info({ device_token: DEVICE_TOKEN_VALUE }, 'sample');
+    await flush();
+
+    const raw = read().join('\n');
+    expect(raw).not.toContain(DEVICE_TOKEN_VALUE);
+  });
+
+  it('redacts nested pairing_code under any object path', async () => {
+    const { factory, read } = makeCapturingFactory();
+    const logger = await createLogger({
+      process: 'main',
+      appVersion: APP_VERSION,
+      logsDir: '/tmp/x',
+      pinoRollFactory: factory,
+    });
+    logger.info({ request: { body: { pairing_code: PAIR_CODE_VALUE } } }, 'sample');
+    await flush();
+
+    const raw = read().join('\n');
+    expect(raw).not.toContain(PAIR_CODE_VALUE);
+  });
+
+  it('redacts nested device_token under any object path', async () => {
+    const { factory, read } = makeCapturingFactory();
+    const logger = await createLogger({
+      process: 'main',
+      appVersion: APP_VERSION,
+      logsDir: '/tmp/x',
+      pinoRollFactory: factory,
+    });
+    logger.info({ response: { envelope: { device_token: DEVICE_TOKEN_VALUE } } }, 'sample');
+    await flush();
+
+    const raw = read().join('\n');
+    expect(raw).not.toContain(DEVICE_TOKEN_VALUE);
+  });
+
+  it('does not redact unrelated fields (sanity — redaction is targeted)', async () => {
+    const { factory, read } = makeCapturingFactory();
+    const logger = await createLogger({
+      process: 'main',
+      appVersion: APP_VERSION,
+      logsDir: '/tmp/x',
+      pinoRollFactory: factory,
+    });
+    logger.info({ tenant_id: 'tenant-42', terminal_label: 'Counter 1' }, 'sample');
+    await flush();
+
+    const record = parseRecord(firstLine(read()));
+    expect(record['tenant_id']).toBe('tenant-42');
+    expect(record['terminal_label']).toBe('Counter 1');
+  });
+});
+
+/**
  * pino writes asynchronously through SonicBoom; tests need a microtask
  * tick before reading. We use a small queue-microtask-sized await rather
  * than setImmediate so vitest can run with a fake timer if needed later.

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'crypto';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import initSqlJs, { type Database as SqlJsDatabase } from 'sql.js';
 
 import {
   bindMigrationsDb,
@@ -347,5 +349,182 @@ describe('bindMigrationsDb', () => {
     expect(ran).toBe(true);
     expect(result).toBe(42);
     expect(m.transactionCalls).toBe(1);
+  });
+});
+
+/**
+ * 002-terminal-pairing T007 — `0003_terminal_assignment.sql` migration tests.
+ *
+ * The CHECK (id = 1) constraint is a behavioural guarantee, not a textual one,
+ * so this suite executes the migration SQL against a real SQLite engine.
+ * Production uses `better-sqlite3` via Electron's rebuilt ABI; loading that
+ * native binary in Vitest (system Node) crashes with NODE_MODULE_VERSION
+ * mismatch (R1, see client.test.ts header). We use `sql.js` (pure-JS SQLite-
+ * compiled-to-WASM) as the unit-test engine. CHECK / NOT NULL / PRIMARY KEY
+ * semantics in sql.js match SQLite proper because it IS SQLite. The native
+ * better-sqlite3 path remains exercised by the manual smoke (T079).
+ */
+
+const __dirnameForMigrationFile = path.dirname(fileURLToPath(import.meta.url));
+const MIGRATIONS_DIR = path.resolve(
+  __dirnameForMigrationFile,
+  '..',
+  '..',
+  '..',
+  '..',
+  'migrations',
+);
+const MIGRATION_NAME = '0003_terminal_assignment';
+const MIGRATION_PATH = path.join(MIGRATIONS_DIR, `${MIGRATION_NAME}.sql`);
+
+async function openInMemoryDb(): Promise<SqlJsDatabase> {
+  // sql.js's default export is an init promise that resolves to the SQL module.
+  // Calling with no options uses the bundled WASM (no fs / network).
+  const SQL = await initSqlJs();
+  return new SQL.Database();
+}
+
+function readMigrationSql(): string {
+  return readFileSync(MIGRATION_PATH, 'utf8');
+}
+
+describe('migration 0003_terminal_assignment', () => {
+  it('applies cleanly against a fresh SQLite database', async () => {
+    const db = await openInMemoryDb();
+    try {
+      const sql = readMigrationSql();
+      expect(() => db.run(sql)).not.toThrow();
+      // Sanity: the table exists and accepts the canonical row.
+      expect(() =>
+        db.run(
+          `INSERT INTO terminal_assignment
+             (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)
+           VALUES (1, 't1', 'b1', 'term-1', 'Counter 1', 1735689600)`,
+        ),
+      ).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it('CHECK (id = 1) rejects a second-row insert with id != 1', async () => {
+    const db = await openInMemoryDb();
+    try {
+      db.run(readMigrationSql());
+      // First row at id=1 is fine.
+      db.run(
+        `INSERT INTO terminal_assignment
+           (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)
+         VALUES (1, 't1', 'b1', 'term-1', 'Counter 1', 1735689600)`,
+      );
+      // Any other id MUST fail the CHECK constraint.
+      expect(() =>
+        db.run(
+          `INSERT INTO terminal_assignment
+             (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)
+           VALUES (2, 't2', 'b2', 'term-2', 'Counter 2', 1735689601)`,
+        ),
+      ).toThrow(/CHECK constraint/i);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('PRIMARY KEY (id) blocks a duplicate insert at id=1', async () => {
+    // Belt-and-braces: even if the CHECK is somehow bypassed, the PRIMARY KEY
+    // still prevents a second row at id=1. Together they enforce "at most one row".
+    const db = await openInMemoryDb();
+    try {
+      db.run(readMigrationSql());
+      db.run(
+        `INSERT INTO terminal_assignment
+           (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)
+         VALUES (1, 't1', 'b1', 'term-1', 'Counter 1', 1735689600)`,
+      );
+      expect(() =>
+        db.run(
+          `INSERT INTO terminal_assignment
+             (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)
+           VALUES (1, 't9', 'b9', 'term-9', 'Counter 9', 1735689602)`,
+        ),
+      ).toThrow(/UNIQUE|PRIMARY KEY/i);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('every column except id has NOT NULL enforced', async () => {
+    const db = await openInMemoryDb();
+    try {
+      db.run(readMigrationSql());
+      // Try to insert with each NOT NULL column nulled in turn. SQLite reports
+      // "NOT NULL constraint failed: <table>.<col>".
+      const required = ['tenant_id', 'branch_id', 'terminal_id', 'terminal_label', 'paired_at'];
+      for (const col of required) {
+        const cols = ['id', 'tenant_id', 'branch_id', 'terminal_id', 'terminal_label', 'paired_at'];
+        const values: Record<string, string | number | null> = {
+          id: 1,
+          tenant_id: 't',
+          branch_id: 'b',
+          terminal_id: 'term',
+          terminal_label: 'Counter',
+          paired_at: 1735689600,
+        };
+        values[col] = null;
+        const placeholders = cols.map((c) => JSON.stringify(values[c])).join(', ');
+        expect(() =>
+          db.run(`INSERT INTO terminal_assignment (${cols.join(', ')}) VALUES (${placeholders})`),
+        ).toThrow(/NOT NULL constraint/i);
+        // Reset between iterations.
+        db.run('DELETE FROM terminal_assignment');
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it('migration file is recorded as applied by the runMigrations runner (idempotent on re-run)', () => {
+    // Runner-level integration: read the real on-disk file via the existing
+    // adapter and confirm runMigrations records it once and skips it on rerun.
+    const all = readMigrationsFromDisk(MIGRATIONS_DIR);
+    const file = all.find((f) => f.name === MIGRATION_NAME);
+    expect(file).toBeDefined();
+    if (!file) return;
+
+    // Use the in-memory MigrationsDb fake (SQL never executes here — we only
+    // exercise the runner's bookkeeping path; SQL semantics are covered by the
+    // sql.js suite above).
+    const applied: AppliedRow[] = [];
+    let schemaMigrationsTableCreated = false;
+    const execLog: string[] = [];
+    const fakeDb: MigrationsDb = {
+      exec(sql: string): void {
+        if (/CREATE TABLE IF NOT EXISTS schema_migrations/i.test(sql)) {
+          schemaMigrationsTableCreated = true;
+          return;
+        }
+        execLog.push(sql);
+      },
+      listAppliedNames(): string[] {
+        return applied.map((r) => r.name);
+      },
+      recordApplied(row: AppliedRow): void {
+        applied.push(row);
+      },
+      transaction<T>(fn: () => T): T {
+        return fn();
+      },
+    };
+
+    runMigrations({ db: fakeDb, files: [file] });
+    expect(schemaMigrationsTableCreated).toBe(true);
+    expect(applied.map((r) => r.name)).toEqual([MIGRATION_NAME]);
+    expect(execLog).toContain(file.sql);
+
+    // Second run — no new rows, no re-exec.
+    const execCountBefore = execLog.length;
+    runMigrations({ db: fakeDb, files: [file] });
+    expect(applied.map((r) => r.name)).toEqual([MIGRATION_NAME]);
+    expect(execLog.length).toBe(execCountBefore);
   });
 });
