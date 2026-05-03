@@ -4,14 +4,15 @@ import { TransportError, type Network, type PairResult } from './network.js';
 import { mapFailure } from './failure-mapping.js';
 
 /**
- * 002-terminal-pairing T023 + T023a — `PairingService.submit`.
+ * 002-terminal-pairing T023 + T023a + T041 — `PairingService.submit`.
  *
  * The orchestrator. Composes:
  *
  *   network.pair(code)          // transport-only rejection
  *     -> on ok=true:   pairingStore.persist({...})  -> success log
- *     -> on ok=false:  mapFailure (success-guard only in US2; per-outcome
- *                      branches in US3+)            -> unknown_error log
+ *     -> on ok=false:  mapFailure -> typed PairingSubmitResult
+ *                      (US3 wires the three recoverable failure
+ *                       outcomes; US4/US5 extend this list later)
  *     -> on TransportError:                        -> network_error log
  *                      (timed_out propagates to log)
  *
@@ -19,6 +20,12 @@ import { mapFailure } from './failure-mapping.js';
  * backend/network outcome with a typed `PairingSubmitResult`. The only
  * rejection path is programmer error (non-string code). US3/US4/US5/US7
  * later refine outcome categories without ever changing this rule.
+ *
+ * T041 (US3) — failure path = log only. The three new outcomes
+ * (invalid_code / expired_code / already_paired) NEVER call
+ * `pairingStore.persist()` or `pairingStore.clear()`. Prior persisted
+ * state (token + assignment row) is byte-for-byte unchanged across a
+ * failed submit (FR-8).
  *
  * Security policy (Constitution VII + spec NFR-4 / FR-9 / FR-10):
  *   - The `pairing_code` is read from the argument and passed to the
@@ -168,30 +175,33 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
         };
       }
 
-      // Reachable non-2xx. US2 routes ALL such responses through
-      // mapFailure's catch-all, which today returns 'unknown_error'.
-      // US3/US4/US5 will refine the typed outcomes; the call site here
-      // does not need to change.
+      // Reachable non-2xx. US3 wires the three documented recoverable
+      // outcomes (invalid_code / expired_code / already_paired); US4
+      // (branch_mismatch) and US5 (rate_limited) extend this list. Any
+      // outcome the switch does not yet recognise (or that mapFailure
+      // returns from a future code path the service hasn't wired) falls
+      // through to 'unknown_error' so the bridge contract holds.
+      //
+      // No store call on any branch — failure path = log only (FR-8).
+      // Prior persisted token + assignment row remain byte-for-byte
+      // untouched across every failure outcome.
       const outcome = mapFailure(pairResult.status, pairResult.body);
-
-      // T023a defensive check: mapFailure SHOULD only ever yield outcome
-      // categories US2 has wired through to PairingSubmitResult. The
-      // catch-all guarantees 'unknown_error' is the only possibility
-      // until US3+ extends the function. If a future contributor adds
-      // a branch without updating the service, fall through to
-      // unknown_error rather than crashing.
-      if (outcome !== 'unknown_error') {
-        // Belt-and-braces: this branch is unreachable in US2 because
-        // mapFailure only returns 'unknown_error'. Documented here so
-        // a future contributor knows the service-level result mapping
-        // is the next thing to extend (alongside the per-outcome
-        // user-message dictionary in T074 / US3+).
-        pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
-        return { outcome: 'unknown_error' };
+      switch (outcome) {
+        case 'invalid_code':
+        case 'expired_code':
+        case 'already_paired': {
+          pairingLog({ event: 'pairing_attempt', outcome, at: nowIso() });
+          return { outcome };
+        }
+        // US4 will add 'branch_mismatch'; US5 will add 'rate_limited'
+        // (with retry_after_s). Until then, those outcome categories
+        // cannot reach this switch — mapFailure routes them through the
+        // catch-all 'unknown_error' default.
+        default: {
+          pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
+          return { outcome: 'unknown_error' };
+        }
       }
-
-      pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
-      return { outcome: 'unknown_error' };
     },
   };
 }

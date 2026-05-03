@@ -1,7 +1,14 @@
 import type { components } from '../../shared/api-types.js';
 
 /**
- * 002-terminal-pairing T021 — `network.pair()`.
+ * 002-terminal-pairing T021 + T039 — `network.pair()`.
+ *
+ * T039 (US3): no behaviour change. The contract below was already
+ * "resolve verbatim on every reachable response, including non-2xx";
+ * T038 added regression tests for the three documented US3 failure
+ * envelopes (400 INVALID_CODE / 410 EXPIRED_CODE / 409 ALREADY_PAIRED),
+ * each of which surfaces unchanged through the existing implementation.
+ * The function's surface is unchanged.
  *
  * The only `fetch` site in the pairing slice. Contract (LOCKED from MVP
  * onward — every later US refines body-code mapping but never changes

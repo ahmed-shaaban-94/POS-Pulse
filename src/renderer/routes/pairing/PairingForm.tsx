@@ -1,10 +1,11 @@
 import { useRef, useState, type SyntheticEvent, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { messageFor, EMPTY_INPUT_MESSAGE } from './messages';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 
 /**
- * 002-terminal-pairing T029 + T034 — `PairingForm`.
+ * 002-terminal-pairing T029 + T034 + T043 + T045 — `PairingForm`.
  *
  * Single-input form that drives the pairing submit flow. Accepts both
  * manual entry (operator types code + Enter or click) and wedge-scanner
@@ -19,9 +20,14 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *      mean a stale `useState` read can produce an empty submit. The
  *      ref always reflects the live DOM value.
  *
- *   2. The only `useState` is the in-flight `submitting` flag. That flag
- *      gates re-entry (a second Enter while the first call is still
- *      pending is dropped) and disables the submit button.
+ *   2. `useState` holds two pieces of state:
+ *      - `submitting` — gates re-entry (a second Enter while the first
+ *        call is still pending is dropped) and disables the submit
+ *        button.
+ *      - `statusMessage` — the operator-facing message rendered in a
+ *        `role="status"` region. `null` when the form is idle; the
+ *        empty-input validation copy on a no-content submit (T045);
+ *        the outcome's message family on a non-success result (T043).
  *
  *   3. On `outcome === 'success'` the form calls
  *      `navigate('/paired', { replace: true })`. PairedScreen calls
@@ -29,20 +35,25 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *      route that fetches its own data — we are not coupling the form
  *      to the boot router's state.
  *
- *   4. NO outcome-specific copy. T029 / T034 do not require it; T074
- *      (Phase Final) lands the message dictionary. The form is
- *      correct-but-coarse on every non-success outcome — re-enables
- *      and stays editable so the operator can retry.
+ *   4. Per-outcome copy lives in `./messages.ts`. US3 owns the three
+ *      recoverable-failure outcomes (invalid_code / expired_code /
+ *      already_paired); every other non-success outcome (network_error,
+ *      unknown_error, the future US4/US5 outcomes) routes through the
+ *      generic fallback in `messageFor()` until T074 / US4 / US5 land
+ *      their own copy.
  *
  * Security policy (Constitution VII + spec NFR-4 / FR-9 / FR-10):
  *   - The `pairing_code` lives in the input element's value (controlled
  *     uncontrolled hybrid: ref-driven, but the input IS what holds it).
- *     It is never written to a logger, never echoed to a status line.
+ *     It is never written to a logger, never interpolated into the
+ *     status message, never echoed to any text node outside the input.
  *   - On success the form navigates away; the input unmounts and React
  *     drops the value.
  *   - The bridge's submit return type omits `device_token` by
  *     construction (PR #15 / PR #17), so even if the form rendered
- *     `result` it could not leak the token.
+ *     `result` it could not leak the token. The status message comes
+ *     from a fixed string table in `./messages.ts` — there is no place
+ *     to interpolate a secret.
  */
 
 export interface PairingFormProps {
@@ -56,6 +67,7 @@ export interface PairingFormProps {
 export function PairingForm(props: PairingFormProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const pairing = props.pairing ?? readBridge();
@@ -63,18 +75,29 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
   async function performSubmit(): Promise<void> {
     if (submitting) return;
     const code = inputRef.current?.value.trim() ?? '';
-    if (code.length === 0) return; // empty / whitespace-only is a no-op
+    if (code.length === 0) {
+      // T045: visible client-side validation. Replaces the silent
+      // no-op the form had in US2. No bridge call; the operator sees
+      // why nothing happened.
+      setStatusMessage(EMPTY_INPUT_MESSAGE);
+      return;
+    }
 
     setSubmitting(true);
+    // Clear any prior message so a stale failure copy does not visually
+    // stack with the in-flight state.
+    setStatusMessage(null);
     try {
       const result = await pairing.submit(code);
       if (result.outcome === 'success') {
         void navigate('/paired', { replace: true });
         return;
       }
-      // Non-success outcomes (network_error / unknown_error in US2; US3+
-      // adds typed branches). The form re-enables; the operator can
-      // retry. No outcome-specific copy here — that lands in T074.
+      // Non-success outcomes (US3 wires invalid_code / expired_code /
+      // already_paired; other categories route through the generic
+      // fallback until T074 / US4 / US5 land their copy). The form
+      // re-enables and stays editable so the operator can retry.
+      setStatusMessage(messageFor(result.outcome));
     } finally {
       setSubmitting(false);
     }
@@ -100,6 +123,11 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
       <button type="submit" disabled={submitting}>
         {submitting ? 'Pairing…' : 'Pair terminal'}
       </button>
+      {statusMessage !== null ? (
+        <p role="status" data-testid="pairing-message">
+          {statusMessage}
+        </p>
+      ) : null}
     </form>
   );
 }

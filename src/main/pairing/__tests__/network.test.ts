@@ -269,6 +269,117 @@ describe('network.pair() — transport failure (T021a)', () => {
   });
 });
 
+/* ------------------------- T038 ------------------------- */
+
+describe('network.pair() — verbatim forwarding of US3 failure envelopes (T038)', () => {
+  it('400 INVALID_CODE: surfaces { ok: false, status: 400, body: <verbatim> }', async () => {
+    const failureBody = { code: 'INVALID_CODE', message: 'Code not recognised.' };
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify(failureBody), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('BADCODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      // Verbatim — the service / failure-mapping read body.code from
+      // exactly this object.
+      expect(result.body).toEqual(failureBody);
+    }
+  });
+
+  it('410 EXPIRED_CODE: surfaces { ok: false, status: 410, body: <verbatim> }', async () => {
+    const failureBody = { code: 'EXPIRED_CODE', message: 'Code expired.' };
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify(failureBody), {
+        status: 410,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('OLDCODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(410);
+      expect(result.body).toEqual(failureBody);
+    }
+  });
+
+  it('409 ALREADY_PAIRED: surfaces { ok: false, status: 409, body: <verbatim> }', async () => {
+    const failureBody = { code: 'ALREADY_PAIRED', message: 'Code already used.' };
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify(failureBody), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('USEDCODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(409);
+      expect(result.body).toEqual(failureBody);
+    }
+  });
+
+  it('does NOT throw for any of the three documented US3 failure responses', async () => {
+    // Re-pin the resolve-on-reachable contract for the three US3
+    // outcomes specifically. A regression that throws on a typed
+    // failure envelope would crash the renderer with a rejected promise
+    // — the bridge contract requires resolve-with-typed-result.
+    for (const [status, code] of [
+      [400, 'INVALID_CODE'],
+      [410, 'EXPIRED_CODE'],
+      [409, 'ALREADY_PAIRED'],
+    ] as const) {
+      const { fetch } = makeFakeFetch({
+        response: new Response(JSON.stringify({ code, message: 'x' }), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      });
+      const network = createNetwork({ fetch, baseUrl: BASE_URL });
+      await expect(network.pair('CODE')).resolves.toBeDefined();
+    }
+  });
+
+  it('preserves additional body fields verbatim (no field stripping)', async () => {
+    // Defensive: if the backend evolves the envelope to include extra
+    // diagnostic fields (e.g., `request_id`), they MUST flow through
+    // verbatim so future features can read them without changing the
+    // network contract. failure-mapping reads only `code` defensively.
+    const failureBody = {
+      code: 'INVALID_CODE',
+      message: 'Code not recognised.',
+      request_id: 'req-7f3e9',
+      hint: 'check terminal label',
+    };
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify(failureBody), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.body).toEqual(failureBody);
+    }
+  });
+});
+
 describe('network.pair() — client-side timeout (T021b)', () => {
   // Note: `AbortSignal.timeout` is implemented in the JS runtime (Node)
   // and does NOT honour vitest's fake-timer patch — the underlying
