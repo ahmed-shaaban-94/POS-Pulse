@@ -1,0 +1,268 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+
+import { PairedScreen } from '../PairedScreen';
+import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
+import type { PairingStatus } from '../../../../shared/pairing-types';
+
+/**
+ * 002-terminal-pairing T032 — `PairedScreen` tests.
+ *
+ * The screen calls `bridge.pairing.getStatus()` itself on mount
+ * (Option B from the readiness review): this decouples it from the
+ * boot router's state machine, so a fresh navigation from the form
+ * lands on a route that re-fetches its own data.
+ *
+ * Security policy: the `paired` PairingStatus branch type explicitly
+ * omits `device_token`. The test injects a sentinel string into the
+ * fake bridge's getStatus result and asserts the sentinel is absent
+ * from the rendered DOM tree — even a future bug in the type would
+ * be caught by this runtime assertion.
+ */
+
+const PAIRED_STATUS: Extract<PairingStatus, { kind: 'paired' }> = {
+  kind: 'paired',
+  tenant_id: 'tenant-A',
+  branch_id: 'branch-B',
+  terminal_id: 'terminal-C',
+  terminal_label: 'Counter 1',
+  paired_at: 1735689600,
+};
+
+interface BridgeFixture {
+  bridge: PairingBridgeAPI;
+  getStatus: ReturnType<typeof vi.fn<() => Promise<PairingStatus>>>;
+}
+
+function makeBridge(
+  opts: {
+    status?: PairingStatus;
+    statusImpl?: () => Promise<PairingStatus>;
+  } = {},
+): BridgeFixture {
+  const getStatus = vi.fn<() => Promise<PairingStatus>>(
+    opts.statusImpl ?? (() => Promise.resolve(opts.status ?? PAIRED_STATUS)),
+  );
+  return {
+    getStatus,
+    bridge: {
+      getStatus,
+      submit: vi.fn(() => Promise.reject(new Error('PairedScreen must not call submit'))),
+    },
+  };
+}
+
+function renderInRouter(bridge: PairingBridgeAPI): { locations: string[] } {
+  const locations: string[] = [];
+  function LocationProbe(): null {
+    const loc = useLocation();
+    locations.push(loc.pathname);
+    return null;
+  }
+  render(
+    <MemoryRouter initialEntries={['/paired']}>
+      <Routes>
+        <Route
+          path="/paired"
+          element={
+            <>
+              <PairedScreen pairing={bridge} />
+              <LocationProbe />
+            </>
+          }
+        />
+        <Route path="/pairing" element={<LocationProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  return { locations };
+}
+
+afterEach(() => {
+  cleanup();
+});
+
+describe('PairedScreen — happy path (T032)', () => {
+  it('calls bridge.pairing.getStatus() on mount', async () => {
+    const { bridge, getStatus } = makeBridge();
+    renderInRouter(bridge);
+    await waitFor(() => {
+      expect(getStatus).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('renders tenant_id, branch_id, terminal_id, terminal_label as visible text', async () => {
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+    });
+
+    // Each field is visible in the rendered tree (text node, not just
+    // a data attribute). Tests are lenient about formatting — they
+    // assert substring presence.
+    const root = screen.getByTestId('route-paired');
+    const text = root.textContent;
+    expect(text).toContain(PAIRED_STATUS.tenant_id);
+    expect(text).toContain(PAIRED_STATUS.branch_id);
+    expect(text).toContain(PAIRED_STATUS.terminal_id);
+    expect(text).toContain(PAIRED_STATUS.terminal_label);
+  });
+
+  it('preserves the data-testid="route-paired" attribute (router test compatibility)', async () => {
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+    await waitFor(() => {
+      expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+    });
+  });
+
+  it('preserves the four data attributes (tenant-id, branch-id, terminal-id, terminal-label)', async () => {
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+    await waitFor(() => {
+      const root = screen.getByTestId('route-paired');
+      expect(root).toHaveAttribute('data-tenant-id', PAIRED_STATUS.tenant_id);
+      expect(root).toHaveAttribute('data-branch-id', PAIRED_STATUS.branch_id);
+      expect(root).toHaveAttribute('data-terminal-id', PAIRED_STATUS.terminal_id);
+      expect(root).toHaveAttribute('data-terminal-label', PAIRED_STATUS.terminal_label);
+    });
+  });
+});
+
+describe('PairedScreen — security (T032)', () => {
+  it('does NOT render device_token field name in the DOM', async () => {
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+    await waitFor(() => {
+      expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+    });
+
+    const root = screen.getByTestId('route-paired');
+    const fullText = root.textContent;
+    const fullHtml = root.outerHTML;
+    // Even the literal label "device_token" must not appear — defense
+    // in depth against a future helper component leaking the field name.
+    expect(fullText).not.toContain('device_token');
+    expect(fullHtml).not.toContain('device_token');
+  });
+
+  it('does NOT render a sentinel token-shaped string even if the bridge return type were ever to leak one', async () => {
+    // Force-cast a bridge whose getStatus returns an object containing a
+    // token-shaped property. The PairingStatus type prohibits this at
+    // compile time; the runtime test pins the contract regardless.
+    const sentinel = 'OPAQUE-TOKEN-SENTINEL-9876';
+    const leakyStatus = {
+      ...PAIRED_STATUS,
+      // Deliberately injected to prove the runtime guard. The
+      // PairingStatus type does not declare device_token; this cast
+      // simulates a future bug or backend leak.
+      device_token: sentinel,
+    } as Extract<PairingStatus, { kind: 'paired' }>;
+    const { bridge } = makeBridge({ status: leakyStatus });
+    renderInRouter(bridge);
+    await waitFor(() => {
+      expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+    });
+
+    const root = screen.getByTestId('route-paired');
+    expect(root.textContent).not.toContain(sentinel);
+    expect(root.outerHTML).not.toContain(sentinel);
+  });
+});
+
+describe('PairedScreen — production fallback to window.api', () => {
+  it('reads bridge from window.api when no `pairing` prop is provided', async () => {
+    const fakeApi = {
+      ping: vi.fn(),
+      appVersion: vi.fn(),
+      log: vi.fn(),
+      appConfig: vi.fn(),
+      pairing: {
+        getStatus: vi.fn(() => Promise.resolve(PAIRED_STATUS)),
+        submit: vi.fn(),
+      },
+    };
+    const original = (window as unknown as { api?: unknown }).api;
+    (window as unknown as { api: typeof fakeApi }).api = fakeApi;
+    try {
+      render(
+        <MemoryRouter initialEntries={['/paired']}>
+          {/* No `pairing` prop — must fall through to window.api */}
+          <PairedScreen />
+        </MemoryRouter>,
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+      });
+    } finally {
+      if (original === undefined) delete (window as unknown as { api?: unknown }).api;
+      else (window as unknown as { api?: unknown }).api = original;
+    }
+  });
+
+  it('throws a clear error when no `pairing` prop AND window.api is missing', () => {
+    const original = (window as unknown as { api?: unknown }).api;
+    delete (window as unknown as { api?: unknown }).api;
+    try {
+      expect(() => {
+        render(
+          <MemoryRouter initialEntries={['/paired']}>
+            <PairedScreen />
+          </MemoryRouter>,
+        );
+      }).toThrow(/window\.api missing/);
+    } finally {
+      if (original !== undefined) (window as unknown as { api?: unknown }).api = original;
+    }
+  });
+});
+
+describe('PairedScreen — defensive recovery (T033)', () => {
+  it('shows a loading affordance while getStatus() is pending', () => {
+    const pending = new Promise<PairingStatus>(() => {
+      /* never resolve */
+    });
+    const { bridge } = makeBridge({ statusImpl: () => pending });
+    renderInRouter(bridge);
+
+    // While pending, EITHER:
+    //  - the route-paired root is not yet in the DOM, OR
+    //  - a loading sentinel is shown.
+    // Either is acceptable; the assertion below covers both.
+    expect(
+      screen.queryByTestId('route-paired-loading') ?? screen.queryByTestId('route-paired'),
+    ).toBeInTheDocument();
+  });
+
+  it('redirects to /pairing when getStatus() resolves to unpaired (defensive)', async () => {
+    const { bridge } = makeBridge({ status: { kind: 'unpaired' } });
+    const { locations } = renderInRouter(bridge);
+    await waitFor(() => {
+      expect(locations).toContain('/pairing');
+    });
+  });
+
+  it('redirects to /pairing when getStatus() resolves to invalid (defensive)', async () => {
+    const { bridge } = makeBridge({
+      status: { kind: 'invalid', reason: 'missing_token' },
+    });
+    const { locations } = renderInRouter(bridge);
+    await waitFor(() => {
+      expect(locations).toContain('/pairing');
+    });
+  });
+
+  it('redirects to /pairing when getStatus() rejects (defensive — same recovery surface)', async () => {
+    const { bridge } = makeBridge({
+      statusImpl: () => Promise.reject(new Error('bridge boom')),
+    });
+    const { locations } = renderInRouter(bridge);
+    await waitFor(() => {
+      expect(locations).toContain('/pairing');
+    });
+  });
+});

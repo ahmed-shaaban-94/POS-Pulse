@@ -1,36 +1,117 @@
-import type { JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
+import { Navigate } from 'react-router-dom';
 
+import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
 
 /**
- * 002-terminal-pairing T016 — `/paired` route placeholder.
+ * 002-terminal-pairing T033 — `/paired` route.
  *
- * US1 ships an EMPTY scaffold so the boot router can mount something
- * type-safely. The full content (tenant / branch / terminal-label
- * surface, post-pair confirmation flow) lands in US2 (T032-T033).
+ * Self-fetches its data via `bridge.pairing.getStatus()` (Option B
+ * from the readiness review). This decouples the route from the boot
+ * router's state machine: the form's `navigate('/paired')` lands here,
+ * the screen re-fetches, and the operator sees the fresh assignment.
  *
- * SECURITY: this component receives only the configuration half of
- * PairingStatus (tenant/branch/terminal_id/terminal_label/paired_at).
- * The device_token never crosses the bridge — getStatus() returns the
- * `paired` discriminant whose type explicitly omits the token. US2's
- * test (T032) re-asserts that no `device_token` field reaches the
- * component.
+ * Defensive recovery: if `getStatus()` returns `unpaired` or `invalid`
+ * (or rejects), the screen redirects to `/pairing`. US7 (T070) lands
+ * the actual diagnostic banner; US2 just gets the operator back to a
+ * usable surface.
+ *
+ * Security policy:
+ *   - The `paired` PairingStatus branch type explicitly omits
+ *     `device_token`. This component only reads tenant_id / branch_id
+ *     / terminal_id / terminal_label / paired_at — all configuration,
+ *     no secrets.
+ *   - The bridge call goes through the typed preload, which
+ *     in turn invokes the main-process IPC handler that already
+ *     omits the token from the result envelope.
+ *   - Tests assert (T032) that no `device_token` field name and no
+ *     sentinel-token string ever appear in the rendered tree.
  */
+
 export interface PairedScreenProps {
-  status: Extract<PairingStatus, { kind: 'paired' }>;
+  /**
+   * Bridge to the main process. Tests inject a fake; production reads
+   * from `window.api.pairing`.
+   */
+  pairing?: PairingBridgeAPI;
 }
 
+type ScreenState =
+  | { phase: 'loading' }
+  | { phase: 'paired'; status: Extract<PairingStatus, { kind: 'paired' }> }
+  | { phase: 'redirect-to-pairing' };
+
 export function PairedScreen(props: PairedScreenProps): JSX.Element {
-  // Render the assignment fields as data attributes so the router test
-  // can assert "we're on /paired" without depending on actual UI text
-  // (which lands in US2).
+  const [state, setState] = useState<ScreenState>({ phase: 'loading' });
+  const pairing = props.pairing ?? readBridge();
+
+  useEffect(() => {
+    const guard = { cancelled: false };
+    void (async () => {
+      let next: ScreenState;
+      try {
+        const status = await pairing.getStatus();
+        if (status.kind === 'paired') {
+          next = { phase: 'paired', status };
+        } else {
+          // unpaired or invalid → recovery is to land on /pairing.
+          next = { phase: 'redirect-to-pairing' };
+        }
+      } catch {
+        // Bridge rejection: same recovery surface (operator re-pairs).
+        // We DO NOT include the rejection's value in any log emission
+        // here — Constitution VII (no secret-shaped data through the
+        // logger from a typed error path).
+        next = { phase: 'redirect-to-pairing' };
+      }
+      if (!guard.cancelled) setState(next);
+    })();
+    return () => {
+      guard.cancelled = true;
+    };
+  }, [pairing]);
+
+  if (state.phase === 'loading') {
+    return <main data-testid="route-paired-loading" />;
+  }
+  if (state.phase === 'redirect-to-pairing') {
+    return <Navigate to="/pairing" replace />;
+  }
+
+  const { status } = state;
   return (
     <main
       data-testid="route-paired"
-      data-tenant-id={props.status.tenant_id}
-      data-branch-id={props.status.branch_id}
-      data-terminal-id={props.status.terminal_id}
-      data-terminal-label={props.status.terminal_label}
-    />
+      data-tenant-id={status.tenant_id}
+      data-branch-id={status.branch_id}
+      data-terminal-id={status.terminal_id}
+      data-terminal-label={status.terminal_label}
+    >
+      <h1>Terminal paired</h1>
+      <dl>
+        <dt>Tenant</dt>
+        <dd>{status.tenant_id}</dd>
+        <dt>Branch</dt>
+        <dd>{status.branch_id}</dd>
+        <dt>Terminal</dt>
+        <dd>{status.terminal_id}</dd>
+        <dt>Label</dt>
+        <dd>{status.terminal_label}</dd>
+      </dl>
+    </main>
   );
+}
+
+/**
+ * Read `window.api.pairing` defensively. Mirrors the helper in
+ * PairingForm.tsx — see that file for the trade-off on test/prod
+ * indirection.
+ */
+function readBridge(): PairingBridgeAPI {
+  const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
+  if (!api) {
+    throw new Error('PairedScreen: window.api missing — preload bridge not initialised.');
+  }
+  return api.pairing;
 }
