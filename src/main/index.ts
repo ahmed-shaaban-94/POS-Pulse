@@ -6,12 +6,23 @@ import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
 import { registerLogHandler } from './ipc/log.js';
 import { registerAppConfigHandler } from './ipc/app-config.js';
+import { registerPairingHandlers } from './ipc/pairing.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
 import { createLogger } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
+import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
+import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
+
+/**
+ * 002-terminal-pairing US1: SecretStore key under which the device
+ * token is held. Single source of truth — re-used by the pairing store
+ * here AND any future feature that reads the token to set
+ * `X-Terminal-Token` on backend calls.
+ */
+const DEVICE_TOKEN_KEY = makeSecretKey('terminal.device-token');
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -148,10 +159,9 @@ app
 
     // T048 wire-in: construct the SecretStore on the same long-lived
     // handle to validate factory wiring (production refusal will throw
-    // into .catch below per R8). The reference is discarded — feature
-    // 002+ will retain it when an actual caller exists. Not exposed to
-    // the renderer in 001 (no IPC surface for secrets yet).
-    createSecretStore({
+    // into .catch below per R8). 002 US1 retains the reference because
+    // the pairing store now consumes it.
+    const secretStore = createSecretStore({
       handle: dbHandle,
       safeStorage,
       isPackaged: app.isPackaged,
@@ -159,6 +169,17 @@ app
     // Note (Phase 5 R8): SecretStore still uses console.warn/error
     // placeholders. Swap to mainLogger is a deferred follow-up — out
     // of Phase 8 scope.
+
+    // 002-terminal-pairing T011/T013 — construct the pairing store on
+    // the shared DB handle + SecretStore. The store is the only module
+    // that touches both halves of pairing state; the IPC handler below
+    // exposes its `getStatus()` to the renderer. `persist()` and
+    // `clear()` are not yet called by any application path in US1.
+    const pairingStore = createPairingStore({
+      secretStore,
+      db: bindPairingStoreDb(dbHandle),
+      deviceTokenKey: DEVICE_TOKEN_KEY,
+    });
 
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
@@ -178,6 +199,11 @@ app
       return {};
     };
     registerAppConfigHandler(ipcMain, getAppConfig);
+
+    // 002-terminal-pairing T013 — wire `pairing:get-status`. The
+    // `pairing:submit` channel is a US2 task and is deliberately NOT
+    // registered here yet.
+    registerPairingHandlers(ipcMain, pairingStore);
 
     createWindow();
     mainLogger.info('app:ready');

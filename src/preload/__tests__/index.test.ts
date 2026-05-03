@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PreloadBridgeAPI } from '../../shared/bridge-api';
+import { PAIRING_IPC_CHANNELS, type PairingStatus } from '../../shared/pairing-types';
 
 const exposeInMainWorld = vi.fn<(name: string, api: unknown) => void>();
 const ipcRendererInvoke = vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>();
@@ -63,26 +64,38 @@ describe('preload bridge', () => {
   });
 
   /**
-   * 002-terminal-pairing T006: the pairing namespace is declared at the
-   * foundational layer but its methods MUST throw "not implemented" until
-   * US1 / US2 wire real handlers. The test guards against accidental early
-   * wiring (which would slip past type-checking).
+   * 002-terminal-pairing T014: pairing.getStatus() is now wired to
+   * ipcRenderer.invoke(PAIRING_IPC_CHANNELS.GET_STATUS). pairing.submit
+   * REMAINS a "not implemented" placeholder until US2 (T026) lands the
+   * matching IPC handler.
    */
-  it('exposes a pairing namespace whose methods reject with "not implemented" until US1/US2', async () => {
+  it('pairing.getStatus() invokes ipcRenderer with PAIRING_IPC_CHANNELS.GET_STATUS and forwards the result', async () => {
+    const expected: PairingStatus = { kind: 'unpaired' };
+    ipcRendererInvoke.mockResolvedValueOnce(expected);
     await import('../index');
 
     const call = exposeInMainWorld.mock.calls[0];
     expect(call).toBeDefined();
     const [, api] = call as [string, PreloadBridgeAPI];
 
-    expect(api.pairing).toBeDefined();
     expect(typeof api.pairing.getStatus).toBe('function');
-    expect(typeof api.pairing.submit).toBe('function');
+    const result = await api.pairing.getStatus();
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(PAIRING_IPC_CHANNELS.GET_STATUS);
+    expect(PAIRING_IPC_CHANNELS.GET_STATUS).toBe('pairing:get-status');
+    expect(result).toEqual(expected);
+  });
 
-    await expect(api.pairing.getStatus()).rejects.toThrow(/not implemented/i);
+  it('pairing.submit() still rejects with "not implemented" until US2', async () => {
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    expect(typeof api.pairing.submit).toBe('function');
     await expect(api.pairing.submit('any-code')).rejects.toThrow(/not implemented/i);
-    // Bridge MUST NOT call ipcRenderer for placeholder methods — there is no
-    // handler registered yet, and a leaked invoke would surface as
+    // submit MUST NOT call ipcRenderer — there is no handler registered yet
+    // for PAIRING_IPC_CHANNELS.SUBMIT, and a leaked invoke would surface as
     // "no handler for channel" in production.
     expect(ipcRendererInvoke).not.toHaveBeenCalled();
   });

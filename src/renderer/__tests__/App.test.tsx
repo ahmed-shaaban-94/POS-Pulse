@@ -1,18 +1,63 @@
-import { describe, it, expect } from 'vitest';
-import { renderToString } from 'react-dom/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+
 import App from '../App';
+import type { PreloadBridgeAPI } from '../../shared/bridge-api';
+import type { PairingStatus } from '../../shared/pairing-types';
 
 /**
- * Minimal coverage gate for the Phase 2 App stub.
+ * 002-terminal-pairing T016 — App root smoke.
  *
- * `renderToString` is used instead of a DOM-mounting test runner to avoid
- * adding a new dev dependency (e.g. @testing-library/react) just to smoke-test
- * a one-line component. The next phase that adds real UI surface should
- * graduate to a full DOM-based test setup.
+ * The Phase 2 renderToString test no longer fits because App now reads
+ * `window.api` and uses hooks (boot-time getStatus). We mount the
+ * component via testing-library with a stubbed bridge and assert the
+ * router lands on /pairing for the unpaired branch — proving the
+ * window.api → AppRouter wiring is intact.
  */
+
+afterEach(() => {
+  cleanup();
+  // Clear our window.api stub between tests.
+  delete (window as unknown as { api?: PreloadBridgeAPI }).api;
+});
+
+function stubBridge(status: PairingStatus): PreloadBridgeAPI {
+  return {
+    ping: vi.fn(() => Promise.resolve('pong' as const)),
+    appVersion: vi.fn(() => Promise.resolve('0.0.0-test')),
+    log: vi.fn(() => Promise.resolve()),
+    appConfig: vi.fn(() => Promise.resolve({})),
+    pairing: {
+      getStatus: vi.fn(() => Promise.resolve(status)),
+      submit: vi.fn(() => Promise.reject(new Error('submit not used in US1'))),
+    },
+  };
+}
+
 describe('App', () => {
-  it('renders a <main> element', () => {
-    const html = renderToString(<App />);
-    expect(html).toContain('<main');
+  it('mounts the router and lands on /pairing when bridge reports unpaired', async () => {
+    (window as unknown as { api: PreloadBridgeAPI }).api = stubBridge({ kind: 'unpaired' });
+    window.history.replaceState(null, '', '/');
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
+  });
+
+  it('mounts the router and lands on /paired when bridge reports paired', async () => {
+    (window as unknown as { api: PreloadBridgeAPI }).api = stubBridge({
+      kind: 'paired',
+      tenant_id: 't',
+      branch_id: 'b',
+      terminal_id: 'term',
+      terminal_label: 'Counter',
+      paired_at: 1735689600,
+    });
+    window.history.replaceState(null, '', '/');
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId('route-paired')).toBeInTheDocument());
   });
 });
