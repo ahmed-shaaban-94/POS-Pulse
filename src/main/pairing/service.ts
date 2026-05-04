@@ -1,3 +1,5 @@
+import { addBreadcrumb } from '@sentry/electron/main';
+
 import type { PairingSubmitResult } from '../../shared/pairing-types.js';
 import type { PairingStore } from './store.js';
 import { TransportError, type Network, type PairResult } from './network.js';
@@ -115,6 +117,15 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
     return Math.floor(clock().getTime() / 1000);
   }
 
+  // T065 (US6) — Sentry breadcrumb emitter. Category 'pairing'; data
+  // carries `outcome` (string) and `status` (HTTP status or null for
+  // transport errors). No code, no token, no request/response body.
+  // Sentry is inert without a DSN (initSentryMain no-ops); addBreadcrumb
+  // becomes a no-op — callers need no DSN guard here.
+  function emitBreadcrumb(outcome: string, status: number | null): void {
+    addBreadcrumb({ category: 'pairing', data: { outcome, status } });
+  }
+
   return {
     async submit(pairing_code: string): Promise<PairingSubmitResult> {
       // Programmer error guard. The IPC handler will repeat this check
@@ -145,9 +156,11 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
             ? { event: 'pairing_attempt', outcome: 'network_error', at: nowIso(), timed_out: true }
             : { event: 'pairing_attempt', outcome: 'network_error', at: nowIso() };
           pairingLog(record);
+          emitBreadcrumb('network_error', null);
           return { outcome: 'network_error' };
         }
         pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
+        emitBreadcrumb('unknown_error', null);
         return { outcome: 'unknown_error' };
       }
 
@@ -173,6 +186,7 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
           // log record with unknown_error and resolve — the bridge
           // contract is preserved.
           pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
+          emitBreadcrumb('unknown_error', 200);
           return { outcome: 'unknown_error' };
         }
 
@@ -182,6 +196,7 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
           at: nowIso(),
           terminal_id: pairResult.body.terminal_id,
         });
+        emitBreadcrumb('success', 200);
 
         // The success result type explicitly OMITS device_token — that
         // is the renderer-visible shape, and the only place the token
@@ -227,6 +242,7 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
           const retry_after_s = pairResult.retry_after_s;
           if (retry_after_s === undefined) {
             pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
+            emitBreadcrumb('unknown_error', pairResult.status);
             return { outcome: 'unknown_error' };
           }
           pairingLog({
@@ -235,6 +251,7 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
             at: nowIso(),
             retry_after_s,
           });
+          emitBreadcrumb('rate_limited', pairResult.status);
           return { outcome: 'rate_limited', retry_after_s };
         }
         case 'invalid_code':
@@ -242,10 +259,12 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
         case 'already_paired':
         case 'branch_mismatch': {
           pairingLog({ event: 'pairing_attempt', outcome, at: nowIso() });
+          emitBreadcrumb(outcome, pairResult.status);
           return { outcome };
         }
         default: {
           pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
+          emitBreadcrumb('unknown_error', pairResult.status);
           return { outcome: 'unknown_error' };
         }
       }

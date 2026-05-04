@@ -3,33 +3,50 @@ import type { Logger } from 'pino';
 import type { PairingAttemptLogRecord } from './service.js';
 
 /**
- * 002-terminal-pairing US2 — thin wrapper around the existing pino base
- * logger from 001 to satisfy the `pairingLog` dependency in the
- * `PairingService` interface.
+ * 002-terminal-pairing US6 (T058-T059) — schema-restricted `pairingLog` emitter.
  *
- * US6 (T058-T059) replaces this with a schema-restricted emitter that
- * adds a runtime guard against extra fields. For US2 the
- * TypeScript-level shape (`PairingAttemptLogRecord`) is sufficient,
- * because the only call site is `service.ts` and every record is
- * constructed inline from a fixed schema.
+ * Replaces the US2 thin wrapper with a strict two-layer guard:
  *
- * Belt-and-braces: PR #15's redaction list already scrubs
- * `pairing_code` and `device_token` at any reachable depth (logger.ts
- * `PAIRING_REDACTED_KEYS`), so even if a future caller passes a record
- * containing one of those keys the log line will not leak.
+ *   Layer 1 (runtime, T059): iterates the actual keys of the incoming
+ *     record and throws an Error if any key is not in the allow-list.
+ *     This happens BEFORE pino is called, so a forbidden-key record
+ *     produces zero log output (no partial emission).
+ *
+ *   Layer 2 (pino redaction, T009a): the base logger's `redact` option
+ *     already scrubs `pairing_code` and `device_token` at any depth.
+ *     That layer is belt-and-braces; Layer 1 is the primary defence.
  *
  * Security policy (Constitution VII + spec NFR-4 / FR-9 / FR-10):
- *   - Only the fields enumerated in PairingAttemptLogRecord are passed
- *     through to pino. The wrapper does NOT spread arbitrary objects.
- *   - The wrapper namespace-tags every record with `pairing_log: true`
- *     so cross-process redaction tests (US6) can filter the stream
- *     deterministically.
+ *   - Only fields in ALLOWED_KEYS may appear in the emitted record.
+ *   - The function NEVER spreads arbitrary objects into pino.
+ *   - Forbidden keys cause an immediate throw, not a silent drop.
  */
+
+const ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  'event',
+  'outcome',
+  'at',
+  'terminal_id',
+  'retry_after_s',
+  'timed_out',
+]);
+
 export function createPairingLog(logger: Logger): (record: PairingAttemptLogRecord) => void {
   return (record: PairingAttemptLogRecord) => {
-    // Re-build the record explicitly so a future caller cannot smuggle
-    // extra fields through. US6 will tighten this with a runtime guard
-    // (T058-T059) and a `pairingLog` channel namespace.
+    // Runtime guard: reject any key outside the allow-list before
+    // touching pino. Throwing guarantees zero log output on a bad call.
+    for (const key of Object.keys(record)) {
+      if (!ALLOWED_KEYS.has(key)) {
+        throw new Error(
+          `pairingLog: unknown key "${key}" is forbidden in PairingAttemptLogRecord. ` +
+            `Allowed keys: ${[...ALLOWED_KEYS].join(', ')}.`,
+        );
+      }
+    }
+
+    // Rebuild from the typed schema — explicit field assignment ensures
+    // tsc catches any future schema drift even if the runtime guard were
+    // somehow bypassed.
     const safe: PairingAttemptLogRecord = {
       event: record.event,
       outcome: record.outcome,

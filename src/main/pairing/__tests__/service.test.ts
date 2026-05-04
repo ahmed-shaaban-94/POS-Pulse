@@ -4,6 +4,16 @@ import { createPairingService, type PairingAttemptLogRecord } from '../service.j
 import type { PairingStore, PersistInput } from '../store.js';
 import { TransportError, type Network, type PairResult } from '../network.js';
 
+// service.ts imports addBreadcrumb from @sentry/electron/main; mock it here
+// so Vitest does not try to load the real Electron-dependent module in a
+// plain node test environment.
+vi.mock('@sentry/electron/main', () => ({
+  addBreadcrumb: vi.fn(),
+  captureException: vi.fn(),
+  captureEvent: vi.fn(),
+  init: vi.fn(),
+}));
+
 /**
  * 002-terminal-pairing T022 / T023b / T023c / T048 — `PairingService.submit` tests.
  *
@@ -897,5 +907,210 @@ describe('PairingService.submit — contract invariants (T023a)', () => {
     await expect(h.service.submit(undefined)).rejects.toThrow(/string|invalid/i);
     // @ts-expect-error — intentional misuse
     await expect(h.service.submit(42)).rejects.toThrow(/string|invalid/i);
+  });
+});
+
+// ─── T060: log record field assertions for every outcome ─────────────────────
+
+/**
+ * T060 (US6) — schema-level log assertions for every outcome.
+ *
+ * Each test drives a single outcome and asserts:
+ *   1. Exactly ONE pairing_attempt record is emitted.
+ *   2. The `outcome` field is correct.
+ *   3. The `at` field is present and ISO-8601 shaped.
+ *   4. Optional fields (terminal_id / retry_after_s / timed_out) appear
+ *      ONLY on the outcomes they are scoped to.
+ *   5. No extra fields beyond the allowed schema appear.
+ *   6. No pairing_code or device_token appears in the record.
+ *
+ * This describe-block depends on T061: wiring `pairingLog` from `log.ts`
+ * so the runtime guard applies. Until T061 lands, these tests are
+ * structurally identical to what T022/T023/T040/T048/T054 already assert
+ * (field presence/absence). The new assertions are the "no extra fields"
+ * check and the explicit schema allow-list walk.
+ */
+
+const ALLOWED_LOG_KEYS = new Set([
+  'event',
+  'outcome',
+  'at',
+  'terminal_id',
+  'retry_after_s',
+  'timed_out',
+]);
+
+function assertSchemaCompliant(record: PairingAttemptLogRecord, label: string): void {
+  for (const key of Object.keys(record)) {
+    if (!ALLOWED_LOG_KEYS.has(key)) {
+      throw new Error(`T060: outcome "${label}" emitted forbidden key "${key}" in log record`);
+    }
+  }
+}
+
+describe('PairingService.submit — T060 log-field schema (US6)', () => {
+  /* ── success ── */
+  it('success: emits exactly one record; outcome=success; carries terminal_id; no extras', async () => {
+    const h = makeHarness();
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('success');
+    expect(rec.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(rec.terminal_id).toBe(SUCCESS_BODY.terminal_id);
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'success');
+    expect(JSON.stringify(rec)).not.toContain('PAIR-CODE');
+    expect(JSON.stringify(rec)).not.toContain(SUCCESS_BODY.device_token);
+  });
+
+  /* ── invalid_code ── */
+  it('invalid_code: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
+    const h = makeHarness({
+      pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } },
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('invalid_code');
+    expect(rec.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'invalid_code');
+    expect(JSON.stringify(rec)).not.toContain('PAIR-CODE');
+  });
+
+  /* ── expired_code ── */
+  it('expired_code: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
+    const h = makeHarness({
+      pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } },
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('expired_code');
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'expired_code');
+  });
+
+  /* ── already_paired ── */
+  it('already_paired: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
+    const h = makeHarness({
+      pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } },
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('already_paired');
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'already_paired');
+  });
+
+  /* ── branch_mismatch ── */
+  it('branch_mismatch: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
+    const h = makeHarness({
+      pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } },
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('branch_mismatch');
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'branch_mismatch');
+  });
+
+  /* ── rate_limited ── */
+  it('rate_limited: emits exactly one record; carries retry_after_s; no terminal_id/timed_out', async () => {
+    const h = makeHarness({
+      pairResult: { ok: false, status: 429, body: { code: 'RATE_LIMITED' }, retry_after_s: 42 },
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('rate_limited');
+    expect(rec.retry_after_s).toBe(42);
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'rate_limited');
+  });
+
+  /* ── network_error (non-timeout) ── */
+  it('network_error(non-timeout): emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
+    const h = makeHarness({
+      pairRejection: new TransportError({ timed_out: false, reason: 'fetch_failed' }),
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('network_error');
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'network_error(non-timeout)');
+  });
+
+  /* ── network_error (timeout) ── */
+  it('network_error(timeout): emits exactly one record; carries timed_out=true; no terminal_id/retry_after_s', async () => {
+    const h = makeHarness({
+      pairRejection: new TransportError({ timed_out: true, reason: 'timeout' }),
+    });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('network_error');
+    expect(rec.timed_out).toBe(true);
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    assertSchemaCompliant(rec, 'network_error(timeout)');
+  });
+
+  /* ── unknown_error ── */
+  it('unknown_error: emits exactly one record; no terminal_id/retry_after_s/timed_out', async () => {
+    const h = makeHarness({ pairResult: { ok: false, status: 500, body: {} } });
+    await h.service.submit('PAIR-CODE');
+
+    expect(h.logRecords).toHaveLength(1);
+    const rec = h.logRecords[0] ?? ({} as PairingAttemptLogRecord);
+    expect(rec.outcome).toBe('unknown_error');
+    expect(rec).not.toHaveProperty('terminal_id');
+    expect(rec).not.toHaveProperty('retry_after_s');
+    expect(rec).not.toHaveProperty('timed_out');
+    assertSchemaCompliant(rec, 'unknown_error');
+  });
+
+  /* ── cross-cutting: exactly one record per call regardless of outcome ── */
+  it('all outcomes: exactly one log record per submit (no double-emit)', async () => {
+    const scenarios: HarnessOpts[] = [
+      {},
+      { pairResult: { ok: false, status: 400, body: { code: 'INVALID_CODE' } } },
+      { pairResult: { ok: false, status: 410, body: { code: 'EXPIRED_CODE' } } },
+      { pairResult: { ok: false, status: 409, body: { code: 'ALREADY_PAIRED' } } },
+      { pairResult: { ok: false, status: 409, body: { code: 'BRANCH_MISMATCH' } } },
+      { pairResult: { ok: false, status: 429, body: { code: 'RATE_LIMITED' }, retry_after_s: 5 } },
+      { pairRejection: new TransportError({ timed_out: false, reason: 'fetch_failed' }) },
+      { pairRejection: new TransportError({ timed_out: true, reason: 'timeout' }) },
+      { pairResult: { ok: false, status: 500, body: {} } },
+    ];
+    for (const opts of scenarios) {
+      const h = makeHarness(opts);
+      await h.service.submit('CODE');
+      expect(h.logRecords).toHaveLength(1);
+    }
   });
 });
