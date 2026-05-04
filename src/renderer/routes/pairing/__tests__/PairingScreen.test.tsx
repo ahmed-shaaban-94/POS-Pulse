@@ -146,3 +146,77 @@ describe('PairingScreen — composition (T030)', () => {
     }
   });
 });
+
+/**
+ * T069 (US7) — InvalidStateBanner rendered by PairingScreen.
+ *
+ * Each `invalid` reason maps to a specific user-facing message. The
+ * banner MUST use role="alert" (for screen-reader announcement) and
+ * MUST contain zero <input> elements (the existing T030 input-count
+ * test must remain passing at exactly 1 input on the route).
+ */
+describe('PairingScreen — InvalidStateBanner (T069)', () => {
+  it('renders the missing_token banner message when reason is "missing_token"', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="missing_token" />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText('This terminal needs to be paired again. The secure token is missing.'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the orphaned_row banner message when reason is "orphaned_row"', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="orphaned_row" />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(
+        'This terminal needs to be paired again. Local assignment data is incomplete.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the decrypt_failed banner message when reason is "decrypt_failed"', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="decrypt_failed" />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText('This terminal needs to be paired again. Secure token recovery failed.'),
+    ).toBeInTheDocument();
+  });
+
+  it('does NOT render any banner when invalidReason is omitted', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('banner has role="alert" (screen-reader announcement)', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="missing_token" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('banner contains zero input elements (T030 input-count invariant preserved)', () => {
+    render(
+      <MemoryRouter initialEntries={['/pairing']}>
+        <PairingScreen pairing={makeBridge()} invalidReason="missing_token" />
+      </MemoryRouter>,
+    );
+    // The total on the route must still be exactly 1 (form's pairing-code input).
+    const inputs = document.querySelectorAll('input');
+    expect(inputs).toHaveLength(1);
+  });
+});
