@@ -26,33 +26,43 @@ describe('source-scope guard (T006)', () => {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch {
-      // origin/main unreachable (shallow clone / no remote).
-      const reachable = (() => {
-        try {
-          execSync('git rev-parse origin/main', { stdio: 'pipe' });
-          return true;
-        } catch {
-          return false;
+      // CI shallow clones (fetch-depth=1) don't include origin/main.
+      // Try a targeted fetch before giving up — cheap: only fetches the tip.
+      try {
+        execSync('git fetch --depth=1 origin main:refs/remotes/origin/main', { stdio: 'pipe' });
+        diffOutput = execSync('git diff --name-only origin/main...HEAD', {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+      } catch {
+        // origin/main still unreachable after the fetch attempt.
+        const reachable = (() => {
+          try {
+            execSync('git rev-parse origin/main', { stdio: 'pipe' });
+            return true;
+          } catch {
+            return false;
+          }
+        })();
+
+        if (!reachable) {
+          // Skip with warning but DO NOT pass silently — the PR checklist
+          // in quickstart.md §6 is the manual fallback for this environment.
+          console.warn(
+            '[source-scope-guard] SKIP: origin/main unreachable. ' +
+              'Manual gate required: run `git diff --name-only origin/main...HEAD` ' +
+              'and verify zero intersection with the forbidden allowlist (T005).',
+          );
+          // Re-throw so CI marks the test as skipped/errored, not passed.
+          throw new Error(
+            'source-scope guard: origin/main unreachable; manual check required per quickstart.md §6.',
+          );
         }
-      })();
 
-      if (!reachable) {
-        // Skip with warning but DO NOT pass silently — the PR checklist
-        // in quickstart.md §6 is the manual fallback for this environment.
-        console.warn(
-          '[source-scope-guard] SKIP: origin/main unreachable. ' +
-            'Manual gate required: run `git diff --name-only origin/main...HEAD` ' +
-            'and verify zero intersection with the forbidden allowlist (T005).',
-        );
-        // Re-throw so CI marks the test as skipped/errored, not passed.
-        throw new Error(
-          'source-scope guard: origin/main unreachable; manual check required per quickstart.md §6.',
-        );
+        // origin/main is reachable but the diff command itself failed —
+        // surface the raw error.
+        throw new Error('source-scope guard: git diff command failed; see stderr above.');
       }
-
-      // origin/main is reachable but the diff command itself failed —
-      // surface the raw error.
-      throw new Error('source-scope guard: git diff command failed; see stderr above.');
     }
 
     const changedFiles = diffOutput
