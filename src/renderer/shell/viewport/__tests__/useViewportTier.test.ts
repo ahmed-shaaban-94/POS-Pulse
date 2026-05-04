@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 
 import { useViewportTier } from '../useViewportTier';
 
@@ -8,30 +8,53 @@ import { useViewportTier } from '../useViewportTier';
  * Fakes window.matchMedia and asserts documented breakpoints.
  */
 
-function setupMatchMedia(width: number): void {
+type ChangeListener = (e: MediaQueryListEvent) => void;
+
+interface FakeMqlSlot {
+  matches: boolean;
+  listeners: ChangeListener[];
+  removeEventListenerSpy: ReturnType<typeof vi.fn>;
+}
+
+interface SetupResult {
+  expanded: FakeMqlSlot;
+  iconOnly: FakeMqlSlot;
+}
+
+function setupMatchMedia(width: number): SetupResult {
+  const expanded: FakeMqlSlot = {
+    matches: width >= 1280,
+    listeners: [],
+    removeEventListenerSpy: vi.fn(),
+  };
+  const iconOnly: FakeMqlSlot = {
+    matches: width >= 1024,
+    listeners: [],
+    removeEventListenerSpy: vi.fn(),
+  };
+
   vi.stubGlobal(
     'matchMedia',
     vi.fn((query: string) => {
-      const listeners: Array<(e: MediaQueryListEvent) => void> = [];
-      const matches = query.includes('min-width: 1280px')
-        ? width >= 1280
-        : query.includes('min-width: 1024px')
-          ? width >= 1024
-          : false;
+      const slot = query.includes('min-width: 1280px') ? expanded : iconOnly;
       return {
-        matches,
+        get matches() {
+          return slot.matches;
+        },
         media: query,
         onchange: null,
         addListener: vi.fn(),
         removeListener: vi.fn(),
-        addEventListener: vi.fn((_: string, listener: (e: MediaQueryListEvent) => void) => {
-          listeners.push(listener);
+        addEventListener: vi.fn((_: string, listener: ChangeListener) => {
+          slot.listeners.push(listener);
         }),
-        removeEventListener: vi.fn(),
+        removeEventListener: slot.removeEventListenerSpy,
         dispatchEvent: vi.fn(),
       } as unknown as MediaQueryList;
     }),
   );
+
+  return { expanded, iconOnly };
 }
 
 beforeEach(() => {
@@ -72,5 +95,40 @@ describe('useViewportTier (T025)', () => {
     setupMatchMedia(1920);
     const { result } = renderHook(() => useViewportTier());
     expect(result.current).toBe('expanded');
+  });
+
+  it('fires update listener and debounces tier change', () => {
+    const { expanded, iconOnly } = setupMatchMedia(1023);
+    const { result } = renderHook(() => useViewportTier());
+    expect(result.current).toBe('too-small');
+
+    // The fake mql object uses a getter that reads slot.matches, so
+    // mutating slot.matches is sufficient for the hook's closure to see
+    // the new value when it calls setTier(getTier(mql.matches, ...)).
+    act(() => {
+      iconOnly.matches = true;
+      iconOnly.listeners.forEach((l) => {
+        l({} as MediaQueryListEvent);
+      });
+      vi.advanceTimersByTime(200);
+    });
+    expect(result.current).toBe('icon-only');
+
+    act(() => {
+      expanded.matches = true;
+      expanded.listeners.forEach((l) => {
+        l({} as MediaQueryListEvent);
+      });
+      vi.advanceTimersByTime(200);
+    });
+    expect(result.current).toBe('expanded');
+  });
+
+  it('cleans up listeners on unmount', () => {
+    const { expanded, iconOnly } = setupMatchMedia(1280);
+    const { unmount } = renderHook(() => useViewportTier());
+    unmount();
+    expect(expanded.removeEventListenerSpy).toHaveBeenCalled();
+    expect(iconOnly.removeEventListenerSpy).toHaveBeenCalled();
   });
 });

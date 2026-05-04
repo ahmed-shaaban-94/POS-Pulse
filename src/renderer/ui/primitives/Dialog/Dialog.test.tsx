@@ -77,4 +77,32 @@ describe('Dialog (T018)', () => {
     // Dialog should be focused or contain the focused element
     expect(dialog === document.activeElement || dialog.contains(document.activeElement)).toBe(true);
   });
+
+  it('sets aria-describedby when description is provided', () => {
+    render(
+      <Dialog open title="Described dialog" description="Some description" onOpenChange={() => {}}>
+        Content
+      </Dialog>,
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-describedby');
+    expect(screen.getByText('Some description')).toBeInTheDocument();
+  });
+
+  it('calls secondaryAction.onClick when secondary button is clicked', async () => {
+    const onSecondary = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Dialog
+        open
+        title="Two-action dialog"
+        onOpenChange={() => {}}
+        secondaryAction={{ label: 'Cancel', onClick: onSecondary }}
+      >
+        Content
+      </Dialog>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onSecondary).toHaveBeenCalledTimes(1);
+  });
 });

@@ -56,4 +56,14 @@ describe('Table (T021)', () => {
     render(<Table rows={[]} columns={columns} state="error" errorMessage="Failed to load" />);
     expect(screen.getByText('Failed to load')).toBeInTheDocument();
   });
+
+  it('uses custom render function when provided', () => {
+    const columnsWithRender: ReadonlyArray<ColumnDef<Row>> = [
+      { key: 'id', header: 'ID', render: (val) => <strong>{String(val)}</strong> },
+      { key: 'name', header: 'Name' },
+    ];
+    render(<Table rows={[{ id: 42, name: 'Charlie' }]} columns={columnsWithRender} state="data" />);
+    expect(screen.getByText('42').tagName).toBe('STRONG');
+    expect(screen.getByText('Charlie')).toBeInTheDocument();
+  });
 });

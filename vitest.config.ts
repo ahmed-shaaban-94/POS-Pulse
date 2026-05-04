@@ -17,6 +17,7 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.ts',
         'src/**/*.test.tsx',
+        'src/**/__tests__/**',
         'src/main/index.ts',
         'src/renderer/main.tsx',
         // Phase 8: preload is a thin contextBridge wire-up file with no
