@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
@@ -45,6 +45,7 @@ type ScreenState =
 export function PairedScreen(props: PairedScreenProps): JSX.Element {
   const [state, setState] = useState<ScreenState>({ phase: 'loading' });
   const pairing = props.pairing ?? readBridge();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const guard = { cancelled: false };
@@ -99,6 +100,19 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
         <dt>Label</dt>
         <dd>{status.terminal_label}</dd>
       </dl>
+      {/* T054 — O2 resolution: Continue to dashboard action.
+          Option chosen: Button on /paired navigates to /app/dashboard.
+          The boot router gate is NOT modified; unpaired terminals still
+          route to /pairing. No IPC, no bridge call, no SecretStore read,
+          no token re-read is performed by this navigation transition. */}
+      <button
+        type="button"
+        className="btn btn--primary btn--md"
+        style={{ minHeight: '44px' }}
+        onClick={() => void navigate('/app/dashboard')}
+      >
+        Continue to dashboard →
+      </button>
     </main>
   );
 }

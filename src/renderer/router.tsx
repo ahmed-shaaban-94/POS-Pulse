@@ -9,6 +9,12 @@ import {
 
 import { PairingScreen } from './routes/pairing/PairingScreen';
 import { PairedScreen } from './routes/paired/PairedScreen';
+import { AppShell } from './shell/AppShell';
+import { DashboardPlaceholder } from './routes/app/DashboardPlaceholder';
+import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
+import { CartPlaceholder } from './routes/app/CartPlaceholder';
+import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
+import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import type { PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -111,10 +117,26 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
     ) : (
       <PairingScreen pairing={props.pairing} />
     );
+  // T035 — /app/* parent route wired per contracts/shell-routes.ts.
+  // Existing /pairing and /paired routes are unchanged.
+  // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
+  // still route to /pairing and cannot reach /app/* directly.
   const routes: RouteObject[] = [
     { path: '/', element: <Navigate to={boot.startPath} replace /> },
     { path: '/pairing', element: pairingScreenElement },
     { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
+    {
+      path: '/app',
+      element: <AppShell />,
+      children: [
+        { index: true, element: <Navigate to="dashboard" replace /> },
+        { path: 'dashboard', element: <DashboardPlaceholder /> },
+        { path: 'sales', element: <SalesPlaceholder /> },
+        { path: 'cart', element: <CartPlaceholder /> },
+        { path: 'inventory', element: <InventoryPlaceholder /> },
+        { path: 'settings', element: <SettingsHelpPlaceholder /> },
+      ],
+    },
   ];
 
   // Tests use a memory router so window.location.pathname remains

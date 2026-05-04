@@ -46,6 +46,22 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T004 — 003-pos-ui-shell: additive per-module thresholds at ≥90%
+        // line + branch for the new shell UI paths. Scoped to the exact
+        // subtrees introduced by this feature; does NOT redefine the root
+        // 80% threshold or the money.ts 95% gate.
+        'src/renderer/ui/**': {
+          lines: 90,
+          branches: 90,
+          functions: 90,
+          statements: 90,
+        },
+        'src/renderer/shell/**': {
+          lines: 90,
+          branches: 90,
+          functions: 90,
+          statements: 90,
+        },
       },
     },
   },
