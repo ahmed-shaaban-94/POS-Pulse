@@ -35,8 +35,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # required for T006 source-scope guard (git diff origin/main...HEAD)
 
       - name: Setup Node 20
         uses: actions/setup-node@v4
