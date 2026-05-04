@@ -12,6 +12,8 @@ import {
   BRANCH_MISMATCH_MESSAGE,
   RATE_LIMITED_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
+  NETWORK_ERROR_MESSAGE,
+  UNKNOWN_ERROR_MESSAGE,
   EMPTY_INPUT_MESSAGE,
 } from '../messages';
 import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
@@ -527,10 +529,7 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     expect(screen.queryByText(INVALID_CODE_MESSAGE)).not.toBeInTheDocument();
   });
 
-  it('on outcome=network_error: shows the generic failure message (T074 will refine)', async () => {
-    // network_error is NOT a US3 outcome — but the form must still
-    // surface SOME message so the operator knows the submit failed.
-    // Use the generic fallback until T074 lands per-category copy.
+  it('T074 — on outcome=network_error: shows NETWORK_ERROR_MESSAGE (not generic fallback)', async () => {
     const user = userEvent.setup();
     const { bridge } = makeBridge({ result: { outcome: 'network_error' } });
     renderInRouter(bridge);
@@ -538,11 +537,12 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(GENERIC_FAILURE_MESSAGE);
+      expect(screen.getByRole('status')).toHaveTextContent(NETWORK_ERROR_MESSAGE);
     });
+    expect(screen.queryByText(GENERIC_FAILURE_MESSAGE)).not.toBeInTheDocument();
   });
 
-  it('on outcome=unknown_error: shows the generic failure message', async () => {
+  it('T074 — on outcome=unknown_error: shows UNKNOWN_ERROR_MESSAGE (not generic fallback)', async () => {
     const user = userEvent.setup();
     const { bridge } = makeBridge({ result: { outcome: 'unknown_error' } });
     renderInRouter(bridge);
@@ -550,8 +550,9 @@ describe('PairingForm — recoverable failure messages (T042)', () => {
     await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
 
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent(GENERIC_FAILURE_MESSAGE);
+      expect(screen.getByRole('status')).toHaveTextContent(UNKNOWN_ERROR_MESSAGE);
     });
+    expect(screen.queryByText(GENERIC_FAILURE_MESSAGE)).not.toBeInTheDocument();
   });
 
   it('does NOT echo the pairing_code into the rendered message tree', async () => {
@@ -1035,5 +1036,56 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
       await Promise.resolve();
     });
     expect(submit).toHaveBeenCalledTimes(2);
+  });
+});
+
+/* ------------------------- T075 ------------------------- */
+
+describe('PairingForm — empty-Enter-on-focus regression (T075)', () => {
+  /**
+   * FR-13 / Constitution Principle IV — keyboard-wedge safety.
+   *
+   * When the input receives browser autofocus and the operator (or a
+   * wedge scanner) fires Enter before typing any content, the form MUST:
+   *   - make zero bridge calls, and
+   *   - surface EMPTY_INPUT_MESSAGE so the operator knows why nothing
+   *     happened (not a silent no-op).
+   *
+   * This is the T075 regression guard: a future refactor that removes
+   * the `code.length === 0` guard in `PairingForm` MUST break this test.
+   */
+
+  it('immediate Enter on autofocused input makes no bridge call', async () => {
+    const user = userEvent.setup();
+    const { bridge, submit } = makeBridge();
+    renderInRouter(bridge);
+
+    // Wait for autofocus to land, then press Enter with no content typed.
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+    await user.keyboard('{Enter}');
+
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('immediate Enter on autofocused input surfaces EMPTY_INPUT_MESSAGE', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByRole('status')).toHaveTextContent(EMPTY_INPUT_MESSAGE);
+  });
+
+  it('immediate Enter does not trigger navigation (stays on /pairing)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge();
+    const { locations } = renderInRouter(bridge);
+
+    await waitFor(() => expect(screen.getByRole('textbox')).toHaveFocus());
+    await user.keyboard('{Enter}');
+
+    expect(locations).not.toContain('/paired');
   });
 });

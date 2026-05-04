@@ -1,27 +1,16 @@
 import type { PairingOutcome } from '../../../shared/pairing-types';
 
 /**
- * 002-terminal-pairing T043 + T051 + T057 — operator-facing messages
- * for the recoverable failure outcomes US3/US4/US5 own.
+ * 002-terminal-pairing T043 + T051 + T057 + T074 — operator-facing
+ * messages for all documented pairing outcomes.
  *
- * Scope-fence: this module only owns copy for outcomes US3 + US4 + US5
- * land. The five constants below match the message families documented
- * in `contracts/pairing-http.md`. Outcomes still NOT owned here:
+ * T043/T051/T057 landed copy for US3/US4/US5 outcomes.
+ * T074 (Phase Final) adds friendly, action-oriented copy for the two
+ * remaining categories: `network_error` and `unknown_error`.
  *
- *   - network_error   (T074)        — generic fallback only at this
- *                                     stage; T074 lands the friendly
- *                                     copy.
- *   - unknown_error   (T074)        — generic fallback only.
- *
- * The dictionary is intentionally a *function* (`messageFor`) rather
- * than a `Record<PairingOutcome, string>`. A record would force the
- * dictionary to be exhaustive across every outcome category, which
- * violates the scope-fence — the outcomes still deferred would either
- * need placeholder copy (which could ship to operators) or a
- * non-exhaustive record (which the type-checker would reject under
- * strict TS). The function form lets US3+US4+US5 own five keys and
- * route every other outcome through a generic fallback that T074 will
- * refine.
+ * All eight `PairingOutcome` values now map to a distinct string.
+ * The `success` outcome maps to the generic fallback — the form
+ * navigates before that string is ever rendered.
  *
  * Security: nothing in this module reads the `pairing_code` or any
  * device-side identity. Copy is fixed and includes no user-supplied
@@ -58,13 +47,27 @@ export const BRANCH_MISMATCH_MESSAGE =
 export const RATE_LIMITED_MESSAGE = 'Too many attempts — wait a moment and try again.';
 
 /**
- * Generic failure copy for any outcome the dictionary does not yet own.
- * T074 will land friendlier per-category copy for `network_error` and
- * `unknown_error`; this string is the placeholder until then. Used by
- * the form when an outcome still in the catch-all lands (currently
- * `network_error` and `unknown_error`).
+ * Generic failure copy for the `success` outcome, which the form never
+ * observes (it navigates away first). Kept as the exhaustive-switch
+ * fallback so `messageFor` is total over `PairingOutcome` without a
+ * misleading "success" string. T074 landed per-category copy for
+ * `network_error` and `unknown_error`; this string now only covers the
+ * `success` arm and any future-unknown outcome categories.
  */
 export const GENERIC_FAILURE_MESSAGE = 'Pairing failed — try again.';
+
+/**
+ * Message for `outcome: 'network_error'` (T074).
+ * Action-oriented: names the operator's recovery step (check network).
+ * Matches spec edge-case copy: "no connection — check the network and try again".
+ */
+export const NETWORK_ERROR_MESSAGE = 'No connection — check your network and try again.';
+
+/**
+ * Message for `outcome: 'unknown_error'` (T074).
+ * Honest fallback: does not alarm but invites retry.
+ */
+export const UNKNOWN_ERROR_MESSAGE = 'Pairing failed — please try again.';
 
 /**
  * Client-side validation copy for an empty / whitespace-only submit.
@@ -76,12 +79,12 @@ export const EMPTY_INPUT_MESSAGE = 'Enter a pairing code.';
 /**
  * Resolve a `PairingOutcome` to its operator-facing message.
  *
- * Returns the matching message for the five recoverable outcomes this
- * module owns (three from US3, one from US4, one from US5). Every
- * other outcome — including outcomes the dictionary has explicitly
- * NOT taught itself about — falls through to the generic fallback.
- * This keeps the function safe to call across the full `PairingOutcome`
- * union without coupling US3/US4/US5 to outcomes T074 will own.
+ * Covers all eight `PairingOutcome` values:
+ *   - US3: invalid_code / expired_code / already_paired
+ *   - US4: branch_mismatch
+ *   - US5: rate_limited
+ *   - T074: network_error / unknown_error
+ *   - success: generic fallback (form navigates before this is rendered)
  */
 export function messageFor(outcome: PairingOutcome): string {
   switch (outcome) {
@@ -101,9 +104,8 @@ export function messageFor(outcome: PairingOutcome): string {
       // function total without a misleading "success" copy.
       return GENERIC_FAILURE_MESSAGE;
     case 'network_error':
+      return NETWORK_ERROR_MESSAGE;
     case 'unknown_error':
-      // Outcomes still in the catch-all route to the generic fallback.
-      // T074 will replace specific cases here as they land.
-      return GENERIC_FAILURE_MESSAGE;
+      return UNKNOWN_ERROR_MESSAGE;
   }
 }
