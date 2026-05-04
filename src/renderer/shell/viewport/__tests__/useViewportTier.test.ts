@@ -131,4 +131,28 @@ describe('useViewportTier (T025)', () => {
     expect(expanded.removeEventListenerSpy).toHaveBeenCalled();
     expect(iconOnly.removeEventListenerSpy).toHaveBeenCalled();
   });
+
+  it('clears pending debounce timer when fired in rapid succession and on unmount', () => {
+    const { iconOnly } = setupMatchMedia(1023);
+    const { result, unmount } = renderHook(() => useViewportTier());
+    expect(result.current).toBe('too-small');
+
+    // Two rapid listener fires — the second one hits the
+    // `if (debounceTimer !== null) clearTimeout(...)` branch in update().
+    act(() => {
+      iconOnly.matches = true;
+      iconOnly.listeners.forEach((l) => {
+        l({} as MediaQueryListEvent);
+      });
+      iconOnly.listeners.forEach((l) => {
+        l({} as MediaQueryListEvent);
+      });
+    });
+
+    // Unmount BEFORE the debounce fires — exercises the cleanup
+    // function's `if (debounceTimer !== null) clearTimeout(...)` branch.
+    unmount();
+    // Tier never updated because the timer was cleared on unmount.
+    expect(result.current).toBe('too-small');
+  });
 });
