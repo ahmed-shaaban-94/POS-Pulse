@@ -4,15 +4,16 @@ import { TransportError, type Network, type PairResult } from './network.js';
 import { mapFailure } from './failure-mapping.js';
 
 /**
- * 002-terminal-pairing T023 + T023a + T041 — `PairingService.submit`.
+ * 002-terminal-pairing T023 + T023a + T041 + T049 — `PairingService.submit`.
  *
  * The orchestrator. Composes:
  *
  *   network.pair(code)          // transport-only rejection
  *     -> on ok=true:   pairingStore.persist({...})  -> success log
  *     -> on ok=false:  mapFailure -> typed PairingSubmitResult
- *                      (US3 wires the three recoverable failure
- *                       outcomes; US4/US5 extend this list later)
+ *                      (US3 wires invalid_code / expired_code /
+ *                       already_paired; US4 wires branch_mismatch;
+ *                       US5 will extend with rate_limited)
  *     -> on TransportError:                        -> network_error log
  *                      (timed_out propagates to log)
  *
@@ -21,11 +22,20 @@ import { mapFailure } from './failure-mapping.js';
  * rejection path is programmer error (non-string code). US3/US4/US5/US7
  * later refine outcome categories without ever changing this rule.
  *
- * T041 (US3) — failure path = log only. The three new outcomes
+ * T041 (US3) — failure path = log only. The three US3 outcomes
  * (invalid_code / expired_code / already_paired) NEVER call
  * `pairingStore.persist()` or `pairingStore.clear()`. Prior persisted
  * state (token + assignment row) is byte-for-byte unchanged across a
  * failed submit (FR-8).
+ *
+ * T049 (US4) — extends the same "failure path = log only" invariant
+ * to BRANCH_MISMATCH, with the extra-strong FR-14 guarantee: a
+ * BRANCH_MISMATCH attempt against a re-pair MUST preserve the existing
+ * valid token + assignment row byte-for-byte. The "no persist + no
+ * clear" branch below is the load-bearing line; do NOT introduce a
+ * "clear on mismatch" path here under any circumstances. The recovery
+ * surface is admin-driven (Option B from the 2026-05-03 clarification),
+ * not client-side state mutation.
  *
  * Security policy (Constitution VII + spec NFR-4 / FR-9 / FR-10):
  *   - The `pairing_code` is read from the argument and passed to the
@@ -177,26 +187,34 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
 
       // Reachable non-2xx. US3 wires the three documented recoverable
       // outcomes (invalid_code / expired_code / already_paired); US4
-      // (branch_mismatch) and US5 (rate_limited) extend this list. Any
-      // outcome the switch does not yet recognise (or that mapFailure
-      // returns from a future code path the service hasn't wired) falls
-      // through to 'unknown_error' so the bridge contract holds.
+      // adds branch_mismatch; US5 (rate_limited) extends this list.
+      // Any outcome the switch does not yet recognise (or that
+      // mapFailure returns from a future code path the service hasn't
+      // wired) falls through to 'unknown_error' so the bridge contract
+      // holds.
       //
       // No store call on any branch — failure path = log only (FR-8).
       // Prior persisted token + assignment row remain byte-for-byte
       // untouched across every failure outcome.
+      //
+      // FR-14 cross-reference: the 'branch_mismatch' arm specifically
+      // protects an EXISTING valid token. A re-pair attempt that hits
+      // BRANCH_MISMATCH MUST NOT clear or replace the prior pairing —
+      // recovery is admin-driven (Option B from the 2026-05-03
+      // clarification). Do NOT introduce a "clear on mismatch" path
+      // here; the absence of any store call IS the invariant.
       const outcome = mapFailure(pairResult.status, pairResult.body);
       switch (outcome) {
         case 'invalid_code':
         case 'expired_code':
-        case 'already_paired': {
+        case 'already_paired':
+        case 'branch_mismatch': {
           pairingLog({ event: 'pairing_attempt', outcome, at: nowIso() });
           return { outcome };
         }
-        // US4 will add 'branch_mismatch'; US5 will add 'rate_limited'
-        // (with retry_after_s). Until then, those outcome categories
-        // cannot reach this switch — mapFailure routes them through the
-        // catch-all 'unknown_error' default.
+        // US5 will add 'rate_limited' (with retry_after_s). Until then,
+        // that outcome category cannot reach this switch — mapFailure
+        // routes it through the catch-all 'unknown_error' default.
         default: {
           pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
           return { outcome: 'unknown_error' };
