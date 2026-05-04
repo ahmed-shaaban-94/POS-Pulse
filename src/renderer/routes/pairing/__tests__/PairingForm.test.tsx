@@ -9,6 +9,7 @@ import {
   INVALID_CODE_MESSAGE,
   EXPIRED_CODE_MESSAGE,
   ALREADY_PAIRED_MESSAGE,
+  BRANCH_MISMATCH_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   EMPTY_INPUT_MESSAGE,
 } from '../messages';
@@ -648,5 +649,125 @@ describe('PairingForm — empty / whitespace validation (T044)', () => {
       expect(screen.getByRole('status')).toHaveTextContent(INVALID_CODE_MESSAGE);
     });
     expect(screen.queryByText(EMPTY_INPUT_MESSAGE)).not.toBeInTheDocument();
+  });
+});
+
+/* ------------------------- T050 ------------------------- */
+
+describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
+  // US4: a BRANCH_MISMATCH outcome surfaces a distinct user-visible
+  // message, the form remains editable, no navigation occurs, and the
+  // input value is preserved so the operator can hand off to the
+  // admin-driven recovery flow without retyping. The message MUST be
+  // distinct from the three US3 messages and from the generic failure
+  // fallback (regression guard at the dictionary level).
+
+  it('on outcome=branch_mismatch: renders the BRANCH_MISMATCH message via role="status"', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'branch_mismatch' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'OTHER-BRANCH-CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(BRANCH_MISMATCH_MESSAGE);
+    });
+  });
+
+  it('the BRANCH_MISMATCH message is distinct from the three US3 messages', () => {
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      BRANCH_MISMATCH_MESSAGE,
+    ]);
+    expect(set.size).toBe(4);
+  });
+
+  it('the BRANCH_MISMATCH message is distinct from the generic failure fallback', () => {
+    // The generic fallback is still used for unknown_error /
+    // network_error / rate_limited until US5 / T074 land their copy.
+    // BRANCH_MISMATCH MUST NOT collapse onto it — operators need a
+    // distinct hint to escalate to admin.
+    const set = new Set([BRANCH_MISMATCH_MESSAGE, GENERIC_FAILURE_MESSAGE]);
+    expect(set.size).toBe(2);
+  });
+
+  it('BRANCH_MISMATCH copy mentions admin / different branch (operator action hint)', () => {
+    // Pin the action-oriented shape of the copy at the dictionary level
+    // so a future copy edit does not accidentally drop the admin hint.
+    expect(BRANCH_MISMATCH_MESSAGE.toLowerCase()).toMatch(/branch/);
+    expect(BRANCH_MISMATCH_MESSAGE.toLowerCase()).toMatch(/admin|release/);
+  });
+
+  it('on outcome=branch_mismatch: form remains editable (input + button enabled)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'branch_mismatch' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button')).not.toBeDisabled();
+    });
+    expect(screen.getByRole('textbox')).toBeEnabled();
+  });
+
+  it('on outcome=branch_mismatch: does NOT navigate away from /pairing', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'branch_mismatch' } });
+    const { locations } = renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(locations).not.toContain('/paired');
+  });
+
+  it('preserves the input value across a BRANCH_MISMATCH failure (operator can retry)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'branch_mismatch' } });
+    renderInRouter(bridge);
+
+    const input = screen.getByRole<HTMLInputElement>('textbox');
+    await user.type(input, 'TYPED-MISMATCH-VALUE{Enter}');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(input.value).toBe('TYPED-MISMATCH-VALUE');
+  });
+
+  it('does NOT echo the pairing_code into the BRANCH_MISMATCH message', async () => {
+    const user = userEvent.setup();
+    const sentinel = 'TOP-SECRET-MISMATCH-CODE-2024';
+    const { bridge } = makeBridge({ result: { outcome: 'branch_mismatch' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), `${sentinel}{Enter}`);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    // The status region's text MUST NOT contain the sentinel — only
+    // the input element holds the value (for retry).
+    expect(screen.getByRole('status').textContent).not.toContain(sentinel);
+  });
+
+  it('does NOT render any device_token field name on BRANCH_MISMATCH', async () => {
+    // Belt-and-braces: even if a future force-cast bridge surfaced
+    // device_token in the result, the form must not place it in the
+    // DOM on this failure path.
+    const user = userEvent.setup();
+    const { bridge } = makeBridge({ result: { outcome: 'branch_mismatch' } });
+    renderInRouter(bridge);
+
+    await user.type(screen.getByRole('textbox'), 'CODE{Enter}');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(document.body.textContent).not.toContain('device_token');
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { mapFailure } from '../failure-mapping.js';
 
 /**
- * 002-terminal-pairing T018 + T036 — `mapFailure` tests.
+ * 002-terminal-pairing T018 + T036 + T046 — `mapFailure` tests.
  *
  * `mapFailure` is the pure function the service uses to translate a
  * non-2xx backend envelope into a `PairingOutcome`. US2 (T018) lands the
@@ -15,16 +15,19 @@ import { mapFailure } from '../failure-mapping.js';
  *   410 EXPIRED_CODE   -> 'expired_code'
  *   409 ALREADY_PAIRED -> 'already_paired'
  *
- * BRANCH_MISMATCH (US4) and RATE_LIMITED (US5) are deliberately NOT
- * tested here — those branches must remain unrecognised at this stage
- * and route through the catch-all 'unknown_error' default. That keeps
- * the body-code switch open for US4/US5 to extend without touching
- * US3's contract.
+ * US4 (T046) adds:
+ *
+ *   409 BRANCH_MISMATCH -> 'branch_mismatch'
+ *
+ * RATE_LIMITED (US5) is deliberately NOT tested here — that branch
+ * must remain unrecognised at this stage and route through the
+ * catch-all 'unknown_error' default. That keeps the body-code switch
+ * open for US5 to extend without touching US3/US4's contract.
  *
  * Discriminator: `body.code`, not the HTTP status. The status comes
  * along for parity with the contract, but routing is body-code driven —
- * `409` is shared between `ALREADY_PAIRED` and the future US4
- * `BRANCH_MISMATCH`, so the function MUST NOT key off status alone.
+ * `409` is shared between `ALREADY_PAIRED` (US3) and `BRANCH_MISMATCH`
+ * (US4), so the function MUST NOT key off status alone.
  */
 
 describe('mapFailure — success-path guard (T018)', () => {
@@ -101,19 +104,13 @@ describe('mapFailure — recoverable failure branches (T036)', () => {
     expect(mapFailure(500, { code: 'INVALID_CODE' })).toBe('invalid_code');
   });
 
-  it('shares HTTP status 409 between ALREADY_PAIRED and the future BRANCH_MISMATCH (US4)', () => {
-    // 409 is documented for BOTH ALREADY_PAIRED (US3) and BRANCH_MISMATCH
-    // (US4). US3 must recognise ALREADY_PAIRED only; BRANCH_MISMATCH
-    // remains unrecognised here and routes through the catch-all
-    // 'unknown_error'. US4 will add the BRANCH_MISMATCH branch.
+  it('shares HTTP status 409 between ALREADY_PAIRED (US3) and BRANCH_MISMATCH (US4)', () => {
+    // 409 is documented for BOTH ALREADY_PAIRED and BRANCH_MISMATCH.
+    // The two MUST resolve to distinct outcomes via body.code routing —
+    // a status-only switch would conflate them. US4 (T046) lands the
+    // BRANCH_MISMATCH branch; this test pins both 409 mappings.
     expect(mapFailure(409, { code: 'ALREADY_PAIRED' })).toBe('already_paired');
-    expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('unknown_error');
-  });
-
-  it('does NOT recognise BRANCH_MISMATCH (US4 scope) — falls through to "unknown_error"', () => {
-    // Explicit US3 scope-fence: BRANCH_MISMATCH must remain in the
-    // catch-all until US4 lands its branch.
-    expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('unknown_error');
+    expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
   });
 
   it('does NOT recognise RATE_LIMITED (US5 scope) — falls through to "unknown_error"', () => {
@@ -140,5 +137,54 @@ describe('mapFailure — recoverable failure branches (T036)', () => {
     expect(mapFailure(400, { code: 'invalid_code' })).toBe('unknown_error');
     expect(mapFailure(410, { code: 'expired_code' })).toBe('unknown_error');
     expect(mapFailure(409, { code: 'already_paired' })).toBe('unknown_error');
+  });
+});
+
+/* ------------------------- T046 ------------------------- */
+
+describe('mapFailure — BRANCH_MISMATCH branch (T046)', () => {
+  it('BRANCH_MISMATCH -> "branch_mismatch"', () => {
+    expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
+  });
+
+  it('BRANCH_MISMATCH with the documented {code, message} envelope -> "branch_mismatch"', () => {
+    expect(
+      mapFailure(409, {
+        code: 'BRANCH_MISMATCH',
+        message: 'Terminal registered to a different branch.',
+      }),
+    ).toBe('branch_mismatch');
+  });
+
+  it('routes by body.code, not HTTP status (BRANCH_MISMATCH on a non-409 status)', () => {
+    // Defensive: if the backend ever returns BRANCH_MISMATCH on a
+    // different status, the body code MUST still drive the outcome.
+    // Status is informational, not the discriminator (status 409 is
+    // shared with ALREADY_PAIRED — body.code is what splits them).
+    expect(mapFailure(422, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
+    expect(mapFailure(500, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
+  });
+
+  it('BRANCH_MISMATCH does NOT throw (catch-all invariant preserved)', () => {
+    // The function only throws on programmer error (2xx status). The
+    // new BRANCH_MISMATCH branch MUST keep that invariant.
+    expect(() => mapFailure(409, { code: 'BRANCH_MISMATCH' })).not.toThrow();
+    expect(() => mapFailure(409, { code: 'BRANCH_MISMATCH', message: 'x' })).not.toThrow();
+  });
+
+  it('case-sensitive matching (lowercase "branch_mismatch" NOT recognised)', () => {
+    // The contract specifies the UPPER_CASE code verbatim. Lowercase
+    // variants are treated as unknown rather than silently coerced.
+    expect(mapFailure(409, { code: 'branch_mismatch' })).toBe('unknown_error');
+    expect(mapFailure(409, { code: 'Branch_Mismatch' })).toBe('unknown_error');
+  });
+
+  it('US3 + US4 outcomes coexist: each body.code resolves to its own outcome', () => {
+    // Cross-test that adding the BRANCH_MISMATCH branch did not
+    // accidentally re-route any of the three US3 outcomes.
+    expect(mapFailure(400, { code: 'INVALID_CODE' })).toBe('invalid_code');
+    expect(mapFailure(410, { code: 'EXPIRED_CODE' })).toBe('expired_code');
+    expect(mapFailure(409, { code: 'ALREADY_PAIRED' })).toBe('already_paired');
+    expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
   });
 });
