@@ -400,6 +400,100 @@ describe('createPairingStore.clear()', () => {
 });
 
 /**
+ * T068 (US7) — invalid-reason discriminator semantic block.
+ *
+ * T010 already asserts all three `invalid` reasons; this describe
+ * groups them explicitly under a US7 label so the test report makes
+ * the coverage surface discoverable. Tests will be green from write —
+ * that is the intended outcome (no new production code is required).
+ */
+describe('createPairingStore.getStatus() — US7 invalid reason discriminator (T068)', () => {
+  let h: TestHarness | undefined;
+  afterEach(() => {
+    h?.db.close();
+    h = undefined;
+  });
+
+  it('returns reason="missing_token" when token present but row absent', async () => {
+    h = await makeHarness();
+    await h.secretStore.set(DEVICE_TOKEN_KEY, 'opaque-token');
+
+    const status = await h.store.getStatus();
+    expect(status).toEqual<PairingStatus>({ kind: 'invalid', reason: 'missing_token' });
+  });
+
+  it('returns reason="orphaned_row" when row present but token absent', async () => {
+    h = await makeHarness();
+    h.storeDb.writeAssignment({
+      tenant_id: 't',
+      branch_id: 'b',
+      terminal_id: 'term',
+      terminal_label: 'Counter',
+      paired_at: 1735689600,
+    });
+
+    const status = await h.store.getStatus();
+    expect(status).toEqual<PairingStatus>({ kind: 'invalid', reason: 'orphaned_row' });
+  });
+
+  it('returns reason="decrypt_failed" when SecretStore.get() rejects (corrupt SecretStore)', async () => {
+    const failingStore = makeDecryptFailingSecretStore(createInMemorySecretStore());
+    await failingStore.set(DEVICE_TOKEN_KEY, 'x');
+    h = await makeHarness({ secretStore: failingStore });
+    h.storeDb.writeAssignment({
+      tenant_id: 't',
+      branch_id: 'b',
+      terminal_id: 'term',
+      terminal_label: 'Counter',
+      paired_at: 1735689600,
+    });
+
+    const status = await h.store.getStatus();
+    expect(status).toEqual<PairingStatus>({ kind: 'invalid', reason: 'decrypt_failed' });
+  });
+});
+
+/**
+ * T071 (US7) — clear() token-leak guard.
+ *
+ * Extends the existing clear() suite with a spy-based assertion that
+ * the token VALUE is never passed to secretStore.delete() — only the
+ * SecretKey is forwarded.
+ */
+describe('createPairingStore.clear() — US7 token-leak guard (T071)', () => {
+  let h: TestHarness | undefined;
+  afterEach(() => {
+    h?.db.close();
+    h = undefined;
+  });
+
+  it('passes only the SecretKey to secretStore.delete(), never the token value', async () => {
+    h = await makeHarness();
+    const distinctToken = 'TOKEN-VALUE-FOR-LEAK-TEST-ZZZZZ';
+    await h.store.persist({
+      device_token: distinctToken,
+      tenant_id: 't',
+      branch_id: 'b',
+      terminal_id: 'term',
+      terminal_label: 'Counter',
+      paired_at: 1735689600,
+    });
+
+    const deleteSpy = vi.spyOn(h.secretStore, 'delete');
+    await h.store.clear();
+
+    // delete() must have been called exactly once with the key, not the value.
+    expect(deleteSpy).toHaveBeenCalledTimes(1);
+    expect(deleteSpy).toHaveBeenCalledWith(DEVICE_TOKEN_KEY);
+
+    // Belt-and-braces: confirm the token string does not appear anywhere
+    // in the recorded call arguments.
+    const callLog = JSON.stringify(deleteSpy.mock.calls);
+    expect(callLog).not.toContain(distinctToken);
+  });
+});
+
+/**
  * Adapter coverage for `bindPairingStoreDb` — mirrors the 001 pattern in
  * `migrate.test.ts § bindMigrationsDb`: hand-rolled mock DatabaseHandle so
  * the better-sqlite3 native binding never loads (R1). Real SQL semantics

@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { PairingForm } from './PairingForm';
+import { InvalidStateBanner } from './InvalidStateBanner';
 import type { PairingBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
 
@@ -48,6 +49,7 @@ export function PairingScreen(props: PairingScreenProps): JSX.Element {
   const formProps = props.pairing !== undefined ? { pairing: props.pairing } : {};
   return (
     <main data-testid="route-pairing" {...reasonAttr}>
+      {props.invalidReason !== undefined && <InvalidStateBanner reason={props.invalidReason} />}
       <PairingForm {...formProps} />
     </main>
   );

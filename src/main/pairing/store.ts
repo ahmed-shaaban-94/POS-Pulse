@@ -208,6 +208,14 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
       // Both deletes are idempotent. The order does not matter for
       // correctness — clear() is the only path that wipes state and
       // there is no in-flight reader to race with.
+      //
+      // T072 / US7 seam — deferred 401-interceptor hook:
+      // A future interceptor (post-US7) MAY call clear() automatically
+      // when the backend returns 401 on a paired request. When that
+      // feature lands, wire the call here — do NOT call clear() from
+      // the IPC handler or from network.ts. clear() owns no logger call
+      // by design (FR-8 / T071); the interceptor is responsible for its
+      // own log record before invoking this method.
       db.deleteAssignment();
       await secretStore.delete(deviceTokenKey);
     },
