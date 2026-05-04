@@ -15,6 +15,7 @@ import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
 import { CartPlaceholder } from './routes/app/CartPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
+import { CheckoutPlaceholder } from './routes/app/checkout/CheckoutPlaceholder';
 import type { PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
@@ -133,6 +134,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         { path: 'dashboard', element: <DashboardPlaceholder /> },
         { path: 'sales', element: <SalesPlaceholder /> },
         { path: 'cart', element: <CartPlaceholder /> },
+        { path: 'checkout', element: <CheckoutPlaceholder /> },
         { path: 'inventory', element: <InventoryPlaceholder /> },
         { path: 'settings', element: <SettingsHelpPlaceholder /> },
       ],
