@@ -36,10 +36,7 @@ export function TopBar({
     <header role="banner" className="top-bar">
       <IdentityStrip tenantId={tenantId} branchId={branchId} terminalLabel={terminalLabel} />
       {connectionState !== 'online' && (
-        <StatusBanner
-          state={connectionState}
-          message={BANNER_MESSAGES[connectionState]}
-        />
+        <StatusBanner state={connectionState} message={BANNER_MESSAGES[connectionState]} />
       )}
       <ConnectionIndicator state={connectionState} />
       <OperatorSlot />

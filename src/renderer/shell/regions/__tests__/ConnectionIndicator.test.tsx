@@ -101,12 +101,10 @@ describe('ConnectionIndicator (T044)', () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const localStorageSpy = vi.spyOn(window, 'localStorage', 'get').mockReturnValue(
-      {} as Storage,
-    );
-    const sessionStorageSpy = vi.spyOn(window, 'sessionStorage', 'get').mockReturnValue(
-      {} as Storage,
-    );
+    const localStorageSpy = vi.spyOn(window, 'localStorage', 'get').mockReturnValue({} as Storage);
+    const sessionStorageSpy = vi
+      .spyOn(window, 'sessionStorage', 'get')
+      .mockReturnValue({} as Storage);
 
     const { container } = render(<ConnectionIndicator state="syncing" />);
     const indicator = container.querySelector('[role="status"]');
@@ -130,12 +128,10 @@ describe('ConnectionIndicator (T044)', () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const localStorageSpy = vi.spyOn(window, 'localStorage', 'get').mockReturnValue(
-      {} as Storage,
-    );
-    const sessionStorageSpy = vi.spyOn(window, 'sessionStorage', 'get').mockReturnValue(
-      {} as Storage,
-    );
+    const localStorageSpy = vi.spyOn(window, 'localStorage', 'get').mockReturnValue({} as Storage);
+    const sessionStorageSpy = vi
+      .spyOn(window, 'sessionStorage', 'get')
+      .mockReturnValue({} as Storage);
 
     const { container } = render(<ConnectionIndicator state="syncing" />);
     const indicator = container.querySelector('[role="status"]');
