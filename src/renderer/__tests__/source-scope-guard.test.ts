@@ -18,50 +18,64 @@ describe('source-scope guard (T006)', () => {
   it('003-pos-ui-shell diff must not touch forbidden paths', () => {
     let diffOutput: string;
 
+    const runDiff = (tripleDoc: boolean): string =>
+      execSync(
+        tripleDoc
+          ? 'git diff --name-only origin/main...HEAD'
+          : 'git diff --name-only origin/main HEAD',
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+
     try {
       // Triple-dot: diff from the merge-base of origin/main and HEAD,
       // squash-merge-safe (works even when main has been squash-merged).
-      diffOutput = execSync('git diff --name-only origin/main...HEAD', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+      diffOutput = runDiff(true);
     } catch {
       // CI shallow clones (fetch-depth=1) don't include origin/main.
-      // Try a targeted fetch before giving up — cheap: only fetches the tip.
+      // Fetch just the tip so rev-parse and diff both work.
+      let fetchErr = '';
       try {
-        execSync('git fetch --depth=1 origin main:refs/remotes/origin/main', { stdio: 'pipe' });
-        diffOutput = execSync('git diff --name-only origin/main...HEAD', {
+        // Explicitly map to the remote-tracking ref so origin/main resolves.
+        execSync('git fetch --depth=1 origin main:refs/remotes/origin/main', {
           encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
+          stdio: 'pipe',
         });
+      } catch (e) {
+        fetchErr = e instanceof Error ? e.message : String(e);
+      }
+
+      try {
+        // Triple-dot needs a merge-base, which may not exist after a
+        // shallow fetch. Fall back to double-dot (tip-to-tip) which works
+        // with any depth and is equivalent for a linear PR branch.
+        diffOutput = runDiff(true);
       } catch {
-        // origin/main still unreachable after the fetch attempt.
-        const reachable = (() => {
-          try {
-            execSync('git rev-parse origin/main', { stdio: 'pipe' });
-            return true;
-          } catch {
-            return false;
+        try {
+          diffOutput = runDiff(false);
+        } catch {
+          const reachable = (() => {
+            try {
+              execSync('git rev-parse origin/main', { stdio: 'pipe' });
+              return true;
+            } catch {
+              return false;
+            }
+          })();
+
+          if (!reachable) {
+            console.warn(
+              '[source-scope-guard] SKIP: origin/main unreachable. ' +
+                (fetchErr ? `fetch error: ${fetchErr}. ` : '') +
+                'Manual gate required: run `git diff --name-only origin/main...HEAD` ' +
+                'and verify zero intersection with the forbidden allowlist (T005).',
+            );
+            throw new Error(
+              'source-scope guard: origin/main unreachable; manual check required per quickstart.md §6.',
+            );
           }
-        })();
 
-        if (!reachable) {
-          // Skip with warning but DO NOT pass silently — the PR checklist
-          // in quickstart.md §6 is the manual fallback for this environment.
-          console.warn(
-            '[source-scope-guard] SKIP: origin/main unreachable. ' +
-              'Manual gate required: run `git diff --name-only origin/main...HEAD` ' +
-              'and verify zero intersection with the forbidden allowlist (T005).',
-          );
-          // Re-throw so CI marks the test as skipped/errored, not passed.
-          throw new Error(
-            'source-scope guard: origin/main unreachable; manual check required per quickstart.md §6.',
-          );
+          throw new Error('source-scope guard: git diff command failed; see stderr above.');
         }
-
-        // origin/main is reachable but the diff command itself failed —
-        // surface the raw error.
-        throw new Error('source-scope guard: git diff command failed; see stderr above.');
       }
     }
 
