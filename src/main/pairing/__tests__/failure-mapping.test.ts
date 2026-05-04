@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { mapFailure } from '../failure-mapping.js';
 
 /**
- * 002-terminal-pairing T018 + T036 + T046 — `mapFailure` tests.
+ * 002-terminal-pairing T018 + T036 + T046 + T054 — `mapFailure` tests.
  *
  * `mapFailure` is the pure function the service uses to translate a
  * non-2xx backend envelope into a `PairingOutcome`. US2 (T018) lands the
@@ -19,15 +19,17 @@ import { mapFailure } from '../failure-mapping.js';
  *
  *   409 BRANCH_MISMATCH -> 'branch_mismatch'
  *
- * RATE_LIMITED (US5) is deliberately NOT tested here — that branch
- * must remain unrecognised at this stage and route through the
- * catch-all 'unknown_error' default. That keeps the body-code switch
- * open for US5 to extend without touching US3/US4's contract.
+ * US5 (T054) adds:
+ *
+ *   429 RATE_LIMITED   -> 'rate_limited'
  *
  * Discriminator: `body.code`, not the HTTP status. The status comes
  * along for parity with the contract, but routing is body-code driven —
  * `409` is shared between `ALREADY_PAIRED` (US3) and `BRANCH_MISMATCH`
- * (US4), so the function MUST NOT key off status alone.
+ * (US4), so the function MUST NOT key off status alone. Note also
+ * that `mapFailure` is a pure status+body→outcome function: it does
+ * NOT touch `retry_after_s` (which lives on the surrounding
+ * `PairResult` envelope, parsed by `network.ts`).
  */
 
 describe('mapFailure — success-path guard (T018)', () => {
@@ -113,12 +115,6 @@ describe('mapFailure — recoverable failure branches (T036)', () => {
     expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
   });
 
-  it('does NOT recognise RATE_LIMITED (US5 scope) — falls through to "unknown_error"', () => {
-    // Explicit US3 scope-fence: RATE_LIMITED must remain in the catch-all
-    // until US5 lands its branch (and the Retry-After parsing).
-    expect(mapFailure(429, { code: 'RATE_LIMITED' })).toBe('unknown_error');
-  });
-
   it('unknown body shape -> "unknown_error", never throws (catch-all preserved)', () => {
     // Belt-and-braces re-assertion of the US2 catch-all from T018: any
     // body shape the function does not recognise becomes 'unknown_error',
@@ -186,5 +182,67 @@ describe('mapFailure — BRANCH_MISMATCH branch (T046)', () => {
     expect(mapFailure(410, { code: 'EXPIRED_CODE' })).toBe('expired_code');
     expect(mapFailure(409, { code: 'ALREADY_PAIRED' })).toBe('already_paired');
     expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
+  });
+});
+
+/* ------------------------- T054 ------------------------- */
+
+describe('mapFailure — RATE_LIMITED branch (T054)', () => {
+  it('RATE_LIMITED -> "rate_limited"', () => {
+    expect(mapFailure(429, { code: 'RATE_LIMITED' })).toBe('rate_limited');
+  });
+
+  it('RATE_LIMITED with the documented {code, message} envelope -> "rate_limited"', () => {
+    expect(
+      mapFailure(429, {
+        code: 'RATE_LIMITED',
+        message: 'Too many attempts.',
+      }),
+    ).toBe('rate_limited');
+  });
+
+  it('routes by body.code, not HTTP status (RATE_LIMITED on a non-429 status)', () => {
+    // Defensive: even if the backend mis-issues RATE_LIMITED on a
+    // different status, the body code drives the outcome. Note that
+    // network.ts gates retry_after_s on status === 429 specifically,
+    // so the timer surface won't fire here — but the outcome category
+    // is still routed correctly.
+    expect(mapFailure(503, { code: 'RATE_LIMITED' })).toBe('rate_limited');
+    expect(mapFailure(400, { code: 'RATE_LIMITED' })).toBe('rate_limited');
+  });
+
+  it('RATE_LIMITED does NOT throw (catch-all invariant preserved)', () => {
+    expect(() => mapFailure(429, { code: 'RATE_LIMITED' })).not.toThrow();
+    expect(() => mapFailure(429, { code: 'RATE_LIMITED', message: 'x' })).not.toThrow();
+  });
+
+  it('case-sensitive matching (lowercase "rate_limited" NOT recognised)', () => {
+    // The contract specifies the UPPER_CASE code verbatim.
+    expect(mapFailure(429, { code: 'rate_limited' })).toBe('unknown_error');
+    expect(mapFailure(429, { code: 'Rate_Limited' })).toBe('unknown_error');
+  });
+
+  it('mapFailure does NOT touch retry_after_s (pure status+body->outcome)', () => {
+    // Belt-and-braces: the function signature accepts only (status,
+    // body) — it never sees retry_after_s. This test pins the surface
+    // by passing a body with a `retry_after_s` field and asserting
+    // the function still routes purely on `code`. The field flows
+    // around mapFailure via the surrounding PairResult envelope.
+    const bodyWithExtra = {
+      code: 'RATE_LIMITED',
+      message: 'slow down',
+      retry_after_s: 99, // ignored by mapFailure
+    };
+    expect(mapFailure(429, bodyWithExtra)).toBe('rate_limited');
+  });
+
+  it('US3 + US4 + US5 outcomes coexist: each body.code resolves to its own outcome', () => {
+    // Cross-test that adding the RATE_LIMITED branch did not
+    // accidentally re-route any of the previously-shipped outcomes.
+    expect(mapFailure(400, { code: 'INVALID_CODE' })).toBe('invalid_code');
+    expect(mapFailure(410, { code: 'EXPIRED_CODE' })).toBe('expired_code');
+    expect(mapFailure(409, { code: 'ALREADY_PAIRED' })).toBe('already_paired');
+    expect(mapFailure(409, { code: 'BRANCH_MISMATCH' })).toBe('branch_mismatch');
+    expect(mapFailure(429, { code: 'RATE_LIMITED' })).toBe('rate_limited');
   });
 });

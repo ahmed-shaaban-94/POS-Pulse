@@ -1,8 +1,8 @@
 import type { PairingOutcome } from '../../shared/pairing-types.js';
 
 /**
- * 002-terminal-pairing T020 + T037 + T047 — pure mapping from a non-2xx
- * HTTP envelope to a `PairingOutcome` category.
+ * 002-terminal-pairing T020 + T037 + T047 + T055 — pure mapping from a
+ * non-2xx HTTP envelope to a `PairingOutcome` category.
  *
  * US2 (T020) shipped:
  *   - the success-path guard ("called with 2xx is a programmer error"),
@@ -15,13 +15,16 @@ import type { PairingOutcome } from '../../shared/pairing-types.js';
  *   - EXPIRED_CODE   -> 'expired_code'
  *   - ALREADY_PAIRED -> 'already_paired'
  *
- * US4 (T047) adds:
+ * US4 (T047) added:
  *   - BRANCH_MISMATCH -> 'branch_mismatch'
  *
- * Still deferred (intentionally — the catch-all keeps the door open):
- *   - RATE_LIMITED   -> 'rate_limited'    (US5; will also surface
- *                                          retry_after_s on the failure
- *                                          envelope, parsed by network.ts)
+ * US5 (T055) adds:
+ *   - RATE_LIMITED   -> 'rate_limited'
+ *
+ * `retry_after_s` (US5) is NOT touched by this function — it lives on
+ * the surrounding `PairResult` envelope, parsed by `network.ts` (only
+ * when status === 429). `mapFailure` is a pure status+body→outcome
+ * function; the field flows around it via the envelope.
  *
  * Discriminator policy: the function reads `body.code` only. HTTP status
  * is NOT the routing key — `409` is shared between `ALREADY_PAIRED` (US3)
@@ -66,10 +69,9 @@ export function mapFailure(status: number, body: FailureBody): PairingOutcome {
   }
 
   // Body-code switch (NOT a status switch). US3 landed the three
-  // recoverable-failure branches; US4 adds BRANCH_MISMATCH; US5 will
-  // extend this list without changing the function's contract. The
-  // catch-all 'unknown_error' covers every unrecognised body code,
-  // including RATE_LIMITED (US5) until that task lands.
+  // recoverable-failure branches; US4 added BRANCH_MISMATCH; US5
+  // adds RATE_LIMITED. The catch-all 'unknown_error' covers every
+  // unrecognised body code.
   switch (body.code) {
     case 'INVALID_CODE':
       return 'invalid_code';
@@ -79,6 +81,8 @@ export function mapFailure(status: number, body: FailureBody): PairingOutcome {
       return 'already_paired';
     case 'BRANCH_MISMATCH':
       return 'branch_mismatch';
+    case 'RATE_LIMITED':
+      return 'rate_limited';
     default:
       return 'unknown_error';
   }
