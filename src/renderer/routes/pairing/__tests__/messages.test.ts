@@ -7,7 +7,9 @@ import {
   EXPIRED_CODE_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   INVALID_CODE_MESSAGE,
+  NETWORK_ERROR_MESSAGE,
   RATE_LIMITED_MESSAGE,
+  UNKNOWN_ERROR_MESSAGE,
   messageFor,
 } from '../messages';
 import type { PairingOutcome } from '../../../../shared/pairing-types';
@@ -63,13 +65,53 @@ describe('messageFor — US5 outcome (T057)', () => {
   });
 });
 
-describe('messageFor — outcomes still in the catch-all (route to generic fallback)', () => {
-  it('network_error (T074) -> GENERIC_FAILURE_MESSAGE', () => {
-    expect(messageFor('network_error')).toBe(GENERIC_FAILURE_MESSAGE);
+describe('messageFor — T074 friendly copy for network_error / unknown_error', () => {
+  it('network_error -> NETWORK_ERROR_MESSAGE (not GENERIC_FAILURE_MESSAGE)', () => {
+    const msg = messageFor('network_error');
+    expect(msg).toBe(NETWORK_ERROR_MESSAGE);
+    expect(msg).not.toBe(GENERIC_FAILURE_MESSAGE);
   });
 
-  it('unknown_error (T074) -> GENERIC_FAILURE_MESSAGE', () => {
-    expect(messageFor('unknown_error')).toBe(GENERIC_FAILURE_MESSAGE);
+  it('NETWORK_ERROR_MESSAGE contains /no connection/i or /check.*network/i action hint', () => {
+    expect(NETWORK_ERROR_MESSAGE).toMatch(/no connection|check.*network/i);
+  });
+
+  it('unknown_error -> UNKNOWN_ERROR_MESSAGE (not GENERIC_FAILURE_MESSAGE)', () => {
+    const msg = messageFor('unknown_error');
+    expect(msg).toBe(UNKNOWN_ERROR_MESSAGE);
+    expect(msg).not.toBe(GENERIC_FAILURE_MESSAGE);
+  });
+
+  it('UNKNOWN_ERROR_MESSAGE contains /try again/i action hint', () => {
+    expect(UNKNOWN_ERROR_MESSAGE).toMatch(/try again/i);
+  });
+
+  it('NETWORK_ERROR_MESSAGE is distinct from UNKNOWN_ERROR_MESSAGE', () => {
+    expect(NETWORK_ERROR_MESSAGE).not.toBe(UNKNOWN_ERROR_MESSAGE);
+  });
+
+  it('NETWORK_ERROR_MESSAGE is distinct from all five US3/US4/US5 messages', () => {
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
+      NETWORK_ERROR_MESSAGE,
+    ]);
+    expect(set.size).toBe(6);
+  });
+
+  it('UNKNOWN_ERROR_MESSAGE is distinct from all five US3/US4/US5 messages', () => {
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
+      UNKNOWN_ERROR_MESSAGE,
+    ]);
+    expect(set.size).toBe(6);
   });
 
   it('success outcome -> GENERIC_FAILURE_MESSAGE (never observed; form navigates first)', () => {
@@ -141,11 +183,28 @@ describe('messages dictionary — distinct constants', () => {
       BRANCH_MISMATCH_MESSAGE,
       RATE_LIMITED_MESSAGE,
       GENERIC_FAILURE_MESSAGE,
+      NETWORK_ERROR_MESSAGE,
+      UNKNOWN_ERROR_MESSAGE,
       EMPTY_INPUT_MESSAGE,
     ]) {
       expect(typeof msg).toBe('string');
       expect(msg.length).toBeGreaterThan(0);
     }
+  });
+
+  it('all nine message constants are pairwise distinct', () => {
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
+      GENERIC_FAILURE_MESSAGE,
+      NETWORK_ERROR_MESSAGE,
+      UNKNOWN_ERROR_MESSAGE,
+      EMPTY_INPUT_MESSAGE,
+    ]);
+    expect(set.size).toBe(9);
   });
 
   it('every PairingOutcome maps to a non-empty message (totality)', () => {
