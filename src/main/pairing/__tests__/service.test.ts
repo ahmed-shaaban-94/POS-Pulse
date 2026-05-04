@@ -638,6 +638,225 @@ describe('PairingService.submit — BRANCH_MISMATCH branch (T048, FR-14)', () =>
   });
 });
 
+/* ------------------------- T054 ------------------------- */
+
+describe('PairingService.submit — RATE_LIMITED branch (T054, US5)', () => {
+  // US5 wires the rate_limited outcome end-to-end. The service trusts
+  // network.ts as the SSOT for parsing the Retry-After header — it
+  // pulls retry_after_s straight off the envelope and threads it
+  // through both the log record and the returned PairingSubmitResult.
+  //
+  // Same FR-8 invariant as US3/US4: failure path = log only. No
+  // persist, no clear, no reject.
+
+  const PRIOR_PAIRED_STATUS = {
+    kind: 'paired',
+    tenant_id: 'prior-tenant',
+    branch_id: 'prior-branch',
+    terminal_id: 'prior-terminal',
+    terminal_label: 'Prior Counter',
+    paired_at: 1700000000,
+  } as const;
+
+  function makeHarnessWithPriorPair(opts: HarnessOpts = {}): Harness {
+    const h = makeHarness(opts);
+    h.store.getStatus.mockResolvedValue(PRIOR_PAIRED_STATUS);
+    return h;
+  }
+
+  it('resolves with { outcome: "rate_limited", retry_after_s: 7 } when network surfaces 7', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED', message: 'slow down' },
+        retry_after_s: 7,
+      },
+    });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'rate_limited', retry_after_s: 7 });
+  });
+
+  it('does NOT call store.persist() (failure path = log only)', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 30,
+      },
+    });
+    await h.service.submit('CODE');
+    expect(h.store.persist).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call store.clear() (prior token + row preserved per FR-8)', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 30,
+      },
+    });
+    await h.service.submit('CODE');
+    expect(h.store.clear).not.toHaveBeenCalled();
+  });
+
+  it('emits exactly ONE log record with outcome=rate_limited AND retry_after_s', async () => {
+    const code = 'SECRET-RATE-LIMITED-CODE-9999';
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 42,
+      },
+    });
+    await h.service.submit(code);
+
+    expect(h.logRecords).toHaveLength(1);
+    expect(h.logRecords[0]).toMatchObject({
+      event: 'pairing_attempt',
+      outcome: 'rate_limited',
+      retry_after_s: 42,
+    });
+    expect(h.logRecords[0]?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const dump = JSON.stringify(h.logRecords);
+    expect(dump).not.toContain(code);
+    expect(dump).not.toContain('SECRET-RATE-LIMITED-CODE-9999');
+  });
+
+  it('the rate_limited log record carries NO terminal_id (success-only field)', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 5,
+      },
+    });
+    await h.service.submit('CODE');
+    expect(h.logRecords[0]).not.toHaveProperty('terminal_id');
+  });
+
+  it('the rate_limited log record carries NO timed_out (transport-only field)', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 5,
+      },
+    });
+    await h.service.submit('CODE');
+    expect(h.logRecords[0]).not.toHaveProperty('timed_out');
+  });
+
+  it('boundary: retry_after_s = 1 (min) flows through unchanged', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 1,
+      },
+    });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'rate_limited', retry_after_s: 1 });
+    expect(h.logRecords[0]).toMatchObject({ retry_after_s: 1 });
+  });
+
+  it('boundary: retry_after_s = 300 (max) flows through unchanged', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 300,
+      },
+    });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'rate_limited', retry_after_s: 300 });
+    expect(h.logRecords[0]).toMatchObject({ retry_after_s: 300 });
+  });
+
+  it('service does NOT re-clamp retry_after_s (network is the SSOT)', async () => {
+    // If network produced an out-of-band value (it shouldn't — the
+    // network test suite asserts clamping), service trusts it. This
+    // test pins "no second-line clamping" — a defensive guarantee that
+    // a future contributor cannot accidentally introduce a divergent
+    // clamp by adding `Math.min(...)` in the service.
+    const h = makeHarnessWithPriorPair({
+      // Synthetic: network would never produce 500 (clamped to 300).
+      // The point: service must pass it through as-is.
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 500,
+      },
+    });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'rate_limited', retry_after_s: 500 });
+  });
+
+  it('NEVER rejects on RATE_LIMITED (bridge contract)', async () => {
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        retry_after_s: 30,
+      },
+    });
+    await expect(h.service.submit('CODE')).resolves.toBeDefined();
+  });
+
+  it('defensive: missing retry_after_s on a rate_limited envelope -> falls through to unknown_error', async () => {
+    // Contract: network ALWAYS sets retry_after_s on a 429 response.
+    // If a future bug omits it, the service must NOT silently emit
+    // `{ outcome: 'rate_limited', retry_after_s: undefined }` — that
+    // would crash the renderer's setTimeout(undefined * 1000). Fall
+    // through to unknown_error so the bridge contract holds.
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 429,
+        body: { code: 'RATE_LIMITED' },
+        // retry_after_s intentionally missing
+      },
+    });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'unknown_error' });
+    expect(h.logRecords).toHaveLength(1);
+    expect(h.logRecords[0]).toMatchObject({ outcome: 'unknown_error' });
+    // Still no state mutation.
+    expect(h.store.persist).not.toHaveBeenCalled();
+    expect(h.store.clear).not.toHaveBeenCalled();
+  });
+
+  it('RATE_LIMITED on a non-429 status (defensive): body.code routes to rate_limited; envelope had no retry_after_s; falls through to unknown_error', async () => {
+    // network.ts sets retry_after_s ONLY on status === 429. If a
+    // future backend mis-issues RATE_LIMITED on (say) 503,
+    // failure-mapping returns 'rate_limited' (body-code-driven) but
+    // the envelope has no retry_after_s. Service's defensive guard
+    // catches that and resolves as unknown_error.
+    const h = makeHarnessWithPriorPair({
+      pairResult: {
+        ok: false,
+        status: 503,
+        body: { code: 'RATE_LIMITED' },
+        // retry_after_s missing — network skipped attaching it on non-429
+      },
+    });
+    const result = await h.service.submit('CODE');
+    expect(result).toEqual({ outcome: 'unknown_error' });
+    expect(h.store.persist).not.toHaveBeenCalled();
+    expect(h.store.clear).not.toHaveBeenCalled();
+  });
+});
+
 /* ------------------------- contract invariants ------------------------- */
 
 describe('PairingService.submit — contract invariants (T023a)', () => {

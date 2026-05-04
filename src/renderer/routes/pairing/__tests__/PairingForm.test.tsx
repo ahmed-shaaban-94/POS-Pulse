@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -10,6 +10,7 @@ import {
   EXPIRED_CODE_MESSAGE,
   ALREADY_PAIRED_MESSAGE,
   BRANCH_MISMATCH_MESSAGE,
+  RATE_LIMITED_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   EMPTY_INPUT_MESSAGE,
 } from '../messages';
@@ -769,5 +770,270 @@ describe('PairingForm — BRANCH_MISMATCH outcome (T050)', () => {
       expect(screen.getByRole('status')).toBeInTheDocument();
     });
     expect(document.body.textContent).not.toContain('device_token');
+  });
+});
+
+/* ------------------------- T056 ------------------------- */
+
+describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
+  // US5: a rate_limited outcome disables submit for the indicated
+  // retry_after_s seconds, then re-enables. The form input remains
+  // editable throughout (only the button gates). The visible message
+  // is distinct from all other failure messages and matches a stable
+  // /too many attempts/i family copy.
+  //
+  // Strategy: drive the form via fireEvent (synchronous, no microtask
+  // pumping needed) so we can mix real and fake timers cleanly.
+  // userEvent + fake timers in Vitest 4 has a known-tricky interaction
+  // (microtask vs setTimeout patching) that fireEvent sidesteps.
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /**
+   * Synchronously set the input value and submit the form. Avoids
+   * userEvent's internal delays so fake-timer tests don't have to
+   * coordinate microtask pumping. Returns the form element for any
+   * further direct dispatch.
+   */
+  function submitWithCode(code: string): HTMLFormElement {
+    const input = screen.getByRole<HTMLInputElement>('textbox');
+    fireEvent.change(input, { target: { value: code } });
+    const form = input.closest('form');
+    if (!form) throw new Error('form not found');
+    fireEvent.submit(form);
+    return form;
+  }
+
+  it('on rate_limited: disables submit immediately and re-enables exactly after retry_after_s', async () => {
+    // Fake timers MUST be active BEFORE mount so the form's useEffect
+    // schedules its setTimeout under fake-timer control. waitFor uses
+    // setTimeout internally and would hang under fake timers, so we
+    // flush microtasks manually via async-act instead — that pumps
+    // the bridge's promise resolve and React's setState commits.
+    vi.useFakeTimers();
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 5 } });
+    renderInRouter(bridge);
+
+    await act(async () => {
+      submitWithCode('CODE');
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole('button')).toBeDisabled();
+
+    // 4_999 ms in: still disabled.
+    act(() => {
+      vi.advanceTimersByTime(4_999);
+    });
+    expect(screen.getByRole('button')).toBeDisabled();
+
+    // Cross the 5_000 ms boundary: re-enables. Async-act flushes the
+    // setState commit from the timer callback through React 19's
+    // microtask scheduling.
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).not.toBeDisabled();
+  });
+
+  it('on rate_limited: shows RATE_LIMITED_MESSAGE matching /too many attempts/i', async () => {
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 3 } });
+    renderInRouter(bridge);
+
+    submitWithCode('CODE');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(RATE_LIMITED_MESSAGE);
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(/too many attempts/i);
+  });
+
+  it('the rate_limited message is distinct from every other US3/US4 message and the generic fallback', () => {
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
+      GENERIC_FAILURE_MESSAGE,
+    ]);
+    expect(set.size).toBe(6);
+  });
+
+  it('while disabled: a second Enter / click does NOT call bridge.submit again', async () => {
+    const { bridge, submit } = makeBridge({
+      result: { outcome: 'rate_limited', retry_after_s: 10 },
+    });
+    renderInRouter(bridge);
+
+    const form = submitWithCode('CODE');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button')).toBeDisabled();
+    });
+    expect(submit).toHaveBeenCalledTimes(1);
+
+    // Try to submit again while disabled. The form's isRateLimited
+    // guard MUST suppress the call.
+    fireEvent.submit(form);
+    expect(submit).toHaveBeenCalledTimes(1);
+
+    // Click attempts on disabled buttons are dropped by the runtime,
+    // but assert the call count anyway as a regression guard.
+    fireEvent.click(screen.getByRole('button'));
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('while disabled: the input remains editable (not disabled by isRateLimited)', async () => {
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 10 } });
+    renderInRouter(bridge);
+
+    submitWithCode('CODE');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button')).toBeDisabled();
+    });
+
+    // The input MUST remain enabled — operators may correct a typo
+    // while waiting for the timer. Only the submit BUTTON gates.
+    const input = screen.getByRole<HTMLInputElement>('textbox');
+    expect(input).toBeEnabled();
+
+    // Operator can still edit the input value while the button is
+    // disabled.
+    fireEvent.change(input, { target: { value: 'CODEX' } });
+    expect(input.value).toBe('CODEX');
+  });
+
+  it('on rate_limited: does NOT navigate away from /pairing', async () => {
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 5 } });
+    const { locations } = renderInRouter(bridge);
+
+    submitWithCode('CODE');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(locations).not.toContain('/paired');
+  });
+
+  it('preserves the input value across a rate_limited failure (operator can retry after timer)', async () => {
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 5 } });
+    renderInRouter(bridge);
+
+    submitWithCode('TYPED-RATE-VALUE');
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(screen.getByRole<HTMLInputElement>('textbox').value).toBe('TYPED-RATE-VALUE');
+  });
+
+  it('does NOT echo the pairing_code into the rate_limited message region', async () => {
+    const sentinel = 'TOP-SECRET-RATE-CODE-2024';
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 5 } });
+    renderInRouter(bridge);
+
+    submitWithCode(sentinel);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('status').textContent).not.toContain(sentinel);
+  });
+
+  it('does NOT render any device_token field name on rate_limited', async () => {
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 5 } });
+    renderInRouter(bridge);
+
+    submitWithCode('CODE');
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toBeInTheDocument();
+    });
+    expect(document.body.textContent).not.toContain('device_token');
+  });
+
+  it('boundary: retry_after_s = 1 second disables submit for ~1s and re-enables', async () => {
+    vi.useFakeTimers();
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 1 } });
+    renderInRouter(bridge);
+
+    await act(async () => {
+      submitWithCode('CODE');
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(999);
+    });
+    expect(screen.getByRole('button')).toBeDisabled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).not.toBeDisabled();
+  });
+
+  it('boundary: retry_after_s = 300 (max) disables submit for the full 5 minutes', async () => {
+    vi.useFakeTimers();
+    const { bridge } = makeBridge({ result: { outcome: 'rate_limited', retry_after_s: 300 } });
+    renderInRouter(bridge);
+
+    await act(async () => {
+      submitWithCode('CODE');
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(299_999);
+    });
+    expect(screen.getByRole('button')).toBeDisabled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).not.toBeDisabled();
+  });
+
+  it('after the timer expires: a fresh submit IS allowed (form recovers)', async () => {
+    vi.useFakeTimers();
+    let nextResult: PairingSubmitResult = { outcome: 'rate_limited', retry_after_s: 2 };
+    const submit = vi.fn(() => Promise.resolve(nextResult));
+    const bridge: PairingBridgeAPI = {
+      submit,
+      getStatus: vi.fn(() => Promise.reject(new Error('not used'))),
+    };
+    renderInRouter(bridge);
+
+    await act(async () => {
+      submitWithCode('CODE');
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).toBeDisabled();
+    expect(submit).toHaveBeenCalledTimes(1);
+
+    // Advance past the timer.
+    await act(async () => {
+      vi.advanceTimersByTime(2_000);
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button')).not.toBeDisabled();
+
+    // Switch the bridge to a different outcome and retry. The second
+    // submit goes through fireEvent.click; async-act flushes its
+    // promise resolve.
+    nextResult = { outcome: 'invalid_code' };
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button'));
+      await Promise.resolve();
+    });
+    expect(submit).toHaveBeenCalledTimes(2);
   });
 });

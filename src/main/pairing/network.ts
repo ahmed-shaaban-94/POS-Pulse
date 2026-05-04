@@ -1,14 +1,22 @@
 import type { components } from '../../shared/api-types.js';
 
 /**
- * 002-terminal-pairing T021 + T039 — `network.pair()`.
+ * 002-terminal-pairing T021 + T039 + T053 — `network.pair()`.
  *
  * T039 (US3): no behaviour change. The contract below was already
  * "resolve verbatim on every reachable response, including non-2xx";
  * T038 added regression tests for the three documented US3 failure
  * envelopes (400 INVALID_CODE / 410 EXPIRED_CODE / 409 ALREADY_PAIRED),
  * each of which surfaces unchanged through the existing implementation.
- * The function's surface is unchanged.
+ *
+ * T053 (US5): adds `Retry-After` header parsing on `status === 429`.
+ * The parsed-and-clamped value is attached to the resolved failure
+ * envelope as `retry_after_s`. The header value is consulted ONLY on
+ * 429 — non-429 responses (even those carrying a Retry-After header)
+ * leave the field undefined, because the renderer's disabled-timer
+ * surface is bound to the RATE_LIMITED outcome, not the header. The
+ * resolve-on-reachable / reject-only-on-transport contract above is
+ * unchanged.
  *
  * The only `fetch` site in the pairing slice. Contract (LOCKED from MVP
  * onward — every later US refines body-code mapping but never changes
@@ -39,10 +47,28 @@ import type { components } from '../../shared/api-types.js';
  *     unconditionally — even if the runtime/library accidentally
  *     surfaces the request body in the error, the wrapper's message is
  *     a stable, secret-free string.
+ *   - The `Retry-After` header value is parsed locally and never
+ *     emitted to a logger; the parsed integer that flows downstream is
+ *     a public timer value, not a secret.
  */
 
 const PAIR_PATH = '/api/v1/terminals/pair';
 const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * Retry-After parsing bounds (T053).
+ *
+ *   MIN clamp prevents a buggy backend from sending a zero/negative
+ *   value that would let submit fire immediately and re-trigger the
+ *   rate limit.
+ *   MAX clamp prevents a malicious or buggy backend from disabling
+ *   submit indefinitely (research §4 explicit rationale).
+ *   DEFAULT applies on missing / malformed values; matches the spec
+ *   contract at pairing-http.md:67.
+ */
+const RETRY_AFTER_MIN_S = 1;
+const RETRY_AFTER_MAX_S = 300;
+const RETRY_AFTER_DEFAULT_S = 30;
 
 type PairRequestBody = components['schemas']['TerminalPairRequest'];
 export type PairSuccessBody = components['schemas']['TerminalPairResponse'];
@@ -61,7 +87,19 @@ export interface PairFailureBody {
 
 export type PairResult =
   | { ok: true; status: 200; body: PairSuccessBody }
-  | { ok: false; status: number; body: PairFailureBody };
+  | {
+      ok: false;
+      status: number;
+      body: PairFailureBody;
+      /**
+       * Parsed-and-clamped `Retry-After` value in seconds. Set ONLY
+       * when `status === 429` (T053). Never present on other statuses
+       * even if the backend carries a Retry-After header — the
+       * renderer's disabled-timer surface is bound to the
+       * RATE_LIMITED outcome, not the header.
+       */
+      retry_after_s?: number;
+    };
 
 /**
  * Typed transport-level error. Distinct from a backend "failure
@@ -169,7 +207,20 @@ export function createNetwork(deps: NetworkDeps): Network {
       // Reachable non-2xx: resolve with the typed failure shape. Any
       // body parse failure becomes an empty object so the service has
       // something to read defensively.
+      //
+      // T053 (US5): on status === 429, parse Retry-After and attach
+      // the clamped value to the envelope. On every other status, the
+      // field stays undefined — bind the disabled-timer surface to
+      // the RATE_LIMITED outcome, not to header presence.
       const parsed = await parseJsonSafely(response);
+      if (response.status === 429) {
+        return {
+          ok: false,
+          status: 429,
+          body: parsed,
+          retry_after_s: parseRetryAfter(response.headers.get('Retry-After')),
+        };
+      }
       return {
         ok: false,
         status: response.status,
@@ -177,6 +228,49 @@ export function createNetwork(deps: NetworkDeps): Network {
       };
     },
   };
+}
+
+/**
+ * Parse the `Retry-After` header into a clamped integer-seconds value.
+ *
+ * Accepts both forms documented in RFC 7231:
+ *   - `delta-seconds` (e.g., `"5"`)
+ *   - `HTTP-date`     (RFC 7231 IMF-fixdate / RFC 850 / asctime —
+ *                      delegated to `Date.parse()`)
+ *
+ * Behaviour:
+ *   - Missing (`null`) / empty / malformed → returns `RETRY_AFTER_DEFAULT_S`.
+ *   - Negative or past dates                → clamped to `RETRY_AFTER_MIN_S`.
+ *   - Above max                             → clamped to `RETRY_AFTER_MAX_S`.
+ *
+ * Security: the function does not log the header value or expose it
+ * via a thrown error. The returned integer is a public timer value.
+ */
+function parseRetryAfter(headerValue: string | null): number {
+  if (headerValue === null) return RETRY_AFTER_DEFAULT_S;
+  const trimmed = headerValue.trim();
+  if (trimmed.length === 0) return RETRY_AFTER_DEFAULT_S;
+
+  // Integer delta-seconds first. Accept an optional leading '-' so we
+  // can clamp negatives explicitly rather than treating them as
+  // malformed (the spec wants negatives to clamp to MIN, not default).
+  if (/^-?\d+$/.test(trimmed)) {
+    const seconds = Number.parseInt(trimmed, 10);
+    return clampRetryAfter(seconds);
+  }
+
+  // HTTP-date fallback. Date.parse returns NaN on unrecognised input.
+  const targetMs = Date.parse(trimmed);
+  if (Number.isNaN(targetMs)) return RETRY_AFTER_DEFAULT_S;
+  const deltaSeconds = Math.round((targetMs - Date.now()) / 1000);
+  return clampRetryAfter(deltaSeconds);
+}
+
+function clampRetryAfter(seconds: number): number {
+  if (!Number.isFinite(seconds)) return RETRY_AFTER_DEFAULT_S;
+  if (seconds < RETRY_AFTER_MIN_S) return RETRY_AFTER_MIN_S;
+  if (seconds > RETRY_AFTER_MAX_S) return RETRY_AFTER_MAX_S;
+  return seconds;
 }
 
 /**

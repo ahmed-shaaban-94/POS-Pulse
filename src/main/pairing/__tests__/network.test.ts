@@ -447,6 +447,220 @@ describe('network.pair() — client-side timeout (T021b)', () => {
   });
 });
 
+/* ------------------------- T052 ------------------------- */
+
+describe('network.pair() — Retry-After parsing on 429 (T052)', () => {
+  // The contract from research §4 + pairing-http.md:67:
+  //   - Header MAY be integer delta-seconds OR HTTP-date.
+  //   - Clamp result to [1, 300] s.
+  //   - Default 30 s on missing / malformed values.
+  //   - retry_after_s is set on the resolved failure envelope ONLY
+  //     when status === 429.
+  //
+  // Tests use a real `Date.now()` reference; HTTP-date cases compute
+  // their target relative to the system clock so the assertion is
+  // tolerant of test-runner drift (±1 s).
+
+  function makeRateLimitResponse(retryAfter: string | null, status = 429): Response {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (retryAfter !== null) headers['Retry-After'] = retryAfter;
+    return new Response(JSON.stringify({ code: 'RATE_LIMITED', message: 'slow down' }), {
+      status,
+      headers,
+    });
+  }
+
+  it('Retry-After: 5 (integer delta-seconds) -> retry_after_s === 5', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse('5') });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(429);
+      expect(result.retry_after_s).toBe(5);
+    }
+  });
+
+  it('Retry-After: 9999 (above max) -> clamped to 300', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse('9999') });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(300);
+  });
+
+  it('Retry-After: 0 (below min) -> clamped to 1', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse('0') });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(1);
+  });
+
+  it('Retry-After: -7 (negative) -> clamped to 1', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse('-7') });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(1);
+  });
+
+  it('Retry-After: HTTP-date in the future -> seconds-from-now, clamped', async () => {
+    const futureMs = Date.now() + 12_000; // 12 s ahead
+    const future = new Date(futureMs).toUTCString();
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse(future) });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Tolerate ±1 s drift from test-runner scheduling.
+      expect(result.retry_after_s).toBeGreaterThanOrEqual(11);
+      expect(result.retry_after_s).toBeLessThanOrEqual(13);
+    }
+  });
+
+  it('Retry-After: HTTP-date far in the future -> clamped to 300', async () => {
+    const farFuture = new Date(Date.now() + 60 * 60 * 1000).toUTCString(); // 1 h
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse(farFuture) });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(300);
+  });
+
+  it('Retry-After: HTTP-date in the past -> clamped to 1', async () => {
+    const past = new Date(Date.now() - 60_000).toUTCString();
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse(past) });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(1);
+  });
+
+  it('429 with no Retry-After header -> default 30', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse(null) });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(30);
+  });
+
+  it('429 with malformed Retry-After ("not a number") -> default 30', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse('not a number') });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(30);
+  });
+
+  it('429 with empty Retry-After -> default 30', async () => {
+    const { fetch } = makeFakeFetch({ response: makeRateLimitResponse('') });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.retry_after_s).toBe(30);
+  });
+
+  it('non-429 status with Retry-After header -> retry_after_s is omitted/undefined', async () => {
+    // The spec contract: retry_after_s is set ONLY when status === 429.
+    // A backend that returns a Retry-After header on 503 (some do) MUST
+    // NOT cause the renderer to disable submit — that semantic belongs
+    // to RATE_LIMITED only.
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify({ code: 'UNKNOWN' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(503);
+      expect(result.retry_after_s).toBeUndefined();
+    }
+  });
+
+  it('non-429 with body.code === RATE_LIMITED but status 400 -> retry_after_s is omitted', async () => {
+    // Defensive: even if the backend mis-issues RATE_LIMITED on a
+    // non-429 status, the network module's "only on 429" rule holds.
+    // failure-mapping will still route the body code (status-agnostic);
+    // the timer surface specifically gates on 429.
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify({ code: 'RATE_LIMITED' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '5' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      expect(result.retry_after_s).toBeUndefined();
+    }
+  });
+
+  it('200 success path does NOT carry retry_after_s (type discriminant)', async () => {
+    // The PairResult success branch type has no retry_after_s field.
+    // This test pins the runtime shape too.
+    const successBody = {
+      device_token: 'opaque',
+      tenant_id: 't',
+      branch_id: 'b',
+      terminal_id: 'term',
+      terminal_label: 'Counter',
+    };
+    const { fetch } = makeFakeFetch({
+      response: new Response(JSON.stringify(successBody), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '60' },
+      }),
+    });
+    const network = createNetwork({ fetch, baseUrl: BASE_URL });
+
+    const result = await network.pair('CODE');
+
+    expect(result.ok).toBe(true);
+    // The success branch is structurally distinct — it has no
+    // retry_after_s slot. This assertion guards against a regression
+    // that broadens the type or accidentally attaches the field.
+    expect(result).not.toHaveProperty('retry_after_s');
+  });
+
+  it('does NOT throw for any 429 variant (resolve-on-reachable holds)', async () => {
+    for (const headerValue of ['5', '9999', '-7', 'not a number', null, '']) {
+      const { fetch } = makeFakeFetch({ response: makeRateLimitResponse(headerValue) });
+      const network = createNetwork({ fetch, baseUrl: BASE_URL });
+      await expect(network.pair('CODE')).resolves.toBeDefined();
+    }
+  });
+});
+
 /* ---------- helpers ---------- */
 
 function stringifyFetchInput(input: RequestInfo | URL): string {

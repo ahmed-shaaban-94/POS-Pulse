@@ -4,7 +4,7 @@ import { TransportError, type Network, type PairResult } from './network.js';
 import { mapFailure } from './failure-mapping.js';
 
 /**
- * 002-terminal-pairing T023 + T023a + T041 + T049 — `PairingService.submit`.
+ * 002-terminal-pairing T023 + T023a + T041 + T049 + T055 — `PairingService.submit`.
  *
  * The orchestrator. Composes:
  *
@@ -13,7 +13,7 @@ import { mapFailure } from './failure-mapping.js';
  *     -> on ok=false:  mapFailure -> typed PairingSubmitResult
  *                      (US3 wires invalid_code / expired_code /
  *                       already_paired; US4 wires branch_mismatch;
- *                       US5 will extend with rate_limited)
+ *                       US5 wires rate_limited with retry_after_s)
  *     -> on TransportError:                        -> network_error log
  *                      (timed_out propagates to log)
  *
@@ -36,6 +36,16 @@ import { mapFailure } from './failure-mapping.js';
  * "clear on mismatch" path here under any circumstances. The recovery
  * surface is admin-driven (Option B from the 2026-05-03 clarification),
  * not client-side state mutation.
+ *
+ * T055 (US5) — adds the rate_limited outcome with `retry_after_s`
+ * pass-through. Same FR-8 invariant: failure path = log only. The
+ * service trusts `network.ts` as the single source of truth for
+ * Retry-After parsing — it does NOT re-parse, does NOT re-clamp.
+ * Defensive guard: if `pairResult.retry_after_s` is undefined despite
+ * outcome === 'rate_limited' (would only happen if network.ts has a
+ * bug or the body code arrived on a non-429 status), the service
+ * falls through to `unknown_error` so the renderer never sees an
+ * `undefined * 1000` setTimeout.
  *
  * Security policy (Constitution VII + spec NFR-4 / FR-9 / FR-10):
  *   - The `pairing_code` is read from the argument and passed to the
@@ -71,7 +81,7 @@ export interface PairingAttemptLogRecord {
   at: string;
   /** Present only when outcome === 'success'. Opaque server-issued ID. Never the device token. */
   terminal_id?: string;
-  /** Present only when outcome === 'rate_limited' (US5; not emitted by US2). */
+  /** Present only when outcome === 'rate_limited' (US5). */
   retry_after_s?: number;
   /** Present only when outcome === 'network_error' AND the cause was the 30s timeout. */
   timed_out?: boolean;
@@ -187,11 +197,9 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
 
       // Reachable non-2xx. US3 wires the three documented recoverable
       // outcomes (invalid_code / expired_code / already_paired); US4
-      // adds branch_mismatch; US5 (rate_limited) extends this list.
-      // Any outcome the switch does not yet recognise (or that
-      // mapFailure returns from a future code path the service hasn't
-      // wired) falls through to 'unknown_error' so the bridge contract
-      // holds.
+      // adds branch_mismatch; US5 adds rate_limited (with
+      // retry_after_s). Any outcome the switch does not yet recognise
+      // falls through to 'unknown_error' so the bridge contract holds.
       //
       // No store call on any branch — failure path = log only (FR-8).
       // Prior persisted token + assignment row remain byte-for-byte
@@ -205,6 +213,30 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
       // here; the absence of any store call IS the invariant.
       const outcome = mapFailure(pairResult.status, pairResult.body);
       switch (outcome) {
+        case 'rate_limited': {
+          // US5 — retry_after_s flows from network.ts (the SSOT for
+          // Retry-After parsing) onto the envelope, then through to
+          // both the log record and the returned PairingSubmitResult.
+          // The service does NOT re-clamp.
+          //
+          // Defensive: if retry_after_s is missing (would only happen
+          // if network mis-attached the field, or RATE_LIMITED arrived
+          // on a non-429 status where network skips attaching), fall
+          // through to unknown_error so the renderer never sees
+          // setTimeout(NaN) or setTimeout(undefined * 1000).
+          const retry_after_s = pairResult.retry_after_s;
+          if (retry_after_s === undefined) {
+            pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
+            return { outcome: 'unknown_error' };
+          }
+          pairingLog({
+            event: 'pairing_attempt',
+            outcome: 'rate_limited',
+            at: nowIso(),
+            retry_after_s,
+          });
+          return { outcome: 'rate_limited', retry_after_s };
+        }
         case 'invalid_code':
         case 'expired_code':
         case 'already_paired':
@@ -212,9 +244,6 @@ export function createPairingService(deps: CreatePairingServiceOptions): Pairing
           pairingLog({ event: 'pairing_attempt', outcome, at: nowIso() });
           return { outcome };
         }
-        // US5 will add 'rate_limited' (with retry_after_s). Until then,
-        // that outcome category cannot reach this switch — mapFailure
-        // routes it through the catch-all 'unknown_error' default.
         default: {
           pairingLog({ event: 'pairing_attempt', outcome: 'unknown_error', at: nowIso() });
           return { outcome: 'unknown_error' };

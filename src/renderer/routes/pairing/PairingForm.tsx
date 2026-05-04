@@ -1,11 +1,11 @@
-import { useRef, useState, type SyntheticEvent, type JSX } from 'react';
+import { useEffect, useRef, useState, type SyntheticEvent, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { messageFor, EMPTY_INPUT_MESSAGE } from './messages';
 import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api';
 
 /**
- * 002-terminal-pairing T029 + T034 + T043 + T045 — `PairingForm`.
+ * 002-terminal-pairing T029 + T034 + T043 + T045 + T057 — `PairingForm`.
  *
  * Single-input form that drives the pairing submit flow. Accepts both
  * manual entry (operator types code + Enter or click) and wedge-scanner
@@ -20,7 +20,7 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *      mean a stale `useState` read can produce an empty submit. The
  *      ref always reflects the live DOM value.
  *
- *   2. `useState` holds two pieces of state:
+ *   2. `useState` holds three pieces of state:
  *      - `submitting` — gates re-entry (a second Enter while the first
  *        call is still pending is dropped) and disables the submit
  *        button.
@@ -28,6 +28,12 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *        `role="status"` region. `null` when the form is idle; the
  *        empty-input validation copy on a no-content submit (T045);
  *        the outcome's message family on a non-success result (T043).
+ *      - `disabledUntil` (T057, US5) — epoch-ms timestamp when the
+ *        rate-limit window expires. `null` means "no rate limit
+ *        active". A `useEffect` schedules a single `setTimeout` to
+ *        flip the value back to `null`. The submit BUTTON is gated by
+ *        this state; the input is NOT (operators may correct a typo
+ *        while waiting).
  *
  *   3. On `outcome === 'success'` the form calls
  *      `navigate('/paired', { replace: true })`. PairedScreen calls
@@ -35,12 +41,16 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *      route that fetches its own data — we are not coupling the form
  *      to the boot router's state.
  *
- *   4. Per-outcome copy lives in `./messages.ts`. US3 owns the three
- *      recoverable-failure outcomes (invalid_code / expired_code /
- *      already_paired); every other non-success outcome (network_error,
- *      unknown_error, the future US4/US5 outcomes) routes through the
- *      generic fallback in `messageFor()` until T074 / US4 / US5 land
- *      their own copy.
+ *   4. Per-outcome copy lives in `./messages.ts`. US3+US4+US5 own
+ *      five recoverable-failure outcomes; the generic fallback in
+ *      `messageFor()` covers `network_error` / `unknown_error` until
+ *      T074 lands per-category copy.
+ *
+ *   5. Rate-limit timer (T057): plain `useState + useEffect` rather
+ *      than Zustand. The state lives entirely inside `PairingForm`
+ *      and there is no cross-component sharing requirement; pulling
+ *      in Zustand for one number would be inconsistent with the
+ *      ref+useState architecture established in US2/US3/US4.
  *
  * Security policy (Constitution VII + spec NFR-4 / FR-9 / FR-10):
  *   - The `pairing_code` lives in the input element's value (controlled
@@ -54,6 +64,9 @@ import type { PairingBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-
  *     `result` it could not leak the token. The status message comes
  *     from a fixed string table in `./messages.ts` — there is no place
  *     to interpolate a secret.
+ *   - The `retry_after_s` value flowed from the bridge is a public
+ *     timer integer; it is NOT logged from the renderer (the main
+ *     process already logged it via `pairingLog` in `service.ts`).
  */
 
 export interface PairingFormProps {
@@ -68,12 +81,36 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [disabledUntil, setDisabledUntil] = useState<number | null>(null);
   const navigate = useNavigate();
 
   const pairing = props.pairing ?? readBridge();
 
+  // T057 — rate-limit timer. Schedule a single setTimeout that flips
+  // disabledUntil back to null when the window elapses. The cleanup
+  // clears the timeout on unmount or when disabledUntil changes (e.g.,
+  // a fresh rate_limited outcome with a new window arrives), so we
+  // never leak timers and never have two pending timers at once.
+  useEffect(() => {
+    if (disabledUntil === null) return;
+    const remainingMs = Math.max(0, disabledUntil - Date.now());
+    const timer = setTimeout(() => {
+      setDisabledUntil(null);
+    }, remainingMs);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [disabledUntil]);
+
+  // Compute fresh on every render. `disabledUntil` is the epoch-ms
+  // expiry; `Date.now() < disabledUntil` is the active window. The
+  // useEffect above guarantees the value flips to null when the window
+  // closes, so this predicate stays in sync with the rendered button.
+  const isRateLimited = disabledUntil !== null && Date.now() < disabledUntil;
+
   async function performSubmit(): Promise<void> {
     if (submitting) return;
+    if (isRateLimited) return;
     const code = inputRef.current?.value.trim() ?? '';
     if (code.length === 0) {
       // T045: visible client-side validation. Replaces the silent
@@ -93,10 +130,21 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
         void navigate('/paired', { replace: true });
         return;
       }
-      // Non-success outcomes (US3 wires invalid_code / expired_code /
-      // already_paired; other categories route through the generic
-      // fallback until T074 / US4 / US5 land their copy). The form
-      // re-enables and stays editable so the operator can retry.
+      if (result.outcome === 'rate_limited') {
+        // T057 — start the disabled-window. The retry_after_s value
+        // is the authoritative wait time (already parsed and clamped
+        // by network.ts; service trusts the envelope verbatim). We
+        // convert to an epoch-ms expiry so the useEffect's setTimeout
+        // can compute the remaining ms even if the component re-renders
+        // mid-window.
+        setDisabledUntil(Date.now() + result.retry_after_s * 1000);
+        setStatusMessage(messageFor('rate_limited'));
+        return;
+      }
+      // Other non-success outcomes (US3 invalid_code / expired_code /
+      // already_paired; US4 branch_mismatch; T074 network_error /
+      // unknown_error). The form re-enables and stays editable so the
+      // operator can retry.
       setStatusMessage(messageFor(result.outcome));
     } finally {
       setSubmitting(false);
@@ -118,9 +166,13 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
         autoComplete="off"
         spellCheck={false}
         autoFocus
+        // T057: input is gated by `submitting` only. While rate-limited,
+        // the operator may correct a typo so they're ready to retry the
+        // moment the timer expires. Only the submit BUTTON gates on
+        // isRateLimited.
         disabled={submitting}
       />
-      <button type="submit" disabled={submitting}>
+      <button type="submit" disabled={submitting || isRateLimited}>
         {submitting ? 'Pairing…' : 'Pair terminal'}
       </button>
       {statusMessage !== null ? (

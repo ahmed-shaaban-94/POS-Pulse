@@ -7,24 +7,24 @@ import {
   EXPIRED_CODE_MESSAGE,
   GENERIC_FAILURE_MESSAGE,
   INVALID_CODE_MESSAGE,
+  RATE_LIMITED_MESSAGE,
   messageFor,
 } from '../messages';
 import type { PairingOutcome } from '../../../../shared/pairing-types';
 
 /**
- * 002-terminal-pairing T043 + T051 — `messageFor` direct coverage.
+ * 002-terminal-pairing T043 + T051 + T057 — `messageFor` direct coverage.
  *
  * The form-level tests in `PairingForm.test.tsx` cover the user-facing
- * paths through `messageFor` (US3 + US4 outcomes + the generic fallback
- * for network_error / unknown_error). This file pins every branch of
- * the function directly so the dictionary's contract stays stable as
- * US5 / T074 add per-outcome copy.
+ * paths through `messageFor` (US3 + US4 + US5 outcomes + the generic
+ * fallback for network_error / unknown_error). This file pins every
+ * branch of the function directly so the dictionary's contract stays
+ * stable as T074 adds per-outcome copy for the remaining categories.
  *
  * Critical scope-fence assertions:
- *   - Outcomes still in the catch-all (US5 rate_limited, T074
- *     network_error/unknown_error) must route through
- *     GENERIC_FAILURE_MESSAGE — they MUST NOT silently reuse a
- *     US3/US4 message.
+ *   - Outcomes still in the catch-all (T074 network_error /
+ *     unknown_error) must route through GENERIC_FAILURE_MESSAGE —
+ *     they MUST NOT silently reuse a US3/US4/US5 message.
  *   - The success outcome (which the form never observes — it
  *     navigates first) returns the generic fallback rather than a
  *     misleading "success" string.
@@ -50,12 +50,20 @@ describe('messageFor — US4 outcome (T051)', () => {
   });
 });
 
-describe('messageFor — outcomes still in the catch-all (route to generic fallback)', () => {
-  it('rate_limited (US5) -> GENERIC_FAILURE_MESSAGE', () => {
-    // US5 will replace this. US4 MUST NOT ship rate_limited copy.
-    expect(messageFor('rate_limited')).toBe(GENERIC_FAILURE_MESSAGE);
+describe('messageFor — US5 outcome (T057)', () => {
+  it('rate_limited -> RATE_LIMITED_MESSAGE', () => {
+    expect(messageFor('rate_limited')).toBe(RATE_LIMITED_MESSAGE);
   });
 
+  it('RATE_LIMITED_MESSAGE matches the /too many attempts/i family copy', () => {
+    // Pin the action-oriented family so a future copy edit cannot
+    // silently drop the operator-recognisable phrase. Same regex used
+    // in PairingForm.test.tsx (T056).
+    expect(RATE_LIMITED_MESSAGE).toMatch(/too many attempts/i);
+  });
+});
+
+describe('messageFor — outcomes still in the catch-all (route to generic fallback)', () => {
   it('network_error (T074) -> GENERIC_FAILURE_MESSAGE', () => {
     expect(messageFor('network_error')).toBe(GENERIC_FAILURE_MESSAGE);
   });
@@ -89,15 +97,27 @@ describe('messages dictionary — distinct constants', () => {
     expect(set.size).toBe(4);
   });
 
-  it('the generic failure fallback is distinct from the four US3+US4 messages', () => {
+  it('the five US3+US4+US5 messages are pairwise distinct', () => {
     const set = new Set([
       INVALID_CODE_MESSAGE,
       EXPIRED_CODE_MESSAGE,
       ALREADY_PAIRED_MESSAGE,
       BRANCH_MISMATCH_MESSAGE,
-      GENERIC_FAILURE_MESSAGE,
+      RATE_LIMITED_MESSAGE,
     ]);
     expect(set.size).toBe(5);
+  });
+
+  it('the generic failure fallback is distinct from the five US3+US4+US5 messages', () => {
+    const set = new Set([
+      INVALID_CODE_MESSAGE,
+      EXPIRED_CODE_MESSAGE,
+      ALREADY_PAIRED_MESSAGE,
+      BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
+      GENERIC_FAILURE_MESSAGE,
+    ]);
+    expect(set.size).toBe(6);
   });
 
   it('the empty-input validation message is distinct from every failure message', () => {
@@ -107,9 +127,10 @@ describe('messages dictionary — distinct constants', () => {
       EXPIRED_CODE_MESSAGE,
       ALREADY_PAIRED_MESSAGE,
       BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
       GENERIC_FAILURE_MESSAGE,
     ]);
-    expect(set.size).toBe(6);
+    expect(set.size).toBe(7);
   });
 
   it('every message is a non-empty string (operator must always see something)', () => {
@@ -118,6 +139,7 @@ describe('messages dictionary — distinct constants', () => {
       EXPIRED_CODE_MESSAGE,
       ALREADY_PAIRED_MESSAGE,
       BRANCH_MISMATCH_MESSAGE,
+      RATE_LIMITED_MESSAGE,
       GENERIC_FAILURE_MESSAGE,
       EMPTY_INPUT_MESSAGE,
     ]) {
