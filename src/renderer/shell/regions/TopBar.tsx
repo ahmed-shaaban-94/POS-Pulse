@@ -1,0 +1,29 @@
+import type { JSX } from 'react';
+import type { ConnectionState } from '../../ui/tokens/connection-state';
+import { IdentityStrip } from './IdentityStrip';
+import { ConnectionIndicator } from './ConnectionIndicator';
+import { OperatorSlot } from './OperatorSlot';
+import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
+
+interface TopBarProps {
+  tenantId: string;
+  branchId: string;
+  terminalLabel: string;
+  connectionState: ConnectionState;
+}
+
+export function TopBar({
+  tenantId,
+  branchId,
+  terminalLabel,
+  connectionState,
+}: TopBarProps): JSX.Element {
+  return (
+    <header role="banner" className="top-bar">
+      <IdentityStrip tenantId={tenantId} branchId={branchId} terminalLabel={terminalLabel} />
+      {connectionState !== 'online' && <StatusBanner state={connectionState} />}
+      <ConnectionIndicator state={connectionState} />
+      <OperatorSlot />
+    </header>
+  );
+}

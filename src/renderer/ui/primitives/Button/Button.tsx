@@ -1,0 +1,47 @@
+import type { JSX, ReactNode, MouseEvent, AriaAttributes } from 'react';
+
+type ButtonIntent = 'primary' | 'secondary' | 'ghost' | 'destructive';
+type ButtonSize = 'md' | 'lg';
+
+interface ButtonProps extends AriaAttributes {
+  intent: ButtonIntent;
+  size?: ButtonSize;
+  children: ReactNode;
+  iconStart?: ReactNode;
+  iconEnd?: ReactNode;
+  disabled?: boolean;
+  loading?: boolean;
+  type?: 'button' | 'submit' | 'reset';
+  onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
+}
+
+export function Button({
+  intent,
+  size = 'md',
+  children,
+  iconStart,
+  iconEnd,
+  disabled = false,
+  loading = false,
+  type = 'button',
+  onClick,
+  ...aria
+}: ButtonProps): JSX.Element {
+  return (
+    <button
+      type={type}
+      className={`btn btn--${intent} btn--${size}`}
+      aria-busy={loading ? 'true' : undefined}
+      aria-disabled={disabled ? 'true' : undefined}
+      tabIndex={disabled ? -1 : undefined}
+      onClick={disabled ? undefined : onClick}
+      data-touch-target="44"
+      style={{ minHeight: '44px', minWidth: '44px' }}
+      {...aria}
+    >
+      {iconStart}
+      {children}
+      {iconEnd}
+    </button>
+  );
+}

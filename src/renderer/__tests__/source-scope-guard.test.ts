@@ -1,0 +1,95 @@
+import { execSync } from 'node:child_process';
+import { describe, it, expect } from 'vitest';
+import { FORBIDDEN_PATH_PREFIXES } from './source-scope-guard.const';
+
+/**
+ * T006 — Static no-touch source-scope guard.
+ *
+ * Shells out to `git diff --name-only origin/main...HEAD` (triple-dot,
+ * squash-merge-safe) and asserts the diff does not touch any path in the
+ * forbidden allowlist (T005).  Covers additions, modifications, AND
+ * deletions (git diff lists all three).
+ *
+ * Fallback: if `origin/main` is unreachable, the test skips with an
+ * explicit warning AND records a CI failure signal so the PR-review
+ * checklist in quickstart.md §6 becomes the manual gate.
+ */
+describe('source-scope guard (T006)', () => {
+  it('003-pos-ui-shell diff must not touch forbidden paths', () => {
+    let diffOutput: string;
+
+    const runDiff = (tripleDoc: boolean): string =>
+      execSync(
+        tripleDoc
+          ? 'git diff --name-only origin/main...HEAD'
+          : 'git diff --name-only origin/main HEAD',
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+      );
+
+    try {
+      // Triple-dot: diff from the merge-base of origin/main and HEAD,
+      // squash-merge-safe (works even when main has been squash-merged).
+      diffOutput = runDiff(true);
+    } catch {
+      // CI shallow clones (fetch-depth=1) don't include origin/main.
+      // Fetch just the tip so rev-parse and diff both work.
+      let fetchErr = '';
+      try {
+        // Explicitly map to the remote-tracking ref so origin/main resolves.
+        execSync('git fetch --depth=1 origin main:refs/remotes/origin/main', {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        });
+      } catch (e) {
+        fetchErr = e instanceof Error ? e.message : String(e);
+      }
+
+      try {
+        // Triple-dot needs a merge-base, which may not exist after a
+        // shallow fetch. Fall back to double-dot (tip-to-tip) which works
+        // with any depth and is equivalent for a linear PR branch.
+        diffOutput = runDiff(true);
+      } catch {
+        try {
+          diffOutput = runDiff(false);
+        } catch {
+          const reachable = (() => {
+            try {
+              execSync('git rev-parse origin/main', { stdio: 'pipe' });
+              return true;
+            } catch {
+              return false;
+            }
+          })();
+
+          if (!reachable) {
+            console.warn(
+              '[source-scope-guard] SKIP: origin/main unreachable. ' +
+                (fetchErr ? `fetch error: ${fetchErr}. ` : '') +
+                'Manual gate required: run `git diff --name-only origin/main...HEAD` ' +
+                'and verify zero intersection with the forbidden allowlist (T005).',
+            );
+            throw new Error(
+              'source-scope guard: origin/main unreachable; manual check required per quickstart.md §6.',
+            );
+          }
+
+          throw new Error('source-scope guard: git diff command failed; see stderr above.');
+        }
+      }
+    }
+
+    const changedFiles = diffOutput
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const violations = changedFiles.filter((file) =>
+      FORBIDDEN_PATH_PREFIXES.some((prefix) => file === prefix || file.startsWith(prefix)),
+    );
+
+    expect(violations, `Forbidden paths modified by this branch: ${violations.join(', ')}`).toEqual(
+      [],
+    );
+  });
+});

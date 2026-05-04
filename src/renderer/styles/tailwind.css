@@ -1,1 +1,107 @@
 @import 'tailwindcss';
+
+:root {
+  /* Color tokens — semantic palette (contracts/design-tokens.md) */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f5f5;
+  --color-surface-elevated: #ffffff;
+  --color-text: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-inverse: #ffffff;
+  --color-primary: #2563eb;
+  --color-primary-emphasis: #1d4ed8;
+  --color-primary-on: #ffffff;
+  --color-danger: #dc2626;
+  --color-danger-emphasis: #b91c1c;
+  --color-danger-on: #ffffff;
+  --color-warning: #d97706;
+  --color-warning-emphasis: #b45309;
+  --color-warning-on: #ffffff;
+  --color-success: #059669;
+  --color-success-emphasis: #047857;
+  --color-success-on: #ffffff;
+  --color-neutral: #4b5563;
+  --color-neutral-emphasis: #374151;
+  --color-neutral-on: #ffffff;
+  --color-focus-ring: #2563eb;
+  --color-border: #e5e7eb;
+  --color-border-strong: #9ca3af;
+  --color-overlay-scrim: rgba(0, 0, 0, 0.5);
+
+  /* Spacing scale — 0=0px 1=4px 2=8px 3=12px 4=16px 5=24px 6=32px 7=48px */
+  --space-0: 0px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Typography — families */
+  --font-family-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-family-mono: ui-monospace, 'Cascadia Code', monospace;
+
+  /* Typography — weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Typography — sizes (body default md=16px ≥14px requirement met) */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+
+  /* Typography — line heights */
+  --line-height-tight: 1.25;
+  --line-height-snug: 1.375;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+
+  /* Radius */
+  --radius-none: 0;
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --radius-pill: 9999px;
+
+  /* Shadow */
+  --shadow-none: none;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-overlay: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+}
+
+@theme {
+  --color-surface: var(--color-surface);
+  --color-surface-muted: var(--color-surface-muted);
+  --color-surface-elevated: var(--color-surface-elevated);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-primary: var(--color-primary);
+  --color-primary-emphasis: var(--color-primary-emphasis);
+  --color-primary-on: var(--color-primary-on);
+  --color-danger: var(--color-danger);
+  --color-danger-emphasis: var(--color-danger-emphasis);
+  --color-danger-on: var(--color-danger-on);
+  --color-warning: var(--color-warning);
+  --color-warning-emphasis: var(--color-warning-emphasis);
+  --color-warning-on: var(--color-warning-on);
+  --color-success: var(--color-success);
+  --color-success-emphasis: var(--color-success-emphasis);
+  --color-success-on: var(--color-success-on);
+  --color-neutral: var(--color-neutral);
+  --color-neutral-emphasis: var(--color-neutral-emphasis);
+  --color-neutral-on: var(--color-neutral-on);
+  --color-focus-ring: var(--color-focus-ring);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --color-overlay-scrim: var(--color-overlay-scrim);
+}

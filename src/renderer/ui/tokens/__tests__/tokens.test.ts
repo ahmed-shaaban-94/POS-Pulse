@@ -1,0 +1,179 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, it, expect } from 'vitest';
+
+import * as colors from '../colors';
+import * as spacing from '../spacing';
+import * as typography from '../typography';
+import * as radius from '../radius';
+import * as shadow from '../shadow';
+import { density } from '../density';
+import { touchTarget } from '../touch';
+import { connectionState } from '../connection-state';
+
+/**
+ * T008 — Design token parity + completeness test.
+ *
+ * Asserts per contracts/design-tokens.md:
+ * 1. Every TS token export has a matching CSS custom property in tailwind.css
+ * 2. Every CSS custom property under :root has a matching TS export
+ * 3. density enum has exactly two members (comfortable, compact)
+ * 4. touchTarget.min === 44
+ * 5. connectionState has exactly four members
+ */
+
+const TAILWIND_CSS_PATH = resolve(__dirname, '../../../styles/tailwind.css');
+const cssContent = readFileSync(TAILWIND_CSS_PATH, 'utf-8');
+
+function extractCssVars(css: string): Set<string> {
+  const vars = new Set<string>();
+  // Match --var-name: inside :root { ... } block
+  const rootMatch = css.match(/:root\s*\{([^}]*)\}/s);
+  if (!rootMatch) return vars;
+  const body = rootMatch[1] ?? '';
+  for (const m of body.matchAll(/--([a-z][a-z0-9-]*)\s*:/g)) {
+    const name = m[1];
+    if (name) vars.add(`--${name}`);
+  }
+  return vars;
+}
+
+const cssVars = extractCssVars(cssContent);
+
+// Build the expected CSS var names from TS exports
+function camelToKebab(s: string): string {
+  return s.replace(/([A-Z])/g, '-$1').toLowerCase();
+}
+
+describe('design token parity (T008)', () => {
+  it('density has exactly two members: comfortable and compact', () => {
+    const members = Object.keys(density);
+    expect(members).toHaveLength(2);
+    expect(members).toContain('comfortable');
+    expect(members).toContain('compact');
+  });
+
+  it('touchTarget.min === 44', () => {
+    expect(touchTarget.min).toBe(44);
+  });
+
+  it('connectionState has exactly four members', () => {
+    const members = Object.keys(connectionState);
+    expect(members).toHaveLength(4);
+    expect(members).toContain('online');
+    expect(members).toContain('degraded');
+    expect(members).toContain('offline');
+    expect(members).toContain('syncing');
+  });
+
+  describe('color tokens', () => {
+    it('every TS color export has a matching CSS --color-* var', () => {
+      for (const key of Object.keys(colors)) {
+        const cssVar = `--color-${camelToKebab(key)}`;
+        expect(cssVars, `Missing CSS var ${cssVar} for colors.${key}`).toContain(cssVar);
+      }
+    });
+  });
+
+  describe('spacing tokens', () => {
+    it('every TS spacing key has a matching CSS --space-* var', () => {
+      for (const key of Object.keys(spacing.spacing)) {
+        const cssVar = `--space-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar} for spacing[${key}]`).toContain(cssVar);
+      }
+    });
+  });
+
+  describe('typography tokens', () => {
+    it('every TS font-family has a matching CSS --font-family-* var', () => {
+      for (const key of Object.keys(typography.typography.family)) {
+        const cssVar = `--font-family-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar}`).toContain(cssVar);
+      }
+    });
+
+    it('every TS font-weight has a matching CSS --font-weight-* var', () => {
+      for (const key of Object.keys(typography.typography.weight)) {
+        const cssVar = `--font-weight-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar}`).toContain(cssVar);
+      }
+    });
+
+    it('every TS font-size has a matching CSS --font-size-* var', () => {
+      for (const key of Object.keys(typography.typography.size)) {
+        const cssVar = `--font-size-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar}`).toContain(cssVar);
+      }
+    });
+
+    it('every TS line-height has a matching CSS --line-height-* var', () => {
+      for (const key of Object.keys(typography.typography.lineHeight)) {
+        const cssVar = `--line-height-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar}`).toContain(cssVar);
+      }
+    });
+  });
+
+  describe('radius tokens', () => {
+    it('every TS radius export has a matching CSS --radius-* var', () => {
+      for (const key of Object.keys(radius.radius)) {
+        const cssVar = `--radius-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar}`).toContain(cssVar);
+      }
+    });
+  });
+
+  describe('shadow tokens', () => {
+    it('every TS shadow export has a matching CSS --shadow-* var', () => {
+      for (const key of Object.keys(shadow.shadow)) {
+        const cssVar = `--shadow-${key}`;
+        expect(cssVars, `Missing CSS var ${cssVar}`).toContain(cssVar);
+      }
+    });
+  });
+
+  describe('CSS vars have matching TS exports', () => {
+    it('every --color-* CSS var has a matching TS color export', () => {
+      for (const cssVar of cssVars) {
+        if (!cssVar.startsWith('--color-')) continue;
+        const key = cssVar
+          .replace('--color-', '')
+          .replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+        expect(colors, `CSS var ${cssVar} has no matching TS export colors.${key}`).toHaveProperty(
+          key,
+        );
+      }
+    });
+
+    it('every --space-* CSS var has a matching TS spacing key', () => {
+      for (const cssVar of cssVars) {
+        if (!cssVar.startsWith('--space-')) continue;
+        const key = cssVar.replace('--space-', '');
+        expect(
+          spacing.spacing,
+          `CSS var ${cssVar} has no matching TS export spacing[${key}]`,
+        ).toHaveProperty(key);
+      }
+    });
+
+    it('every --radius-* CSS var has a matching TS radius key', () => {
+      for (const cssVar of cssVars) {
+        if (!cssVar.startsWith('--radius-')) continue;
+        const key = cssVar.replace('--radius-', '');
+        expect(radius.radius, `CSS var ${cssVar} has no matching TS radius.${key}`).toHaveProperty(
+          key,
+        );
+      }
+    });
+
+    it('every --shadow-* CSS var has a matching TS shadow key', () => {
+      for (const cssVar of cssVars) {
+        if (!cssVar.startsWith('--shadow-')) continue;
+        const key = cssVar.replace('--shadow-', '');
+        expect(shadow.shadow, `CSS var ${cssVar} has no matching TS shadow.${key}`).toHaveProperty(
+          key,
+        );
+      }
+    });
+  });
+});
