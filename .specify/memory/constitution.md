@@ -1,6 +1,94 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.3.0 → 1.4.0
+Bump rationale: MINOR — three substitutions and two materially-expanded subsections that reflect
+  decisions already locked in features 002-terminal-pairing and 003-pos-ui-shell, plus housekeeping
+  on the templates ledger now that the three Spec Kit templates exist on disk. No principle is
+  added, removed, or backward-incompatibly redefined.
+
+  - Runtime baseline: Electron pin tightened from `33+` to `40+`. The repository has been on
+    Electron 40 since feature 001 (`package.json` declares `electron ^40.9.3`; foundation
+    `tasks.md` notes the 33→40 bump). Plans 002 and 003 already pin to v1.3.0 *and* call out
+    Electron `^40.9` in their Technical Context. The constitution lagged the reality and the
+    plans; this amendment closes that gap.
+  - Renderer UI library policy: `Radix UI primitives` and `lucide-react icons` are removed from
+    the Tech Stack and replaced by the **first-party UI primitives module** at
+    `src/renderer/ui/` (primitives, tokens, states), which feature 003's research §4 locked in
+    explicitly (rejecting shadcn/ui, Radix, MUI, Mantine, and Headless UI by name). Neither
+    Radix nor lucide-react has ever been in `package.json`; the constitution's prior wording
+    was aspirational. The substitution lands inside the existing "Renderer" Tech Stack
+    category. (Resolved drift: UI_LIBRARY.)
+  - Testing line expanded: the Vitest stack as-shipped includes `happy-dom`,
+    `@testing-library/react` + `@testing-library/jest-dom` + `@testing-library/user-event`, and
+    `axe-core` (consumed via a first-party `expectNoAxeViolations` Vitest helper, per 003
+    research §5). The constitution previously named only Vitest and Playwright. The expansion
+    is descriptive — it documents the test toolchain that is already running in CI.
+  - Connection-state model: Principle I's "Offline" indicator is generalised to a four-state
+    visual indicator — `online`, `degraded`, `offline`, `syncing` — locked by 003 spec
+    Clarifications §3 and FR-7 / FR-16. `syncing` is reserved as a *visual-only* state today;
+    real offline-sync behaviour remains the subject of a future feature. The non-blocking,
+    non-modal property is unchanged.
+  - Touch-target floor: a minimum of 44 × 44 CSS pixels is added to the Hardware section's
+    operational rules, mirroring 003 NFR-5 / FR-19. The constitution previously left the
+    touch-target floor unspecified.
+
+Modified principles: none redefined.
+  - Principle I ("Offline-First, NON-NEGOTIABLE") — connection-state indicator now names four
+    visual states; offline-first guarantee unchanged.
+
+Modified sections:
+  - Core Principles → Principle I — connection-state indicator clause amended.
+  - Additional Constraints → Hardware (MVP Matrix) → Operational rules — touch-target floor
+    added.
+  - Additional Constraints → Tech Stack → Runtime — Electron `33+` → `40+`.
+  - Additional Constraints → Tech Stack → Renderer — Radix UI / lucide-react removed; first-party
+    UI primitives module noted; Tailwind 4 clarified as CSS-first.
+  - Additional Constraints → Tech Stack → new "UI primitives" line — names
+    `src/renderer/ui/` as the canonical primitives module; external UI libraries require an
+    amendment.
+  - Additional Constraints → Tech Stack → Testing — `happy-dom`, `@testing-library/react`,
+    and `axe-core` named alongside Vitest.
+
+Added sections: none (existing sections expanded).
+Removed sections: none.
+
+Templates requiring updates:
+  - ✅ `.specify/templates/plan-template.md` — scaffolded in repo; no amendment-driven changes
+    needed (Constitution Check table tracks principles by name, none were added/removed).
+  - ✅ `.specify/templates/spec-template.md` — scaffolded in repo; no changes needed.
+  - ✅ `.specify/templates/tasks-template.md` — scaffolded in repo; no changes needed.
+
+Follow-up TODOs (open): (none).
+
+Resolved TODOs (this revision):
+  - ✅ UI_LIBRARY — Radix / lucide-react removed; first-party `src/renderer/ui/` primitives
+    module is the canonical UI surface.
+  - ✅ ELECTRON_PIN — pinned to `40+` to match `package.json` and feature plans.
+  - ✅ TEMPLATES_SCAFFOLDED — three Spec Kit templates exist; ledger updated.
+
+Consequence ledger (drift NOT closed by this revision, deliberately):
+
+  - Auth (Clerk OIDC) — Principle VIII names Clerk as the IdP. `@clerk/*` is not yet a
+    `package.json` dependency; the foundation slice (001) and the pairing slice (002) ship the
+    *terminal* identity half of the hybrid model only. Clerk integration is planned for a later
+    feature; the constitutional rule stands and will be honoured when human-auth lands.
+  - Auto-update (`electron-updater`) — Tech Stack and Platform Integration name the auto-update
+    feed at `https://pos.smartdatapulse.tech/updates/`. `electron-updater` is not yet a
+    dependency; auto-update wiring is deferred to a packaging-and-distribution feature.
+  - Direct-path printing (`node-thermal-printer` or equivalent) — Tech Stack names a printer
+    adapter; no printer library is installed yet because no feature has needed receipt
+    printing. Hardware caveat: the constitution still requires receipt-template engines to emit
+    both an ESC/POS byte stream and a printable HTML/canvas fallback when the receipt-printing
+    feature lands.
+
+  These three are *future-state* commitments that the constitution forecasts. They are NOT
+  drift in the sense of "constitution diverges from the reality the team has agreed to build";
+  they are deliberate not-yet-built capabilities. Listing them here keeps the ledger honest and
+  makes the next plan's Constitution Check easier to write.
+
+History (prior revisions retained for reference):
+
 Version change: 1.2.1 → 1.3.0
 Bump rationale: MINOR — two stack substitutions within categories already named in §Tech Stack.
   No principle is redefined; both substitutions land inside rules that already exist.
@@ -164,7 +252,10 @@ connectivity. Concretely:
   background concern, not a request-path concern.
 - Pending transactions, refunds, and inventory adjustments queue locally with idempotency keys and
   reconcile when connectivity returns.
-- The UI MUST show a clear, non-modal "Offline" indicator. It MUST NOT block the cashier.
+- The UI MUST show a clear, non-modal connection-state indicator. The indicator surfaces four
+  visual states — `online`, `degraded`, `offline`, `syncing` — and MUST NOT block the cashier.
+  (`syncing` is reserved today as a visual-only state; the offline-sync behaviour behind it
+  lands in a future feature, but the visual contract is fixed so future work remains additive.)
 - A failed network call is NEVER a reason to lose, drop, or refuse a sale.
 
 **Rationale:** A POS that stops selling because Wi-Fi blinked is a product failure, not a network
@@ -420,6 +511,9 @@ is **Out of scope** until a future amendment.
 - Barcode scanner input is treated as keyboard input by default; the focus-management strategy MUST
   prevent stray scans from polluting unrelated fields. The pairing screen and the cart screen are
   the two contexts where wedge input is accepted by design.
+- Every interactive element in the renderer MUST meet a minimum touch-target size of
+  **44 × 44 CSS pixels**. Cashier hardware is touchscreen-first; the floor is enforced by an
+  invariant test in `src/renderer/ui/`.
 - Receipt templates are version-controlled assets (not hardcoded strings). The template engine MUST
   emit both an ESC/POS byte stream and a printable HTML/canvas fallback so the same template renders
   on both the direct and OS-print paths.
@@ -475,15 +569,22 @@ constitution prevents the very common drift where each new feature reinvents its
 The stack below is locked for the MVP. Changes require an amendment (MINOR bump for a substitution
 within a category, MAJOR bump if it shifts a Core Principle's enforcement).
 
-- Runtime: Electron 33+, Node 20+, Windows 10/11 x64 primary target.
-- Renderer: React 19, TypeScript 5.6+, Vite 8, Tailwind 4, Radix UI primitives, lucide-react icons.
+- Runtime: Electron 40+, Node 20+, Windows 10/11 x64 primary target.
+- Renderer: React 19, TypeScript 5.6+, Vite 8, Tailwind 4 (CSS-first theming via `@theme`).
+- UI primitives: first-party module at `src/renderer/ui/` (`primitives/`, `tokens/`, `states/`).
+  External UI libraries (Radix, shadcn/ui, MUI, Mantine, Headless UI, lucide-react, …) are NOT
+  in the MVP stack; adding one requires an amendment with the rationale recorded against the
+  rejection logged in feature 003 research §4.
 - State: Zustand for UI state; TanStack Query (or SWR) for server state.
 - Local DB: better-sqlite3 (synchronous, embedded, fastest for POS workload).
 - Secret storage: Electron `safeStorage` (DPAPI on Windows, Keychain on macOS, libsecret on Linux).
   No third-party secret store; production refuses to start without it.
 - Routing: react-router-dom 7.
 - Observability: pino + pino-roll (logs), Sentry (crashes).
-- Testing: Vitest (renderer + main + business logic), Playwright (optional E2E).
+- Testing: Vitest (renderer + main + business logic) with `happy-dom` as the DOM env,
+  `@testing-library/react` (+ `jest-dom`, `user-event`) for renderer assertions, and `axe-core`
+  consumed via a first-party `expectNoAxeViolations` helper for accessibility-rule smoke
+  checks. Playwright remains an optional addition for end-to-end flows.
 - Printing: receipt template engine emitting both an ESC/POS byte stream and a printable
   HTML/canvas fallback (`node-thermal-printer` or equivalent for the direct path; the OS print queue
   for the fallback). The choice is per-printer, not per-feature.
@@ -566,6 +667,6 @@ document (READMEs, ADRs, comments, agent instructions), this document wins until
 
 ---
 
-**Version:** 1.3.0
+**Version:** 1.4.0
 **Ratified:** 2026-05-01
-**Last Amended:** 2026-05-01
+**Last Amended:** 2026-05-05
