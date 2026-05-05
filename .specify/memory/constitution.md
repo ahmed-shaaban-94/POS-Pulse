@@ -14,7 +14,9 @@ Bump rationale: MINOR — introduces a new section ("Cross-Feature POS Principle
 
   Why this update is needed:
   - The repository now has three features in flight or completed (001 ✅, 002 ✅, 003
-    in-planning), and several future POS domains (payments, fiscal integration, offline-sync
+    in-flight — planning merged, Slice 1 + US3 + US4 + US6 merged, Final polish /
+    validation / handoff remaining), and several future POS domains (payments, fiscal
+    integration, offline-sync
     write-path, operator/session/auth, receipt printing, auto-update wiring) are visible in
     the constitution's Tech Stack and Platform Integration sections but lack stable,
     cross-feature governance rules. Each domain has a tendency to creep into the feature
@@ -91,13 +93,15 @@ Bump rationale: MINOR — introduces a new section ("Cross-Feature POS Principle
   - 002-terminal-pairing — none. The 18 principles are consistent with 002's plan and
     tasks (operator accountability deferred to login feature; idempotency present in
     pairing-code semantics; redaction enforced).
-  - 003-pos-ui-shell — none in spec, none in plan, none in /speckit-tasks output. The
-    compatibility appendix codifies what 003 already commits to (UI-only, visual-only
-    syncing state, no business logic, no IPC/main/preload/Sentry/CI changes). It does NOT
-    widen 003's scope; it tightens the boundary 003 already drew. **003 planning does
-    not require edits as a result of this amendment**; the next /speckit-analyze pass
-    SHOULD verify the plan's Constitution Check is still PASS / N/A across the new P1–P18
-    rows and add the rows if they are not already there.
+  - 003-pos-ui-shell — none in spec, none in plan, none in `tasks.md`, and none in the
+    MVP slices already merged to `main` (Slice 1 foundation, US3 placeholder states, US4
+    connection states, US6 checkout reservation). The compatibility appendix codifies
+    what 003 already commits to (UI-only, visual-only syncing state, no business logic,
+    no IPC/main/preload/Sentry/CI changes). It does NOT widen 003's scope; it tightens
+    the boundary 003 already drew. **003 planning does not require edits as a result
+    of this amendment**; the only remaining 003 work is the Final polish / validation
+    / handoff slice, which SHOULD be re-checked against P1–P18 before it is started.
+    No re-plan is required unless that re-check finds a real violation.
 
   003-pos-ui-shell impact summary:
   - Compatibility note declares 003 a visual-shell feature; it MUST NOT implement
@@ -109,8 +113,12 @@ Bump rationale: MINOR — introduces a new section ("Cross-Feature POS Principle
   - 003 MAY reserve visual space for future POS domains (cart, sales, checkout-payments,
     inventory, settings, dashboard) — exactly as its plan and spec already commit.
   - **No re-specification, no re-clarification, no re-planning is required by this
-    amendment** for 003. /speckit-tasks for 003 remains unconfirmed; nothing in this
-    amendment unblocks or blocks /speckit-tasks.
+    amendment** for 003. `/speckit-tasks` for 003 has already completed and four
+    implementation slices (Slice 1 foundation, US3 placeholder states, US4 connection
+    states, US6 checkout reservation) are merged to `main`. The only remaining 003 work
+    is Final polish / validation / handoff, which the team SHOULD re-check against the
+    new P1–P18 rows before starting; a re-plan is required only if that re-check finds
+    a real violation.
 
 History (prior revisions retained for reference):
 
@@ -1175,13 +1183,18 @@ widen 003's scope. It sunsets when 003 ships and the active-feature index advanc
   bridge-typing test and renderer-isolation test in `src/tests/` are the canonical guards.
 - Promise capabilities through visual states that the underlying code does not deliver (P2,
   P9). The `syncing` visual is a placeholder; no real sync logic backs it in 003.
-- Skip ahead to `/speckit-tasks` / implementation. As of this amendment, 003 has completed
-  `/speckit-specify` and `/speckit-clarify`; planning is in progress; `/speckit-tasks` has
-  NOT been confirmed complete; no implementation may begin until planning artifacts,
-  `/speckit-tasks`, the analyse pass, and the planning PR are merged, AND explicit
-  instruction is given.
+- Widen 003 scope beyond what its merged `spec.md`, `plan.md`, and `tasks.md` already
+  authorise. As of this amendment, 003 has completed `/speckit-specify`,
+  `/speckit-clarify`, `/speckit-plan`, and `/speckit-tasks`; the planning PR is merged;
+  and four implementation slices (Slice 1 foundation, US3 placeholder states, US4
+  connection states, US6 checkout reservation) are merged to `main`. The only
+  remaining 003 work is the Final polish / validation / handoff slice. Before that
+  slice begins, the responsible author MUST re-check it against P1–P18 (and the rest
+  of this constitution); a planning revision is required only if the re-check finds a
+  real violation. New scope items not already in 003's `tasks.md` MUST go through a
+  separate spec, not be smuggled into the polish slice.
 
-**003 source-of-truth:** the `spec.md`, `plan.md`, and (when present) `tasks.md` under
+**003 source-of-truth:** the `spec.md`, `plan.md`, and `tasks.md` under
 `specs/003-pos-ui-shell/` are the source of truth (P12). Any Figma frame, Figma Make export,
 Figma MCP output, screenshot, or visual exploration referenced during 003 work MUST be
 reflected back into those artifacts before it counts as a requirement.
