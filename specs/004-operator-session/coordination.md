@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-05 (Slice 0 review signed off by Ahmed — approved with 3 minor notes, none blocking)
+**Last updated:** 2026-05-06 (§A1 cleared — PR #39, merge SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1; §A2 backend coordination outstanding)
 
 ---
 
@@ -27,10 +27,11 @@ invoked", and it is updated in place as coordination items resolve.
 
 - **Phase:** Slice 0 (visual direction) artifact written and **review signed
   off by Ahmed on 2026-05-05** (approved-with-revisions; 3 minor notes
-  flagged for S1/S4/S5 task authors; none blocking). **Awaiting §A1 Path 1
-  amendment work (assigned to Ahmed) and §A2 backend counterpart
-  identification before slice merges; `/speckit-tasks` is invocable now
-  given the Slice 0 review pass and the §A1/§A2 owner assignments.**
+  flagged for S1/S4/S5 task authors; none blocking). **§A1 cleared via
+  PR #39 (merge SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1).**
+  **§A2 backend/OpenAPI coordination remains the active remaining blocker.**
+  `/speckit-tasks` is invocable; Slices 3–6 hold on §A2 per-endpoint
+  delivery.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -98,53 +99,51 @@ invoked. They are independent and may be worked in parallel.
 ### 2. §A1 local-unlock-factor approval owner
 
 - **Owner:** **Ahmed** (assigned 2026-05-05)
-- **Status:** ✅ **Assigned** — resolution pending
-- **Resolution path chosen:** **Path 1 — constitutional clarification
-  clause approving local terminal unlock factor, with Clerk remaining
-  the sole human IdP.** The clause to be added to Principle VIII
-  affirms: a *local terminal unlock factor* (a per-terminal hashed PIN
-  keyed by Clerk user ID) is not an identity provider and not a custom
-  user database within the meaning of Principle VIII, provided
-  canonical identity remains in Clerk, the factor is not consulted by
-  any backend endpoint, and audit attribution uses the Clerk-backed
-  identity, not the factor record.
-- **Required action:** Ahmed approves or revises the local-unlock-factor
-  framing before implementation slices beyond S0. The recommended
-  artifact is a small constitution-amendment PR landing the
-  clarification clause; once merged, §A1 transitions to ✅ and Slices
-  3–6 unblock (subject to §A2 / §A3 / §A4 per slice).
-- **Unblocks:** S3–S6 and any cashier PIN / local-factor work. Without
-  §A1 ✅, the cashier sign-in code path cannot land, the
-  `cashier_pin_records` table cannot be created (§A3), the Argon2id
-  binding cannot be installed (§A4), and the bridge surface cannot
-  expand beyond the manager/admin Clerk path.
+- **Status:** ✅ **Cleared** — PR #39 merged 2026-05-05T20:53:45Z,
+  merge SHA `7ae337b`, Constitution v1.5.1.
+- **Resolution path taken:** **Path 1 — constitutional clarification
+  clause added to Principle VIII.** The clause affirms: a *local
+  terminal unlock factor* (a per-terminal hashed PIN keyed by Clerk
+  user ID) is not an identity provider and not a custom user database
+  within the meaning of Principle VIII, provided canonical identity
+  remains in Clerk, the factor is not consulted by any backend
+  endpoint, and audit attribution uses the Clerk-backed identity, not
+  the factor record.
+- **Required action:** None. Gate is closed.
+- **Unblocked:** S3–S6 and any cashier PIN / local-factor work are now
+  unblocked from the §A1 perspective. Remaining holds: §A2 per-slice
+  endpoint delivery (S1, S3, S4, S5), §A3 migrations, §A4 Argon2id
+  binding (both now unblocked for planning).
 
 ### 3. §A2 SmartDataPulse backend / OpenAPI dependency owner
 
-- **Owner:** **Ahmed / Backend owner TBD** (Ahmed holds POS-Pulse-side
-  coordination; the backend-team-side counterpart owner is to be
-  identified during the first §A2 coordination step)
-- **Status:** ⚠️ **Assigned pending backend coordination** — Ahmed is on
-  the POS Pulse side; the SmartDataPulse backend repo's owner for the
-  five operator endpoints needs to be identified.
-- **Required action:** Create / coordinate backend tickets for the five
-  conceptual endpoints in
-  [`./contracts/backend-endpoints.md`](./contracts/backend-endpoints.md):
-  `GET /v1/operators/roster?branch_id=`, `POST /v1/operators/sign-in`,
-  `POST /v1/operators/sign-out`, `POST /v1/operators/takeover/confirm`,
-  `POST /v1/audit-events`. The cashier PIN factor introduces ZERO new
-  backend endpoints (AD-2). Each ticket lands as a separate backend
-  feature in the SmartDataPulse repo; once each endpoint's OpenAPI spec
-  is merged there, the POS Pulse `npm run codegen:api` task pulls
-  regenerated types and `npm run codegen:verify` confirms determinism
-  (Constitution V).
-- **Unblocks:** S1 (`sign-in` + `sign-out`), S3 (`audit-events`), S4
-  (`roster` + `takeover/confirm` + audit-event categories), S5
-  (`shift.forced_close` audit-event recognition). Per-endpoint delivery
-  unblocks per-slice work independently; `/speckit-tasks` may be
-  invoked once §A2 has a visible owner (the POS Pulse side, Ahmed)
-  even before all backend tickets are delivered — slices then schedule
-  behind their endpoint dependencies.
+- **Owner:** **Ahmed** (POS-Pulse side) / **Backend counterpart: TBD**
+- **Status:** ⚠️ **Active remaining blocker** — Ahmed holds the
+  POS-Pulse-side coordination; the SmartDataPulse backend repo owner
+  for the six endpoint tickets has not yet been identified.
+- **Required action:**
+  1. Identify the SmartDataPulse backend owner responsible for the six
+     endpoint tickets defined in
+     [`./contracts/backend-endpoints.md`](./contracts/backend-endpoints.md).
+  2. Coordinate creation of backend feature tickets for each endpoint:
+     `GET /v1/operators/roster?branch_id=`,
+     `POST /v1/operators/sign-in`,
+     `POST /v1/operators/sign-out`,
+     `POST /v1/operators/takeover/confirm`,
+     `POST /v1/audit-events`, and the
+     `shift.forced_close` audit-event category recognition endpoint.
+     The cashier PIN factor introduces **ZERO new backend endpoints**
+     (AD-2 — the PIN is local-only). Each ticket lands as a separate
+     backend feature in the SmartDataPulse repo; once each endpoint's
+     OpenAPI spec is merged there, the POS-Pulse `npm run codegen:api`
+     task pulls regenerated types and `npm run codegen:verify` confirms
+     determinism (Constitution V).
+- **Blocks:** S1 (sign-in + sign-out endpoints), S3 (audit-events
+  endpoint), S4 (roster + takeover/confirm + audit-event categories),
+  S5 (shift.forced_close audit-event recognition). Per-endpoint
+  delivery unblocks per-slice work independently.
+- **Note:** §A1 clearance does not change §A2's status. §A2 is the
+  primary outstanding coordination item as of 2026-05-06.
 
 ### 4. §A3 migrations
 
@@ -187,8 +186,8 @@ invoked. They are independent and may be worked in parallel.
 | Gate | Status | Owner | Resolution-path note |
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | **Ahmed** | Signed off; 3 minor notes for S1/S4/S5 task authors (not blocking). |
-| §A1 — local-unlock-factor approval | ⏳ Resolution pending | **Ahmed** | **Path 1 chosen** — constitutional clarification clause; Clerk remains sole human IdP. |
-| §A2 — backend / OpenAPI | ⏳ Backend coordination pending | **Ahmed / Backend owner TBD** | Five endpoints; backend-side counterpart owner to be identified during first coordination step. |
+| §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1 | **Ahmed** | **Path 1** — constitutional clarification clause added to Principle VIII; Clerk remains sole human IdP. |
+| §A2 — backend / OpenAPI | ⚠️ **Active remaining blocker** — backend counterpart TBD | **Ahmed / Backend owner TBD** | Six endpoint tickets in `contracts/backend-endpoints.md`; backend-side counterpart owner to be identified as first coordination step. |
 | §A3 — migrations | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅. |
 | §A4 — Argon2id binding | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅; Path 1 keeps §A4 in scope. |
 | §A5 — production readiness | ⏳ Held | _Assigned at rollout PR open time_ | Blocks production rollout only. |
@@ -208,13 +207,13 @@ invoked. They are independent and may be worked in parallel.
 | §A2 (S5 endpoint lands) | S5 implementation may proceed |
 | §A5 ✅ + all slices merged | Production rollout may proceed |
 
-**Bottom line:** `/speckit-tasks` becomes invocable when (a) Slice 0
-review is complete AND (b) §A1 has a visible owner AND (c) §A2 has a
-visible owner. Endpoints need not all be delivered before `/speckit-tasks`
-runs; per-slice scheduling can hold individual slices for their backend
-dependencies. §A1's resolution may be in flight at `/speckit-tasks` time
-provided the *path* is chosen so the tasks file knows which shape to
-produce.
+**Bottom line:** `/speckit-tasks` is now invocable — Slice 0 review is
+complete ✅ and §A1 is cleared ✅. The remaining active blocker is §A2:
+identifying the SmartDataPulse backend owner and coordinating the six
+endpoint tickets from `contracts/backend-endpoints.md`. Endpoints need
+not all be delivered before `/speckit-tasks` runs; per-slice scheduling
+holds individual slices behind their per-endpoint dependencies. §A3 and
+§A4 are unblocked for planning now that §A1 is cleared.
 
 ---
 
@@ -260,7 +259,9 @@ agents and humans should read this file (and `plan.md`) first to know
 
 ---
 
-**End of coordination file.** Slice 0 review and §A1 / §A2 owners are the
-three live items; §A3 / §A4 are downstream-of-§A1 holds; §A5 is a
-later-rollout gate. `/speckit-tasks` is not yet started; implementation
-slices S1–S6 are not yet started.
+**End of coordination file.** §A1 cleared (PR #39, SHA 7ae337b,
+Constitution v1.5.1). §A2 backend/OpenAPI coordination is the active
+remaining blocker (Ahmed holds POS-Pulse side; backend counterpart TBD).
+§A3 / §A4 are unblocked for planning; §A5 is a later-rollout gate.
+`/speckit-tasks` may now be invoked; implementation slices S1–S6 are
+not yet started.
