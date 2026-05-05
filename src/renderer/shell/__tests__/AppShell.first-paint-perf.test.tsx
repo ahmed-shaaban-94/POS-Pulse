@@ -4,6 +4,13 @@
  * Spec NFR-4: AppShell first paint <= 500 ms from mocked paired-bridge
  * resolve to <main> landmark visible.
  *
+ * Architecture note: The AppRouter boot state machine always resolves a paired
+ * bridge to /paired (PairedScreen), not directly to /app/* (AppShell). The
+ * perf budget test therefore renders AppShell directly via MemoryRouter —
+ * the same pattern used by AppShell.test.tsx — to accurately measure AppShell
+ * first-paint time (NFR-4). Two companion tests cover the AppRouter boot
+ * pipeline: bridge.getStatus() call count, and <main> landmark presence.
+ *
  * Threshold policy:
  *   - CI hard limit: NFR_4_BUDGET_MS = 500 (the spec contract; not softened).
  *   - Local diagnostic override: set env NFR_4_BUDGET_MS_LOCAL_DIAG to a
@@ -19,8 +26,10 @@
  */
 import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
 
+import { AppShell } from '../AppShell';
 import { AppRouter } from '../../router';
 import type { PairingBridgeAPI } from '../../../shared/bridge-api';
 
@@ -91,15 +100,24 @@ beforeEach(() => {
 });
 
 describe('AppShell first-paint perf budget (T062a / NFR-4)', () => {
-  it('renders AppShell <main> landmark within NFR-4 budget from mocked paired-bridge resolve', async () => {
-    const { bridge } = makeFakePairedBridge();
-
+  it('renders AppShell <main> landmark within NFR-4 budget (direct MemoryRouter mount)', async () => {
+    // Render AppShell directly — the boot router always lands on /paired
+    // first (PairedScreen), so direct MemoryRouter is the only path that
+    // accurately measures AppShell first-paint time for NFR-4.
     const t0 = performance.now();
 
-    render(<AppRouter pairing={bridge} initialEntry="/" />);
+    render(
+      <MemoryRouter initialEntries={['/app/dashboard']}>
+        <Routes>
+          <Route path="/app/*" element={<AppShell />}>
+            <Route path="dashboard" element={<div data-testid="dashboard-outlet" />} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
 
-    // findByRole waits for async state updates (boot phase -> ready -> render).
-    // In happy-dom with a pre-resolved Promise, this resolves in the next microtask tick.
+    // findByRole('main') resolves when AppShell's <main> landmark is in the DOM.
+    // In happy-dom with synchronous RTL render this completes in the current tick.
     await screen.findByRole('main');
 
     const t1 = performance.now();
@@ -130,13 +148,13 @@ describe('AppShell first-paint perf budget (T062a / NFR-4)', () => {
     expect(elapsed, failMsg).toBeLessThanOrEqual(budget);
   });
 
-  it('AppShell boot renders a <main> landmark (paired-state path)', async () => {
+  it('paired-boot pipeline renders a <main> landmark (AppRouter path)', async () => {
+    // Tests the AppRouter boot path: bridge.getStatus() paired → /paired (PairedScreen).
+    // PairedScreen renders a <main> landmark, satisfying the boot-pipeline contract.
+    // This is separate from the AppShell NFR-4 perf test above.
     const { bridge } = makeFakePairedBridge();
     render(<AppRouter pairing={bridge} initialEntry="/" />);
-    // findByRole waits for the element to appear and returns it from the live document.
-    // The paired boot resolves to /paired which renders a <main> landmark.
     const main = await screen.findByRole('main');
-    // The element is in the screen's active document at the time of resolution.
     expect(main.tagName.toLowerCase()).toBe('main');
   });
 
