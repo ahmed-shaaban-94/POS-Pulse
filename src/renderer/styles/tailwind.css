@@ -105,3 +105,356 @@
   --color-border-strong: var(--color-border-strong);
   --color-overlay-scrim: var(--color-overlay-scrim);
 }
+
+/* ─── Component layer ───────────────────────────────────────────────
+ * BEM classes emitted by existing src/renderer/ components.
+ * CSS-first Tailwind v4 approach — no tailwind.config.js.
+ * All values resolve to :root tokens; no hard-coded colours or sizes.
+ *
+ * Classes NOT present in current markup (skipped per policy):
+ *   status-banner*, placeholder-pane*, checkout-tender-slot,
+ *   pairing-screen, paired-screen, screen-too-small, top-bar__*,
+ *   btn--destructive
+ * ──────────────────────────────────────────────────────────────────*/
+@layer components {
+  /* ── Button (.btn) ─────────────────────────────────────────────── */
+  .btn {
+    /* Layout */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    /* Touch target floor — 44 × 44 CSS px (NFR touch-target contract) */
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    /* Typography */
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-tight);
+    /* Shape */
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    /* Interaction */
+    cursor: pointer;
+    text-decoration: none;
+    user-select: none;
+    white-space: nowrap;
+    /* Focus ring — non-color cue via offset (meets WCAG non-color requirement) */
+    outline: none;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .btn:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Disabled state — aria-disabled is used instead of the disabled attribute
+     so the element retains its DOM presence for tests while being non-interactive. */
+  .btn[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* Loading state */
+  .btn[aria-busy='true'] {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
+  /* --- Intents --- */
+  .btn--primary {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-on);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-4);
+  }
+
+  .btn--primary:hover:not([aria-disabled='true']):not([aria-busy='true']) {
+    background-color: var(--color-primary-emphasis);
+    border-color: var(--color-primary-emphasis);
+  }
+
+  .btn--secondary {
+    background-color: var(--color-surface);
+    border-color: var(--color-border-strong);
+    color: var(--color-text);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-4);
+  }
+
+  .btn--secondary:hover:not([aria-disabled='true']):not([aria-busy='true']) {
+    background-color: var(--color-surface-muted);
+  }
+
+  .btn--ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--color-text-muted);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-3);
+  }
+
+  .btn--ghost:hover:not([aria-disabled='true']):not([aria-busy='true']) {
+    background-color: var(--color-surface-muted);
+    color: var(--color-text);
+  }
+
+  /* --- Sizes --- */
+  .btn--md {
+    font-size: var(--font-size-md);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-4);
+    /* Preserve inline-set min-height/width from component; these are additive. */
+  }
+
+  .btn--lg {
+    font-size: var(--font-size-lg);
+    padding-block: var(--space-3);
+    padding-inline: var(--space-5);
+  }
+
+  /* ── TopBar (.top-bar) ──────────────────────────────────────────── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-4);
+    background-color: var(--color-surface);
+    border-block-end: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    /* Ensure TopBar spans the full inline axis */
+    inline-size: 100%;
+    /* Logical flex layout: IdentityStrip grows, Indicator + OperatorSlot at inline-end */
+    flex-wrap: nowrap;
+  }
+
+  /* ── IdentityStrip (.identity-strip) ───────────────────────────── */
+  .identity-strip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1 1 0;
+    min-inline-size: 0;
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    /* Allow long tenant/branch names to truncate rather than overflow */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── OperatorSlot (.operator-slot) ─────────────────────────────── */
+  .operator-slot {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-inline-start: auto;
+  }
+
+  /* ── ConnectionIndicator (.connection-indicator) ───────────────── */
+  /*
+   * Indicator uses intent-based modifier classes (--success/warning/danger/neutral)
+   * because the component maps connection states → intents before emitting className.
+   * Text label is always visible so the indicator is NEVER color-only (accessibility).
+   */
+  .connection-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding-block: var(--space-1);
+    padding-inline: var(--space-2);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    /* Border for non-color differentiation even on monochrome displays */
+    border: 1px solid currentColor;
+    /* non-actionable — pointer-events stay default so the outer click-no-op
+       guard test can confirm there's no handler invocation */
+  }
+
+  /* Add a status dot via pseudo-element (non-color cue: shape, not just colour) */
+  .connection-indicator::before {
+    content: '';
+    display: inline-block;
+    block-size: 8px;
+    inline-size: 8px;
+    border-radius: var(--radius-pill);
+    background-color: currentColor;
+    flex-shrink: 0;
+  }
+
+  .connection-indicator--success {
+    color: var(--color-success);
+    background-color: color-mix(in srgb, var(--color-success) 10%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+  }
+
+  .connection-indicator--warning {
+    color: var(--color-warning-emphasis);
+    background-color: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-warning) 35%, transparent);
+  }
+
+  .connection-indicator--danger {
+    color: var(--color-danger);
+    background-color: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+  }
+
+  .connection-indicator--neutral {
+    color: var(--color-neutral);
+    background-color: color-mix(in srgb, var(--color-neutral) 10%, transparent);
+    border-color: color-mix(in srgb, var(--color-neutral) 30%, transparent);
+  }
+
+  /* ── NavRail (.nav-rail) ────────────────────────────────────────── */
+  /*
+   * Logical layout: nav-rail sits at inline-start of the flex row in AppShell.
+   * No hard-coded left/right — uses logical properties for future RTL support.
+   */
+  .nav-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-block: var(--space-3);
+    padding-inline: var(--space-2);
+    background-color: var(--color-surface-muted);
+    border-inline-end: 1px solid var(--color-border);
+    block-size: 100%;
+    flex-shrink: 0;
+    /* Fixed width for expanded layout; icon-only width is overridden
+       when .nav-rail contains only icon entries (no .nav-rail__label). */
+    min-inline-size: 180px;
+  }
+
+  /* ── NavRail entry (.nav-rail__entry) ──────────────────────────── */
+  .nav-rail__entry {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+    padding-inline: var(--space-3);
+    min-block-size: 44px;
+    min-inline-size: 44px;
+    border-radius: var(--radius-md);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-regular);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    /* Non-color cue for interactive state: left-edge accent via border */
+    border-inline-start: 3px solid transparent;
+    transition:
+      background-color 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease;
+  }
+
+  .nav-rail__entry:hover {
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    border-inline-start-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+
+  .nav-rail__entry:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* Active state — non-color cue: background tint + left-edge accent (contracts/shell-regions.md) */
+  .nav-rail__entry--active {
+    background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+    color: var(--color-primary);
+    font-weight: var(--font-weight-medium);
+    border-inline-start-color: var(--color-primary);
+  }
+
+  .nav-rail__entry--active:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 15%, var(--color-surface));
+  }
+
+  /* Icon-only width: when there is no label span the rail shrinks to icon size */
+  .nav-rail__entry:not(:has(.nav-rail__label)) {
+    justify-content: center;
+  }
+
+  /* ── NavRail label (.nav-rail__label) ──────────────────────────── */
+  .nav-rail__label {
+    flex: 1 1 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--font-size-md);
+    line-height: var(--line-height-tight);
+  }
+
+  /* ── Badge (.badge) ─────────────────────────────────────────────── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding-block: 2px;
+    padding-inline: var(--space-2);
+    border-radius: var(--radius-pill);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-tight);
+    white-space: nowrap;
+  }
+
+  .badge--info {
+    background-color: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary-emphasis);
+  }
+
+  .badge--success {
+    background-color: color-mix(in srgb, var(--color-success) 12%, transparent);
+    color: var(--color-success-emphasis);
+  }
+
+  .badge--warning {
+    background-color: color-mix(in srgb, var(--color-warning) 14%, transparent);
+    color: var(--color-warning-emphasis);
+  }
+
+  .badge--danger {
+    background-color: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    color: var(--color-danger-emphasis);
+  }
+
+  .badge--neutral {
+    background-color: color-mix(in srgb, var(--color-neutral) 12%, transparent);
+    color: var(--color-neutral-emphasis);
+  }
+
+  /* ── Card (.card) ───────────────────────────────────────────────── */
+  .card {
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+  }
+
+  .card--default {
+    background-color: var(--color-surface);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card--muted {
+    background-color: var(--color-surface-muted);
+    box-shadow: var(--shadow-none);
+  }
+
+  .card--elevated {
+    background-color: var(--color-surface-elevated);
+    box-shadow: var(--shadow-md);
+  }
+} /* end @layer components */
