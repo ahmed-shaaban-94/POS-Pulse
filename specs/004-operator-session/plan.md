@@ -4,8 +4,8 @@
 **Spec:** [./spec.md](./spec.md)
 **Plan Version:** 1.1
 **Created:** 2026-05-05
-**Last Updated:** 2026-05-05 (refined: cashier PIN reframed as local terminal unlock factor; §A1 promoted to early-blocking gate; six normative PIN security constraints added)
-**Constitution version pinned:** v1.5.0
+**Last Updated:** 2026-05-06 (§A1 cleared via PR #39, merge SHA 7ae337b, Constitution v1.5.1; §A2 backend coordination remains outstanding)
+**Constitution version pinned:** v1.5.1
 **Branch:** `004-operator-session`
 
 ---
@@ -388,7 +388,7 @@ Principles (P1–P18) per constitution v1.5.0 governance.
 | V. Type Safety End-to-End | **PASS** | All `operator.*` bridge calls typed in `src/shared/bridge-api.ts`; both ends share the interface. No `any`. The audit-event shape, role enum, session state, takeover-prompt return type, and PIN-verifier result type all strict-typed. |
 | VI. Test-First, Coverage-Gated | **PASS** | Each slice ships failing tests first. Coverage targets: ≥ 95 % on bridge-API role-enforcement module and PIN-verifier (load-bearing trust-boundary code), ≥ 90 % on `src/renderer/ui/operator/`, ≥ 90 % on the audit module. CI ratchets upward only. |
 | VII. Observability — Local Logs + Remote Crash Reports | **PASS-with-extension** | New `pino` log sites added for: sign-in attempt outcome category (Clerk path AND PIN path), takeover detection, takeover confirmation/cancellation, forced-close request, PIN-rate-limit/lockout events (PR-3), PIN-reset events (PR-5), audit-event emission, audit-event sync. **All sites pair with explicit redaction list updates** (PR-1) — operator credentials, session tokens, PIN values in any form, raw operator IDs (logged only as opaque references per FR-032), Clerk JWTs. Sentry scrubber updated symmetrically. P11 enforcement. |
-| VIII. Terminal Identity ≠ User (NON-NEGOTIABLE) | **PASS-with-explicit-gate** | This is the load-bearing principle for 004. **Clerk remains the sole IdP**; every operator's identity is a Clerk user. The local PIN factor (AD-2 / §A1) is *not* an IdP and *not* a custom user database — it is a local terminal unlock factor over an already-Clerk-anchored identity. The framing is asserted in AD-2 and gated on §A1; until §A1 approves, the cashier PIN code path does NOT land. |
+| VIII. Terminal Identity ≠ User (NON-NEGOTIABLE) | **PASS** | This is the load-bearing principle for 004. **Clerk remains the sole IdP**; every operator's identity is a Clerk user. The local PIN factor (AD-2 / §A1) is *not* an IdP and *not* a custom user database — it is a local terminal unlock factor over an already-Clerk-anchored identity. **§A1 cleared via PR #39 (merge SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1)**, which added the normative local-unlock-factor clause to Principle VIII. The gate is resolved; Slices 3–6 are unblocked subject to §A2/§A3/§A4. |
 | IX. Reference, Not Inheritance | **PASS** | No legacy POS operator/session code is consulted. All decisions are re-derived from the constitution + 001/002/003 plans + the clarified spec. |
 
 ### Cross-Feature POS Principles (P1–P18)
@@ -414,7 +414,7 @@ Principles (P1–P18) per constitution v1.5.0 governance.
 | P17. Privacy and Tenant Isolation | **PASS** | Every new SQLite table carries `tenant_id` and `branch_id`. The `cashier_pin_records` table is additionally scoped by `terminal_id` (PR-4). Roster fetch scoped server-side by paired tenant + branch. Audit events carry `tenant_id`. |
 | P18. Local Durability Before Offline Promises | **PASS** | 004 makes no offline-operator-sign-in promise (NFR-010 + NFR-011 fail-closed rule set). The Sign-In surface honestly fails when offline (`no_connection` generic variant per NFR-003 / PR-2). Local durability for transactional operations under an existing offline session continues to honour P3/P5 via the audit-event outbox. |
 
-**Initial gate result: PASS with explicit blocking gate §A1 (local-unlock-factor approval).** Slice 0 (visual direction) and Slices 1–2 (manager/admin sign-in via Clerk + bridge-surface security review of that subset) MAY proceed before §A1 resolves. Slices 3–6 are blocked on §A1.
+**Gate result: PASS.** §A1 (local-unlock-factor approval) cleared via PR #39 (merge SHA 7ae337b, Constitution v1.5.1). Slice 0 (visual direction, already signed off) and Slices 1–2 (manager/admin sign-in via Clerk + bridge-surface security review) may proceed. Slices 3–6 are unblocked from the §A1 perspective; they remain held on §A2 (backend OpenAPI endpoints — coordination outstanding), §A3 (migrations — downstream of §A1, now unblocked for planning), and §A4 (Argon2id binding — downstream of §A1, now unblocked for planning) per their individual gate requirements.
 
 ## Phase 0 — Research
 
@@ -681,4 +681,4 @@ tests/
 
 ---
 
-**End of plan.** Re-evaluation of the Constitution Check after Phase 1 design is identical to the initial gate result: PASS with §A1 as the explicit blocking gate (load-bearing) and §A2/§A3/§A4 as downstream gates. Ready for `/speckit-tasks`, *after* Slice 0 (visual direction) is reviewed and §A1 has a visible owner. Until §A1 is cleared, slices 3–6 must remain unscheduled; slices 0–2 may proceed.
+**End of plan.** §A1 cleared (PR #39, SHA 7ae337b, Constitution v1.5.1, 2026-05-05T20:53:45Z). §A2 backend/OpenAPI coordination remains outstanding (Ahmed holds POS-Pulse side; backend counterpart TBD). §A3 and §A4 are now unblocked for planning, awaiting §A2 per-slice endpoint delivery. Slice 0 review is complete. `/speckit-tasks` may be invoked; slices 3–6 scheduling holds on §A2 per-endpoint delivery.
