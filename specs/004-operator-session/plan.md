@@ -93,7 +93,12 @@ them MUST be filed as a separate feature, not folded into 004:
   service PIN reset is out of scope; manager/admin-attributable PIN reset is the
   in-scope flow under PR-5), **no biometric/smart-card sign-in**, **no offline
   operator authentication**, **no second identity provider of any kind**. All
-  deferred to later, explicitly scoped features.
+  deferred to later, explicitly scoped features. **Offline behaviour for 004
+  is fail-closed for new sign-in** — see spec NFR-011 for the normative rule
+  set; the spec covers manager/admin sign-in unavailability, cashier PIN
+  unlock not constituting a new offline session, takeover-detection
+  unavailability, existing-session continuation rules, and the deferral of
+  full offline operator sign-in to a future offline-auth feature.
 - **No new IPC channel beyond the `operator.*` namespace defined in
   contracts/bridge-api.md.** Other channels remain frozen.
 - **No weakening of 001/002/003 security boundaries** (`contextIsolation: true`,
@@ -376,7 +381,7 @@ Principles (P1–P18) per constitution v1.5.0 governance.
 
 | Principle | Status | Notes |
 |:--|:--:|:--|
-| I. Offline-First (NON-NEGOTIABLE) | **PASS-with-deferral** | 004 does not promise offline operator sign-in (NFR-010, A6). The local PIN factor is offline-capable *for the unlock step* — but the operator session it produces still validates against the Clerk identity, which requires connectivity (until a future offline-auth feature lands). Spec is explicit; not a violation. |
+| I. Offline-First (NON-NEGOTIABLE) | **PASS-with-deferral** | 004 does not promise offline operator sign-in (NFR-010, A6); the offline-behaviour rule set is explicitly fail-closed for new sign-in per NFR-011 (manager/admin sign-in unavailable; cashier PIN unlock alone insufficient; takeover-detection unavailable; existing sessions may continue with truthful connection-state visuals; local sign-out and inactivity timeout MAY still terminate offline). Spec is explicit; not a violation. The Offline-First principle's mandate ("MUST be able to ring up a sale, print a receipt, and open the drawer with zero network connectivity") applies to *transactional* operations once an operator session exists — operator authentication is governed by the deferred offline-auth feature. |
 | II. Financial Precision — No Floats | **N/A** | No money-bearing state in 004. |
 | III. Process-Boundary Discipline (NON-NEGOTIABLE) | **PASS** | 004 expands the preload bridge under the `operator.*` namespace ONLY (contracts/bridge-api.md). All new IPC channels are enumerable, named, documented. The renderer NEVER imports Node modules directly. SQLite access lives in the main process. The `cashier_pin_records` table (post-§A1) is reachable only through main-process code paths, never from renderer. PIN values cross the bridge once on input and are never persisted in any renderer-accessible form. |
 | IV. Hardware Loud, Not Silent | **N/A** | No new hardware surface in 004. |
@@ -407,7 +412,7 @@ Principles (P1–P18) per constitution v1.5.0 governance.
 | P15. Production Readiness Gates | **PASS** | 004 is production-affecting (cashier login is in P15's named list). Production Readiness subsection below names the test plan, rollback strategy, support-runbook entry, failure-mode catalogue, operational-readiness expectations. |
 | P16. Feature Scope Discipline | **PASS** | Hard Non-Implementation Boundaries restate the spec's Out-of-Scope list. |
 | P17. Privacy and Tenant Isolation | **PASS** | Every new SQLite table carries `tenant_id` and `branch_id`. The `cashier_pin_records` table is additionally scoped by `terminal_id` (PR-4). Roster fetch scoped server-side by paired tenant + branch. Audit events carry `tenant_id`. |
-| P18. Local Durability Before Offline Promises | **PASS** | 004 makes no offline-operator-sign-in promise (NFR-010). The Sign-In surface honestly fails when offline. |
+| P18. Local Durability Before Offline Promises | **PASS** | 004 makes no offline-operator-sign-in promise (NFR-010 + NFR-011 fail-closed rule set). The Sign-In surface honestly fails when offline (`no_connection` generic variant per NFR-003 / PR-2). Local durability for transactional operations under an existing offline session continues to honour P3/P5 via the audit-event outbox. |
 
 **Initial gate result: PASS with explicit blocking gate §A1 (local-unlock-factor approval).** Slice 0 (visual direction) and Slices 1–2 (manager/admin sign-in via Clerk + bridge-surface security review of that subset) MAY proceed before §A1 resolves. Slices 3–6 are blocked on §A1.
 

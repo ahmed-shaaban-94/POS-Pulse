@@ -223,9 +223,15 @@ the list can be inferred from a cashier-visible surface.
 
 - **No operator signed in, terminal idle**: the Sign-In screen is the only reachable
   surface; route restoration from a previous operator's session MUST NOT bypass it.
-- **Operator credentials offline**: behaviour for offline credential validation is
-  governed by the global offline policy. This feature does not implement offline auth;
-  see [NEEDS CLARIFICATION: offline operator sign-in policy] and Assumptions.
+- **Operator credentials offline**: 004 fails *closed* for any new operator sign-in
+  attempt while offline. New manager/admin sign-in is refused (Clerk unreachable);
+  cashier PIN unlock alone is insufficient (the Clerk-anchored identity validation
+  and Endpoint 6 takeover-detection step both require connectivity); the Sign-In
+  surface returns the generic `no_connection` failure variant per NFR-003 / PR-2.
+  Existing already-signed-in local sessions MAY continue, with the connection-state
+  visual surfacing `offline`/`degraded` per 003. The full offline-behaviour rule set
+  is normative under NFR-011; full offline operator sign-in is deferred to a future
+  offline-auth feature (see Assumption A6).
 - **Inactivity / auto-sign-out**: while signed in, an inactivity timer terminates the
   operator session and returns the shell to the Sign-In screen. Default duration: see
   Assumptions.
@@ -593,6 +599,47 @@ the list can be inferred from a cashier-visible surface.
   authentication. If offline sign-in is required by a downstream feature, it MUST be
   designed and clarified there; this feature does not pre-commit to an offline auth
   surface.
+- **NFR-011 (offline behaviour — fail-closed for new sign-in)**: 004 fails *closed*
+  for any new operator sign-in attempt while offline (no Clerk / backend
+  connectivity). The complete offline-behaviour rules are:
+  - **New sign-in is unavailable while offline.** Manager / Admin sign-in
+    requires Clerk reachability; the Sign-In surface refuses with the generic
+    `no_connection` failure variant per NFR-003 / PR-2 ("No connection. Please
+    check the network and try again.") and creates no operator session.
+  - **Cashier PIN unlock alone is not a sign-in.** A successful local PIN
+    verification while offline MUST NOT create an operator session and MUST NOT
+    transition the shell to the operator-bound landing surface. The cashier
+    PIN is a *local terminal unlock factor* (AD-2); it is not, on its own, an
+    authentication path. The Clerk-anchored cashier identity validation step
+    that follows the PIN unlock requires connectivity.
+  - **Cashier takeover detection is unavailable while offline.** Endpoint 6
+    (`GET /v1/operators/active-session`) cannot be checked offline; therefore
+    the cashier sign-in path's takeover-detection step cannot complete. The
+    Sign-In surface refuses with `no_connection` rather than risk a duplicate
+    session per FR-013.
+  - **Existing already-signed-in local sessions MAY remain visible.** An
+    operator who was already signed in before connectivity dropped continues
+    to see the operator-bound shell; the role-indicator slot continues to
+    display their identity. However:
+    - **Backend-dependent actions (sales, payments, audit-event sync,
+      future features) MUST surface the existing `no_connection` /
+      `degraded` connection-state visual** per 003's four-state model;
+      they MUST NOT optimistically claim success (P2 — no fake success
+      states).
+    - **Cashier-Forbidden Information catalogue items (FR-015) remain
+      cashier-forbidden offline.** The role boundary holds offline as
+      strictly as it holds online (NFR-004 — deterministic role boundary).
+      A cashier surface that is forbidden online MUST NOT become reachable
+      offline by way of error-state fallback or local-cached data.
+  - **Local sign-out and inactivity auto-sign-out (FR-008 / FR-009) MAY
+    still terminate the current operator session offline.** These are local
+    operations; they update the local `operator_sessions` row's `end_at` /
+    `end_cause` and queue any consequent audit events for sync per the local
+    outbox pattern (P3 — no silent data loss).
+  - **Full offline operator sign-in is deferred to a future offline-auth
+    feature.** 004 makes no commitment about how offline cashier or
+    manager/admin sign-in would work; that's the scope of a later, explicitly
+    designed offline-auth feature with its own spec, plan, and approval path.
 
 ### Key Entities *(behavioural; not implementation)*
 

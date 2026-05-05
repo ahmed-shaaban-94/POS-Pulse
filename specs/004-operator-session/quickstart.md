@@ -123,10 +123,50 @@ auth is pure Clerk).
    - **Expected**: Same generic "credentials not recognised" message; no
      disclosure that the operator exists elsewhere.
 
-8. **Network unreachable.** Disconnect the terminal's network; attempt
-   sign-in.
-   - **Expected**: A "no connection — try again" message. The connection-
-     state indicator transitions to `offline` per 003's four-state model.
+8. **Network unreachable (NFR-011 fail-closed for new sign-in).**
+   Disconnect the terminal's network; attempt sign-in as a manager.
+   - **Expected**: A "No connection. Please check the network and try
+     again." message (the generic `no_connection` variant per NFR-003 /
+     PR-2). The connection-state indicator transitions to `offline` per
+     003's four-state model. **No operator session is created.** The
+     shell does NOT optimistically transition to the operator-bound
+     landing surface (P2 — no fake success states).
+   - **NFR-011 cross-check**: while still offline, attempt cashier sign-in
+     (after S4 lands the cashier path). The cashier roster view is
+     reachable (it is rendered from cached state per Endpoint 1's prior
+     fetch, with a banner indicating stale data); attempting to enter
+     a PIN and submit MUST also fail with `no_connection` (the cashier
+     path's Endpoint 6 takeover-detection step cannot complete offline,
+     so sign-in is refused). **No operator session is created** even if
+     the local PIN happens to verify — local PIN unlock alone is not a
+     sign-in (NFR-011, AD-2).
+
+### Existing offline session continuation (NFR-011)
+
+8a. **Sign in while online; then disconnect mid-session.** Sign in as a
+    manager while the network is reachable. Disconnect the network. Wait
+    a few seconds.
+    - **Expected**: The shell remains visible; the OperatorBadge still
+      shows the manager's identity. The connection-state indicator
+      transitions to `offline`. Backend-dependent placeholder actions
+      surface the existing 003 `no_connection` / `degraded` UX rather
+      than appearing to succeed. **Cashier-Forbidden Information
+      catalogue items remain forbidden offline** — a cashier signed in
+      offline (after S4) MUST NOT reach a manager-only surface even
+      though the bridge cannot freshly verify the role, because the
+      role is cached at session creation time and `requireRole` operates
+      against the cached value (NFR-004 — deterministic role boundary;
+      NFR-011 — role boundary holds offline as strictly as online).
+
+8b. **Local sign-out / inactivity timeout while offline.** While offline
+    and signed in, invoke explicit Sign-Out OR wait for the 15-minute
+    inactivity timer (FR-009).
+    - **Expected**: The local operator session terminates with the
+      correct `end_cause` (`signed_out` or `inactivity_timeout`); the
+      shell returns to `/sign-in`; any consequent audit events queue
+      in the local outbox for sync when connectivity returns (P3 / P5);
+      the next sign-in attempt while still offline fails closed per
+      step 8.
 
 ### Logging redaction (FR-030 / PR-1)
 
