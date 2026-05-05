@@ -14,7 +14,6 @@ export function OperatorSlot(): JSX.Element {
         tabIndex={-1}
         title="Sign-in is not yet available."
         className="btn btn--ghost btn--md"
-        style={{ minHeight: '44px', minWidth: '44px' }}
       >
         Sign in
       </button>
