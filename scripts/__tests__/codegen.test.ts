@@ -37,6 +37,9 @@ afterEach(() => {
 });
 
 describe('generateApiTypes — determinism', () => {
+  // Timeout raised to 15 s: two back-to-back openapiTS calls plus V8
+  // coverage instrumentation and subprocess cold-start can exceed 5 s on
+  // slow CI runners. The assertion itself is unchanged.
   it('produces byte-identical output across two runs from the same snapshot', async () => {
     const a = path.join(tmpDir, 'a.ts');
     const b = path.join(tmpDir, 'b.ts');
@@ -47,7 +50,7 @@ describe('generateApiTypes — determinism', () => {
     const aBytes = readFileSync(a);
     const bBytes = readFileSync(b);
     expect(aBytes.equals(bBytes)).toBe(true);
-  });
+  }, 15_000);
 
   it('writes the generated-file header sentinel', async () => {
     const out = path.join(tmpDir, 'out.ts');
