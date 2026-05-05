@@ -13,11 +13,21 @@ export function ScreenTooSmall(): JSX.Element {
   }, []);
 
   return (
-    <main aria-labelledby="screen-too-small-heading">
-      <h1 id="screen-too-small-heading" tabIndex={-1} ref={headingRef}>
-        Screen too small
-      </h1>
-      <p>Use a display at least 1024px wide to run POS Pulse.</p>
+    <main className="screen-too-small" aria-labelledby="screen-too-small-heading">
+      <div className="screen-too-small__card">
+        <span className="screen-too-small__icon" aria-hidden="true" />
+        <h1
+          className="screen-too-small__title"
+          id="screen-too-small-heading"
+          tabIndex={-1}
+          ref={headingRef}
+        >
+          Screen too small
+        </h1>
+        <p className="screen-too-small__body">
+          Use a display at least 1024px wide to run POS Pulse.
+        </p>
+      </div>
     </main>
   );
 }

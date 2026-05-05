@@ -37,7 +37,7 @@ export function CartPlaceholder(): JSX.Element {
   }
 
   return (
-    <section>
+    <section className="placeholder-pane">
       <h1>Cart</h1>
       <p>Cart functionality coming soon.</p>
     </section>

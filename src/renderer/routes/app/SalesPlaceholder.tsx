@@ -37,7 +37,7 @@ export function SalesPlaceholder(): JSX.Element {
   }
 
   return (
-    <section>
+    <section className="placeholder-pane">
       <h1>Sales</h1>
       <p>Sales functionality coming soon.</p>
     </section>

@@ -43,7 +43,7 @@ export function SettingsHelpPlaceholder(): JSX.Element {
   }
 
   return (
-    <section>
+    <section className="placeholder-pane">
       <h1>Settings / Help</h1>
       <p>Settings and help functionality coming soon.</p>
     </section>

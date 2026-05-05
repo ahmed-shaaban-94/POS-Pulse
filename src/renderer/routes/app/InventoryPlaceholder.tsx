@@ -43,7 +43,7 @@ export function InventoryPlaceholder(): JSX.Element {
   }
 
   return (
-    <section>
+    <section className="placeholder-pane">
       <h1>Inventory</h1>
       <p>Navigation only — inventory management is not available at this terminal.</p>
     </section>
