@@ -14,21 +14,33 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 ## Active feature
 
 <!-- SPECKIT START -->
-**Active feature:** `specs/001-foundation` — **status: complete** (closed by Phase Final / Polish PR)
-- Spec: [specs/001-foundation/spec.md](specs/001-foundation/spec.md)
-- Plan: [specs/001-foundation/plan.md](specs/001-foundation/plan.md)
-- Research: [specs/001-foundation/research.md](specs/001-foundation/research.md)
-- Data model: [specs/001-foundation/data-model.md](specs/001-foundation/data-model.md)
-- Contracts: [specs/001-foundation/contracts/](specs/001-foundation/contracts/)
-- Quickstart: [specs/001-foundation/quickstart.md](specs/001-foundation/quickstart.md)
-- Checklist: [specs/001-foundation/checklists/requirements.md](specs/001-foundation/checklists/requirements.md)
+**Active feature:** `specs/004-operator-session` — **status: planning complete (v1.1); §A1-gated before implementation**
+- Spec: [specs/004-operator-session/spec.md](specs/004-operator-session/spec.md)
+- Plan: [specs/004-operator-session/plan.md](specs/004-operator-session/plan.md)
+- Research: [specs/004-operator-session/research.md](specs/004-operator-session/research.md)
+- Data model: [specs/004-operator-session/data-model.md](specs/004-operator-session/data-model.md)
+- Contracts: [specs/004-operator-session/contracts/](specs/004-operator-session/contracts/)
+  - [bridge-api.md](specs/004-operator-session/contracts/bridge-api.md) — `operator.*` preload bridge
+  - [backend-endpoints.md](specs/004-operator-session/contracts/backend-endpoints.md) — backend OpenAPI dependencies (§A2-gated)
+  - [role-visibility-matrix.md](specs/004-operator-session/contracts/role-visibility-matrix.md) — canonical FR-015 / FR-017 / FR-018 matrix
+- Quickstart: [specs/004-operator-session/quickstart.md](specs/004-operator-session/quickstart.md)
+- Checklist: [specs/004-operator-session/checklists/requirements.md](specs/004-operator-session/checklists/requirements.md)
 
-<!--
-Next feature: `specs/002-terminal-pairing` (NOT yet scaffolded — directory does
-not exist). To begin feature 002, run `/speckit-specify` and follow the Spec Kit
-workflow below; that will materialise spec.md / plan.md / tasks.md under the new
-directory and an agent should re-point this SPECKIT block to the new feature.
--->
+**Approval gates before implementation slices** (plan.md §"Approval Gates"):
+- §A1 — local-unlock-factor approval (LOAD-BEARING, blocks Slices 3–6)
+- §A2 — backend OpenAPI endpoints (blocks Slices 1, 3, 4, 5)
+- §A3 — three new SQLite tables (blocks Slices 3, 4)
+- §A4 — Argon2id binding install (blocks Slice 4 only; obsolete if §A1 → Alternative 1)
+- §A5 — Production Readiness (blocks production rollout, not slice merges)
+
+**Next phase**: Slice 0 (visual direction — non-code) is the immediate next step
+per FR-033. After Slice 0 review, `/speckit-tasks` produces the per-slice work
+list, scheduled behind §A1–§A4.
+
+**Previous features (complete)**:
+- `specs/001-foundation` — Foundation (Electron + Vite + TS + tests + CI).
+- `specs/002-terminal-pairing` — Terminal pairing (device token, branch scope).
+- `specs/003-pos-ui-shell` — POS UI shell (design tokens, navigation, role-indicator slot).
 <!-- SPECKIT END -->
 
 ## Spec Kit workflow
