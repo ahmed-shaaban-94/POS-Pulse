@@ -41,7 +41,7 @@ export function DashboardPlaceholder(): JSX.Element {
   }
 
   return (
-    <section>
+    <section className="placeholder-pane">
       <h1>Dashboard</h1>
       <p>Welcome to POS Pulse. Select an option from the navigation rail.</p>
     </section>

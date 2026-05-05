@@ -7,4 +7,5 @@ export const spacing = {
   5: 'var(--space-5)',
   6: 'var(--space-6)',
   7: 'var(--space-7)',
+  8: 'var(--space-8)',
 } as const;

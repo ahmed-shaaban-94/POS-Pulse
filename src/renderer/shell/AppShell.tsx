@@ -49,7 +49,7 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
 
   if (tier === 'too-small') {
     return (
-      <div data-testid="app-shell">
+      <div className="app-shell" data-testid="app-shell">
         <TopBar
           tenantId={tenantId}
           branchId={branchId}
@@ -62,19 +62,16 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   }
 
   return (
-    <div
-      data-testid="app-shell"
-      style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}
-    >
+    <div className="app-shell" data-testid="app-shell">
       <TopBar
         tenantId={tenantId}
         branchId={branchId}
         terminalLabel={terminalLabel}
         connectionState={connectionState}
       />
-      <div style={{ display: 'flex', flex: 1 }}>
+      <div className="app-shell__body">
         <NavRail />
-        <main style={{ flex: 1, overflow: 'auto' }}>
+        <main className="app-shell__content">
           <Outlet />
         </main>
       </div>

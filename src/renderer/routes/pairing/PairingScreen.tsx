@@ -48,9 +48,15 @@ export function PairingScreen(props: PairingScreenProps): JSX.Element {
   // when omitted. exactOptionalPropertyTypes forbids `{ pairing: undefined }`.
   const formProps = props.pairing !== undefined ? { pairing: props.pairing } : {};
   return (
-    <main data-testid="route-pairing" {...reasonAttr}>
+    <main className="pairing-screen" data-testid="route-pairing" {...reasonAttr}>
       {props.invalidReason !== undefined && <InvalidStateBanner reason={props.invalidReason} />}
-      <PairingForm {...formProps} />
+      <div className="pairing-screen__card">
+        <div className="pairing-screen__brand">
+          <h1>POS Pulse</h1>
+          <p>Enter the pairing code shown in the admin portal.</p>
+        </div>
+        <PairingForm {...formProps} />
+      </div>
     </main>
   );
 }

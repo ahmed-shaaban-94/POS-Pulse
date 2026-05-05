@@ -83,36 +83,41 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
   const { status } = state;
   return (
     <main
+      className="paired-screen"
       data-testid="route-paired"
       data-tenant-id={status.tenant_id}
       data-branch-id={status.branch_id}
       data-terminal-id={status.terminal_id}
       data-terminal-label={status.terminal_label}
     >
-      <h1>Terminal paired</h1>
-      <dl>
-        <dt>Tenant</dt>
-        <dd>{status.tenant_id}</dd>
-        <dt>Branch</dt>
-        <dd>{status.branch_id}</dd>
-        <dt>Terminal</dt>
-        <dd>{status.terminal_id}</dd>
-        <dt>Label</dt>
-        <dd>{status.terminal_label}</dd>
-      </dl>
-      {/* T054 — O2 resolution: Continue to dashboard action.
-          Option chosen: Button on /paired navigates to /app/dashboard.
-          The boot router gate is NOT modified; unpaired terminals still
-          route to /pairing. No IPC, no bridge call, no SecretStore read,
-          no token re-read is performed by this navigation transition. */}
-      <button
-        type="button"
-        className="btn btn--primary btn--md"
-        style={{ minHeight: '44px' }}
-        onClick={() => void navigate('/app/dashboard')}
-      >
-        Continue to dashboard →
-      </button>
+      <div className="paired-screen__card">
+        <div className="paired-screen__badge">Terminal paired</div>
+        <h1>Ready</h1>
+        <dl className="paired-screen__summary">
+          <dt>Tenant</dt>
+          <dd>{status.tenant_id}</dd>
+          <dt>Branch</dt>
+          <dd>{status.branch_id}</dd>
+          <dt>Terminal</dt>
+          <dd>{status.terminal_id}</dd>
+          <dt>Label</dt>
+          <dd>{status.terminal_label}</dd>
+        </dl>
+        {/* T054 — O2 resolution: Continue to dashboard action.
+            Option chosen: Button on /paired navigates to /app/dashboard.
+            The boot router gate is NOT modified; unpaired terminals still
+            route to /pairing. No IPC, no bridge call, no SecretStore read,
+            no token re-read is performed by this navigation transition. */}
+        <div className="paired-screen__actions">
+          <button
+            type="button"
+            className="btn btn--primary btn--md"
+            onClick={() => void navigate('/app/dashboard')}
+          >
+            Continue to dashboard
+          </button>
+        </div>
+      </div>
     </main>
   );
 }

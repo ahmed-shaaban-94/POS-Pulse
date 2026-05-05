@@ -29,10 +29,7 @@ import { ReservedTotalsRow } from './ReservedTotalsRow';
  */
 export function CheckoutPlaceholder(): JSX.Element {
   return (
-    <section
-      aria-labelledby="checkout-heading"
-      style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px' }}
-    >
+    <section className="checkout-placeholder" aria-labelledby="checkout-heading">
       <h1 id="checkout-heading">Checkout</h1>
       <p>Payment tender slots are reserved for feature 005-checkout-payments.</p>
 

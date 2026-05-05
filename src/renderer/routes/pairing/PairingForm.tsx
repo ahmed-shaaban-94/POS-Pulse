@@ -157,24 +157,32 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
   }
 
   return (
-    <form onSubmit={onSubmit} aria-label="Pair terminal">
-      <label htmlFor="pairing-code">Pairing code</label>
-      <input
-        id="pairing-code"
-        ref={inputRef}
-        type="text"
-        autoComplete="off"
-        spellCheck={false}
-        autoFocus
-        // T057: input is gated by `submitting` only. While rate-limited,
-        // the operator may correct a typo so they're ready to retry the
-        // moment the timer expires. Only the submit BUTTON gates on
-        // isRateLimited.
-        disabled={submitting}
-      />
-      <button type="submit" disabled={submitting || isRateLimited}>
-        {submitting ? 'Pairing…' : 'Pair terminal'}
-      </button>
+    <form className="pairing-form" onSubmit={onSubmit} aria-label="Pair terminal">
+      <div className="pairing-screen__field">
+        <label htmlFor="pairing-code">Pairing code</label>
+        <input
+          id="pairing-code"
+          ref={inputRef}
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus
+          // T057: input is gated by `submitting` only. While rate-limited,
+          // the operator may correct a typo so they're ready to retry the
+          // moment the timer expires. Only the submit BUTTON gates on
+          // isRateLimited.
+          disabled={submitting}
+        />
+      </div>
+      <div className="pairing-screen__actions">
+        <button
+          type="submit"
+          className="btn btn--primary btn--lg pairing-form__submit"
+          disabled={submitting || isRateLimited}
+        >
+          {submitting ? 'Pairing…' : 'Pair terminal'}
+        </button>
+      </div>
       {statusMessage !== null ? (
         <p role="status" data-testid="pairing-message">
           {statusMessage}

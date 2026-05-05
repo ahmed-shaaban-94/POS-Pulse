@@ -31,7 +31,6 @@ export function NavRail(): JSX.Element | null {
           className={({ isActive }) =>
             `nav-rail__entry${isActive ? ' nav-rail__entry--active' : ''}`
           }
-          style={{ display: 'flex', minHeight: '44px', minWidth: '44px', alignItems: 'center' }}
         >
           <span aria-hidden="true" data-icon={entry.iconKey} />
           {!iconOnly && <span className="nav-rail__label">{entry.label}</span>}

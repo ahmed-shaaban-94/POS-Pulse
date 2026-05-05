@@ -15,20 +15,9 @@ import type { ReservedSlotProps } from './reserved-slot-ids';
  */
 export function ReservedTenderRow({ slotId, label }: ReservedSlotProps): JSX.Element {
   return (
-    <div
-      data-slot-id={slotId}
-      aria-label={label}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        padding: '12px',
-        border: '1px dashed #ccc',
-        borderRadius: '4px',
-      }}
-    >
-      <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>{label}</span>
-      <span data-slot-body style={{ fontSize: '0.75rem', color: '#888', fontStyle: 'italic' }}>
+    <div className="reserved-slot reserved-slot--tender" data-slot-id={slotId} aria-label={label}>
+      <span className="reserved-slot__label">{label}</span>
+      <span className="reserved-slot__body" data-slot-body>
         Reserved for 005-checkout-payments
       </span>
     </div>

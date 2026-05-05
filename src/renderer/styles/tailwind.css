@@ -1,34 +1,68 @@
 @import 'tailwindcss';
 
 :root {
-  /* Color tokens — semantic palette (contracts/design-tokens.md) */
-  --color-surface: #ffffff;
-  --color-surface-muted: #f5f5f5;
-  --color-surface-elevated: #ffffff;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
+  /* ── Colour tokens — aligned to POS Pulse 003 design spec ───────────── */
+
+  /* Workspace + surface */
+  --color-background: #fbfcfd; /* workspace surface */
+  --color-surface: #ffffff; /* card / panel */
+  --color-surface-elevated: #f3f6fa; /* inert tile, slot-id chip, banner band */
+  --color-surface-muted: #f3f6fa; /* alias kept for backward compat */
+
+  /* Ink */
+  --color-text: #0f1d2e;
+  --color-text-muted: #5b6b7c;
   --color-text-inverse: #ffffff;
-  --color-primary: #2563eb;
-  --color-primary-emphasis: #1d4ed8;
+
+  /* Brand primary — deep enterprise navy */
+  --color-primary: #1f4e7a;
+  --color-primary-emphasis: #163d61;
+  --color-primary-soft: #e6eef6;
   --color-primary-on: #ffffff;
-  --color-danger: #dc2626;
-  --color-danger-emphasis: #b91c1c;
-  --color-danger-on: #ffffff;
-  --color-warning: #d97706;
-  --color-warning-emphasis: #b45309;
-  --color-warning-on: #ffffff;
-  --color-success: #059669;
-  --color-success-emphasis: #047857;
+
+  /* Accent (active-row tab, eyebrow, decorative ink) */
+  --color-accent: #2e7da3;
+
+  /* Semantic state colours */
+  --color-success: #1f8a5b;
+  --color-success-emphasis: #176944;
+  --color-success-soft: #e7f5ee;
   --color-success-on: #ffffff;
-  --color-neutral: #4b5563;
-  --color-neutral-emphasis: #374151;
+
+  --color-warning: #b87600;
+  --color-warning-emphasis: #8f5b00;
+  --color-warning-soft: #fbf0db;
+  --color-warning-on: #ffffff;
+
+  --color-danger: #b32e36;
+  --color-danger-emphasis: #8e2329;
+  --color-danger-soft: #f7e2e3;
+  --color-danger-on: #ffffff;
+
+  --color-info: #1e6f8c;
+  --color-info-emphasis: #175670;
+  --color-info-soft: #e1f0f5;
+  --color-info-on: #ffffff;
+
+  /* Neutral (legacy syncing intent in ConnectionIndicator) */
+  --color-neutral: #5b6b7c;
+  --color-neutral-emphasis: #3d4c5a;
   --color-neutral-on: #ffffff;
-  --color-focus-ring: #2563eb;
-  --color-border: #e5e7eb;
+
+  /* Dark rail */
+  --color-rail: #0e1b2a;
+  --color-rail-hover: #162a40;
+  --color-rail-text: #cdd6e0;
+  --color-rail-text-dim: #7a8a9c;
+
+  /* Borders / rules */
+  --color-border: #d8dfe7;
+  --color-border-soft: #e7ecf2;
   --color-border-strong: #9ca3af;
+  --color-focus-ring: var(--color-primary);
   --color-overlay-scrim: rgba(0, 0, 0, 0.5);
 
-  /* Spacing scale — 0=0px 1=4px 2=8px 3=12px 4=16px 5=24px 6=32px 7=48px */
+  /* ── Spacing scale — 4 px base ──────────────────────────────────────── */
   --space-0: 0px;
   --space-1: 4px;
   --space-2: 8px;
@@ -37,44 +71,48 @@
   --space-5: 24px;
   --space-6: 32px;
   --space-7: 48px;
+  --space-8: 64px;
 
-  /* Typography — families */
-  --font-family-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-family-mono: ui-monospace, 'Cascadia Code', monospace;
+  /* ── Typography ─────────────────────────────────────────────────────── */
+  --font-family-sans: 'Inter Variable', Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-family-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', monospace;
 
-  /* Typography — weights */
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* Typography — sizes (body default md=16px ≥14px requirement met) */
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-md: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
+  --font-size-2xs: 0.6875rem; /* 11px */
+  --font-size-xs: 0.75rem; /* 12px */
+  --font-size-sm: 0.875rem; /* 14px */
+  --font-size-md: 1rem; /* 16px */
+  --font-size-lg: 1.125rem; /* 18px */
+  --font-size-xl: 1.25rem; /* 20px */
+  --font-size-2xl: 1.5rem; /* 24px */
+  --font-size-3xl: 1.875rem; /* 30px */
 
-  /* Typography — line heights */
   --line-height-tight: 1.25;
   --line-height-snug: 1.375;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.625;
 
-  /* Radius */
+  /* ── Radius ─────────────────────────────────────────────────────────── */
   --radius-none: 0;
-  --radius-sm: 0.125rem;
-  --radius-md: 0.25rem;
-  --radius-lg: 0.5rem;
+  --radius-sm: 0.125rem; /* 2px */
+  --radius-md: 0.25rem; /* 4px */
+  --radius-lg: 0.5rem; /* 8px */
+  --radius-control: 10px; /* buttons, fields */
+  --radius-card: 14px; /* cards, panes */
+  --radius-pane: 16px; /* pairing / paired centred panels */
   --radius-pill: 9999px;
 
-  /* Shadow */
+  /* ── Shadow ─────────────────────────────────────────────────────────── */
   --shadow-none: none;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 2px rgba(15, 29, 46, 0.04), 0 8px 24px rgba(15, 29, 46, 0.06);
+  --shadow-pane: 0 18px 60px rgba(15, 29, 46, 0.1);
   --shadow-overlay: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
 }
 
@@ -106,6 +144,38 @@
   --color-overlay-scrim: var(--color-overlay-scrim);
 }
 
+/* ─── Keyframes ─────────────────────────────────────────────────────────── */
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.55;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ─── Base ──────────────────────────────────────────────────────────────── */
 
 *,
@@ -124,11 +194,12 @@ body,
 
 body {
   font-family: var(--font-family-sans);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
   color: var(--color-text);
-  background-color: var(--color-surface);
+  background-color: var(--color-background);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* ─── Focus ─────────────────────────────────────────────────────────────── */
@@ -150,24 +221,25 @@ body {
     gap: var(--space-2);
     padding-inline: var(--space-3);
     border: 1px solid transparent;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-control);
     font-family: var(--font-family-sans);
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-semibold);
     line-height: 1;
+    letter-spacing: -0.005em;
     white-space: nowrap;
     cursor: pointer;
     text-decoration: none;
     transition:
-      background-color 150ms ease,
-      border-color 150ms ease,
-      color 150ms ease,
-      box-shadow 150ms ease;
+      background-color 120ms ease-out,
+      border-color 120ms ease-out,
+      color 120ms ease-out,
+      box-shadow 120ms ease-out;
   }
 
   .btn:disabled,
   .btn[aria-disabled='true'] {
-    opacity: 0.45;
+    opacity: 0.5;
     cursor: not-allowed;
     pointer-events: none;
   }
@@ -176,13 +248,13 @@ body {
   .btn--md {
     block-size: 44px;
     padding-inline: 14px;
-    font-size: var(--font-size-sm);
+    font-size: 0.875rem; /* 14px */
   }
 
   .btn--lg {
     block-size: 52px;
     padding-inline: 18px;
-    font-size: var(--font-size-md);
+    font-size: 0.9375rem; /* 15px */
   }
 
   /* Intent modifiers */
@@ -197,14 +269,19 @@ body {
     border-color: var(--color-primary-emphasis);
   }
 
+  .btn--primary:focus-visible {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
+  }
+
   .btn--secondary {
-    background-color: transparent;
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    background-color: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
   }
 
   .btn--secondary:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+    color: var(--color-primary);
   }
 
   .btn--ghost {
@@ -214,7 +291,7 @@ body {
   }
 
   .btn--ghost:hover:not(:disabled):not([aria-disabled='true']) {
-    background-color: color-mix(in srgb, var(--color-text) 6%, transparent);
+    background-color: var(--color-surface-elevated);
   }
 
   .btn--destructive {
@@ -228,19 +305,37 @@ body {
     border-color: var(--color-danger-emphasis);
   }
 
+  .btn--destructive:focus-visible {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-danger) 18%, transparent);
+  }
+
   /* ── Top Bar ─────────────────────────────────────────────────────────── */
 
   .top-bar {
     display: flex;
     align-items: center;
-    block-size: 56px;
-    padding-inline: var(--space-4);
     gap: var(--space-3);
-    background-color: var(--color-surface-elevated);
+    block-size: 64px;
+    padding-inline: var(--space-5);
+    background-color: var(--color-surface);
     border-block-end: 1px solid var(--color-border);
-    box-shadow: var(--shadow-sm);
     flex-shrink: 0;
     z-index: 10;
+  }
+
+  /* Identity strip fills remaining space; connection pill + operator slot pushed to end */
+  .top-bar > .identity-strip {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .top-bar > .connection-indicator {
+    flex-shrink: 0;
+    margin-inline-start: auto;
+  }
+
+  .top-bar > .operator-slot {
+    flex-shrink: 0;
   }
 
   /* ── Nav Rail ────────────────────────────────────────────────────────── */
@@ -249,13 +344,15 @@ body {
     display: flex;
     flex-direction: column;
     block-size: 100%;
-    background-color: var(--color-text); /* darkest available token ≈ rail bg */
-    border-inline-end: 1px solid color-mix(in srgb, var(--color-text) 80%, transparent);
+    background-color: var(--color-rail);
     overflow: hidden;
     flex-shrink: 0;
     /* Expanded width: ≥1280px = 248px, icon-only 1024–1279px = 84px */
     inline-size: 84px;
     transition: inline-size 200ms ease;
+    padding-block-start: var(--space-2);
+    padding-block-end: var(--space-2);
+    padding-inline: var(--space-2);
   }
 
   @media (min-width: 1280px) {
@@ -276,11 +373,12 @@ body {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding-inline: var(--space-4);
+    padding-inline: var(--space-3);
+    block-size: 48px;
     min-block-size: 44px;
-    color: color-mix(in srgb, var(--color-text-inverse) 72%, transparent);
+    border-radius: 12px;
+    color: var(--color-rail-text);
     text-decoration: none;
-    border-radius: 0;
     cursor: pointer;
     transition:
       background-color 150ms ease,
@@ -290,7 +388,7 @@ body {
   }
 
   .nav-rail__entry:hover {
-    background-color: color-mix(in srgb, var(--color-text-inverse) 10%, transparent);
+    background-color: var(--color-rail-hover);
     color: var(--color-text-inverse);
   }
 
@@ -309,25 +407,44 @@ body {
     inline-size: 4px;
     block-size: 24px;
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    background-color: var(--color-primary-on);
+    background-color: var(--color-accent);
   }
 
   .nav-rail__entry--active:hover {
     background-color: var(--color-primary-emphasis);
   }
 
+  .nav-rail__entry:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /* Nav icon span — 20×20 placeholder, current-colour */
+  .nav-rail__entry [data-icon] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 20px;
+    block-size: 20px;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  .nav-rail__entry--active [data-icon] {
+    opacity: 1;
+  }
+
   .nav-rail__label {
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-semibold);
     overflow: hidden;
     text-overflow: ellipsis;
     /* Visually hidden in icon-only tier; stays in AT tree */
-    clip: auto;
-    clip-path: none;
     transition:
       clip-path 200ms ease,
       opacity 200ms ease;
     opacity: 1;
+    clip-path: none;
   }
 
   @media (max-width: 1279px) {
@@ -342,38 +459,28 @@ body {
 
   .identity-strip {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    padding-inline: var(--space-4);
-    padding-block: var(--space-3);
-    border-block-end: 1px solid color-mix(in srgb, var(--color-text-inverse) 12%, transparent);
-    color: var(--color-text-inverse);
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
     overflow: hidden;
+    flex: 1;
+    min-inline-size: 0;
   }
 
-  .identity-strip > * {
-    font-size: var(--font-size-xs);
+  .identity-strip > span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    opacity: 0.8;
+    flex-shrink: 1;
+    min-inline-size: 0;
   }
 
-  .identity-strip > *:first-child {
+  .identity-strip > span:first-child {
+    color: var(--color-text);
     font-weight: var(--font-weight-semibold);
     font-size: var(--font-size-sm);
-    opacity: 1;
-  }
-
-  @media (max-width: 1279px) {
-    .identity-strip {
-      padding-inline: var(--space-2);
-    }
-
-    .identity-strip > * {
-      clip-path: inset(50%);
-      opacity: 0;
-    }
+    flex-shrink: 2;
   }
 
   /* ── Operator Slot ───────────────────────────────────────────────────── */
@@ -382,11 +489,12 @@ body {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    padding-inline: var(--space-4);
-    padding-block: var(--space-3);
-    margin-block-start: auto;
-    border-block-start: 1px solid color-mix(in srgb, var(--color-text-inverse) 12%, transparent);
-    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .operator-slot .btn {
+    min-inline-size: 44px;
+    min-block-size: 44px;
   }
 
   /* ── Connection Indicator ────────────────────────────────────────────── */
@@ -400,11 +508,11 @@ body {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    block-size: 44px;
+    block-size: 40px;
     padding-inline: 14px;
     border-radius: var(--radius-pill);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    font-size: 0.8125rem; /* 13px */
+    font-weight: var(--font-weight-semibold);
     line-height: 1;
     border: 1px solid transparent;
     transition:
@@ -421,103 +529,109 @@ body {
     border-radius: var(--radius-pill);
     flex-shrink: 0;
     background-color: currentColor;
-    opacity: 0.7;
   }
 
-  /* Intent variants */
+  /* Online: static dot with resting halo */
   .connection-indicator--success,
-  [data-connection-state='online'] .connection-indicator,
   .connection-indicator[data-connection-state='online'] {
-    background-color: color-mix(in srgb, var(--color-success) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
-    color: var(--color-success-emphasis);
+    background-color: var(--color-success-soft);
+    border-color: color-mix(in srgb, var(--color-success) 25%, transparent);
+    color: var(--color-success);
   }
 
+  .connection-indicator--success::before,
+  .connection-indicator[data-connection-state='online']::before {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success) 13%, transparent);
+  }
+
+  /* Degraded */
   .connection-indicator--warning,
-  [data-connection-state='degraded'] .connection-indicator,
   .connection-indicator[data-connection-state='degraded'] {
-    background-color: color-mix(in srgb, var(--color-warning) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
-    color: var(--color-warning-emphasis);
+    background-color: var(--color-warning-soft);
+    border-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+    color: var(--color-warning);
   }
 
+  /* Offline */
   .connection-indicator--danger,
-  [data-connection-state='offline'] .connection-indicator,
   .connection-indicator[data-connection-state='offline'] {
-    background-color: color-mix(in srgb, var(--color-danger) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
-    color: var(--color-danger-emphasis);
+    background-color: var(--color-danger-soft);
+    border-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
+    color: var(--color-danger);
   }
 
+  /* Syncing — pulsing dot using info colour */
   .connection-indicator--neutral,
-  [data-connection-state='syncing'] .connection-indicator,
   .connection-indicator[data-connection-state='syncing'] {
-    background-color: color-mix(in srgb, var(--color-neutral) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-neutral) 30%, transparent);
-    color: var(--color-neutral-emphasis);
+    background-color: var(--color-info-soft);
+    border-color: color-mix(in srgb, var(--color-info) 25%, transparent);
+    color: var(--color-info);
+  }
+
+  .connection-indicator--neutral::before,
+  .connection-indicator[data-connection-state='syncing']::before {
+    animation: pulse-dot 1.6s ease-in-out infinite;
   }
 
   /* ── Status Banner ───────────────────────────────────────────────────── */
   /*
    * Component emits <aside role="status" data-state={state}>.
-   * No BEM class on aside itself — use element+attribute selectors.
    */
 
   aside[role='status'] {
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    min-block-size: 36px;
-    padding-inline: var(--space-4);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    min-block-size: 38px;
+    padding-inline: var(--space-5);
+    font-size: 0.8125rem; /* 13px */
+    font-weight: var(--font-weight-semibold);
     border-block-end: 1px solid transparent;
     flex-shrink: 0;
   }
 
   aside[role='status'][data-state='degraded'] {
-    background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
+    background-color: var(--color-warning-soft);
     border-block-end-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
-    color: var(--color-warning-emphasis);
+    color: var(--color-warning);
   }
 
   aside[role='status'][data-state='offline'] {
-    background-color: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    background-color: var(--color-danger-soft);
     border-block-end-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
-    color: var(--color-danger-emphasis);
+    color: var(--color-danger);
   }
 
   aside[role='status'][data-state='syncing'] {
-    background-color: color-mix(in srgb, var(--color-neutral) 10%, transparent);
-    border-block-end-color: color-mix(in srgb, var(--color-neutral) 25%, transparent);
-    color: var(--color-neutral-emphasis);
+    background-color: var(--color-info-soft);
+    border-block-end-color: color-mix(in srgb, var(--color-info) 25%, transparent);
+    color: var(--color-info);
   }
 
   /* ── App Shell Layout ────────────────────────────────────────────────── */
-  /*
-   * AppShell emits <div data-testid="app-shell">.
-   * Inline styles on the shell handle display:flex and height:100vh;
-   * we add the background and overflow polish here.
-   */
 
-  [data-testid='app-shell'] {
-    background-color: var(--color-surface-muted);
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    block-size: 100vh;
+    background-color: var(--color-background);
   }
 
-  /* Content pane: the <main> inside the shell row */
-  [data-testid='app-shell'] > div > main {
-    background-color: var(--color-surface-muted);
+  .app-shell__body {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .app-shell__content {
+    flex: 1;
     overflow-y: auto;
+    background-color: var(--color-background);
   }
 
   /* ── Placeholder Panes ───────────────────────────────────────────────── */
-  /*
-   * DashboardPlaceholder + other route placeholders render <section> with no class.
-   * Best-effort cascade: main > section.
-   * Cannot distinguish loading/empty/error variants from CSS alone.
-   */
 
-  main > section {
+  .placeholder-pane {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -527,127 +641,402 @@ body {
     padding: var(--space-6);
     text-align: center;
     color: var(--color-text-muted);
+    background-color: var(--color-background);
   }
 
-  main > section h1,
-  main > section h2 {
-    font-size: var(--font-size-xl);
-    font-weight: var(--font-weight-semibold);
+  /* Icon block — 96×96 squared-circle in surface-elevated with border */
+  .placeholder-pane::before {
+    content: '';
+    display: block;
+    inline-size: 96px;
+    block-size: 96px;
+    border-radius: var(--radius-card);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    flex-shrink: 0;
+    order: -1;
+  }
+
+  .placeholder-pane h1,
+  .placeholder-pane h2 {
+    font-size: 1.375rem; /* 22px */
+    font-weight: var(--font-weight-bold);
     color: var(--color-text);
     margin: 0;
+    letter-spacing: -0.01em;
   }
 
-  main > section p {
-    font-size: var(--font-size-md);
+  .placeholder-pane p {
+    font-size: 0.90625rem; /* ~14.5px body */
+    font-weight: var(--font-weight-medium);
     max-inline-size: 40ch;
     margin: 0;
+    line-height: var(--line-height-relaxed);
   }
 
   /* ── Pairing Screen ──────────────────────────────────────────────────── */
-  /*
-   * <main data-testid="route-pairing"> — no .pairing-screen class emitted.
-   */
 
-  main[data-testid='route-pairing'] {
+  .pairing-screen {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-block-size: 100dvh;
     padding: var(--space-6);
-    background-color: var(--color-surface-muted);
+    background-color: var(--color-background);
   }
 
-  main[data-testid='route-pairing'] > * {
+  .pairing-screen__card {
     inline-size: 100%;
-    max-inline-size: 440px;
+    min-inline-size: 480px;
+    max-inline-size: 560px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pane);
+    box-shadow: var(--shadow-pane);
+    padding: var(--space-7);
   }
 
-  main[data-testid='route-pairing'] h1 {
-    font-size: var(--font-size-2xl);
-    font-weight: var(--font-weight-bold);
-    color: var(--color-text);
+  /* ── Pairing Screen BEM children ────────────────────────────────────── */
+
+  .pairing-screen__brand {
     text-align: center;
-    margin-block-end: var(--space-5);
+    margin-block-end: var(--space-6);
+  }
+
+  .pairing-screen__brand h1 {
+    font-size: 1.75rem; /* 28px page title */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.015em;
+    color: var(--color-text);
+    margin: 0 0 var(--space-2);
+  }
+
+  .pairing-screen__brand p {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-relaxed);
+    margin: 0;
+    max-inline-size: 36ch;
+  }
+
+  .pairing-screen__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin-block-end: var(--space-4);
+  }
+
+  /* Pairing code input — monospace, tall, prominent */
+  .pairing-screen__field input[type='text'],
+  .pairing-screen__field input {
+    block-size: 56px;
+    font-family: var(--font-family-mono);
+    font-size: 1.375rem; /* 22px */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.32em;
+    border-radius: var(--radius-control);
+    border: 1px solid var(--color-border);
+    padding-inline: var(--space-4);
+    text-transform: uppercase;
+  }
+
+  .pairing-screen__field input[type='text']:focus-visible,
+  .pairing-screen__field input:focus-visible {
+    border-color: var(--color-primary);
+    border-width: 2px;
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 18%, transparent);
+    outline: none;
+  }
+
+  .pairing-screen__actions {
+    margin-block-start: var(--space-3);
+  }
+
+  .pairing-screen__actions .btn {
+    inline-size: 100%;
+  }
+
+  /* ── Pairing Form ────────────────────────────────────────────────────── */
+
+  .pairing-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .pairing-form__submit {
+    inline-size: 100%;
   }
 
   /* ── Paired Screen ───────────────────────────────────────────────────── */
-  /*
-   * <main data-testid="route-paired"> — no .paired-screen class emitted.
-   */
 
-  main[data-testid='route-paired'] {
+  .paired-screen {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-block-size: 100dvh;
     padding: var(--space-6);
-    background-color: var(--color-surface-muted);
-    gap: var(--space-4);
+    background-color: var(--color-background);
+  }
+
+  .paired-screen__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-5);
+    inline-size: 100%;
+    min-inline-size: 480px;
+    max-inline-size: 560px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pane);
+    box-shadow: var(--shadow-pane);
+    padding: var(--space-7);
     text-align: center;
   }
 
-  main[data-testid='route-paired'] h1 {
-    font-size: var(--font-size-2xl);
+  .paired-screen__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding-inline: var(--space-3);
+    padding-block: var(--space-1);
+    border-radius: var(--radius-pill);
+    background-color: var(--color-success-soft);
+    border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+    color: var(--color-success);
+    font-size: 0.8125rem; /* 13px */
     font-weight: var(--font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .paired-screen__card h1 {
+    font-size: 1.75rem; /* 28px */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.015em;
     color: var(--color-text);
     margin: 0;
   }
 
-  main[data-testid='route-paired'] p {
+  .paired-screen__card > p {
     color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     margin: 0;
   }
 
-  /* ── Screen Too Small ────────────────────────────────────────────────── */
-  /*
-   * <main aria-labelledby="screen-too-small-heading"> — no class hook.
-   */
+  /* Terminal details summary — label/value rows separated by soft rules */
+  .paired-screen__summary {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0;
+    inline-size: 100%;
+    margin: 0;
+    font-size: var(--font-size-sm);
+    border-block-start: 1px solid var(--color-border-soft);
+    border-block-end: 1px solid var(--color-border-soft);
+  }
 
-  main[aria-labelledby='screen-too-small-heading'] {
+  .paired-screen__summary dt,
+  .paired-screen__summary dd {
+    padding-block: var(--space-3);
+    border-block-end: 1px solid var(--color-border-soft);
+  }
+
+  .paired-screen__summary dt:last-of-type,
+  .paired-screen__summary dd:last-of-type {
+    border-block-end: none;
+  }
+
+  .paired-screen__summary dt {
+    font-size: 0.6875rem; /* 11px label */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    text-align: start;
+    padding-inline-end: var(--space-4);
+    align-content: center;
+  }
+
+  .paired-screen__summary dd {
+    margin: 0;
+    color: var(--color-text);
+    text-align: start;
+    font-weight: var(--font-weight-semibold);
+    align-content: center;
+  }
+
+  .paired-screen__actions {
+    inline-size: 100%;
+  }
+
+  .paired-screen__actions .btn {
+    inline-size: 100%;
+  }
+
+  /* ── Screen Too Small ────────────────────────────────────────────────── */
+
+  .screen-too-small {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     block-size: 100dvh;
     padding: var(--space-5);
-    background-color: var(--color-surface);
+    background-color: var(--color-background);
+  }
+
+  .screen-too-small__card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: var(--space-4);
+    max-inline-size: 360px;
+    padding: var(--space-6);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
     text-align: center;
   }
 
-  main[aria-labelledby='screen-too-small-heading'] h1 {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
+  .screen-too-small__icon {
+    display: block;
+    inline-size: 88px;
+    block-size: 88px;
+    border-radius: 22px; /* 88px squared-circle per spec */
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .screen-too-small__title {
+    font-size: 1.625rem; /* 26px */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
     color: var(--color-text);
     margin: 0;
   }
 
-  main[aria-labelledby='screen-too-small-heading'] p {
+  .screen-too-small__body {
     color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
+    font-size: 0.9375rem; /* 15px */
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-relaxed);
     margin: 0;
   }
 
-  /* ── Tender Slot (Checkout) ──────────────────────────────────────────── */
+  /* ── Reserved Slot (Checkout) ────────────────────────────────────────── */
   /*
-   * ReservedTenderRow uses inline styles — [data-slot-id] selector provides
-   * best-effort enhancement but cannot override inline styles without !important.
-   * Limitation documented; inline-style migration is out of scope for CSS-only pass.
+   * Each row is a horizontal signage strip — label left, body right.
+   * Dashed bottom rule signals reservation (not a full dashed box).
+   * No inputs, no values, no enabled buttons.
    */
 
-  [data-slot-id] {
-    border-radius: var(--radius-lg) !important;
-    border-color: var(--color-border) !important;
-    transition:
-      border-color 150ms ease,
-      background-color 150ms ease;
+  .reserved-slot {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-4);
+    padding-block: var(--space-3);
+    padding-inline: var(--space-4);
+    min-block-size: 56px;
+    background-color: var(--color-surface);
+    border-block-end: 1.5px dashed var(--color-border);
   }
 
-  [data-slot-id]:hover {
-    border-color: var(--color-border-strong) !important;
-    background-color: color-mix(in srgb, var(--color-primary) 4%, transparent) !important;
+  .reserved-slot:last-child {
+    border-block-end: none;
+  }
+
+  .reserved-slot--totals {
+    background-color: var(--color-surface-elevated);
+  }
+
+  .reserved-slot__label {
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    flex-shrink: 0;
+    min-inline-size: 140px;
+  }
+
+  .reserved-slot__body {
+    font-size: 0.8125rem; /* 13px caption */
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+    font-style: normal;
+  }
+
+  /* Slot-id chip — monospace pill on the trailing end */
+  .reserved-slot[data-slot-id]::after {
+    content: attr(data-slot-id);
+    margin-inline-start: auto;
+    font-family: var(--font-family-mono);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    padding-block: var(--space-1);
+    padding-inline: var(--space-2);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* ── Checkout Placeholder ────────────────────────────────────────────── */
+
+  .checkout-placeholder {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: var(--space-5);
+    background-color: var(--color-background);
+  }
+
+  .checkout-placeholder h1 {
+    font-size: 1.75rem; /* 28px page title */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.015em;
+    color: var(--color-text);
+    margin: 0 0 var(--space-2);
+  }
+
+  .checkout-placeholder > p {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-medium);
+    margin: 0 0 var(--space-5);
+  }
+
+  /* Card wrapper around the reservation rows */
+  .checkout-placeholder > .reserved-slot {
+    margin-inline: 0;
+    /* First row gets card-top radius */
+  }
+
+  .checkout-placeholder > .reserved-slot:first-of-type {
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    border: 1px solid var(--color-border);
+    border-block-end: 1.5px dashed var(--color-border);
+  }
+
+  .checkout-placeholder > .reserved-slot:not(:first-of-type):not(:last-of-type) {
+    border-inline: 1px solid var(--color-border);
+  }
+
+  .checkout-placeholder > .reserved-slot:last-of-type {
+    border-radius: 0 0 var(--radius-card) var(--radius-card);
+    border: 1px solid var(--color-border);
+    border-block-start: none;
+    border-block-end: none;
   }
 
   /* ── Form Elements ───────────────────────────────────────────────────── */
@@ -669,7 +1058,7 @@ body {
     color: var(--color-text);
     background-color: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-control);
     transition:
       border-color 150ms ease,
       box-shadow 150ms ease;
@@ -691,7 +1080,7 @@ body {
   label {
     display: block;
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     margin-block-end: var(--space-1);
   }
