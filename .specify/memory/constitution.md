@@ -1,6 +1,119 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.4.0 → 1.5.0
+Bump rationale: MINOR — introduces a new section ("Cross-Feature POS Principles", P1–P18),
+  expands the Governance section with four new subsections (Spec Compliance, ADRs &
+  Constitutional Principles, Implementation PR Review — Constitution Check, Exception
+  Procedure), and adds a time-boxed Active-Feature Compatibility Note for 003-pos-ui-shell.
+  No existing principle is added to, removed from, or backward-incompatibly redefined in the
+  Roman-numeral Core Principles set (I–IX); no Tech Stack lock changes; no Hardware Matrix
+  changes; no Pharmacy Domain changes. The 18 cross-feature principles are stable POS-Pulse
+  invariants that cut across features and are intentionally distinct from the stack-specific
+  rules in I–IX.
+
+  Why this update is needed:
+  - The repository now has three features in flight or completed (001 ✅, 002 ✅, 003
+    in-planning), and several future POS domains (payments, fiscal integration, offline-sync
+    write-path, operator/session/auth, receipt printing, auto-update wiring) are visible in
+    the constitution's Tech Stack and Platform Integration sections but lack stable,
+    cross-feature governance rules. Each domain has a tendency to creep into the feature
+    that is currently in motion; the cross-feature principles below codify the invariants
+    that prevent that drift.
+  - The principle set in v1.4.0 is stack-flavoured (Electron sandboxing, TypeScript strict,
+    Vitest coverage, etc.) and stays valid. The new principles operate at a different layer:
+    *what the product owes its operators and customers*, regardless of stack. The two layers
+    coexist; an implementation PR's Constitution Check must walk both.
+
+  Section additions / expansions:
+  - **NEW** "Cross-Feature POS Principles" section (P1–P18) — eighteen normative MUST /
+    MUST NOT / SHOULD principles with rationale and enforcement guidance.
+  - **EXPANDED** Governance section — four new subsections covering how new specs comply,
+    how ADRs relate to constitutional principles, how implementation PR reviews check
+    compliance, and how exceptions to the constitution are proposed and approved (separate
+    from the existing Amendment Procedure).
+  - **NEW** "Active Feature Compatibility Note — 003-pos-ui-shell" appendix — short,
+    time-boxed marker that codifies what 003 may visually reserve, what it MUST NOT
+    implement, and the visual-only status of the connection-state visuals introduced by
+    P1–P18 / Principle I. The note sunsets when 003 ships and the feature index advances.
+
+  Modified principles: none redefined. The existing nine Core Principles (I–IX) are
+    unchanged in wording. The new P1–P18 set is additive and complementary, not a
+    replacement.
+
+  Modified sections:
+  - Core Principles → unchanged.
+  - **NEW** Cross-Feature POS Principles → P1–P18.
+  - Additional Constraints → unchanged.
+  - Development Workflow & Quality Gates → unchanged.
+  - Governance → expanded with four new subsections (Spec Compliance, ADRs &
+    Constitutional Principles, Implementation PR Review — Constitution Check, Exception
+    Procedure). The existing Authority, Amendment Procedure, Versioning Policy, and
+    Compliance Review subsections are unchanged in normative content.
+  - **NEW** Active Feature Compatibility Note — 003-pos-ui-shell.
+
+  Added sections: "Cross-Feature POS Principles", four Governance subsections, and the 003
+    compatibility note (see above). No sections removed.
+
+  Templates requiring updates:
+  - ⚠ `.specify/templates/plan-template.md` — the Constitution Check table currently lists
+    only the I–IX principles plus the Additional-Constraints rows. A follow-up PR SHOULD
+    extend the table with the P1–P18 rows so each plan walks both sets explicitly. This is
+    a template-only change and is NOT performed in this PR (which is constitution-only).
+  - ✅ `.specify/templates/spec-template.md` — no template changes required; spec-level
+    compliance is enforced by P12 and the new "Spec Compliance" governance subsection.
+  - ✅ `.specify/templates/tasks-template.md` — no template changes required.
+
+  Follow-up TODOs (open):
+  - ⏳ TEMPLATE_PLAN_P1_P18 — extend `plan-template.md` Constitution Check table with the
+    P1–P18 rows. Owner: next planning-artifact author or a small follow-up doc PR.
+
+  Resolved TODOs (this revision):
+  - ✅ CROSS_FEATURE_PRINCIPLES — eighteen cross-feature POS principles codified.
+  - ✅ GOVERNANCE_EXCEPTION_PROCEDURE — separated from Amendment Procedure.
+  - ✅ 003_COMPATIBILITY_NOTE — added as a sunsetting appendix.
+
+  Intentional non-additions (principles considered but NOT added in this revision, with
+    one-line rationale):
+  - "No flaky tests" — already covered by Principle VI (Test-First, Coverage-Gated) plus
+    the Development Workflow CI gates; a separate principle would be redundant.
+  - "Reproducible builds" — the constitution's Tech Stack lock + lockfile commitments
+    already imply this; a dedicated principle adds ceremony without enforcement.
+  - "Rate limiting / abuse prevention" — a backend concern; POS-Pulse honours the
+    backend's typed failure modes (RATE_LIMITED is in the pairing contract). No
+    cross-feature principle added; specs that introduce new client-driven write paths
+    should address rate-limit handling at the plan level under P5 (idempotency).
+  - "Mandatory dark mode" / "Mandatory localisation parity" — accessibility and
+    localisation are covered by P14 + the Localization Additional-Constraint section.
+    Specific UX commitments belong in feature specs, not the constitution.
+
+  Conflicts with existing planning artifacts:
+  - 002-terminal-pairing — none. The 18 principles are consistent with 002's plan and
+    tasks (operator accountability deferred to login feature; idempotency present in
+    pairing-code semantics; redaction enforced).
+  - 003-pos-ui-shell — none in spec, none in plan, none in /speckit-tasks output. The
+    compatibility appendix codifies what 003 already commits to (UI-only, visual-only
+    syncing state, no business logic, no IPC/main/preload/Sentry/CI changes). It does NOT
+    widen 003's scope; it tightens the boundary 003 already drew. **003 planning does
+    not require edits as a result of this amendment**; the next /speckit-analyze pass
+    SHOULD verify the plan's Constitution Check is still PASS / N/A across the new P1–P18
+    rows and add the rows if they are not already there.
+
+  003-pos-ui-shell impact summary:
+  - Compatibility note declares 003 a visual-shell feature; it MUST NOT implement
+    sales/cart business logic, payments, receipts, fiscal integration, inventory mutation,
+    offline-sync write paths, cashier login/session/auth, backend calls, IPC/preload/main
+    changes, database migrations, OpenAPI changes, or Sentry changes.
+  - Connection-state visuals (`syncing`, `offline`, `degraded`) introduced by 003 are
+    visual-only unless a separate, already-approved source-of-truth backs them.
+  - 003 MAY reserve visual space for future POS domains (cart, sales, checkout-payments,
+    inventory, settings, dashboard) — exactly as its plan and spec already commit.
+  - **No re-specification, no re-clarification, no re-planning is required by this
+    amendment** for 003. /speckit-tasks for 003 remains unconfirmed; nothing in this
+    amendment unblocks or blocks /speckit-tasks.
+
+History (prior revisions retained for reference):
+
 Version change: 1.3.0 → 1.4.0
 Bump rationale: MINOR — three substitutions and two materially-expanded subsections that reflect
   decisions already locked in features 002-terminal-pairing and 003-pos-ui-shell, plus housekeeping
@@ -391,6 +504,296 @@ description with a justification.
 **Rationale:** The reference embodies decisions made under different constraints. Re-typing forces
 re-thinking; copy-paste imports decisions silently.
 
+## Cross-Feature POS Principles
+
+The eighteen principles below are stable, cross-feature invariants for POS-Pulse. They operate at
+a different layer than the Roman-numeral Core Principles (I–IX): I–IX pin the *stack* (Electron
+sandboxing, TypeScript strict, Vitest coverage, etc.); P1–P18 pin *what the product owes its
+operators and customers* regardless of stack. Every plan's Constitution Check MUST walk both sets.
+A VIOLATION on either set blocks `/speckit-tasks`; a WAIVED entry is permitted on P1–P18 (under
+the Exception Procedure below) but PROHIBITED on any NON-NEGOTIABLE Roman-numeral principle.
+
+### P1. Financial Correctness First
+
+**Normative.** Financial correctness and auditability MUST take priority over speed, visual
+polish, and convenience. When a design or implementation choice trades correctness or auditability
+for any of those values, the choice MUST be rejected.
+
+**Rationale.** A POS that miscounts is a POS that loses cashier trust and customer trust
+simultaneously, and the loss is permanent. Polish recovers; trust recovers slowly, if at all.
+
+**Enforcement.** Plans MUST cite this principle when their failure modes touch money. PR review
+MUST refuse approval on a money-touching surface that has open correctness or audit gaps. When in
+doubt, slow the feature down — don't ship the gap.
+
+### P2. No Fake Success States
+
+**Normative.** POS-Pulse MUST NOT imply that a financial, payment, receipt, inventory, sync, or
+terminal operation succeeded unless the system state truthfully supports that claim. Optimistic UI
+MUST NOT cross the boundary into "this transaction is now committed" on the cashier's screen.
+
+**Rationale.** A green checkmark that lies is worse than a red error: the cashier handed over the
+goods, the customer left, and the dispute lands tomorrow with no recovery path.
+
+**Enforcement.** Every "success" affordance MUST be backed by a server-confirmed result, a
+durable local persist, or both (per the operation's idempotency strategy — see P5). Acceptance
+criteria for success states MUST name the underlying check that makes the success truthful.
+
+### P3. No Silent Data Loss
+
+**Normative.** Critical POS operations (sales, refunds, voids, inventory adjustments, shift
+events, audit records) MUST either be durably recorded or fail visibly. A failed operation MUST
+NOT vanish silently after crash, restart, network failure, or retry.
+
+**Rationale.** Silent loss converts a software bug into a cash-drawer mystery. The operator
+blames the cashier; the cashier blames the software; the manager has no answer; the audit fails.
+
+**Enforcement.** The local outbox + idempotency-key pattern (P5) is the canonical satisfaction.
+Tests MUST exercise the crash, restart, network-failure, and retry paths for any new critical
+operation. A feature plan that introduces a critical operation without naming its durability path
+fails its Constitution Check.
+
+### P4. Auditability and Non-Destructive Financial Correction
+
+**Normative.** Financial corrections MUST be represented as explicit, auditable events (voids,
+refunds, reversals, adjustments). Mutating or deleting a prior financial record MUST NOT be used
+as a correction mechanism.
+
+**Rationale.** The auditor's question is "what changed and when?" Only an append-only event log
+answers it. Hidden mutations destroy the trail that makes audits possible.
+
+**Enforcement.** Schemas MUST favour append-only event tables over mutable rows for money-bearing
+state. Any feature introducing an `UPDATE` or `DELETE` on a money-bearing row MUST justify the
+choice in its plan and demonstrate the audit trail is preserved by another mechanism.
+
+### P5. Idempotency for Retried Operations
+
+**Normative.** Any operation that can be retried, replayed, synced, or submitted after failure
+MUST define its idempotency strategy in the plan **before** implementation begins. The
+idempotency key MUST be a client-generated UUID established at the moment of intent (e.g.,
+`tx_id` for a sale, `pairing_attempt_id` for a pairing submission), not assigned by the server.
+
+**Rationale.** Without idempotency, the offline queue creates duplicate sales the moment the
+network blinks twice. The duplicate is indistinguishable from a legitimate retry without a key.
+
+**Enforcement.** `/speckit-plan` artifacts MUST include an "Idempotency" subsection for any
+retryable operation. Tests MUST exercise the duplicate-submit path. The bridge surface for any
+retryable operation MUST accept the client UUID as an explicit parameter.
+
+### P6. No Raw Cardholder Data by Default
+
+**Normative.** Raw cardholder data (PAN, full track data, CVV, expiry tuple with PAN) MUST NOT
+enter renderer UI, application logs, the local SQLite database, support bundles, diagnostics,
+Sentry events, or general application state. Only authorisation tokens and last-four MAY be
+persisted, and only inside the payment-feature scope.
+
+**Rationale.** PCI-DSS scope is determined by where card data flows. Letting it flow into
+POS-Pulse multiplies the audit surface tenfold and creates regulatory exposure that the project
+has explicitly chosen to avoid by delegating capture to a certified payment terminal.
+
+**Enforcement.** Card capture MUST be delegated to a PCI-DSS certified payment terminal (per
+Additional Constraints → Security). PRs that touch a payment surface MUST add a redaction test
+covering the bridge, the logs, and the Sentry scrubber. Future scope changes (e.g., adding a
+software-card-input flow) require an explicit constitutional amendment, not an exception.
+
+### P7. Secrets Never Reach Renderer or Logs
+
+**Normative.** `device_token`, pairing codes, payment secrets, fiscal secrets, client secrets,
+preshared keys, and equivalent credentials MUST NOT be exposed to the renderer process or appear
+in any log line, Sentry event, support bundle, or diagnostic output. The renderer MAY display
+user-facing identifiers (`terminal_label`, `branch_name`, the masked last-four of a token) but
+never the underlying secret.
+
+**Rationale.** A secret that reaches the renderer is a secret that reaches the DOM, the
+screenshot tool, the support bundle, and eventually a Slack thread or a screen-share recording.
+
+**Enforcement.** A cross-process redaction test MUST exist (002 ships the canonical version);
+new secret-handling features extend it, not replace it. Bridge-surface review MUST refuse new
+APIs that return raw secrets to the renderer. Pino redaction paths and Sentry scrubbers MUST be
+updated whenever a new secret type is introduced.
+
+### P8. Electron Security Boundary
+
+**Normative.** Changes to IPC channel surface, the preload bridge (`src/preload/`,
+`src/shared/bridge-api.ts`), the main-process boundary (`src/main/`), the SecretStore API, the
+migration runner, or the OpenAPI codegen pipeline MUST be introduced only by features that
+explicitly own them, and MUST receive explicit security review. They MUST NOT be smuggled into
+UI-only features as incidental work.
+
+**Rationale.** The Electron threat model lives at the bridge. Each new bridge call is a security
+review. Quietly expanding the surface during UI work is the documented pattern by which
+Electron apps get owned.
+
+**Enforcement.** PRs touching `src/preload/`, `src/main/`, `src/shared/bridge-api.ts`, or
+`migrations/` MUST cite the feature that owns the change. UI-only feature plans MUST list these
+paths in their out-of-scope section. PR review MUST refuse approval on incidental bridge or
+main-process changes.
+
+### P9. Truthful Offline / Degraded / Sync States
+
+**Normative.** Offline, degraded, syncing, pending, failed, and local-only states MUST be
+truthful. UI MUST NOT imply capabilities (e.g., "synced", "queued for sync", "will be sent when
+online") that are not implemented in the code that drives the state. Visual-only states (states
+introduced for layout consistency before the underlying capability ships) MUST be labelled as
+visual-only in the originating spec and in any consuming feature's plan, until the
+capability lands.
+
+**Rationale.** Visual states create operator expectations. False expectations turn into
+customer-facing claims that the product cannot keep, which silently erode trust and create
+disputes the support team cannot resolve.
+
+**Enforcement.** The audit point on every connection-state visual is: *"what does this state
+promise, and what code makes the promise true?"* Plans MUST answer it for every state they
+introduce or consume. The 003-pos-ui-shell `syncing` state is the canonical example of a
+visual-only state pending real implementation (see Active Feature Compatibility Note).
+
+### P10. Operator Accountability for Sensitive Actions
+
+**Normative.** Sensitive POS actions — refunds, voids, discounts beyond a threshold, price
+overrides, cash-drawer kicks outside a sale, receipt reprints, payment reversals, shift
+reconciliation entries — MUST be attributable to an authenticated operator and an open shift
+before they execute in production. The audit record MUST persist the operator identity, the
+shift identity, the action category, and the originating terminal.
+
+**Rationale.** "Who did that?" is the most common forensic question in retail. Without operator
+attribution, the answer is "the terminal", which is not actionable.
+
+**Enforcement.** Acceptance criteria for any sensitive-action feature MUST include
+operator-attribution. The Domain section's Sales / Returns / Shifts entities already carry the
+schema fields; new sensitive-action features extend the catalogue rather than redefining it.
+Until cashier login/session lands, sensitive actions MAY be gated behind a "supervisor override
+required" flow that captures the supervisor's identity at action-time.
+
+### P11. Supportability Without Secret Leakage
+
+**Normative.** Diagnostics, crash reporting, log streams, and support bundles MUST be useful
+enough to troubleshoot a production issue, AND MUST be minimal and redacted by design. Adding a
+verbose log site MUST be paired with explicit redaction for every field that could carry a
+secret or PII.
+
+**Rationale.** "Just log everything" is how the next breach happens. "Log nothing" is how the
+next outage becomes undebuggable. The path between is deliberate.
+
+**Enforcement.** A redaction list MUST live alongside the logger configuration. Every new log
+site MUST be checked against it. Sentry scrubbing rules MUST be reviewed and updated whenever a
+new event type is introduced. Support-bundle export tooling MUST run the same redaction pipeline
+as the on-disk log writer.
+
+### P12. Spec Kit Artifacts Are Source of Truth
+
+**Normative.** Spec Kit artifacts (`spec.md`, `plan.md`, `tasks.md`, `contracts/`,
+`data-model.md`, `research.md`, `quickstart.md`) ARE the source of truth for requirements, scope,
+and acceptance criteria. Prototypes, Figma designs, Figma Make exports, Figma MCP outputs,
+screenshots, and visual explorations MUST NOT be treated as requirements unless they are
+reflected back into Spec Kit artifacts via `/speckit-specify`, `/speckit-clarify`, or
+`/speckit-plan`.
+
+**Rationale.** Designs drift the moment they leave the design file. The Spec Kit pipeline is
+the only path that produces an auditable trail from intent to acceptance, with versioning, with
+constitutional alignment, and with the analyse pass.
+
+**Enforcement.** PR review MUST cite `tasks.md` task IDs, not Figma frames or design URLs.
+Ambiguities discovered during planning MUST be resolved via `/speckit-clarify`, not via "the
+designer said". Visual-only states (P9) MUST be reflected in the spec, not just the design.
+
+### P13. Small, Scoped Implementation PRs
+
+**Normative.** Each implementation PR MUST implement only the explicitly assigned task IDs from
+`tasks.md`, MUST NOT improvise scope, MUST stage only named files (no `git add -A` or `git add
+.`), and MUST stop after opening the PR. Out-of-scope changes discovered mid-implementation MUST
+be filed as follow-up tasks, not folded into the current PR.
+
+**Rationale.** Small PRs review well, revert cleanly, and build a stable history. Scope
+improvisation is the documented pattern by which features ship half-baked adjacent
+functionality.
+
+**Enforcement.** PR descriptions MUST list the task IDs covered. Reviewers MUST refuse PRs that
+extend beyond the listed IDs. Hooks and process docs SHOULD codify the "stage only named files"
+rule.
+
+### P14. Accessibility and Cashier Ergonomics
+
+**Normative.** POS UI MUST support keyboard operation on every cashier-critical path (no
+mouse-only flows on sales, refunds, voids, or shift actions), touch-friendly targets at the
+≥ 44 × 44 CSS-pixel floor (see Hardware Matrix), readable states (icon + text or icon + colour,
+never colour alone), accessibility-rule cleanliness on default state variants (axe-clean smoke
+checks per the testing toolchain), and Windows desktop ergonomics (focus rings, focus restore,
+keyboard-wedge focus management) from the moment a feature ships.
+
+**Rationale.** The cashier uses this product for an eight-hour shift. Tiny buttons, mouse-only
+flows, and colour-only states cost minutes per transaction and create accessibility violations
+the team will pay to fix later under deadline.
+
+**Enforcement.** Renderer features MUST include keyboard-path tests. Each placeholder pane and
+each interactive primitive MUST run an axe-rule smoke test. The 44 × 44 floor is enforced by
+the existing invariant test in `src/renderer/ui/`.
+
+### P15. Production Readiness Gates
+
+**Normative.** Features that affect real store operations (sales, payments, receipts, inventory
+mutation, offline sync write-paths, fiscal integration, auto-update wiring, cashier login)
+MUST define their test plan, rollback strategy, support runbook entry, failure-mode catalogue,
+and operational readiness expectations BEFORE production rollout. A feature that lacks any of
+these MUST NOT be enabled for paying customers.
+
+**Rationale.** Production readiness review is the last cheap chance to find the failure mode
+before a real cash drawer slams shut at 8 pm. UI-only and infrastructure-only features have
+lower readiness bars; production-affecting features do not.
+
+**Enforcement.** `/speckit-plan` artifacts for production-affecting features MUST include a
+"Production Readiness" subsection. The merge gate for a production-rollout PR MUST require
+its presence. UI-only features (e.g., 003-pos-ui-shell) are explicitly out of this gate.
+
+### P16. Feature Scope Discipline
+
+**Normative.** Future POS domains — payments, sales/cart business logic, inventory mutation,
+offline-sync write-paths, fiscal integration, auto-update wiring, receipt printing,
+operator/session/cashier authentication — MUST be implemented only by the features that
+explicitly own them. Other features MUST NOT bring those domains in incidentally, even when
+they reserve visual space for them.
+
+**Rationale.** Scope creep is how a UI shell ships with a half-working payment integration the
+team had no plan to support. The reservation of *visual space* (slots, placeholders, named
+regions) is permitted; the implementation of *behaviour* is not.
+
+**Enforcement.** Plans MUST list out-of-scope domains explicitly. PR review MUST refuse changes
+that touch out-of-scope domains. The 003-pos-ui-shell plan's "Hard Non-Implementation
+Boundaries" subsection is the canonical example; future feature plans SHOULD adopt the same
+shape.
+
+### P17. Privacy and Tenant Isolation
+
+**Normative.** Tenant, branch, terminal, operator, customer, transaction, and support-bundle
+data MUST NOT cross tenant boundaries. Multi-tenant safety MUST be preserved by design — at the
+database layer (`tenant_id` on every domain row, queries scoped by it), at the API layer (token
+claims rejected on tenant drift, per Principle VIII), and at the support-bundle layer (export
+filtered by tenant before it leaves the device).
+
+**Rationale.** A multi-tenant leak is a regulatory event. The cost is not "user complaints"; it
+is "regulatory fine + customer churn + lost design partner".
+
+**Enforcement.** Schema reviews MUST check for `tenant_id` presence on every new domain table.
+API contracts MUST require tenant claims. Support-bundle export tooling MUST be tenant-aware.
+Cross-tenant queries (e.g., support tooling that aggregates) MUST be a separately reviewed
+feature with explicit operator authorisation.
+
+### P18. Local Durability Before Offline Promises
+
+**Normative.** POS-Pulse MUST NOT promise offline financial capability — in marketing copy, in
+UI, or in any customer commitment — until the local durability, replay safety, conflict
+handling, and recovery behaviours that back that promise are explicitly designed, implemented,
+and tested. Visual-only offline states (per P9) MUST NOT be cited as evidence that the offline
+capability is delivered.
+
+**Rationale.** "Sells offline" is a high-trust promise. Breaking it costs real money in a real
+cash drawer, and the breakage is visible to customers, not just to the operator.
+
+**Enforcement.** Marketing-copy claims about offline behaviour MUST cite the spec/plan that
+delivers the behaviour. Until the relevant feature ships, the UI MUST surface offline state as
+"offline — selling locally, queueing for later" only when the queue is real and durable, not
+visual-only. Connecting this to P9: a visual-only `offline` state MUST be labelled as such in
+the originating spec.
+
 ## Additional Constraints
 
 ### Platform Integration
@@ -644,29 +1047,150 @@ Trivial fixes (typos, dependency bumps, log-message tweaks) MAY skip the pipelin
 This constitution is the highest-priority document in the repository. When it conflicts with any other
 document (READMEs, ADRs, comments, agent instructions), this document wins until it is amended.
 
+### Spec Compliance — How New Specs Comply
+
+Every new feature spec produced by `/speckit-specify` MUST:
+
+1. Cite the constitution version it was authored against in `spec.md` front-matter (see
+   002-terminal-pairing and 003-pos-ui-shell for the canonical layout).
+2. Pass through `/speckit-clarify` before planning if any open `[NEEDS CLARIFICATION]` items
+   touch a constitutional principle (Roman-numeral I–IX or P1–P18).
+3. Be analysed by `/speckit-analyze` after `/speckit-tasks`. The analyse pass MUST include a
+   Constitution Check pass that walks both principle sets.
+4. State, in the Out of Scope section, every domain it does NOT touch — particularly the
+   future POS domains named in P16 (payments, inventory mutation, offline-sync write-paths,
+   fiscal integration, auto-updates, receipt printing, operator/session/auth).
+
+A spec that omits the constitution-version pin is incomplete and MUST be revised before
+`/speckit-plan` runs. A spec that violates a NON-NEGOTIABLE principle is rejected — there is no
+WAIVED state for NON-NEGOTIABLE rules at the spec layer.
+
+### ADRs and Constitutional Principles
+
+Architectural Decision Records (ADRs — whether kept lightweight in `research.md` sections or as
+standalone `docs/adrs/*.md` files) document material design choices that are not bound to a
+single feature. Their relationship to the constitution is one-way:
+
+- An ADR MUST cite the constitutional principle(s) it upholds, applies, or rebalances.
+- An ADR MUST NOT contradict a constitutional principle. An ADR that materially departs from a
+  principle is not an ADR — it is an Amendment proposal in disguise, and MUST be filed as a
+  constitution amendment via the Amendment Procedure below.
+- An ADR MAY refine *how* a principle is satisfied for a particular subsystem (e.g., "this
+  feature satisfies P5's idempotency requirement by using a server-issued sequence number").
+  This is interpretation, not departure.
+
+When an ADR and a feature plan both touch the same principle, the plan's Constitution Check
+table MUST cite the ADR.
+
+### Implementation PR Review — Constitution Check
+
+Every implementation PR description MUST include a "Constitution Check" line that names the
+principles the PR most directly touches (typically two to five). Reviewers MUST:
+
+1. Verify each cited principle is honoured by the diff under review.
+2. Scan the unmentioned principles for incidental violations — particularly P6 (raw cardholder
+   data), P7 (secrets in renderer/logs), P8 (Electron security boundary), P13 (scope
+   discipline), and P17 (tenant isolation), which are the highest-risk categories for silent
+   drift.
+3. Refuse approval on any open VIOLATION; require a follow-up PR or an explicit Exception
+   (below) for any open WAIVED entry.
+4. Confirm the PR stages only the files named in the originating tasks (P13).
+
+The Constitution Check is the reviewer's responsibility; the PR author's responsibility is to
+make it easy to perform — by listing principles touched, citing the corresponding `tasks.md`
+task IDs, and flagging anything intentionally close to a principle boundary.
+
 ### Amendment Procedure
 
 1. Open a PR titled `docs: amend constitution to vX.Y.Z (<summary>)`.
-2. The PR MUST include the updated `Sync Impact Report` (HTML comment at top of this file).
+2. The PR MUST include the updated `Sync Impact Report` (HTML comment at top of this file),
+   covering: version-change line, bump rationale, modified principles (if any), modified
+   sections, added/removed sections, templates requiring updates, follow-up TODOs (open),
+   resolved TODOs (this revision), and any conflicts with existing planning artifacts.
 3. The PR MUST update or flag every dependent template/document affected by the amendment.
 4. At least one maintainer (currently the repo owner) MUST approve.
-5. Merge bumps the version per the rules below and updates `LAST_AMENDED_DATE`.
+5. Merge bumps the version per the rules below and updates `Last Amended`.
+
+### Exception Procedure (Time-Boxed Waiver)
+
+An *exception* is a time-boxed, scope-limited deviation from a constitutional principle that
+is too small to justify a full amendment. Exceptions are recorded as `WAIVED` rows in the
+originating plan's Constitution Check table.
+
+A WAIVED row MUST cite, on a single line each:
+
+- the principle being waived (Roman numeral or P-number);
+- the precise scope of the waiver (which file, which feature, which sub-feature);
+- the expiry condition (a follow-up task ID, a feature ID that closes the waiver, or a date
+  no more than 90 days from waiver-issue);
+- the reviewer who approved the waiver.
+
+Hard rules:
+
+- Exceptions MUST NOT be used to bypass NON-NEGOTIABLE principles (Principle I, III, VIII).
+  Deviations from those require a full amendment, not an exception.
+- Exceptions MUST NOT be open-ended. A waiver without an expiry condition is invalid.
+- Exceptions accumulate — when the count of open waivers exceeds five repository-wide, the
+  constitution Compliance Review (below) moves up the schedule to within two weeks.
 
 ### Versioning Policy (Semantic)
 
-- **MAJOR** — backward-incompatible change to a principle, removal of a principle, or redefinition of
-  governance.
+- **MAJOR** — backward-incompatible change to a principle, removal of a principle, or
+  redefinition of governance.
 - **MINOR** — new principle, new section, or materially expanded guidance.
 - **PATCH** — clarifications, wording, typo fixes, non-semantic refinements.
 
 ### Compliance Review
 
-- Every PR review checklist includes a "Constitution Check" line. The reviewer MUST cite which principles
-  were considered.
-- The constitution is reviewed in full at least once per quarter; the review is logged as an ADR.
+- Every PR review checklist includes a "Constitution Check" line. The reviewer MUST cite which
+  principles were considered (both Roman-numeral I–IX and P1–P18 are in scope).
+- The constitution is reviewed in full at least once per quarter; the review is logged as an
+  ADR. The quarterly review MUST inspect: open waivers (Exception Procedure), follow-up TODOs
+  in the Sync Impact Report, alignment between the principle set and the active feature
+  index, and any drift between the Tech Stack lock and `package.json`.
+
+## Active Feature Compatibility Note — 003-pos-ui-shell
+
+This appendix is a *time-boxed compatibility marker*. It restates what 003 already commits to in
+its `spec.md` and `plan.md` and aligns 003's scope with the principle set above. It does NOT
+widen 003's scope. It sunsets when 003 ships and the active-feature index advances.
+
+**003 MAY:**
+
+- Reserve named visual slots, placeholder regions, and route shells for future POS domains
+  (sales, cart, checkout-payments, inventory, settings, dashboard) — exactly as the existing
+  003 spec/plan permit. Slot reservation is *layout capacity*, not behaviour (P16).
+- Introduce visual-only connection-state visuals (`online`, `degraded`, `offline`,
+  `syncing`). These are visual-only unless and until a separate, already-approved
+  source-of-truth backs them (P9, P18).
+- Land the four-state connection-state model and the 44 × 44 CSS-px touch-target floor
+  established in v1.4.0 of this constitution.
+
+**003 MUST NOT:**
+
+- Implement sales / cart business logic, payments, receipts, fiscal integration, inventory
+  mutation, offline-sync write-paths, cashier login / session / auth, or backend calls (P16).
+- Modify IPC channel surface, the preload bridge, the main-process boundary, the SecretStore
+  API, database migrations, OpenAPI schemas, or Sentry configuration (P8). The
+  bridge-typing test and renderer-isolation test in `src/tests/` are the canonical guards.
+- Promise capabilities through visual states that the underlying code does not deliver (P2,
+  P9). The `syncing` visual is a placeholder; no real sync logic backs it in 003.
+- Skip ahead to `/speckit-tasks` / implementation. As of this amendment, 003 has completed
+  `/speckit-specify` and `/speckit-clarify`; planning is in progress; `/speckit-tasks` has
+  NOT been confirmed complete; no implementation may begin until planning artifacts,
+  `/speckit-tasks`, the analyse pass, and the planning PR are merged, AND explicit
+  instruction is given.
+
+**003 source-of-truth:** the `spec.md`, `plan.md`, and (when present) `tasks.md` under
+`specs/003-pos-ui-shell/` are the source of truth (P12). Any Figma frame, Figma Make export,
+Figma MCP output, screenshot, or visual exploration referenced during 003 work MUST be
+reflected back into those artifacts before it counts as a requirement.
+
+This appendix is removed (or superseded by an equivalent appendix for the next active
+feature) when 003 closes.
 
 ---
 
-**Version:** 1.4.0
+**Version:** 1.5.0
 **Ratified:** 2026-05-01
 **Last Amended:** 2026-05-05
