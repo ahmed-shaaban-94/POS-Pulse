@@ -1,6 +1,91 @@
 <!--
 SYNC IMPACT REPORT
 ==================
+Version change: 1.5.0 → 1.5.1
+Bump rationale: PATCH — non-redefining clarification of an existing principle.
+  Principle VIII ("Terminal Identity is Independent of User Identity (NON-NEGOTIABLE)")
+  gains a single sub-clause under its existing "Human identity (Clerk OIDC)" bullet that
+  formalises the distinction between a *custom user database* (which Principle VIII
+  prohibits) and a *local terminal unlock factor* (which Principle VIII does not address
+  by current wording). The sub-clause is additive: no existing sentence in Principle VIII
+  is modified, no other principle is touched, no Roman-numeral or P1–P18 set entry is
+  redefined, no Tech Stack or Hardware Matrix or Domain section changes.
+
+  Why this update is needed:
+  - Feature 004-operator-session adopts a hybrid identity model (plan AD-2): manager and
+    admin authentication is fully Clerk/password-backed; cashier authentication is also
+    anchored to a Clerk-backed identity, but the *unlock* of that identity at a paired
+    terminal happens via a local 4–6 digit PIN (per spec FR-006). The local PIN is not an
+    identity provider; it is a local-device unlock affordance over an already-Clerk-anchored
+    identity. The 004 plan asserts this is not a "custom user database" within the meaning
+    of Principle VIII — but the constitution does not yet make the distinction explicit.
+  - The 004 planning artifacts gate downstream implementation work (Slices S3–S6, the
+    `cashier_pin_records` migration, the Argon2id binding install, the cashier-PIN bridge
+    surface) on Approval Gate §A1 — a constitutional clarification of Principle VIII.
+    This amendment is the artifact that clears §A1 once merged.
+  - Without this clause, future readers of Principle VIII could plausibly interpret the
+    cashier PIN store as a Principle-VIII violation and reject the entire 004
+    implementation slice. The clause closes that ambiguity at the constitution layer
+    rather than relying on per-feature plan-level interpretation.
+
+  Section additions / expansions:
+  - **EXPANDED** Principle VIII → "Human identity (Clerk OIDC)" sub-bullet — adds a single
+    clarification clause naming the conditions under which a *local terminal unlock
+    factor* (e.g., a per-terminal hashed PIN keyed by the Clerk user ID) is **not** a
+    custom user database. The clause defines six binding rules; a local unlock factor that
+    violates any rule falls back into the "custom user databases are PROHIBITED" rule,
+    which remains in force verbatim.
+
+  Modified principles: none redefined.
+  - Principle VIII — sub-bullet under "Human identity (Clerk OIDC)" extended with the
+    local-unlock-factor clarification clause; existing "Clerk is the sole IdP for humans;
+    custom user databases are PROHIBITED" sentence unchanged; existing Terminal-identity
+    sub-bullet, audit-anchor sub-bullet, and Rationale unchanged.
+
+  Modified sections:
+  - Core Principles → Principle VIII — clause added; everything else verbatim.
+  - All other sections (Mission, Principles I–VII and IX, Cross-Feature POS Principles
+    P1–P18, Additional Constraints, Development Workflow & Quality Gates, Governance,
+    Active-Feature Compatibility Note) → unchanged.
+
+  Added sections: none (existing principle sub-bullet expanded).
+  Removed sections: none.
+
+  Templates requiring updates:
+  - ✅ `.specify/templates/plan-template.md` — no changes required (Constitution Check
+    table tracks principles by name; no principle was added or removed).
+  - ✅ `.specify/templates/spec-template.md` — no changes required.
+  - ✅ `.specify/templates/tasks-template.md` — no changes required.
+
+  Follow-up TODOs (open):
+  - ⏳ FOUR_FOUR_PLAN_CONSTITUTION_CHECK_UPDATE — after this amendment merges, update
+    `specs/004-operator-session/plan.md` Constitution Check Principle VIII row from
+    "PASS-with-clarification-gate" → "PASS" (no clarification gate remaining); update
+    `specs/004-operator-session/coordination.md` §A1 row from "⏳ Resolution pending" →
+    "✅ Cleared" with the merge SHA. Owner: 004 feature owner (Ahmed). Small follow-up;
+    not part of this amendment PR.
+
+  Resolved TODOs (this revision):
+  - ✅ LOCAL_UNLOCK_FACTOR_CLARIFICATION — Principle VIII clarified to permit local
+    terminal unlock factors that satisfy the six rules in the new sub-clause; closes
+    Approval Gate §A1 from `specs/004-operator-session/plan.md` and
+    `specs/004-operator-session/coordination.md` once this revision merges.
+
+  Compatibility ledger:
+  - Principle VIII's "Clerk is the sole IdP for humans; custom user databases are
+    PROHIBITED" rule is preserved verbatim. Every cashier, manager, and admin remains a
+    Clerk user. The clause clarifies what *isn't* covered by "custom user database" — it
+    does not weaken the prohibition itself.
+  - Forward compatibility: the clause is written generically ("local unlock factors"),
+    not specifically PINs. Future features that introduce a biometric, smart-card, or
+    hardware-token factor for local unlock can adopt the same six rules without further
+    amendment, provided they too leave identity in Clerk.
+  - Prior feature plans (001 v1.0+, 002 v1.2+, 003 v1.3.0, 004 v1.5.0) make no assertions
+    that conflict with this clause. 003's plan pins v1.3.0 and is unaffected; 004's plan
+    pins v1.5.0 and references this clarification as the §A1 gate.
+
+History (prior revisions retained for reference):
+
 Version change: 1.4.0 → 1.5.0
 Bump rationale: MINOR — introduces a new section ("Cross-Feature POS Principles", P1–P18),
   expands the Governance section with four new subsections (Spec Compliance, ADRs &
@@ -480,6 +565,43 @@ both MUST be validated server-side.
 - **Human identity (Clerk OIDC).** Cashiers, supervisors, and admins log in to a session via Clerk.
   Their identity drives roles, permissions, and audit attribution on transactions. Clerk is the sole
   IdP for humans; custom user databases are PROHIBITED.
+  - **Local terminal unlock factors** (e.g., a per-terminal hashed PIN keyed by the Clerk user ID,
+    used to unlock a Clerk-backed cashier identity already provisioned on a paired terminal) are
+    **not** custom user databases within the meaning of this principle, **provided all six rules
+    below hold**:
+    1. **Clerk remains the sole human identity provider.** Every cashier, manager, and admin
+       remains a Clerk user. The canonical record of "who is this person?" lives in Clerk. Local
+       unlock factors do not compete with Clerk for identity.
+    2. **The PIN (or equivalent local factor) is used only as a local terminal/session unlock
+       factor.** It proves "the person currently in front of this paired terminal may unlock the
+       already-known cashier identity for an operator session." It does not adjudicate identity
+       in any other context.
+    3. **The PIN MUST NOT mint backend identity tokens.** Backend session tokens for any operator
+       (cashier, manager, admin) derive from the existing Clerk JWT pipeline. A successful local
+       PIN unlock alone does not produce a backend-recognised credential.
+    4. **The PIN MUST NOT be accepted by any backend API as an authentication credential.** Backend
+       endpoints MUST NOT receive a PIN field, header, or query parameter; backend endpoints MUST
+       NOT log any field that could carry a PIN; backend endpoints MUST NOT maintain a server-side
+       PIN store.
+    5. **The local unlock-factor store MUST NOT become a custom user database or source of truth
+       for human identity.** It may contain only terminal-scoped hashed unlock material, lockout
+       state, stable Clerk user references, and minimal audit/support metadata such as
+       `created_at`, `updated_at`, and `created_by_operator_id`. It MUST NOT contain identity
+       profile attributes such as email, phone, legal name, role source-of-truth, tenant
+       membership source-of-truth, or backend authentication tokens.
+    6. **Operator audit identity remains Clerk-backed and stable.** Audit-event records (per the
+       auditability principle, P4 / P10) reference the Clerk user ID for the acting operator,
+       never the local unlock-factor record id. The audit trail's identity anchor is independent
+       of whichever local unlock factor produced the session.
+
+    A local unlock factor that violates any of rules 1–6 falls back into the "custom user
+    database" category and is PROHIBITED.
+
+    **Operational note (informational, not normative):** the canonical storage mechanism for a
+    local unlock factor is Electron's existing `safeStorage` (already named for the device token),
+    with the same cross-platform scoping (DPAPI on Windows / Keychain on macOS / libsecret on
+    Linux). New local-factor implementations should reuse this mechanism rather than introducing a
+    parallel secret store.
 - **Terminal identity (per-device token).** Every physical POS terminal MUST hold its own opaque
   device token, provisioned exactly once via an admin-authenticated pairing flow. The token is the
   machine's identity; it is sent on every request alongside the user JWT.
