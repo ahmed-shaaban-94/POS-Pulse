@@ -6,10 +6,11 @@
 **Handoff:** [./a2-backend-handoff.md](./a2-backend-handoff.md)
 **Approval Gate:** §A2 (Backend Wave 1 — sign-in / sign-out)
 **Status:** ✅ **APPROVED 2026-05-06 by Ahmed — Q1 = Yes, Q2 = (b).
-B-1 contract revision in flight (POS-Pulse PR
-`004-b1-sign-in-clerk-jwt` — updates Endpoint 2 to Clerk JWT
-verification). Implementation still gated: do not start Wave 1
-backend code until B-1 merges and B-2 owner go-ahead is given.**
+B-1 merged 2026-05-06 (PR #43, SHA `c4ce84a`). PR-0 endpoint
+namespace alignment (`/api/pos/v1/...`) in flight on branch
+`004-pr0-pos-namespace`. Implementation still gated: do not start
+Wave 1 backend code until PR-0 merges, PR-1 follow-on lands, and
+B-2 owner go-ahead is given.**
 **Created:** 2026-05-06
 **Owner:** Ahmed (POS-Pulse + SmartDataPulse-backend, owner-implemented
 with ChatGPT/Claude support)
@@ -127,7 +128,7 @@ cost.
 ### Option 1 — Integrate Clerk into Data-Pulse-2 for the POS-Pulse operator/session endpoints
 
 > Bring Clerk in as the identity verifier for the new
-> `/v1/operators/*` surface. Existing `/api/v1/auth/*` (in-house
+> `/api/pos/v1/operators/*` surface. Existing `/api/v1/auth/*` (in-house
 > argon2id) stays as-is and continues to serve the dashboard / admin
 > app today.
 
@@ -169,7 +170,7 @@ cost.
 - **Cons:**
   - Adds a Clerk dependency to a backend that currently has none.
   - Adds two parallel auth surfaces (`/api/v1/auth/*` for the
-    dashboard; `/v1/operators/*` for POS-Pulse). They must not
+    dashboard; `/api/pos/v1/operators/*` for POS-Pulse). They must not
     cross-pollinate session cookies / tokens.
   - Slight ambiguity about whether `users` and
     `operator_identities` should ever be merged later.
@@ -236,7 +237,7 @@ cost.
 
 > **Option 1 — Integrate Clerk into Data-Pulse-2 for the POS-Pulse
 > operator/session endpoints, scoped narrowly to the new
-> `/v1/operators/*` surface.**
+> `/api/pos/v1/operators/*` surface.**
 
 Rationale:
 - It's the only option that honours Principle VIII + §A1 without
@@ -328,7 +329,7 @@ this record. Each row is **scoped to Wave 1 unless otherwise noted**.
   - `terminals` (`id` uuid pk, `tenant_id` fk, `store_id` fk,
     `display_name`, `pairing_code_hash`, `device_token_hash`,
     `paired_at`, `revoked_at`).
-- The guard order on every `/v1/operators/*` endpoint is:
+- The guard order on every `/api/pos/v1/operators/*` endpoint is:
   1. **Device-token guard** — verify the terminal's `device_token`,
      resolve `tenant_id` + `store_id`, attach to request.
   2. **Operators guard** — verify the Clerk JWT (Endpoints 3+),
@@ -385,10 +386,10 @@ identical`.
 
 ## 6. Impact on Wave 1 endpoints
 
-> Wave 1 is **`POST /v1/operators/sign-in`** and
-> **`POST /v1/operators/sign-out`** only.
+> Wave 1 is **`POST /api/pos/v1/operators/sign-in`** and
+> **`POST /api/pos/v1/operators/sign-out`** only.
 
-### 6.1 `POST /v1/operators/sign-in`
+### 6.1 `POST /api/pos/v1/operators/sign-in`
 
 - **Request (per POS-Pulse contract):** `{ kind: "manager_admin",
   identifier, password, device_token_attestation }`.
@@ -436,7 +437,7 @@ identical`.
   return `takeover_required`, even though the confirm endpoint isn't
   ready, so Wave 3 doesn't have to revisit Wave 1 code.
 
-### 6.2 `POST /v1/operators/sign-out`
+### 6.2 `POST /api/pos/v1/operators/sign-out`
 
 - **Request (per contract):** `{ session_id }`. The session id is the
   uuid the backend issued at sign-in (in the `operator_sessions`
@@ -539,7 +540,7 @@ The owner must answer **two** questions and approve in writing on
 this document (a one-line append at the bottom is sufficient):
 
 > **Q1.** Can Data-Pulse-2 adopt **Clerk JWKS verification** for the
-> `/v1/operators/*` surface in Wave 1?
+> `/api/pos/v1/operators/*` surface in Wave 1?
 > ◯ Yes — proceed with Option 1 as described.
 > ◯ No — stop and return to POS-Pulse planning. The contract must
 >   either (a) be revised to explicitly use Data-Pulse-2 internal
@@ -614,9 +615,9 @@ If **Q1 = No**: **stop**. Return to POS-Pulse planning.
 > binding for Wave 1; downstream artifacts (POS-Pulse contract
 > revision PR, Data-Pulse-2 Wave 1 implementation PR) inherit them.
 
-- **Q1 answer (Clerk JWKS adoption for `/v1/operators/*`):**
+- **Q1 answer (Clerk JWKS adoption for `/api/pos/v1/operators/*`):**
   ✅ **Yes.** Data-Pulse-2 will adopt Clerk JWKS verification now for
-  the POS-Pulse-facing `/v1/operators/*` surface. JWKS-only
+  the POS-Pulse-facing `/api/pos/v1/operators/*` surface. JWKS-only
   verification (no Clerk Backend SDK in Wave 1).
 - **Q2 answer (sign-in flow reading (a) or (b)):**
   ✅ **(b) — POS-Pulse holds the Clerk JWT; Data-Pulse-2 verifies via
@@ -653,7 +654,7 @@ the same surface:
    the existing argon2id + cookie-session stack.** Wave 1 does not
    migrate `/api/v1/auth/*`. Any future migration is its own
    decision, separate from §A2.
-2. **POS-Pulse-facing operator/session endpoints (`/v1/operators/*`)
+2. **POS-Pulse-facing operator/session endpoints (`/api/pos/v1/operators/*`)
    MUST use Clerk-backed identity.** No exceptions; do not silently
    fall back to internal auth on these routes.
 3. **A stable `clerk_user_id` mapping MUST be added** — modelled in

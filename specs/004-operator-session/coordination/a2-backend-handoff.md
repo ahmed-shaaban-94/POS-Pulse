@@ -1,9 +1,15 @@
 # §A2 Backend Handoff — POS Pulse 004 operator/session endpoints
 
-**Status:** Draft (not yet sent). Repo-local coordination artifact only.
+**Status:** Repo-local coordination artifact only. **Counterpart resolved
+(2026-05-06): Ahmed holds both sides under §A2 owner-implemented mode** —
+this draft was never sent externally and will not be; it remains as the
+durable in-repo record of the contract surface.
 **Owner (POS-Pulse side):** Ahmed
-**Backend counterpart:** TBD
+**Backend counterpart:** Ahmed (same person; SmartDataPulse-backend `Data-Pulse-2`)
 **Created:** 2026-05-06
+**Endpoint namespace updated:** 2026-05-06 (PR-0) — all six endpoints below
+are mounted under `/api/pos/v1/...` to match the `Data-Pulse-2` URL
+convention.
 **Source artifacts:**
 - [`specs/004-operator-session/contracts/backend-endpoints.md`](../contracts/backend-endpoints.md)
 - [`specs/004-operator-session/coordination.md`](../coordination.md)
@@ -71,7 +77,7 @@ determinism (Constitution V).
 
 ### Required backend tickets
 
-#### 1. `GET /v1/operators/roster?branch_id=`
+#### 1. `GET /api/pos/v1/operators/roster?branch_id=`
 
 - **Purpose:** branch cashier roster for cashier sign-in.
 - **Constraint:** must return only `{id, display_name, role}`; no PII or
@@ -80,7 +86,7 @@ determinism (Constitution V).
 - **Caller:** paired terminal at `/sign-in`, before any operator session
   exists. Device token only — no operator JWT.
 
-#### 2. `POST /v1/operators/sign-in`
+#### 2. `POST /api/pos/v1/operators/sign-in`
 
 - **Purpose:** manager/admin Clerk-backed sign-in only.
 - **Constraint:** the cashier PIN path must NOT use this endpoint. Cashier
@@ -90,14 +96,14 @@ determinism (Constitution V).
   `{kind: "takeover_required"}` — the takeover variant carries no terminal
   name, no timestamp, no other-operator data (FR-013).
 
-#### 3. `POST /v1/operators/sign-out`
+#### 3. `POST /api/pos/v1/operators/sign-out`
 
 - **Purpose:** backend-side sign-out for active operator sessions.
 - **Constraint:** client tears down the local session within 1 s regardless
   of backend reachability (FR-008 / NFR-007); backend liveness is not
   load-bearing for sign-out.
 
-#### 4. `POST /v1/operators/takeover/confirm`
+#### 4. `POST /api/pos/v1/operators/takeover/confirm`
 
 - **Purpose:** explicit takeover confirmation. Terminates prior operator
   session and creates a new one on the calling terminal.
@@ -106,7 +112,7 @@ determinism (Constitution V).
   `operator.session.takeover` audit event is NOT emitted by this endpoint
   — it flows through Endpoint 5 on the consolidated audit-sync channel.
 
-#### 5. `POST /v1/audit-events`
+#### 5. `POST /api/pos/v1/audit-events`
 
 - **Purpose:** consolidated audit-event sync (batched).
 - **Constraints:**
@@ -129,7 +135,7 @@ determinism (Constitution V).
     contains forbidden field names (cardholder data, credential
     fragments, PIN values, session tokens) per FR-027 / PR-1 / P6 / P7.
 
-#### 6. `GET /v1/operators/active-session?operator_id=`
+#### 6. `GET /api/pos/v1/operators/active-session?operator_id=`
 
 - **Purpose:** cashier takeover detection after local PIN unlock.
 - **Constraints:**
