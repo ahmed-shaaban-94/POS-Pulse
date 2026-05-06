@@ -91,4 +91,17 @@ describe('SignOutHandler', () => {
     await handler.signOut();
     expect(calls).toEqual([]);
   });
+
+  it('calls clearJwt with the ended backend session id (PR-1 — JWT no longer in main memory)', async () => {
+    const sessionManager = makeFilledManager();
+    const cleared: string[] = [];
+    const handler = new SignOutHandler({
+      backend: fakeBackend({ kind: 'signed_out' }),
+      sessionManager,
+      jwtFor: () => 'eyJ.fake.jwt',
+      clearJwt: (sessionId) => cleared.push(sessionId),
+    });
+    await handler.signOut();
+    expect(cleared).toEqual(['be-sess-1']);
+  });
 });

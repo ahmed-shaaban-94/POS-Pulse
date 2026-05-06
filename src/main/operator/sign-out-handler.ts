@@ -22,6 +22,13 @@ export interface SignOutHandlerDeps {
   sessionManager: SessionManager;
   /** Held JWT for the active session; production wires from a holder. */
   jwtFor: (backendSessionId: string) => string | null;
+  /**
+   * Clear the JWT for the ended session id. Production wires
+   * `jwtHolder.clear`; tests may omit. Called immediately after
+   * local tear-down so the JWT is no longer held in main-process
+   * memory regardless of the backend POST outcome.
+   */
+  clearJwt?: (backendSessionId: string) => void;
   logger?: Logger;
 }
 
@@ -43,6 +50,7 @@ export class SignOutHandler {
     // within 1 s regardless of backend reachability (NFR-007). The
     // backend call below is fire-and-forget with a short timeout.
     this.deps.sessionManager.end();
+    this.deps.clearJwt?.(backendSessionId);
 
     if (jwt !== null) {
       void this.fireBackendSignOut(backendSessionId, jwt);

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { SignInHandler } from '../sign-in-handler.js';
 import { SessionManager } from '../session-manager.js';
+import { createJwtHolder } from '../jwt-holder.js';
 import type { ClerkExchanger, ClerkExchangeResult } from '../clerk-client.js';
 import type { BackendClient, BackendSignInResponse } from '../backend-client.js';
 
@@ -101,6 +102,47 @@ describe('SignInHandler — manager/admin path', () => {
       expect(res.session).not.toHaveProperty('backend_session_id');
     }
     expect(sessionManager.getCurrent()?.operator_id).toBe('clerk-user-1');
+  });
+
+  it('records the Clerk JWT in the JwtHolder keyed by backend session id', async () => {
+    const sessionManager = new SessionManager();
+    const jwtHolder = createJwtHolder();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
+      sessionManager,
+      jwtHolder,
+      deviceTokenAttestation: () => 'attest',
+    });
+    await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'm@x.test',
+      password: 'p',
+    });
+    // The Clerk JWT is held in main-process memory keyed by the
+    // backend session id from Data-Pulse-2's response. NEVER crosses
+    // the bridge to the renderer.
+    expect(jwtHolder.get('be-sess-1')).toBe(HAPPY_JWT);
+  });
+
+  it('does NOT record the JWT on takeover_required (no local session created)', async () => {
+    const sessionManager = new SessionManager();
+    const jwtHolder = createJwtHolder();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend({ kind: 'takeover_required' }),
+      sessionManager,
+      jwtHolder,
+      deviceTokenAttestation: () => 'attest',
+    });
+    await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'm@x.test',
+      password: 'p',
+    });
+    // No backend session id was returned; nothing to key the JWT
+    // against. The jwtHolder remains empty.
+    expect(jwtHolder.get('be-sess-1')).toBeNull();
   });
 
   it('Wave 1 path (b): password NEVER appears in the backend body', async () => {

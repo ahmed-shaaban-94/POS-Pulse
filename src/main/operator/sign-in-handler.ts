@@ -11,6 +11,7 @@ import type { OperatorRefusal } from '../../shared/audit/event-shape.js';
 import type { ClerkExchanger } from './clerk-client.js';
 import type { BackendClient } from './backend-client.js';
 import type { SessionManager } from './session-manager.js';
+import type { JwtHolder } from './jwt-holder.js';
 
 /**
  * 004-operator-session T026 — manager/admin sign-in handler.
@@ -42,6 +43,13 @@ export interface SignInHandlerDeps {
   sessionManager: SessionManager;
   /** Terminal-side proof of device-token possession (per 002). */
   deviceTokenAttestation: () => Promise<string> | string;
+  /**
+   * Optional JWT holder. Production wires `createJwtHolder()`; tests
+   * may omit. When present, the Clerk JWT is recorded against the
+   * backend session id on successful sign-in so the sign-out handler
+   * can authenticate the backend POST.
+   */
+  jwtHolder?: JwtHolder;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -122,6 +130,10 @@ export class SignInHandler {
       backend_session_id: backend.operator_session.id,
       started_at: backend.operator_session.issued_at,
     });
+    // Record the JWT against the backend session id for sign-out and
+    // any future authenticated bridge call. Held in main-process
+    // memory only — NEVER crosses to the renderer (Wave 1 path b).
+    this.deps.jwtHolder?.set(record.backend_session_id, exchange.jwt);
 
     this.logSuccess('signed_in');
     return {

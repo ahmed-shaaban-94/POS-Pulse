@@ -7,6 +7,7 @@ import { registerAppVersionHandler } from './ipc/app-version.js';
 import { registerLogHandler } from './ipc/log.js';
 import { registerAppConfigHandler } from './ipc/app-config.js';
 import { registerPairingHandlers } from './ipc/pairing.js';
+import { registerOperatorHandlers } from './ipc/operator.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -16,6 +17,17 @@ import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
 import { createNetwork } from './pairing/network.js';
 import { createPairingService } from './pairing/service.js';
 import { createPairingLog } from './pairing/log.js';
+import {
+  createClerkExchanger,
+  decodeFrontendApiBaseUrl,
+  type ClerkExchanger,
+} from './operator/clerk-client.js';
+import { createBackendClient } from './operator/backend-client.js';
+import { SessionManager } from './operator/session-manager.js';
+import { SignInHandler } from './operator/sign-in-handler.js';
+import { SignOutHandler } from './operator/sign-out-handler.js';
+import { InactivityMonitor } from './operator/inactivity-monitor.js';
+import { createJwtHolder } from './operator/jwt-holder.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
 
@@ -40,6 +52,43 @@ function resolveApiBaseUrl(): string {
  * `X-Terminal-Token` on backend calls.
  */
 const DEVICE_TOKEN_KEY = makeSecretKey('terminal.device-token');
+
+/**
+ * 004-operator-session — resolve the production `ClerkExchanger`.
+ *
+ * Decodes the Clerk Frontend API host from `CLERK_PUBLISHABLE_KEY`.
+ * When unset or malformed, returns a stub that always refuses so the
+ * app still launches in dev without a Clerk tenant configured (the
+ * `/sign-in` route renders; submit fails with the generic
+ * `invalid_input` refusal). CI / production builds set the key.
+ *
+ * The publishable key itself is NOT a secret — it identifies the
+ * Clerk instance for client-side use.
+ */
+function resolveClerkExchanger(logger: {
+  warn(payload: object, msg: string): void;
+}): ClerkExchanger {
+  const pk = process.env['CLERK_PUBLISHABLE_KEY'];
+  if (typeof pk !== 'string' || pk.length === 0) {
+    logger.warn(
+      { event: 'operator.clerk.missing_publishable_key' },
+      'CLERK_PUBLISHABLE_KEY unset; sign-in will refuse generically until configured.',
+    );
+    return { exchange: () => Promise.resolve({ kind: 'refused' as const }) };
+  }
+  const fapi = decodeFrontendApiBaseUrl(pk);
+  if (fapi === null) {
+    logger.warn(
+      { event: 'operator.clerk.malformed_publishable_key' },
+      'CLERK_PUBLISHABLE_KEY malformed; sign-in will refuse generically until corrected.',
+    );
+    return { exchange: () => Promise.resolve({ kind: 'refused' as const }) };
+  }
+  return createClerkExchanger({
+    frontendApiBaseUrl: fapi,
+    fetch: globalThis.fetch.bind(globalThis),
+  });
+}
 
 // __dirname is a CJS global; ESM (NodeNext output) requires this polyfill.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -235,6 +284,60 @@ app
     // T025 lands `pairing:submit`; the SUBMIT handler validates the
     // argument shape and forwards the service result unchanged.
     registerPairingHandlers(ipcMain, { store: pairingStore, service: pairingService });
+
+    // 004-operator-session — wire `operator.*` IPC.
+    //
+    // Clerk credential exchange happens HERE in the main process; the
+    // password NEVER reaches Data-Pulse-2 (Wave 1 path b / AD-2 /
+    // Constitution v1.5.1). The Clerk Frontend API host is decoded
+    // from the publishable key (`CLERK_PUBLISHABLE_KEY` env var). If
+    // the key is unset or malformed in dev, we wire a stub exchanger
+    // that always refuses — the app still launches and `/sign-in` is
+    // reachable, but submit fails with the generic refusal copy. CI
+    // and production builds set the key; the stub is dev-only.
+    const operatorJwtHolder = createJwtHolder();
+    const operatorSessionManager = new SessionManager();
+    const apiBaseUrl = resolveApiBaseUrl();
+    const operatorBackend = createBackendClient({
+      baseUrl: apiBaseUrl,
+      fetch: globalThis.fetch.bind(globalThis),
+    });
+    const clerkExchanger = resolveClerkExchanger(mainLogger);
+    const operatorSignInHandler = new SignInHandler({
+      clerk: clerkExchanger,
+      backend: operatorBackend,
+      sessionManager: operatorSessionManager,
+      jwtHolder: operatorJwtHolder,
+      // Wave 1: device-token attestation = the device token itself
+      // (read from SecretStore via the pairingStore). The backend
+      // verifies it server-side. The token is NEVER logged.
+      deviceTokenAttestation: async () => {
+        const status = await pairingStore.getStatus();
+        if (status.kind !== 'paired') return '';
+        const token = await secretStore.get(DEVICE_TOKEN_KEY);
+        return token ?? '';
+      },
+      logger: mainLogger,
+    });
+    const operatorSignOutHandler = new SignOutHandler({
+      backend: operatorBackend,
+      sessionManager: operatorSessionManager,
+      jwtFor: (sessionId) => operatorJwtHolder.get(sessionId),
+      clearJwt: (sessionId) => {
+        operatorJwtHolder.clear(sessionId);
+      },
+      logger: mainLogger,
+    });
+    const operatorInactivityMonitor = new InactivityMonitor({
+      sessionManager: operatorSessionManager,
+    });
+    operatorInactivityMonitor.start();
+    registerOperatorHandlers(ipcMain, {
+      signInHandler: operatorSignInHandler,
+      signOutHandler: operatorSignOutHandler,
+      sessionManager: operatorSessionManager,
+      inactivityMonitor: operatorInactivityMonitor,
+    });
 
     createWindow();
     mainLogger.info('app:ready');
