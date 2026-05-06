@@ -26,9 +26,13 @@ roster fetch, audit-event sync.
 - All endpoints assume the existing 001/002 authentication baseline:
   - The terminal's `device_token` is sent as part of every request
     (Constitution VIII — terminal identity).
-  - The operator's Clerk JWT is sent for endpoints that require human
-    identity (manager/admin sign-in returns the JWT; subsequent calls
-    carry it).
+  - The operator's Clerk JWT is sent in `Authorization: Bearer <jwt>`
+    for endpoints that require human identity. The terminal acquires
+    the Clerk JWT directly from Clerk (path b — see Endpoint 2's
+    revision note); the backend verifies via JWKS and **never**
+    receives the user's Clerk password. Subsequent calls in the same
+    Clerk session reuse the JWT until it expires; refresh is Clerk's
+    responsibility on the terminal side.
 - Response envelopes follow the existing platform convention; the shapes
   below describe the payload only.
 - All endpoints that touch operator-attributable data MUST validate the
@@ -92,24 +96,57 @@ branch) is a separate admin-app flow that 004 does not own.
 
 ## Endpoint 2 — `POST /v1/operators/sign-in`
 
-**Purpose**: Authenticate a manager or admin via Clerk credentials and mint
-a session token. The cashier path does NOT use this endpoint (cashier
-identity is validated server-side via the cached Clerk identity, but the
-PIN unlock that triggers the cashier session is purely local — the cashier
-session's backend token derives from the cached Clerk JWT pipeline).
+> **Revision note (2026-05-06, B-1 — Wave 1 alignment).** This endpoint
+> is revised to use **Clerk JWT verification (path b)** per the
+> approved §A2 Wave 1 alignment decision (see
+> [`../coordination/wave1-alignment-decision.md`](../coordination/wave1-alignment-decision.md)).
+> The POS terminal completes the Clerk credential exchange against
+> Clerk directly (Frontend SDK / public APIs), obtains a Clerk session
+> JWT, and posts it to this endpoint in the `Authorization` header.
+> **Data-Pulse-2 MUST NOT receive, log, or store the user's Clerk
+> password.** Path (a) — backend-talks-to-Clerk-with-credentials — is
+> explicitly rejected for this endpoint.
 
-**Caller**: A paired terminal at the manager/admin sign-in surface.
+**Purpose**: Establish a backend operator session for a manager or
+admin, using a Clerk-verified human identity. The terminal has already
+authenticated the human against Clerk and holds a fresh Clerk session
+JWT; this endpoint validates that JWT, validates the terminal's
+device-token scope, validates role + tenant + branch eligibility, and
+records a backend `operator_sessions` row. The cashier path does NOT
+use this endpoint (cashier identity is validated server-side via the
+cached Clerk identity, but the PIN unlock that triggers the cashier
+session is purely local — the cashier session's backend token derives
+from the cached Clerk JWT pipeline). **The cashier PIN MUST NEVER be
+sent to Data-Pulse-2 (AD-2 / §A1 / Constitution v1.5.1).**
 
-**Request shape**:
+**Caller**: A paired terminal at the manager/admin sign-in surface,
+**after** completing the Clerk credential exchange.
+
+**Request headers (required)**:
+
+- `Authorization: Bearer <clerk_jwt>` — the Clerk session JWT held by
+  the terminal. Verified server-side via Clerk JWKS (issuer +
+  signature + `exp` + `nbf`); no Clerk Backend SDK call on the hot
+  path in Wave 1.
+- The platform's existing terminal device-token header (e.g.
+  `X-Device-Token: <token>` — exact header name follows the existing
+  001/002 baseline; defined once at the platform level, not per
+  endpoint). The device token resolves to a `tenant_id` + `branch_id`
+  scope.
+
+**Request body**:
 
 ```json
 {
   "kind": "manager_admin",
-  "identifier": "<email or stable identifier>",
-  "password": "<password>",
   "device_token_attestation": "<terminal-side proof>"
 }
 ```
+
+The body **MUST NOT** include `password`, `identifier`, `pin`, or any
+other credential field. `kind` discriminates the sign-in surface
+(reserved for future surfaces); manager/admin is the only kind in
+Wave 1.
 
 **Response shape (success)**:
 
@@ -123,9 +160,20 @@ session's backend token derives from the cached Clerk JWT pipeline).
     "tenant_id": "<opaque>",
     "branch_id": "<opaque>"
   },
-  "clerk_session_token": "<JWT>"
+  "operator_session": {
+    "id": "<uuid>",
+    "issued_at": "<ISO timestamp>"
+  }
 }
 ```
+
+The response **does not** echo a `clerk_session_token`: the terminal
+already holds the Clerk JWT it sent in `Authorization`. The backend's
+job here is to confirm the human's eligibility on this terminal and
+to mint a backend operator-session id (used by Endpoint 3 / Endpoint
+5 to identify the active session). The Clerk JWT continues to travel
+on subsequent requests in `Authorization: Bearer <clerk_jwt>` until
+it expires; refresh is Clerk's responsibility on the terminal side.
 
 **Response shape (takeover required — the operator already has an active
 session on a different terminal in this branch)**:
@@ -137,21 +185,55 @@ session on a different terminal in this branch)**:
 ```
 
 The response contains NO terminal name, no timestamp, no other-operator
-data (FR-013). The terminal interprets this as "render the TakeoverPrompt".
+data (FR-013 — minimum-disclosure invariant preserved). The terminal
+interprets this as "render the TakeoverPrompt".
+
+**Server-side validation order** (each step ends in a generic refusal
+on failure; ordering does NOT change the response shape):
+
+1. **Device-token scope** — verify the terminal's device token,
+   resolve `tenant_id` + `branch_id`. Refusal on missing / invalid /
+   revoked token.
+2. **Clerk JWT verification** — verify `Authorization: Bearer <jwt>`
+   against Clerk JWKS (issuer, signature, `exp`, `nbf`). Refusal on
+   any verification failure. JWKS is cached server-side; cache miss
+   does NOT distinguish in the response.
+3. **Operator identity resolution** — look up the Clerk `sub` claim
+   in `operator_identities`. Refusal if no row, or if
+   `disabled_at IS NOT NULL`.
+4. **Role eligibility** — refusal unless `operator_identities.role`
+   is `manager` or `admin`. Cashier-role identities cannot sign in
+   on this endpoint.
+5. **Tenant + branch scope** — refusal if the operator identity's
+   `tenant_id` + `branch_id` (`store_id` internally) do not match
+   the device token's tenant + branch scope.
+6. **Takeover detection** — if an active `operator_sessions` row
+   exists for this `operator_id` on a different terminal in this
+   branch, return `{"kind": "takeover_required"}`. Otherwise create
+   a new `operator_sessions` row and return the success envelope.
 
 **Failure modes**:
 
-- Generic refusal (4xx) for: wrong password, account does not exist,
-  tenant/branch mismatch, account disabled, rate-limited (NFR-003 / PR-2).
-  The response MUST NOT distinguish among these in the body.
-- The lockout case (PR-3 lives client-side for the cashier PIN factor;
-  manager/admin lockout is Clerk's responsibility — the backend MAY return
-  a generic "too many attempts" response for repeated manager/admin
-  failures, mapped to the `rate_limited` refusal category client-side).
+- Generic refusal (4xx) for: invalid Clerk JWT, expired Clerk JWT,
+  unknown Clerk subject, account disabled, role not manager/admin,
+  tenant/branch mismatch, device-token scope mismatch, rate-limited
+  (NFR-003 / PR-2). The response MUST NOT distinguish among these
+  in the body.
+- The lockout case (PR-3 lives client-side for the cashier PIN
+  factor; manager/admin lockout is Clerk's responsibility — the
+  Clerk session is simply revoked / refused to refresh on the
+  terminal side, after which the next backend call fails JWKS
+  verification and is mapped to the `rate_limited` / generic
+  refusal category client-side).
 
-**Redaction (server-side, P11)**: The backend MUST redact `password` from
-its own logs / Sentry / observability surfaces. This is a backend rule;
-contracts/bridge-api.md governs the client-side rule.
+**Redaction (server-side, P11)**: The backend MUST NOT log the raw
+Clerk JWT, `device_token_attestation`, or any `Authorization` header
+value to logs / Sentry / observability surfaces. Because the request
+body no longer carries `password`, the prior server-side
+password-redaction obligation is moot: **no path may exist that
+ingests, logs, or persists a user's Clerk password.** This is a
+backend rule; `contracts/bridge-api.md` governs the client-side
+rule.
 
 ---
 

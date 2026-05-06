@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-06 (§A2 backend owner assigned — Ahmed holds both POS-Pulse and SmartDataPulse-backend sides; coordination mode is owner-implemented with ChatGPT/Claude support; backend Wave 1 not started)
+**Last updated:** 2026-05-06 (§A2 Wave 1 alignment approved — Q1 = Yes, Q2 = path (b); B-1 contract revision in progress via this PR — Endpoint 2 now uses Clerk JWT verification, NOT password submission to Data-Pulse-2; Wave 1 backend code remains blocked behind B-1 merge + B-2 owner go-ahead)
 
 ---
 
@@ -136,10 +136,35 @@ invoked. They are independent and may be worked in parallel.
   backend Wave 1 not started.** §A2 is no longer blocked on
   identifying a counterpart; it is now blocked on the backend work
   itself (Wave 1 first).
-- **Required next action:** **Move to the SmartDataPulse repo and plan
-  backend Wave 1 endpoints** —
-  1. `POST /v1/operators/sign-in` (manager/admin Clerk-backed
-     sign-in only; cashier PIN path does NOT use this endpoint per AD-2).
+- **Wave 1 alignment decision (approved 2026-05-06):**
+  [`./coordination/wave1-alignment-decision.md`](./coordination/wave1-alignment-decision.md).
+  Q1 = Yes (Data-Pulse-2 adopts Clerk JWKS verification for
+  `/v1/operators/*`); Q2 = path (b) (POS-Pulse holds the Clerk JWT,
+  Data-Pulse-2 verifies via JWKS, and **MUST NOT receive or handle
+  the user's Clerk password**). Cashier PIN remains local-only and
+  MUST NEVER be sent to Data-Pulse-2 (AD-2 / §A1 / Constitution
+  v1.5.1).
+- **Active blockers before Wave 1 implementation begins:**
+  - **B-1.** POS-Pulse contract revision PR (this PR) — updates
+    Endpoint 2 in [`./contracts/backend-endpoints.md`](./contracts/backend-endpoints.md)
+    so the request body no longer carries `password`, the Clerk JWT
+    travels in `Authorization: Bearer <jwt>`, the
+    `clerk_session_token` field is removed from the success response
+    (replaced by `operator_session.{id, issued_at}`), and the
+    server-side validation order is documented (device-token →
+    Clerk JWKS → operator identity → role → tenant/branch →
+    takeover detection). **Wave 1 backend code MUST NOT begin until
+    B-1 merges.**
+  - **B-2.** Explicit owner go-ahead to start Wave 1 backend
+    implementation in `Data-Pulse-2`. Separate authorization beyond
+    the alignment decision approval; recorded in
+    `wave1-alignment-decision.md` §11.2.
+- **Required next action:** **Land B-1 (this PR) on POS-Pulse `main`,
+  then await B-2 before opening any Wave 1 backend PR.** Wave 1
+  endpoints —
+  1. `POST /v1/operators/sign-in` (manager/admin Clerk-JWT-verified
+     sign-in only; cashier PIN path does NOT use this endpoint per
+     AD-2; password is NEVER sent to Data-Pulse-2).
   2. `POST /v1/operators/sign-out`.
 
   Subsequent waves remain as previously documented:
@@ -224,7 +249,7 @@ invoked. They are independent and may be worked in parallel.
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | **Ahmed** | Signed off; 3 minor notes for S1/S4/S5 task authors (not blocking). |
 | §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1 | **Ahmed** | **Path 1** — constitutional clarification clause added to Principle VIII; Clerk remains sole human IdP. |
-| §A2 — backend / OpenAPI | ⚠️ **Active remaining blocker — owner assigned; backend Wave 1 not started** | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented with ChatGPT/Claude support; no external handoff. Six endpoints total; **next action: plan and ship Wave 1 — `POST /v1/operators/sign-in` + `POST /v1/operators/sign-out`** in the SmartDataPulse repo. |
+| §A2 — backend / OpenAPI | ⚠️ **Active remaining blocker — Wave 1 alignment approved; B-1 contract revision in progress; B-2 owner go-ahead pending** | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented with ChatGPT/Claude support; no external handoff. Wave 1 alignment approved 2026-05-06 (Q1 = Yes, Q2 = path (b) — Clerk JWKS verification; password NEVER sent to Data-Pulse-2). **Next: land B-1 (this PR) updating Endpoint 2 to Clerk JWT verification, then await B-2 before opening Wave 1 backend PR (`POST /v1/operators/sign-in` + `POST /v1/operators/sign-out`).** |
 | §A3 — migrations | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅. |
 | §A4 — Argon2id binding | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅; Path 1 keeps §A4 in scope. |
 | §A5 — production readiness | ⏳ Held | _Assigned at rollout PR open time_ | Blocks production rollout only. |
@@ -299,8 +324,15 @@ agents and humans should read this file (and `plan.md`) first to know
 **End of coordination file.** §A1 cleared (PR #39, SHA 7ae337b,
 Constitution v1.5.1). §A2 owner consolidated under Ahmed (both
 POS-Pulse and SmartDataPulse-backend sides; owner-implemented with
-ChatGPT/Claude support, no external handoff). §A2 remains the active
-remaining blocker until backend Wave 1 (`POST /v1/operators/sign-in` +
-`POST /v1/operators/sign-out`) lands. §A3 / §A4 are unblocked for
-planning; §A5 is a later-rollout gate. `/speckit-tasks` may now be
-invoked; implementation slices S1–S6 are not yet started.
+ChatGPT/Claude support, no external handoff). §A2 Wave 1 alignment
+approved 2026-05-06 (Q1 = Yes — Data-Pulse-2 adopts Clerk JWKS
+verification for `/v1/operators/*`; Q2 = path (b) — POS-Pulse holds
+the Clerk JWT and Data-Pulse-2 MUST NOT receive or handle the user's
+Clerk password; cashier PIN remains local-only and MUST NEVER be
+sent to Data-Pulse-2). §A2 remains the active remaining blocker
+behind B-1 (this PR — Endpoint 2 contract revision to Clerk JWT
+verification) and B-2 (explicit owner go-ahead to start Wave 1
+backend code). §A3 / §A4 are unblocked for planning; §A5 is a
+later-rollout gate. `/speckit-tasks` may now be invoked;
+implementation slices S1–S6 are not yet started; POS-Pulse S1 stays
+blocked until Wave 1 backend lands.
