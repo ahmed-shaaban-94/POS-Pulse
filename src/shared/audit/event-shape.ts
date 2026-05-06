@@ -1,0 +1,121 @@
+/**
+ * 004-operator-session T013 — Audit-event shape (FR-025 + FR-026 + AD-3).
+ *
+ * The five mandatory attributes of every audit event are codified here
+ * so any future emitter MUST honour them. The shape lands in S1 as a
+ * type-only contract; the durable `audit_events` table + emitter
+ * (T045–T046) is S3 territory under §A1 / §A3.
+ *
+ * The `OperatorRefusal` envelope is the canonical "generic refusal"
+ * shape that crosses the bridge for every refused operator-bridge call
+ * (NFR-003 / PR-2). It carries a closed-set category and NO
+ * factor-distinguishing payload — the renderer renders the generic
+ * Surface 6 message family from the category alone.
+ */
+
+/**
+ * Action categories recognised by the audit catalogue (data-model.md §
+ * "Action Category Catalogue"). 004 owns the operator/session and PIN /
+ * forced-close categories; future features add more.
+ */
+export const AUDIT_ACTION_CATEGORIES = [
+  'shift.open',
+  'shift.close',
+  'shift.forced_close',
+  'operator.session.takeover',
+  'cashier.pin.reset',
+  'cashier.pin.unlock',
+] as const;
+export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
+
+/**
+ * The FR-025 mandatory five attributes plus the optional `session_id`,
+ * `approving_supervisor_id`, and per-category `payload`. `shift_id` is
+ * nullable because some categories (e.g., `operator.session.takeover`)
+ * are not shift-scoped per data-model.md.
+ */
+export interface AuditEvent {
+  /** Client-generated UUID v4 (P5 idempotency key). */
+  event_id: string;
+  /** Opaque tenant identifier. */
+  tenant_id: string;
+  /** Opaque branch identifier. */
+  branch_id: string;
+  /** Opaque terminal identifier (FR-025). */
+  originating_terminal_id: string;
+  /** Clerk user id of the acting operator (FR-025). */
+  acting_operator_id: string;
+  /** Operator session id; null for events emitted outside a session. */
+  session_id: string | null;
+  /** Shift id; null for non-shift-scoped categories per data-model.md. */
+  shift_id: string | null;
+  /** Closed-set category (FR-026). */
+  action_category: ActionCategory;
+  /** ISO 8601 UTC timestamp (FR-025). */
+  created_at: string;
+  /** Optional second identity for supervisor-approved actions. */
+  approving_supervisor_id: string | null;
+  /**
+   * Per-category structured payload. Forbidden field names (raw
+   * cardholder data, full PII, credential fragments, PIN values,
+   * Clerk JWTs, session tokens) MUST be refused at the emitter (T046).
+   */
+  payload: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The five mandatory attributes per FR-025. Used by validators in S3.
+ */
+export const FR025_MANDATORY_ATTRIBUTES = [
+  'acting_operator_id',
+  'originating_terminal_id',
+  'created_at',
+  'action_category',
+  'shift_id',
+] as const;
+export type Fr025MandatoryAttribute = (typeof FR025_MANDATORY_ATTRIBUTES)[number];
+
+/**
+ * Generic-refusal categories. ONE category per failure mode; the
+ * renderer maps to a single generic Surface-6 message family per
+ * outcome (NFR-003 / PR-2).
+ *
+ * `rate_limited` is the sole exception that distinguishes itself
+ * (PR-2 explicit carve-out for the cashier-PIN lockout case; visible
+ * to the operator so they know to wait). Reachable in S4; harmless
+ * to enumerate here.
+ */
+export const REFUSAL_CATEGORIES = [
+  'invalid_input',
+  'no_connection',
+  'rate_limited',
+  'role_mismatch',
+  'not_signed_in',
+] as const;
+export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
+
+export interface OperatorRefusal {
+  kind: 'refused';
+  category: RefusalCategory;
+}
+
+export class OperatorRefusalError extends Error {
+  readonly category: RefusalCategory;
+  constructor(category: RefusalCategory) {
+    super(`operator refusal: ${category}`);
+    this.name = 'OperatorRefusalError';
+    this.category = category;
+  }
+}
+
+export function isOperatorRefusal(value: unknown): value is OperatorRefusal {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const v = value as { kind?: unknown; category?: unknown };
+  return (
+    v.kind === 'refused' &&
+    typeof v.category === 'string' &&
+    (REFUSAL_CATEGORIES as readonly string[]).includes(v.category)
+  );
+}

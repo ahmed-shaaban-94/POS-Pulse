@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, extname, resolve } from 'node:path';
+import { join, extname, resolve, sep } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 /**
@@ -7,10 +7,17 @@ import { describe, it, expect } from 'vitest';
  *
  * Static-analysis style: reads every .ts/.tsx file under src/renderer/
  * and asserts zero references to operator session / auth / cashier
- * surfaces.  Passes trivially at T007a time; catches any later task that
+ * surfaces. Passes trivially at T007a time; catches any later task that
  * silently introduces an operator-identity surface.
  *
  * Constitution Principle VIII binding; spec FR-8 + Out-of-Scope.
+ *
+ * 004-operator-session: the `ui/operator/` sub-tree is the explicit
+ * 004-owned home for operator UI (per `specs/004-operator-session/
+ * tasks.md` T030–T031). It is whitelisted from this scan; the guard
+ * still catches any operator-identity reference that shows up in the
+ * non-operator parts of `ui/`, the non-OperatorSlot parts of `shell/`,
+ * or `routes/app/`.
  */
 
 const SRC_ROOT = resolve(__dirname, '../');
@@ -23,6 +30,24 @@ const SCOPED_DIRS = [
   resolve(SRC_ROOT, 'routes/app'),
 ];
 
+// 004-operator-session: explicit whitelisted sub-paths. These are the
+// operator-identity surfaces 004 OWNS; the guard skips them. Any new
+// operator UI that needs to live outside these paths is a deliberate
+// architectural decision and the guard is the right place to catch
+// it.
+const OPERATOR_OWNED_PATH_FRAGMENTS = [
+  // The 004 operator UI sub-module (RosterList, OperatorBadge, sign-in
+  // form, generic-failure overlay).
+  `${sep}ui${sep}operator${sep}`,
+  // The shell's role-indicator slot. 003 reserved this region; 004
+  // populates it.
+  `${sep}shell${sep}regions${sep}OperatorSlot.tsx`,
+];
+
+function isOperatorOwned(filePath: string): boolean {
+  return OPERATOR_OWNED_PATH_FRAGMENTS.some((frag) => filePath.includes(frag));
+}
+
 function collectFiles(dir: string): string[] {
   const result: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -33,7 +58,8 @@ function collectFiles(dir: string): string[] {
     } else if (
       ['.ts', '.tsx'].includes(extname(entry)) &&
       !entry.endsWith('.test.ts') &&
-      !entry.endsWith('.test.tsx')
+      !entry.endsWith('.test.tsx') &&
+      !isOperatorOwned(full)
     ) {
       result.push(full);
     }

@@ -85,7 +85,37 @@ const FILE_EXTENSION = '.log';
  * contributor logs a request/response object directly.
  */
 const PAIRING_REDACTED_KEYS = ['pairing_code', 'device_token'] as const;
-const REDACTION_PATHS: string[] = PAIRING_REDACTED_KEYS.flatMap((key) => [
+
+/**
+ * 004-operator-session T034 — operator-session redaction extensions.
+ *
+ * Belt-and-braces additions for the new operator-session credential
+ * surface (PR-1 / FR-030). Cross-process redaction smoke (T025
+ * extends 002's) is the load-bearing guarantee; this list keeps the
+ * common case clean even if a future contributor logs a request /
+ * response object directly.
+ *
+ * Coverage rationale: every key listed here MUST never appear in any
+ * log line at any level in any process. The list grows as
+ * later slices add more credential / token vocabulary (cashier PIN
+ * material lands with S4; Clerk JWT and session-token keys are listed
+ * already as defence-in-depth even though S1 does not log them).
+ */
+const OPERATOR_REDACTED_KEYS = [
+  'password',
+  'identifier',
+  'pin',
+  'jwt',
+  'clerk_jwt',
+  'clerk_session_token',
+  'session_token',
+  'authorization',
+  'pin_hash',
+  'pin_salt',
+] as const;
+
+const ALL_REDACTED_KEYS = [...PAIRING_REDACTED_KEYS, ...OPERATOR_REDACTED_KEYS] as const;
+const REDACTION_PATHS: string[] = ALL_REDACTED_KEYS.flatMap((key) => [
   key,
   `*.${key}`,
   `*.*.${key}`,

@@ -1,0 +1,304 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { SignInHandler } from '../sign-in-handler.js';
+import { SessionManager } from '../session-manager.js';
+import type { ClerkExchanger, ClerkExchangeResult } from '../clerk-client.js';
+import type { BackendClient, BackendSignInResponse } from '../backend-client.js';
+
+/**
+ * 004-operator-session T026 + T023 + T025 — sign-in handler, manager/admin path.
+ *
+ * Verifies:
+ *  - Wave 1 path (b): password is consumed by the Clerk exchanger and
+ *    NEVER reaches the backend client (AD-2 — backend body has no
+ *    `password` / `identifier`; Authorization carries the JWT).
+ *  - Generic refusal posture: every factor-distinguishable failure
+ *    becomes `{ kind: 'refused', category: 'invalid_input' }` except
+ *    network unreachability (`no_connection`).
+ *  - Successful sign-in creates a SessionManager record and surfaces
+ *    only the bridge view to the renderer.
+ *  - Cashier-role identities returned by the backend are refused
+ *    locally (defence in depth — backend already refuses them on this
+ *    endpoint).
+ *  - PR-1 redaction: password / identifier / JWT do NOT appear in any
+ *    log line (we capture all logger calls and assert no field
+ *    contains the secret values).
+ */
+
+function fakeClerk(result: ClerkExchangeResult, calls: unknown[] = []): ClerkExchanger {
+  return {
+    exchange: vi.fn((req) => {
+      calls.push(req);
+      return Promise.resolve(result);
+    }),
+  };
+}
+
+function fakeBackend(
+  signInResult: BackendSignInResponse,
+  capture: { lastBody?: unknown; lastJwt?: string } = {},
+): BackendClient {
+  const signIn: BackendClient['signIn'] = (body, jwt) => {
+    capture.lastBody = body;
+    capture.lastJwt = jwt;
+    return Promise.resolve(signInResult);
+  };
+  const signOut: BackendClient['signOut'] = () => Promise.resolve({ kind: 'signed_out' as const });
+  return {
+    signIn: vi.fn(signIn),
+    signOut: vi.fn(signOut),
+  };
+}
+
+const SUCCESS_BACKEND_RESPONSE: BackendSignInResponse = {
+  kind: 'signed_in',
+  operator: {
+    id: 'clerk-user-1',
+    display_name: 'Manager One',
+    role: 'manager',
+    tenant_id: 't1',
+    branch_id: 'b1',
+  },
+  operator_session: {
+    id: 'be-sess-1',
+    issued_at: '2026-05-06T00:00:00.000Z',
+  },
+};
+
+const HAPPY_JWT = 'eyJhbGciOiJSUzI1NiJ9.fake.jwt';
+const HAPPY_CLERK_RESULT: ClerkExchangeResult = {
+  kind: 'ok',
+  jwt: HAPPY_JWT,
+  operator_id: 'clerk-user-1',
+  display_name: 'Manager One',
+  role: 'manager',
+};
+
+describe('SignInHandler — manager/admin path', () => {
+  it('happy path: returns signed_in with bridge view', async () => {
+    const sessionManager = new SessionManager();
+    const clerk = fakeClerk(HAPPY_CLERK_RESULT);
+    const captured: { lastBody?: unknown; lastJwt?: string } = {};
+    const backend = fakeBackend(SUCCESS_BACKEND_RESPONSE, captured);
+
+    const handler = new SignInHandler({
+      clerk,
+      backend,
+      sessionManager,
+      deviceTokenAttestation: () => 'attest-123',
+    });
+
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'manager@pharmacy.test',
+      password: 'correct-horse-battery-staple',
+    });
+
+    expect(res.kind).toBe('signed_in');
+    if (res.kind === 'signed_in') {
+      expect(res.session.role).toBe('manager');
+      expect(res.session.operator_id).toBe('clerk-user-1');
+      expect(res.session).not.toHaveProperty('backend_session_id');
+    }
+    expect(sessionManager.getCurrent()?.operator_id).toBe('clerk-user-1');
+  });
+
+  it('Wave 1 path (b): password NEVER appears in the backend body', async () => {
+    const sessionManager = new SessionManager();
+    const clerk = fakeClerk(HAPPY_CLERK_RESULT);
+    const captured: { lastBody?: unknown; lastJwt?: string } = {};
+    const backend = fakeBackend(SUCCESS_BACKEND_RESPONSE, captured);
+
+    const handler = new SignInHandler({
+      clerk,
+      backend,
+      sessionManager,
+      deviceTokenAttestation: () => 'attest-123',
+    });
+
+    await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'm@x.test',
+      password: 'never-leaks',
+    });
+
+    // The body MUST contain only `kind` and `device_token_attestation`.
+    expect(captured.lastBody).toEqual({
+      kind: 'manager_admin',
+      device_token_attestation: 'attest-123',
+    });
+    // The JWT travels in Authorization (Bearer), not in the body.
+    expect(captured.lastJwt).toBe(HAPPY_JWT);
+    // Defence in depth: serialize the body and assert the password
+    // string does not appear anywhere in it.
+    const bodyJson = JSON.stringify(captured.lastBody);
+    expect(bodyJson).not.toContain('never-leaks');
+    expect(bodyJson).not.toContain('m@x.test');
+    expect(bodyJson).not.toContain('password');
+    expect(bodyJson).not.toContain('identifier');
+  });
+
+  it('refuses generically on empty identifier or password', async () => {
+    const sessionManager = new SessionManager();
+    const clerk = fakeClerk(HAPPY_CLERK_RESULT);
+    const backend = fakeBackend(SUCCESS_BACKEND_RESPONSE);
+    const handler = new SignInHandler({
+      clerk,
+      backend,
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+
+    for (const bad of [
+      { identifier: '', password: 'p' },
+      { identifier: 'i', password: '' },
+    ]) {
+      const res = await handler.signIn({ kind: 'manager_admin', ...bad });
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+    expect(sessionManager.getCurrent()).toBeNull();
+  });
+
+  it('refuses generically when Clerk refuses', async () => {
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk({ kind: 'refused' }),
+      backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+
+  it('returns no_connection when Clerk is unreachable', async () => {
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk({ kind: 'no_connection' }),
+      backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'no_connection' });
+  });
+
+  it('returns no_connection when backend is unreachable', async () => {
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend({ kind: 'no_connection' }),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'no_connection' });
+  });
+
+  it('refuses generically when backend rejects (any cause)', async () => {
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend({ kind: 'refused' }),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+
+  it('surfaces takeover_required without identifying detail (FR-013)', async () => {
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend({ kind: 'takeover_required' }),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'takeover_required' });
+    // No new session was created; the prompt UX (S4) must run before
+    // confirmation. S1 leaves the FSM in `takeoverPrompt` and the
+    // operator manually returns to /sign-in (cancel) — actual
+    // confirmation lands in S4.
+    expect(sessionManager.getCurrent()).toBeNull();
+  });
+
+  it('refuses generically when backend returns cashier role (defence in depth)', async () => {
+    // The backend already refuses cashier-role identities on this
+    // endpoint, but local defence in depth keeps the trust boundary
+    // explicit.
+    const cashierBackend: BackendSignInResponse = {
+      ...SUCCESS_BACKEND_RESPONSE,
+      operator: { ...SUCCESS_BACKEND_RESPONSE.operator, role: 'cashier' },
+    };
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend(cashierBackend),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+    });
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    expect(sessionManager.getCurrent()).toBeNull();
+  });
+
+  it('PR-1 redaction: logger never receives the password / identifier / JWT', async () => {
+    const calls: unknown[] = [];
+    const logger = {
+      info: (...args: unknown[]) => calls.push(...args),
+      warn: (...args: unknown[]) => calls.push(...args),
+      error: (...args: unknown[]) => calls.push(...args),
+      debug: (...args: unknown[]) => calls.push(...args),
+      trace: (...args: unknown[]) => calls.push(...args),
+      fatal: (...args: unknown[]) => calls.push(...args),
+      child: () =>
+        ({
+          info: () => undefined,
+          warn: () => undefined,
+        }) as unknown,
+    } as unknown as NonNullable<ConstructorParameters<typeof SignInHandler>[0]['logger']>;
+    const sessionManager = new SessionManager();
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
+      sessionManager,
+      deviceTokenAttestation: () => 'attest',
+      logger,
+    });
+    await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'leaky@example.com',
+      password: 'this-must-not-appear',
+    });
+    const serialized = JSON.stringify(calls);
+    expect(serialized).not.toContain('this-must-not-appear');
+    expect(serialized).not.toContain('leaky@example.com');
+    expect(serialized).not.toContain('eyJhbGciOiJSUzI1NiJ9.fake.jwt');
+  });
+});

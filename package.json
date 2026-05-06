@@ -27,6 +27,7 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "@clerk/clerk-js": "6.9.0",
     "@sentry/electron": "^7.13.0",
     "@tanstack/react-query": "^5.100.8",
     "better-sqlite3": "^12.9.0",
