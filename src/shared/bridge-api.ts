@@ -126,6 +126,16 @@ export interface OperatorBridgeAPI {
    * one is active, otherwise `null`.
    */
   getCurrentSession(): Promise<OperatorSessionBridgeView | null>;
+
+  /**
+   * Notify-only: the renderer reports genuine user input (mousemove,
+   * keypress, touch) to the inactivity monitor (T028b / FR-009). Fire-
+   * and-forget — the caller MUST NOT await or use the return value. No
+   * new IPC channel: reuses `operator:_report-activity` registered in S1.
+   * Wired by F-01 (s1-review finding — was registered main-side but
+   * missing from the bridge surface).
+   */
+  _reportActivity(): void;
 }
 
 export interface PreloadBridgeAPI {

@@ -43,11 +43,11 @@ const pairing: PairingBridgeAPI = {
 };
 
 /**
- * 004-operator-session T014/T029 — `operator.*` namespace exposed by
- * preload. S1 wires sign-in (manager/admin only), sign-out, and
- * getCurrentSession. The internal `_reportActivity` notify-only call
- * is exposed via the same namespace so the renderer can report
- * genuine user input to the inactivity monitor (T028b).
+ * 004-operator-session T014/T029 + F-01 — `operator.*` namespace exposed
+ * by preload. S1 wires sign-in (manager/admin only), sign-out, and
+ * getCurrentSession. F-01 (s1-review) wires `_reportActivity` so the
+ * renderer can report genuine user input to the inactivity monitor
+ * (T028b / FR-009).
  *
  * The bridge handler validates input shapes; the preload layer is a
  * thin wire-up matching the established 002 pattern.
@@ -60,6 +60,7 @@ const operator: OperatorBridgeAPI = {
     ipcRenderer.invoke(
       OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION,
     ) as Promise<OperatorSessionBridgeView | null>,
+  _reportActivity: () => void ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY),
 };
 
 const api: PreloadBridgeAPI = {

@@ -65,6 +65,7 @@ function operatorBridge(opts: {
     signIn: vi.fn(opts.signIn ?? defaultSignIn),
     signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
     getCurrentSession: vi.fn(() => Promise.resolve(null)),
+    _reportActivity: vi.fn(),
   };
 }
 

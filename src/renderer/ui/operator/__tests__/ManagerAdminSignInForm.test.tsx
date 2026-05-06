@@ -45,6 +45,7 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
     signIn: signInMock,
     signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
     getCurrentSession: vi.fn(() => Promise.resolve(null)),
+    _reportActivity: vi.fn(),
   };
   return { bridge, signInMock };
 }
@@ -198,6 +199,7 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       ),
       signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
       getCurrentSession: vi.fn(() => Promise.resolve(null)),
+      _reportActivity: vi.fn(),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -232,6 +234,7 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       signIn: signInMock,
       signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
       getCurrentSession: vi.fn(() => Promise.resolve(null)),
+      _reportActivity: vi.fn(),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -259,6 +262,7 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       signIn: vi.fn(() => Promise.reject(new Error('SOMETHING-INTERNAL-WE-MUST-NEVER-SHOW'))),
       signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
       getCurrentSession: vi.fn(() => Promise.resolve(null)),
+      _reportActivity: vi.fn(),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
