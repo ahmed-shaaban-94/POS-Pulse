@@ -32,6 +32,13 @@ function stubBridge(status: PairingStatus): PreloadBridgeAPI {
       getStatus: vi.fn(() => Promise.resolve(status)),
       submit: vi.fn(() => Promise.reject(new Error('submit not used in US1'))),
     },
+    operator: {
+      signIn: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
+      getCurrentSession: vi.fn(() => Promise.resolve(null)),
+    },
   };
 }
 

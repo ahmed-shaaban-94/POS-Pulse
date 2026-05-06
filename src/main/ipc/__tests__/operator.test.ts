@@ -1,0 +1,236 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { IpcMain, IpcMainInvokeEvent } from 'electron';
+
+import { registerOperatorHandlers } from '../operator.js';
+import { OPERATOR_IPC_CHANNELS } from '../../../shared/operator/channels.js';
+import type {
+  OperatorSessionBridgeView,
+  SignInResponse,
+  SignOutResponse,
+} from '../../../shared/bridge-api.js';
+import { OperatorRefusalError } from '../../../shared/audit/event-shape.js';
+import type { SignInHandler } from '../../operator/sign-in-handler.js';
+import type { SignOutHandler } from '../../operator/sign-out-handler.js';
+import type { SessionManager } from '../../operator/session-manager.js';
+import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
+
+/**
+ * 004-operator-session — IPC `operator:*` handler tests.
+ *
+ * Mirrors the 002 `pairing:*` IPC test pattern: handlers + state are
+ * INJECTED, the channel names come from the canonical
+ * OPERATOR_IPC_CHANNELS constant, and the test exercises BOUNDARY
+ * input validation (renderers cannot exercise the inner handlers
+ * with malformed payloads).
+ */
+
+type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
+
+interface RegisteredHandlers {
+  signIn: IpcHandler;
+  signOut: IpcHandler;
+  getCurrentSession: IpcHandler;
+  reportActivity: IpcHandler;
+}
+
+function makeIpcMain(): {
+  ipcMain: IpcMain;
+  handlers: Map<string, IpcHandler>;
+  handle: ReturnType<typeof vi.fn>;
+} {
+  const handlers = new Map<string, IpcHandler>();
+  const handle = vi.fn((channel: string, fn: IpcHandler) => {
+    handlers.set(channel, fn);
+  });
+  const ipcMain = { handle } as unknown as IpcMain;
+  return { ipcMain, handlers, handle };
+}
+
+function fakeSignInHandler(result: SignInResponse | (() => SignInResponse)): SignInHandler {
+  const signIn = vi.fn(() => {
+    if (typeof result === 'function') {
+      return Promise.resolve().then(() => result());
+    }
+    return Promise.resolve(result);
+  });
+  return { signIn } as unknown as SignInHandler;
+}
+
+function fakeSignOutHandler(result: SignOutResponse): SignOutHandler {
+  const signOut = vi.fn(() => Promise.resolve(result));
+  return { signOut } as unknown as SignOutHandler;
+}
+
+function fakeSessionManager(view: OperatorSessionBridgeView | null): SessionManager {
+  const getCurrentBridgeView = vi.fn(() => view);
+  return { getCurrentBridgeView } as unknown as SessionManager;
+}
+
+function fakeInactivityMonitor(): {
+  monitor: InactivityMonitor;
+  reportActivity: ReturnType<typeof vi.fn>;
+} {
+  const reportActivity = vi.fn();
+  const monitor = { reportActivity } as unknown as InactivityMonitor;
+  return { monitor, reportActivity };
+}
+
+function register(opts: {
+  signIn?: SignInResponse | (() => SignInResponse) | (() => never);
+  signOut?: SignOutResponse;
+  view?: OperatorSessionBridgeView | null;
+}): {
+  handlers: RegisteredHandlers;
+  reportActivity: ReturnType<typeof vi.fn>;
+} {
+  const { ipcMain, handlers } = makeIpcMain();
+  const sessionManager = fakeSessionManager(opts.view ?? null);
+  const inactivity = fakeInactivityMonitor();
+  registerOperatorHandlers(ipcMain, {
+    signInHandler: fakeSignInHandler(opts.signIn ?? { kind: 'refused', category: 'invalid_input' }),
+    signOutHandler: fakeSignOutHandler(opts.signOut ?? { kind: 'signed_out' }),
+    sessionManager,
+    inactivityMonitor: inactivity.monitor,
+  });
+  const get = (channel: string): IpcHandler => {
+    const fn = handlers.get(channel);
+    if (fn === undefined) throw new Error(`channel ${channel} not registered`);
+    return fn;
+  };
+  return {
+    handlers: {
+      signIn: get(OPERATOR_IPC_CHANNELS.SIGN_IN),
+      signOut: get(OPERATOR_IPC_CHANNELS.SIGN_OUT),
+      getCurrentSession: get(OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION),
+      reportActivity: get(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY),
+    },
+    reportActivity: inactivity.reportActivity,
+  };
+}
+
+const SAMPLE_VIEW: OperatorSessionBridgeView = {
+  id: 'sess-1',
+  operator_id: 'op-1',
+  display_name: 'Manager',
+  role: 'manager',
+  tenant_id: 't1',
+  branch_id: 'b1',
+  started_at: '2026-05-06T00:00:00.000Z',
+};
+
+const FAKE_EVENT = {} as IpcMainInvokeEvent;
+
+describe('registerOperatorHandlers — channel registration', () => {
+  it('registers all four operator:* channels exactly once', () => {
+    const { ipcMain, handle } = makeIpcMain();
+    registerOperatorHandlers(ipcMain, {
+      signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+      signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
+      sessionManager: fakeSessionManager(null),
+      inactivityMonitor: fakeInactivityMonitor().monitor,
+    });
+    const registered = handle.mock.calls.map((c) => c[0] as string);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_IN);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_OUT);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY);
+    // Each channel registered exactly once.
+    for (const channel of registered) {
+      expect(registered.filter((c) => c === channel)).toHaveLength(1);
+    }
+  });
+});
+
+describe('operator:sign-in boundary input validation', () => {
+  it('refuses generically when the payload is not an object', async () => {
+    const { handlers } = register({});
+    for (const bad of [null, undefined, 'string', 42, true]) {
+      const res = await handlers.signIn(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+  });
+
+  it('refuses generically when kind is wrong or missing', async () => {
+    const { handlers } = register({});
+    for (const bad of [
+      {},
+      { kind: 'cashier', cashier_id: 'op', pin: '1234' },
+      { kind: 'manager_admin' },
+      { kind: 'manager_admin', identifier: 42, password: 'p' },
+      { kind: 'manager_admin', identifier: 'i', password: null },
+    ]) {
+      const res = await handlers.signIn(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+  });
+
+  it('forwards a well-formed manager_admin request to the inner handler', async () => {
+    const { handlers } = register({
+      signIn: { kind: 'signed_in', session: SAMPLE_VIEW },
+    });
+    const res = await handlers.signIn(FAKE_EVENT, {
+      kind: 'manager_admin',
+      identifier: 'manager@x.test',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'signed_in', session: SAMPLE_VIEW });
+  });
+
+  it('maps OperatorRefusalError thrown from inner handler to a typed refusal', async () => {
+    const { handlers } = register({
+      signIn: () => {
+        throw new OperatorRefusalError('role_mismatch');
+      },
+    });
+    const res = await handlers.signIn(FAKE_EVENT, {
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'role_mismatch' });
+  });
+
+  it('maps any other thrown error to a generic refusal (no message echo)', async () => {
+    const { handlers } = register({
+      signIn: () => {
+        throw new Error('SHOULD-NOT-CROSS-BRIDGE');
+      },
+    });
+    const res = await handlers.signIn(FAKE_EVENT, {
+      kind: 'manager_admin',
+      identifier: 'i',
+      password: 'p',
+    });
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    // Defence in depth: the thrown message MUST NOT appear in the result.
+    expect(JSON.stringify(res)).not.toContain('SHOULD-NOT-CROSS-BRIDGE');
+  });
+});
+
+describe('operator:sign-out', () => {
+  it('forwards to the sign-out handler', async () => {
+    const { handlers } = register({ signOut: { kind: 'signed_out' } });
+    const res = await handlers.signOut(FAKE_EVENT);
+    expect(res).toEqual({ kind: 'signed_out' });
+  });
+});
+
+describe('operator:get-current-session', () => {
+  it('returns null when no session is active', async () => {
+    const { handlers } = register({ view: null });
+    expect(await handlers.getCurrentSession(FAKE_EVENT)).toBeNull();
+  });
+
+  it('returns the bridge view when a session is active', async () => {
+    const { handlers } = register({ view: SAMPLE_VIEW });
+    expect(await handlers.getCurrentSession(FAKE_EVENT)).toEqual(SAMPLE_VIEW);
+  });
+});
+
+describe('operator:_report-activity', () => {
+  it('forwards to the inactivity monitor', async () => {
+    const { handlers, reportActivity } = register({});
+    await handlers.reportActivity(FAKE_EVENT);
+    expect(reportActivity).toHaveBeenCalledTimes(1);
+  });
+});

@@ -16,7 +16,9 @@ import { CartPlaceholder } from './routes/app/CartPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutPlaceholder } from './routes/app/checkout/CheckoutPlaceholder';
-import type { PairingBridgeAPI } from '../shared/bridge-api';
+import { SignInRoute } from './routes/sign-in';
+import { OperatorRouteGuard } from './routes/operator-route-guard';
+import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
 import type { PairingStatus } from '../shared/pairing-types';
 
 /**
@@ -52,6 +54,13 @@ import type { PairingStatus } from '../shared/pairing-types';
 
 export interface AppRouterProps {
   pairing: PairingBridgeAPI;
+  /**
+   * 004-operator-session T032 — operator bridge for the `/sign-in`
+   * route. Optional so existing 002 / 003 callers (and tests rooted
+   * at /pairing or /paired) keep their current shape; production
+   * (`src/renderer/App.tsx`) wires the real bridge.
+   */
+  operator?: OperatorBridgeAPI;
   /**
    * Test-only: render with a memory router rooted at this initial
    * entry. When omitted (production), a hash router is used so the
@@ -122,13 +131,41 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   // Existing /pairing and /paired routes are unchanged.
   // Pairing-bypass guard (T007) stays green: unpaired/invalid terminals
   // still route to /pairing and cannot reach /app/* directly.
+  // 004-operator-session T032: `/sign-in` mounts above `/app/*`. The
+  // shell is wrapped in `<OperatorRouteGuard>` (no `allow` filter at
+  // S1 — any signed-in role passes; per-route role gating lands with
+  // the manager-only surfaces in S4 / S5). Any deep-link to `/app/*`
+  // without an operator session redirects to `/sign-in` (FR-005).
+  //
+  // The operator bridge is optional on AppRouterProps so existing 002
+  // / 003 callers keep working. When it's present, `/sign-in` is
+  // mounted; when absent, the route falls back to a redirect to the
+  // start path (test scenarios that don't exercise sign-in stay
+  // green).
+  const signInElement =
+    props.operator !== undefined ? (
+      <SignInRoute operator={props.operator} />
+    ) : (
+      <Navigate to={boot.startPath} replace />
+    );
+
+  const guardedShell =
+    props.operator !== undefined ? (
+      <OperatorRouteGuard>
+        <AppShell />
+      </OperatorRouteGuard>
+    ) : (
+      <AppShell />
+    );
+
   const routes: RouteObject[] = [
     { path: '/', element: <Navigate to={boot.startPath} replace /> },
     { path: '/pairing', element: pairingScreenElement },
     { path: '/paired', element: <PairedScreen pairing={props.pairing} /> },
+    { path: '/sign-in', element: signInElement },
     {
       path: '/app',
-      element: <AppShell />,
+      element: guardedShell,
       children: [
         { index: true, element: <Navigate to="dashboard" replace /> },
         { path: 'dashboard', element: <DashboardPlaceholder /> },

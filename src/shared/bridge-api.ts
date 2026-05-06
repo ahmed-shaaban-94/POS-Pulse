@@ -3,6 +3,8 @@
 import type { LogRecord } from './log-record.js';
 import type { AppConfig } from './app-config.js';
 import type { PairingStatus, PairingSubmitResult } from './pairing-types.js';
+import type { Role } from './operator/role.js';
+import type { OperatorRefusal } from './audit/event-shape.js';
 
 /**
  * 002-terminal-pairing: the `pairing` namespace exposed by the preload
@@ -27,6 +29,103 @@ export interface PairingBridgeAPI {
    * the appropriate outcome category (US2 + US3-7).
    */
   submit(pairing_code: string): Promise<PairingSubmitResult>;
+}
+
+/**
+ * 004-operator-session T014 — `operator.*` namespace skeleton.
+ *
+ * Per `specs/004-operator-session/contracts/bridge-api.md`. S1 wires
+ * only the manager/admin Clerk path; cashier-PIN, takeover-confirm,
+ * roster, audit-event-emit, and PIN management are §A1-gated and land
+ * in S3/S4. Their typed signatures are intentionally absent here —
+ * a future task adds them rather than adding stubs that throw
+ * "not implemented" (a stub is a contract claim that the call exists,
+ * which is misleading when the gate is closed).
+ */
+
+export interface OperatorSessionBridgeView {
+  /** Operator session id (UUID v4). */
+  id: string;
+  /** Clerk user id of the operator. */
+  operator_id: string;
+  /** Display name as held by Clerk. */
+  display_name: string;
+  /** Closed-set role from Clerk metadata. */
+  role: Role;
+  /** Opaque tenant identifier from the device-token scope. */
+  tenant_id: string;
+  /** Opaque branch identifier from the device-token scope. */
+  branch_id: string;
+  /** ISO 8601 UTC timestamp the session was issued. */
+  started_at: string;
+}
+
+export interface SignInSuccessResponse {
+  kind: 'signed_in';
+  session: OperatorSessionBridgeView;
+}
+
+export interface TakeoverRequiredResponse {
+  kind: 'takeover_required';
+  // No identification of the prior terminal/operator/timestamp (FR-013).
+}
+
+/**
+ * Manager/admin sign-in request shape. The cashier branch
+ * `{ kind: 'cashier'; ... }` is §A1-gated and added in S4.
+ */
+export interface ManagerAdminSignInRequest {
+  kind: 'manager_admin';
+  /** Identifier (email or username) the operator typed. */
+  identifier: string;
+  /** Cleartext password — crosses the bridge ONCE on input (PR-1). */
+  password: string;
+}
+
+export type SignInRequest = ManagerAdminSignInRequest;
+
+export type SignInResponse = SignInSuccessResponse | TakeoverRequiredResponse | OperatorRefusal;
+
+export interface SignOutResponse {
+  kind: 'signed_out';
+}
+
+/**
+ * `operator.*` namespace. Manager/admin paths only at S1; cashier,
+ * takeover-confirm, roster, audit-event-emit, and PIN management land
+ * in later slices behind their gates.
+ */
+export interface OperatorBridgeAPI {
+  /**
+   * Authenticate an operator and create an operator session. S1 wires
+   * the manager/admin variant only. Resolves with one of:
+   *   - { kind: 'signed_in', session }
+   *   - { kind: 'takeover_required' }                    // S4 wires the prompt UX
+   *   - { kind: 'refused', category: RefusalCategory }   // single generic family
+   *
+   * The bridge handler MUST refuse generically (NFR-003 / PR-2): every
+   * factor-distinguishable cause maps to `invalid_input` except the
+   * cashier-PIN-only `rate_limited` case (S4) and the network-only
+   * `no_connection` case.
+   *
+   * Redaction: the `password` field is consumed by the verifier and
+   * MUST NOT be persisted, logged, snapshotted, or surfaced in any
+   * thrown error (PR-1).
+   */
+  signIn(req: SignInRequest): Promise<SignInResponse>;
+
+  /**
+   * End the current operator session. Best-effort backend call; the
+   * local session is torn down within 1 s regardless of backend
+   * reachability (FR-008 / NFR-007).
+   */
+  signOut(): Promise<SignOutResponse>;
+
+  /**
+   * Read-only inquiry for the current session. Returns the session if
+   * one is active, otherwise `null`.
+   */
+  getCurrentSession(): Promise<OperatorSessionBridgeView | null>;
 }
 
 export interface PreloadBridgeAPI {
@@ -55,6 +154,13 @@ export interface PreloadBridgeAPI {
    * until US1 / US2 wire the real handlers.
    */
   pairing: PairingBridgeAPI;
+  /**
+   * 004-operator-session: operator-session namespace. S1 wires the
+   * manager/admin Clerk path; cashier-PIN, takeover-confirm, roster,
+   * audit-event-emit, and PIN management are §A1-gated and land
+   * later.
+   */
+  operator: OperatorBridgeAPI;
 }
 
 declare global {

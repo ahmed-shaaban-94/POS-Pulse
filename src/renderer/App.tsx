@@ -5,12 +5,13 @@ import type { PreloadBridgeAPI } from '../shared/bridge-api';
 
 /**
  * 002-terminal-pairing T016 — App root.
+ * 004-operator-session T032 — wires the operator bridge alongside
+ * pairing so `/sign-in` is mounted in production.
  *
- * Replaces the blank Phase 2 stub with the boot router. The pairing
- * bridge is read from `window.api`; tests render `AppRouter` directly
- * with an injected bridge, so this component stays a one-liner.
+ * Tests render `AppRouter` directly with injected bridges, so this
+ * component stays a one-liner.
  */
 export default function App(): JSX.Element {
   const bridge = (window as unknown as { api: PreloadBridgeAPI }).api;
-  return <AppRouter pairing={bridge.pairing} />;
+  return <AppRouter pairing={bridge.pairing} operator={bridge.operator} />;
 }
