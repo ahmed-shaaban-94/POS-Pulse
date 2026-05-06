@@ -3,6 +3,19 @@
 **Plan:** [../plan.md](../plan.md) (v1.1)
 **Approval Gate:** §A2 (this whole document is gated)
 
+> **Revision note (2026-05-06, PR-0 — endpoint namespace alignment).**
+> All POS-facing endpoints in this contract are namespaced under
+> `/api/pos/v1/...` to match the SmartDataPulse backend (`Data-Pulse-2`)
+> URL convention discovered during Wave 1 backend planning. The
+> `/api/pos/v1/` prefix scopes the surface to the POS terminal product
+> and keeps it clearly disjoint from the existing dashboard auth surface
+> at `/api/v1/auth/*`. Older planning artifacts in this feature folder
+> (`plan.md`, `tasks.md`, `bridge-api.md`, `research.md`, `spec.md`,
+> `a1-amendment/proposal.md`) may still cite the legacy `/v1/operators/*`
+> / `/v1/audit-events` shorthand; **treat those references as legacy
+> aliases for the canonical paths in this file**. The contract of
+> record is this document.
+
 This contract describes the backend endpoints that 004 depends on. **It does
 not author OpenAPI YAML, does not mutate `scripts/openapi-snapshot.json`, and
 does not modify `src/shared/api-types.ts`.** Each endpoint below lands in the
@@ -23,6 +36,13 @@ roster fetch, audit-event sync.
 
 ## Conventions
 
+- **Namespace.** All POS-facing endpoints in this contract are mounted
+  under `/api/pos/v1/...` on the SmartDataPulse backend. The prefix
+  scopes them to the POS terminal product and is disjoint from the
+  dashboard auth surface at `/api/v1/auth/*`. The six endpoints below
+  use exactly this prefix. `branch_id` remains the POS-facing path /
+  query / body vocabulary; `Data-Pulse-2` maps it internally to
+  `store_id` / `active_store_id` at the DTO boundary.
 - All endpoints assume the existing 001/002 authentication baseline:
   - The terminal's `device_token` is sent as part of every request
     (Constitution VIII — terminal identity).
@@ -44,7 +64,7 @@ roster fetch, audit-event sync.
 
 ---
 
-## Endpoint 1 — `GET /v1/operators/roster`
+## Endpoint 1 — `GET /api/pos/v1/operators/roster`
 
 **Purpose**: Return the branch operator roster for the cashier sign-in
 surface (`operator.listBranchRoster`).
@@ -94,7 +114,7 @@ branch) is a separate admin-app flow that 004 does not own.
 
 ---
 
-## Endpoint 2 — `POST /v1/operators/sign-in`
+## Endpoint 2 — `POST /api/pos/v1/operators/sign-in`
 
 > **Revision note (2026-05-06, B-1 — Wave 1 alignment).** This endpoint
 > is revised to use **Clerk JWT verification (path b)** per the
@@ -237,7 +257,7 @@ rule.
 
 ---
 
-## Endpoint 3 — `POST /v1/operators/sign-out`
+## Endpoint 3 — `POST /api/pos/v1/operators/sign-out`
 
 **Purpose**: End an active operator session.
 
@@ -267,7 +287,7 @@ Sign-In within 1 s regardless of backend reachability).
 
 ---
 
-## Endpoint 4 — `POST /v1/operators/takeover/confirm`
+## Endpoint 4 — `POST /api/pos/v1/operators/takeover/confirm`
 
 **Purpose**: Confirm an explicit takeover from a prior terminal, terminating
 the prior operator session and creating a new one on the current terminal.
@@ -285,7 +305,7 @@ response from `/sign-in`.
 }
 ```
 
-**Response shape (success)**: Identical to `POST /v1/operators/sign-in`'s
+**Response shape (success)**: Identical to `POST /api/pos/v1/operators/sign-in`'s
 success envelope. A new session is now active.
 
 **Side effects (backend)**:
@@ -294,7 +314,7 @@ success envelope. A new session is now active.
   hosted it) is marked terminated with `end_cause = 'superseded_by_takeover'`.
 - A new operator session is created on the calling terminal.
 - The corresponding `operator.session.takeover` audit event is recognised
-  (it is emitted client-side via `POST /v1/audit-events` per Endpoint 5,
+  (it is emitted client-side via `POST /api/pos/v1/audit-events` per Endpoint 5,
   not by this endpoint directly — preserving the rule that audit events
   flow through one consolidated audit-sync channel).
 
@@ -314,7 +334,7 @@ call returns the same successful envelope without creating a second
 
 ---
 
-## Endpoint 5 — `POST /v1/audit-events`
+## Endpoint 5 — `POST /api/pos/v1/audit-events`
 
 **Purpose**: Sync locally-emitted audit events to the backend audit log.
 
@@ -393,7 +413,7 @@ already enforces it via the bridge handler's allowlist check.
 
 ---
 
-## Endpoint 6 — `GET /v1/operators/active-session`
+## Endpoint 6 — `GET /api/pos/v1/operators/active-session`
 
 **Purpose**: Allow a paired terminal to discover whether an operator
 already has an active session somewhere in the branch, **before** the
@@ -515,10 +535,10 @@ Endpoint 6 is a read-only query against the same table, scoped by
 
 | Slice | Endpoints needed |
 |:--|:--|
-| S1 | `POST /v1/operators/sign-in` (manager/admin variant), `POST /v1/operators/sign-out` |
-| S3 | `POST /v1/audit-events` (with at least the placeholder action category recognised) |
-| S4 | `GET /v1/operators/roster` (cashier path), `POST /v1/operators/takeover/confirm`, **`GET /v1/operators/active-session` (Endpoint 6 — cashier-path takeover detection; binary `{kind: "none" \| "active"}` response; no PIN data accepted)**, `POST /v1/audit-events` (with `operator.session.takeover` and `cashier.pin.reset` / `cashier.pin.unlock` recognised) |
-| S5 | `POST /v1/audit-events` (with `shift.forced_close` recognised) |
+| S1 | `POST /api/pos/v1/operators/sign-in` (manager/admin variant), `POST /api/pos/v1/operators/sign-out` |
+| S3 | `POST /api/pos/v1/audit-events` (with at least the placeholder action category recognised) |
+| S4 | `GET /api/pos/v1/operators/roster` (cashier path), `POST /api/pos/v1/operators/takeover/confirm`, **`GET /api/pos/v1/operators/active-session` (Endpoint 6 — cashier-path takeover detection; binary `{kind: "none" \| "active"}` response; no PIN data accepted)**, `POST /api/pos/v1/audit-events` (with `operator.session.takeover` and `cashier.pin.reset` / `cashier.pin.unlock` recognised) |
+| S5 | `POST /api/pos/v1/audit-events` (with `shift.forced_close` recognised) |
 
 Each row is a separate backend feature ticket. `/speckit-tasks` will
 schedule the dependent POS Pulse work behind the corresponding backend
