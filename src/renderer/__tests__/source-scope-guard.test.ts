@@ -13,9 +13,13 @@ import { FORBIDDEN_PATH_PREFIXES } from './source-scope-guard.const';
  * Fallback: if `origin/main` is unreachable, the test skips with an
  * explicit warning AND records a CI failure signal so the PR-review
  * checklist in quickstart.md §6 becomes the manual gate.
+ *
+ * Originally 003-pos-ui-shell scope. The forbidden list has been
+ * scoped down for 004-operator-session (see source-scope-guard.const.ts
+ * — preload / IPC / bridge-api.ts are now allowed seam extensions).
  */
 describe('source-scope guard (T006)', () => {
-  it('003-pos-ui-shell diff must not touch forbidden paths', () => {
+  it('diff must not touch forbidden paths', () => {
     let diffOutput: string;
 
     const runDiff = (tripleDoc: boolean): string =>

@@ -69,7 +69,11 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
         password,
       });
       // Defence in depth: clear the password input as soon as the
-      // bridge resolves, regardless of outcome.
+      // bridge resolves, regardless of outcome. The `!== null` arm is
+      // unreachable in the mounted lifecycle (the form unmounts only
+      // after sign-in resolves and the router redirects); the v8
+      // ignore keeps coverage honest about what tests can exercise.
+      /* v8 ignore next 2 */
       if (passwordRef.current !== null) {
         passwordRef.current.value = '';
       }
@@ -86,6 +90,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
       // channel missing). Fall back to a generic refusal — the
       // operator can retry. We deliberately do NOT echo the thrown
       // value (Constitution VII).
+      /* v8 ignore next 2 */
       if (passwordRef.current !== null) {
         passwordRef.current.value = '';
       }

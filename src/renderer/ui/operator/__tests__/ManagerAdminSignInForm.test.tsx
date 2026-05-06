@@ -88,6 +88,18 @@ describe('ManagerAdminSignInForm — T019 / T023 happy path', () => {
     expect(screen.getByTestId('sign-in-empty-input')).toBeInTheDocument();
   });
 
+  it('typing after the empty-input alert dismisses it (T021 pairing — no overlap)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = bridgeWith(happyResponse);
+    render(<ManagerAdminSignInForm operator={bridge} />);
+    // Trigger the empty-input alert by submitting with no values.
+    await user.click(screen.getByTestId('sign-in-submit'));
+    expect(screen.getByTestId('sign-in-empty-input')).toBeInTheDocument();
+    // The first new keystroke clears the alert.
+    await user.type(screen.getByLabelText(/email or username/i), 'i');
+    expect(screen.queryByTestId('sign-in-empty-input')).not.toBeInTheDocument();
+  });
+
   it('submits the typed identifier and password to the bridge once', async () => {
     const user = userEvent.setup();
     const { bridge, signInMock } = bridgeWith(happyResponse);
@@ -203,6 +215,40 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       expect(screen.queryByTestId('sign-in-spinner')).not.toBeInTheDocument();
     });
     expect(screen.getByTestId('sign-in-refusal')).toBeInTheDocument();
+  });
+});
+
+describe('ManagerAdminSignInForm — re-entry guard', () => {
+  it('a second submit while signingIn is a no-op (does not call the bridge twice)', async () => {
+    const user = userEvent.setup();
+    const resolver: { resolve: ((res: SignInResponse) => void) | null } = { resolve: null };
+    const signInMock = vi.fn(
+      () =>
+        new Promise<SignInResponse>((resolve) => {
+          resolver.resolve = resolve;
+        }),
+    );
+    const slow: OperatorBridgeAPI = {
+      signIn: signInMock,
+      signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
+      getCurrentSession: vi.fn(() => Promise.resolve(null)),
+    };
+    render(<ManagerAdminSignInForm operator={slow} />);
+    await user.type(screen.getByLabelText(/email or username/i), 'i');
+    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    // First submit — kicks off the slow signIn.
+    await user.click(screen.getByTestId('sign-in-submit'));
+    await screen.findByTestId('sign-in-spinner');
+    // Submit button is disabled while signingIn; firing the form's submit
+    // event directly (re-entry path) MUST be a no-op.
+    const form = screen.getByTestId('manager-admin-sign-in-form');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    expect(signInMock).toHaveBeenCalledTimes(1);
+    // Resolve the slow promise so React unmounts cleanly.
+    resolver.resolve?.({ kind: 'refused', category: 'invalid_input' });
+    await waitFor(() => {
+      expect(screen.queryByTestId('sign-in-spinner')).not.toBeInTheDocument();
+    });
   });
 });
 
