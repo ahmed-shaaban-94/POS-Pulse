@@ -38,6 +38,7 @@ function stubBridge(status: PairingStatus): PreloadBridgeAPI {
       ),
       signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
       getCurrentSession: vi.fn(() => Promise.resolve(null)),
+      _reportActivity: vi.fn(),
     },
   };
 }
