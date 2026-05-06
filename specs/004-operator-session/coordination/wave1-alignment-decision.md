@@ -6,11 +6,14 @@
 **Handoff:** [./a2-backend-handoff.md](./a2-backend-handoff.md)
 **Approval Gate:** §A2 (Backend Wave 1 — sign-in / sign-out)
 **Status:** ✅ **APPROVED 2026-05-06 by Ahmed — Q1 = Yes, Q2 = (b).
-B-1 merged 2026-05-06 (PR #43, SHA `c4ce84a`). PR-0 endpoint
-namespace alignment (`/api/pos/v1/...`) in flight on branch
-`004-pr0-pos-namespace`. Implementation still gated: do not start
-Wave 1 backend code until PR-0 merges, PR-1 follow-on lands, and
-B-2 owner go-ahead is given.**
+B-1 merged 2026-05-06 (PR #43, SHA `c4ce84a`). B-2 owner go-ahead
+given. Wave 1 implementation complete in Data-Pulse-2:**
+- **`POST /api/pos/v1/operators/sign-in`** — Data-Pulse-2 PR #52,
+  merge SHA `a765862ae9c7fcdff38db6ec34c72794dcadc59b`, 2026-05-06.
+- **`POST /api/pos/v1/operators/sign-out`** — Data-Pulse-2 PR #54,
+  merge SHA `14a4787232c81d3d404e47cd3a92e68bd9ece255`,
+  2026-05-06T11:20:30Z.
+**POS-Pulse S1 is unblocked. S1 has not started yet.**
 **Created:** 2026-05-06
 **Owner:** Ahmed (POS-Pulse + SmartDataPulse-backend, owner-implemented
 with ChatGPT/Claude support)
@@ -688,5 +691,6 @@ Wave 1 backend code is written in `Data-Pulse-2`:
 ---
 
 **End of §A2 Wave 1 alignment decision record.** Approved
-2026-05-06 (Q1 = Yes, Q2 = (b)). Implementation remains paused
-behind B-1 + B-2.
+2026-05-06 (Q1 = Yes, Q2 = (b)). Wave 1 implementation complete
+in Data-Pulse-2 main (PR #52 SHA `a765862` + PR #54 SHA `14a4787`,
+both 2026-05-06). POS-Pulse S1 unblocked; S1 not yet started.

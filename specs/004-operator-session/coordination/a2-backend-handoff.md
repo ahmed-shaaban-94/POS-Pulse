@@ -1,9 +1,12 @@
 # §A2 Backend Handoff — POS Pulse 004 operator/session endpoints
 
-**Status:** Repo-local coordination artifact only. **Counterpart resolved
-(2026-05-06): Ahmed holds both sides under §A2 owner-implemented mode** —
-this draft was never sent externally and will not be; it remains as the
-durable in-repo record of the contract surface.
+**Status:** ✅ **Wave 1 complete (2026-05-06).** Counterpart: Ahmed (both
+sides, owner-implemented mode). The message below was never sent externally;
+it remains as the durable in-repo record of the contract surface.
+Wave 1 endpoints now live in Data-Pulse-2 main:
+- `POST /api/pos/v1/operators/sign-in` — PR #52, SHA `a765862ae9c7fcdff38db6ec34c72794dcadc59b`
+- `POST /api/pos/v1/operators/sign-out` — PR #54, SHA `14a4787232c81d3d404e47cd3a92e68bd9ece255`
+**POS-Pulse S1 is unblocked. S1 has not started yet.**
 **Owner (POS-Pulse side):** Ahmed
 **Backend counterpart:** Ahmed (same person; SmartDataPulse-backend `Data-Pulse-2`)
 **Created:** 2026-05-06
