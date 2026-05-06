@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-06 (PR-0 namespace alignment in progress — POS-facing operator/session/audit endpoints are now `/api/pos/v1/...` to match `Data-Pulse-2`; B-1 merged via PR #43 — Endpoint 2 uses Clerk JWT verification via JWKS; Wave 1 backend code remains blocked behind PR-0 merge + PR-1 + B-2 owner go-ahead)
+**Last updated:** 2026-05-06 (Backend Wave 1 complete — `POST /api/pos/v1/operators/sign-in` merged via Data-Pulse-2 PR #52 SHA `a765862`, `POST /api/pos/v1/operators/sign-out` merged via Data-Pulse-2 PR #54 SHA `14a4787`; §A2 Wave 1 cleared; POS-Pulse S1 is now unblocked; S1 has not started)
 
 ---
 
@@ -29,13 +29,12 @@ invoked", and it is updated in place as coordination items resolve.
   off by Ahmed on 2026-05-05** (approved-with-revisions; 3 minor notes
   flagged for S1/S4/S5 task authors; none blocking). **§A1 cleared via
   PR #39 (merge SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1).**
-  **§A2 backend owner assigned — Ahmed holds both POS-Pulse and
-  SmartDataPulse-backend sides; coordination mode is owner-implemented
-  with ChatGPT/Claude support; no external backend handoff or issue is
-  required before planning the backend work. §A2 remains the active
-  remaining blocker until backend Wave 1 (`POST /api/pos/v1/operators/sign-in` +
-  `POST /api/pos/v1/operators/sign-out`) lands or is otherwise explicitly
-  approved as available.** `/speckit-tasks` is invocable; Slices 3–6
+  **§A2 backend Wave 1 complete — `POST /api/pos/v1/operators/sign-in`
+  merged via Data-Pulse-2 PR #52 (SHA `a765862ae9c7fcdff38db6ec34c72794dcadc59b`,
+  2026-05-06) and `POST /api/pos/v1/operators/sign-out` merged via
+  Data-Pulse-2 PR #54 (SHA `14a4787232c81d3d404e47cd3a92e68bd9ece255`,
+  2026-05-06T11:20:30Z). POS-Pulse S1 is now unblocked.** S1 has not
+  started yet. `/speckit-tasks` is invocable; Slices 3–6
   hold on §A2 per-endpoint delivery.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
@@ -132,10 +131,15 @@ invoked. They are independent and may be worked in parallel.
   [`./coordination/a2-backend-handoff.md`](./coordination/a2-backend-handoff.md)
   remains the durable record of the contract surface but is **not** to
   be sent externally.
-- **Status:** ⚠️ **Active remaining blocker — owner assigned;
-  backend Wave 1 not started.** §A2 is no longer blocked on
-  identifying a counterpart; it is now blocked on the backend work
-  itself (Wave 1 first).
+- **Status:** ✅ **Wave 1 complete — S1 is now unblocked.**
+  B-1 merged (PR #43, SHA `c4ce84a`) and B-2 owner go-ahead given;
+  Wave 1 backend implementation landed in Data-Pulse-2:
+  - `POST /api/pos/v1/operators/sign-in` — Data-Pulse-2 PR #52,
+    merge SHA `a765862ae9c7fcdff38db6ec34c72794dcadc59b`, 2026-05-06.
+  - `POST /api/pos/v1/operators/sign-out` — Data-Pulse-2 PR #54,
+    merge SHA `14a4787232c81d3d404e47cd3a92e68bd9ece255`,
+    2026-05-06T11:20:30Z.
+  **POS-Pulse S1 is unblocked. S1 has not started yet.**
 - **Wave 1 alignment decision (approved 2026-05-06):**
   [`./coordination/wave1-alignment-decision.md`](./coordination/wave1-alignment-decision.md).
   Q1 = Yes (Data-Pulse-2 adopts Clerk JWKS verification for
@@ -144,24 +148,9 @@ invoked. They are independent and may be worked in parallel.
   the user's Clerk password**). Cashier PIN remains local-only and
   MUST NEVER be sent to Data-Pulse-2 (AD-2 / §A1 / Constitution
   v1.5.1).
-- **Active blockers before Wave 1 implementation begins:**
-  - **B-1.** POS-Pulse contract revision PR (this PR) — updates
-    Endpoint 2 in [`./contracts/backend-endpoints.md`](./contracts/backend-endpoints.md)
-    so the request body no longer carries `password`, the Clerk JWT
-    travels in `Authorization: Bearer <jwt>`, the
-    `clerk_session_token` field is removed from the success response
-    (replaced by `operator_session.{id, issued_at}`), and the
-    server-side validation order is documented (device-token →
-    Clerk JWKS → operator identity → role → tenant/branch →
-    takeover detection). **Wave 1 backend code MUST NOT begin until
-    B-1 merges.**
-  - **B-2.** Explicit owner go-ahead to start Wave 1 backend
-    implementation in `Data-Pulse-2`. Separate authorization beyond
-    the alignment decision approval; recorded in
-    `wave1-alignment-decision.md` §11.2.
-- **Required next action:** **Land B-1 (this PR) on POS-Pulse `main`,
-  then await B-2 before opening any Wave 1 backend PR.** Wave 1
-  endpoints —
+- **Required next action:** Start POS-Pulse S1 (sign-in + sign-out
+  endpoint integration). Wave 1
+  endpoints now available in Data-Pulse-2 main:
   1. `POST /api/pos/v1/operators/sign-in` (manager/admin Clerk-JWT-verified
      sign-in only; cashier PIN path does NOT use this endpoint per
      AD-2; password is NEVER sent to Data-Pulse-2).
@@ -251,7 +240,7 @@ invoked. They are independent and may be worked in parallel.
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | **Ahmed** | Signed off; 3 minor notes for S1/S4/S5 task authors (not blocking). |
 | §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1 | **Ahmed** | **Path 1** — constitutional clarification clause added to Principle VIII; Clerk remains sole human IdP. |
-| §A2 — backend / OpenAPI | ⚠️ **Active remaining blocker — Wave 1 alignment approved; B-1 merged (PR #43, SHA c4ce84a); PR-0 namespace alignment in progress (this PR); PR-1 + B-2 owner go-ahead pending** | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented with ChatGPT/Claude support; no external handoff. Wave 1 alignment approved 2026-05-06 (Q1 = Yes, Q2 = path (b) — Clerk JWKS verification; password NEVER sent to Data-Pulse-2). PR-0 (this PR) aligns the POS-facing endpoint namespace with `Data-Pulse-2` (`/api/pos/v1/...`). **Next: land PR-0, then PR-1, then await B-2 before opening Wave 1 backend PR (`POST /api/pos/v1/operators/sign-in` + `POST /api/pos/v1/operators/sign-out`).** |
+| §A2 — backend / OpenAPI (Wave 1) | ✅ **Wave 1 cleared** — `POST /api/pos/v1/operators/sign-in` (Data-Pulse-2 PR #52, SHA `a765862`) + `POST /api/pos/v1/operators/sign-out` (Data-Pulse-2 PR #54, SHA `14a4787`) both merged to Data-Pulse-2 main 2026-05-06. **POS-Pulse S1 unblocked; S1 not yet started.** Waves 2–4 remain downstream. | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented. B-1 (PR #43) + B-2 complete. Wave 1 delivered with Clerk JWKS verification (Q1 = Yes, Q2 = path (b)); password never sent to Data-Pulse-2; cashier PIN stays local-only (AD-2 / §A1). |
 | §A3 — migrations | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅. |
 | §A4 — Argon2id binding | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅; Path 1 keeps §A4 in scope. |
 | §A5 — production readiness | ⏳ Held | _Assigned at rollout PR open time_ | Blocks production rollout only. |
@@ -324,19 +313,16 @@ agents and humans should read this file (and `plan.md`) first to know
 ---
 
 **End of coordination file.** §A1 cleared (PR #39, SHA 7ae337b,
-Constitution v1.5.1). §A2 owner consolidated under Ahmed (both
-POS-Pulse and SmartDataPulse-backend sides; owner-implemented with
-ChatGPT/Claude support, no external handoff). §A2 Wave 1 alignment
-approved 2026-05-06 (Q1 = Yes — Data-Pulse-2 adopts Clerk JWKS
-verification for `/api/pos/v1/operators/*`; Q2 = path (b) — POS-Pulse holds
-the Clerk JWT and Data-Pulse-2 MUST NOT receive or handle the user's
-Clerk password; cashier PIN remains local-only and MUST NEVER be
-sent to Data-Pulse-2). B-1 merged on 2026-05-06 (PR #43, SHA
-`c4ce84a`) — Endpoint 2 contract revised to Clerk JWT verification.
-PR-0 (this PR) aligns the POS-facing operator/session/audit endpoint
-namespace with `Data-Pulse-2` (`/api/pos/v1/...`). §A2 remains the
-active remaining blocker behind PR-0, PR-1, and B-2 (explicit owner
-go-ahead to start Wave 1 backend code). §A3 / §A4 are unblocked for
-planning; §A5 is a later-rollout gate. `/speckit-tasks` may now be
-invoked; implementation slices S1–S6 are not yet started; POS-Pulse
-S1 stays blocked until Wave 1 backend lands.
+Constitution v1.5.1). §A2 Wave 1 **complete** — `POST
+/api/pos/v1/operators/sign-in` (Data-Pulse-2 PR #52, SHA
+`a765862ae9c7fcdff38db6ec34c72794dcadc59b`) and `POST
+/api/pos/v1/operators/sign-out` (Data-Pulse-2 PR #54, SHA
+`14a4787232c81d3d404e47cd3a92e68bd9ece255`) both merged to
+Data-Pulse-2 main on 2026-05-06. Clerk JWKS verification is in
+place (Q1 = Yes, Q2 = path (b)); password is never sent to
+Data-Pulse-2; cashier PIN stays local-only (AD-2 / §A1 /
+Constitution v1.5.1). **POS-Pulse S1 is now unblocked. S1 has not
+started yet.** §A2 Waves 2–4 (audit-events, roster, takeover/confirm,
+active-session, forced-close) remain downstream. §A3 / §A4 unblocked
+for planning; §A5 is a later-rollout gate. `/speckit-tasks` may be
+invoked; implementation slices S1–S6 are not yet started.
