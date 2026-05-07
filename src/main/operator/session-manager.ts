@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { Role } from '../../shared/operator/role.js';
 import type { OperatorSessionBridgeView } from '../../shared/bridge-api.js';
+import type { SessionEndCause } from '../../shared/operator/session-end-cause.js';
 
 /**
  * 004-operator-session T028 — main-process session manager (in-memory).
@@ -41,6 +42,7 @@ export interface CreateSessionInput {
 
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;
+  private lastEndCause: SessionEndCause | null = null;
 
   getCurrent(): OperatorSessionRecord | null {
     return this.current;
@@ -80,10 +82,23 @@ export class SessionManager {
     return record;
   }
 
-  end(): OperatorSessionRecord | null {
+  /**
+   * End the active session. The optional `cause` is stored in-memory for
+   * test inspection and will be written to the `operator_sessions` SQL row
+   * once §A3 (T065) lands. Matches data-model.md §"Entity 2 — OperatorSession".
+   */
+  end(cause?: SessionEndCause): OperatorSessionRecord | null {
     const ending = this.current;
+    if (ending !== null && cause !== undefined) {
+      this.lastEndCause = cause;
+    }
     this.current = null;
     return ending;
+  }
+
+  /** Returns the end_cause recorded for the most recently ended session. */
+  getLastEndCause(): SessionEndCause | null {
+    return this.lastEndCause;
   }
 
   noteActivity(at: string): void {

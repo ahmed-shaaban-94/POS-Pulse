@@ -9,7 +9,14 @@ export default defineConfig({
     environment: 'happy-dom',
     // T051: scripts/__tests__/* contains codegen tooling tests; add the
     // pattern so vitest collects them.
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.ts'],
+    // T051a/T051c: lifecycle cascade integration tests live in tests/integration/.
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'scripts/**/*.test.ts',
+      'tests/**/*.test.ts',
+      'tests/**/*.test.tsx',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
