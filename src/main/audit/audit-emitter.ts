@@ -13,29 +13,20 @@
 
 import type { AuditEvent, Fr025MandatoryAttribute } from '../../shared/audit/event-shape.js';
 import { FR025_MANDATORY_ATTRIBUTES } from '../../shared/audit/event-shape.js';
+import {
+  FORBIDDEN_PAYLOAD_KEYS,
+  type ForbiddenPayloadKey,
+} from '../../shared/audit/forbidden-keys.js';
 
 // ─── Forbidden payload field names (PR-1 / FR-027) ─────────────────────────
 
 /**
- * Field names that MUST NOT appear anywhere in an audit-event payload tree
- * (any nesting depth). Covering raw credential fragments, PINs, card data,
- * and all Clerk token varieties.
+ * Re-export the canonical list from `shared/audit/forbidden-keys.ts`.
+ * The same list also drives `src/main/logging/logger.ts` redaction paths
+ * and the Sentry `beforeSend` denylist (T050) — one source of truth.
  */
-export const FORBIDDEN_PAYLOAD_KEYS = [
-  'pin',
-  'pin_hash',
-  'password',
-  'password_hash',
-  'clerk_jwt',
-  'clerk_session_token',
-  'device_token',
-  'device_token_attestation',
-  'token',
-  'secret',
-  'credential',
-] as const satisfies readonly string[];
-
-export type ForbiddenPayloadKey = (typeof FORBIDDEN_PAYLOAD_KEYS)[number];
+export { FORBIDDEN_PAYLOAD_KEYS };
+export type { ForbiddenPayloadKey };
 
 // ─── DI interface ──────────────────────────────────────────────────────────
 

@@ -2,6 +2,8 @@ import path from 'path';
 import pino, { type Logger } from 'pino';
 import pinoRoll from 'pino-roll';
 
+import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
+
 /**
  * T060 — main-process logger.
  *
@@ -114,7 +116,34 @@ const OPERATOR_REDACTED_KEYS = [
   'pin_salt',
 ] as const;
 
-const ALL_REDACTED_KEYS = [...PAIRING_REDACTED_KEYS, ...OPERATOR_REDACTED_KEYS] as const;
+/**
+ * 004-operator-session T050 — audit-event payload defence-in-depth keys.
+ *
+ * The `FORBIDDEN_PAYLOAD_KEYS` list (from `shared/audit/forbidden-keys.ts`)
+ * is the canonical name set the audit emitter refuses at insertion time
+ * (FR-027 / PR-1). Mirroring it into the pino redaction list is defence
+ * in depth: even if a future contributor logs a request / response object
+ * containing one of these names somewhere outside the audit emitter
+ * (e.g., a debug trace, a raw error body), the value is scrubbed.
+ *
+ * The merge below dedupes against the operator/pairing sets so we don't
+ * generate duplicate path entries for keys that overlap (`pin`,
+ * `password`, `clerk_jwt`, `clerk_session_token`, `pin_hash`,
+ * `device_token`, `pairing_code`).
+ */
+const PRIOR_REDACTED_KEYS_SET = new Set<string>([
+  ...PAIRING_REDACTED_KEYS,
+  ...OPERATOR_REDACTED_KEYS,
+]);
+const AUDIT_REDACTED_KEYS = FORBIDDEN_PAYLOAD_KEYS.filter(
+  (key) => !PRIOR_REDACTED_KEYS_SET.has(key),
+);
+
+const ALL_REDACTED_KEYS = [
+  ...PAIRING_REDACTED_KEYS,
+  ...OPERATOR_REDACTED_KEYS,
+  ...AUDIT_REDACTED_KEYS,
+] as const;
 const REDACTION_PATHS: string[] = ALL_REDACTED_KEYS.flatMap((key) => [
   key,
   `*.${key}`,
