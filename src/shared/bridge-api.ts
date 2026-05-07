@@ -186,6 +186,15 @@ export interface OperatorBridgeAPI {
    * INSERT OR IGNORE at the SQL layer).
    */
   emitAuditEvent(req: EmitAuditEventRequest): Promise<EmitAuditEventResponse | OperatorRefusal>;
+
+  /**
+   * T051 — Debug bridge smoke. Main generates the event_id; renderer
+   * supplies nothing. Gated by `process.env.NODE_ENV !== 'production'`
+   * in the main-process handler — returns `invalid_input` refusal in
+   * production builds. Manager / admin roles only; cashier → `role_mismatch`.
+   * Hardcoded `action_category: 'shift.open'`, `payload: { smoke: true }`.
+   */
+  _emitAuditEventSmoke(): Promise<EmitAuditEventResponse | OperatorRefusal>;
 }
 
 export interface PreloadBridgeAPI {

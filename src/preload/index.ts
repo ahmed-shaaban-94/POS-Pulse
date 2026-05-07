@@ -68,6 +68,10 @@ const operator: OperatorBridgeAPI = {
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT, req) as Promise<
       EmitAuditEventResponse | OperatorRefusal
     >,
+  _emitAuditEventSmoke: () =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE) as Promise<
+      EmitAuditEventResponse | OperatorRefusal
+    >,
 };
 
 const api: PreloadBridgeAPI = {

@@ -69,6 +69,9 @@ function operatorBridge(opts: {
     emitAuditEvent: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
     ),
+    _emitAuditEventSmoke: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
+    ),
   };
 }
 
