@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-06 (Backend Wave 1 complete — `POST /api/pos/v1/operators/sign-in` merged via Data-Pulse-2 PR #52 SHA `a765862`, `POST /api/pos/v1/operators/sign-out` merged via Data-Pulse-2 PR #54 SHA `14a4787`; §A2 Wave 1 cleared; POS-Pulse S1 is now unblocked; S1 has not started)
+**Last updated:** 2026-05-07 (§A2 Wave 2 cleared — `POST /api/pos/v1/audit-events` merged via Data-Pulse-2 PR #62 SHA `4f77da6`; §A3 now active — `migrations/0004_audit_events.sql` authored in POS-Pulse PR pending review)
 
 ---
 
@@ -200,14 +200,16 @@ invoked. They are independent and may be worked in parallel.
 
 ### 4. §A3 migrations
 
-- **Status:** ⏳ **Downstream of §A1.** No action until §A1 resolves.
-- **Required action:** None until §A1 resolves. The set of needed
-  migrations depends on §A1's outcome:
-  - Path 1 → `audit_events`, `operator_sessions`, `cashier_pin_records`.
-  - Path 2 → `audit_events`, `operator_sessions` only (no
-    `cashier_pin_records`).
-  - Path 3 → `audit_events` only (S3); `operator_sessions` if needed for
-    durability beyond in-memory state.
+- **Status:** ⏳ **Active — §A3 gate PR in review.** §A1 cleared (PR #39,
+  2026-05-05); §A2 Wave 2 cleared (Data-Pulse-2 PR #62, SHA `4f77da6`,
+  2026-05-07). `migrations/0004_audit_events.sql` authored per data-model.md
+  §"Entity 5" (append-only triggers, composite PK `(event_id, tenant_id)`,
+  `audit_events_sync_state` sibling). Merge of the §A3 gate PR unblocks S3
+  implementation tasks T046+.
+- **Required action:** Review and merge the §A3 gate PR (POS-Pulse
+  `feat/004-s3-audit-events-migration`). §A1 resolved via Path 1 →
+  migrations needed: `audit_events` (this PR), `operator_sessions` (S4),
+  `cashier_pin_records` (S4).
 - **Unblocks (when ready):** S3 (audit_events), S4 (cashier_pin_records,
   operator_sessions if not in S1).
 
@@ -241,7 +243,8 @@ invoked. They are independent and may be worked in parallel.
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | **Ahmed** | Signed off; 3 minor notes for S1/S4/S5 task authors (not blocking). |
 | §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1 | **Ahmed** | **Path 1** — constitutional clarification clause added to Principle VIII; Clerk remains sole human IdP. |
 | §A2 — backend / OpenAPI (Wave 1) | ✅ **Wave 1 cleared** — `POST /api/pos/v1/operators/sign-in` (Data-Pulse-2 PR #52, SHA `a765862`) + `POST /api/pos/v1/operators/sign-out` (Data-Pulse-2 PR #54, SHA `14a4787`) both merged to Data-Pulse-2 main 2026-05-06. **POS-Pulse S1 unblocked; S1 not yet started.** Waves 2–4 remain downstream. | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented. B-1 (PR #43) + B-2 complete. Wave 1 delivered with Clerk JWKS verification (Q1 = Yes, Q2 = path (b)); password never sent to Data-Pulse-2; cashier PIN stays local-only (AD-2 / §A1). |
-| §A3 — migrations | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅. |
+| §A2 — backend / OpenAPI (Wave 2) | ✅ **Wave 2 cleared** — `POST /api/pos/v1/audit-events` merged via Data-Pulse-2 PR #62, SHA `4f77da6`, 2026-05-07. **S3 §A2 dependency cleared.** | **Ahmed** | Wave 2 delivered; S3 now holds on §A3 only. |
+| §A3 — migrations | ⏳ **Active — gate PR in review** (`feat/004-s3-audit-events-migration`) | **Ahmed** | §A1 cleared (Path 1); `migrations/0004_audit_events.sql` authored. Merge unblocks S3 T046+. |
 | §A4 — Argon2id binding | ⏳ Held | _Derives from §A1 outcome_ | No action until §A1 ✅; Path 1 keeps §A4 in scope. |
 | §A5 — production readiness | ⏳ Held | _Assigned at rollout PR open time_ | Blocks production rollout only. |
 
