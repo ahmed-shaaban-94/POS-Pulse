@@ -100,8 +100,29 @@ export function initSentryMain(opts: InitSentryMainOptions): void {
  * `phoneNumber`, `customerPhone`, etc. The trade-off is false positives
  * on words that contain "phone" coincidentally; in practice nothing in
  * POS-Pulse's domain vocabulary collides.
+ *
+ * 004-operator-session T050 additions (PR-1 / FR-030 / FR-027 alignment):
+ *   - `pin`     — PIN values, PIN hashes, PIN salts (cashier credential
+ *                 surface; ships in S4). Trade-off mirrors `phone`: the
+ *                 substring may catch false-positive words like `pinpoint`
+ *                 or `spinning`, but POS-Pulse's domain vocabulary does
+ *                 not collide. Reviewers MUST flag any future field name
+ *                 containing `pin` in a non-credential sense.
+ *   - `jwt`     — Clerk JWT and any other JWT-bearing field (catches
+ *                 `clerk_jwt`, `clerkJwt`, `jwtPayload`).
+ *   - `clerk`   — defence-in-depth for `clerk_session_token` and any
+ *                 future Clerk-namespaced credential field.
+ *   - `auth`    — catches `authorization`, `authToken`, `authHeader`.
+ *   - `pair`    — catches `pairing_code` and any future pairing-namespaced
+ *                 credential field.
+ *
+ * The audit-event payload's `FORBIDDEN_PAYLOAD_KEYS` (raw cardholder
+ * data, full PII, credential fragments, PIN values, Clerk JWTs, session
+ * tokens, device-token attestations, pairing codes) are all covered by
+ * this regex now — their substrings are present.
  */
-const DENYLIST_PATTERN = /secret|token|password|credential|card|pii|cvv|pan|email|phone/i;
+const DENYLIST_PATTERN =
+  /secret|token|password|credential|card|pii|cvv|pan|email|phone|pin|jwt|clerk|auth|pair/i;
 
 /**
  * Sentry `beforeSend` hook. Returns `null` to drop the event entirely
@@ -143,14 +164,14 @@ export function scrubEvent(event: ErrorEvent, _hint?: EventHint): ErrorEvent | n
   delete cleaned.user;
 
   if (cleaned.extra !== undefined) {
-    cleaned.extra = stripDenylistedKeys(cleaned.extra);
+    cleaned.extra = stripDenylistedKeys(cleaned.extra) as Record<string, unknown>;
   }
 
   if (cleaned.contexts !== undefined) {
     const cleanedContexts: Record<string, Record<string, unknown>> = {};
     for (const [ctxName, ctxValue] of Object.entries(cleaned.contexts)) {
       if (typeof ctxValue === 'object') {
-        cleanedContexts[ctxName] = stripDenylistedKeys(ctxValue);
+        cleanedContexts[ctxName] = stripDenylistedKeys(ctxValue) as Record<string, unknown>;
       }
     }
     // After scrubbing we hold a plain string-keyed bag; Sentry's
@@ -167,11 +188,37 @@ export function scrubEvent(event: ErrorEvent, _hint?: EventHint): ErrorEvent | n
   return hasPayload ? cleaned : null;
 }
 
-function stripDenylistedKeys(bag: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(bag)) {
-    if (DENYLIST_PATTERN.test(key)) continue;
-    out[key] = value;
+/**
+ * Recursively strip denylisted keys from a nested object tree.
+ *
+ * 004-operator-session T050: prior shape was shallow — only top-level
+ * keys of `extra` / each `contexts[name]` bag were inspected. Audit-event
+ * payloads (data-model.md § "Entity 5 — AuditEvent") are nested objects;
+ * a `Sentry.setContext('audit', { event: { payload: { password_hash: 'x' } } })`
+ * call would pass straight through under the old behaviour. The recursive
+ * walk closes that gap.
+ *
+ * Behaviour:
+ *   - Plain objects are walked; denylisted keys at any depth are dropped.
+ *   - Arrays are walked element-by-element; non-object elements pass
+ *     through untouched.
+ *   - Primitives (string, number, boolean, null, undefined) pass through.
+ *   - Cycles are not expected in Sentry payloads (they're JSON-serialised
+ *     by the Sentry SDK before transport). If one slipped in, the walk
+ *     would recurse indefinitely; we accept that as a non-issue because
+ *     Sentry's own serializer would have failed first.
+ */
+function stripDenylistedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripDenylistedKeys(item));
   }
-  return out;
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (DENYLIST_PATTERN.test(key)) continue;
+      out[key] = stripDenylistedKeys(child);
+    }
+    return out;
+  }
+  return value;
 }

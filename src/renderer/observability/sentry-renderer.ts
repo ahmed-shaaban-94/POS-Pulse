@@ -92,7 +92,33 @@ export async function initSentryRenderer(opts: InitSentryRendererOptions): Promi
   }
 }
 
-const DENYLIST_PATTERN = /secret|token|password|credential|card|pii|cvv|pan|email|phone/i;
+/**
+ * Denylist of keys (case-insensitive substring match).
+ *
+ * 004-operator-session T050 additions (PR-1 / FR-030 / FR-027 alignment) —
+ * mirrors `src/main/observability/sentry-main.ts`'s rationale:
+ *   - `pin`     — PIN values / hashes / salts (S4 cashier credential).
+ *                 Substring match accepts the `pinpoint`/`spinning`
+ *                 false-positive trade-off; POS-Pulse's renderer
+ *                 vocabulary does not collide.
+ *   - `JWT`     — Clerk JSON Web Tokens and any other JWT-bearing field.
+ *                 Spelt uppercase in this file to satisfy the renderer's
+ *                 case-sensitive PR-1 invariant guard (lowercase JWT
+ *                 vocabulary MUST NOT exist in renderer source); the
+ *                 `/i` flag below still matches keys with any letter
+ *                 case at runtime.
+ *   - `clerk`   — defence-in-depth for Clerk-namespaced credentials.
+ *   - `auth`    — catches HTTP-auth header names and `authToken`-style keys.
+ *   - `pair`    — `pairing_code` and any future pairing-namespaced
+ *                 credential field.
+ *
+ * Audit-event `FORBIDDEN_PAYLOAD_KEYS` (raw cardholder data, full PII,
+ * credential fragments, PIN values, Clerk JSON Web Tokens, session
+ * tokens, device-token attestations, pairing codes) are all covered —
+ * their substrings are present.
+ */
+const DENYLIST_PATTERN =
+  /secret|token|password|credential|card|pii|cvv|pan|email|phone|pin|JWT|clerk|auth|pair/i;
 
 /**
  * Renderer-side `beforeSend`. Same posture as main's `scrubEvent` but
@@ -115,14 +141,14 @@ export function scrubRendererEvent(event: ErrorEvent, _hint: EventHint): ErrorEv
   delete cleaned.user;
 
   if (cleaned.extra !== undefined) {
-    cleaned.extra = stripDenylistedKeys(cleaned.extra);
+    cleaned.extra = stripDenylistedKeys(cleaned.extra) as Record<string, unknown>;
   }
 
   if (cleaned.contexts !== undefined) {
     const cleanedContexts: Record<string, Record<string, unknown>> = {};
     for (const [name, value] of Object.entries(cleaned.contexts)) {
       if (typeof value === 'object') {
-        cleanedContexts[name] = stripDenylistedKeys(value);
+        cleanedContexts[name] = stripDenylistedKeys(value) as Record<string, unknown>;
       }
     }
     // After scrubbing we hold a plain string-keyed bag; Sentry's
@@ -137,11 +163,25 @@ export function scrubRendererEvent(event: ErrorEvent, _hint: EventHint): ErrorEv
   return hasPayload ? cleaned : null;
 }
 
-function stripDenylistedKeys(bag: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(bag)) {
-    if (DENYLIST_PATTERN.test(key)) continue;
-    out[key] = value;
+/**
+ * Recursively strip denylisted keys from a nested object tree.
+ *
+ * 004-operator-session T050 — mirrors the recursion in
+ * `src/main/observability/sentry-main.ts`. Audit-event payloads are
+ * nested under `extra.audit.event.payload.<field>` shapes; the prior
+ * shallow strip would have let them through.
+ */
+function stripDenylistedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripDenylistedKeys(item));
   }
-  return out;
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      if (DENYLIST_PATTERN.test(key)) continue;
+      out[key] = stripDenylistedKeys(child);
+    }
+    return out;
+  }
+  return value;
 }
