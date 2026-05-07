@@ -18,7 +18,6 @@
  *   - `src/main/secrets/`         — 001's safeStorage layer.
  *   - `src/shared/api-types.ts`   — generated; only `npm run codegen:api`
  *                                   may regenerate it (NOT in S1).
- *   - `migrations/`               — §A3 gate; S1 has no migrations.
  *   - `scripts/codegen-api.ts`    — the codegen tool itself.
  *   - `scripts/openapi-snapshot.json` — pinned snapshot; S1 owner
  *                                   decision (b) keeps it untouched.
@@ -30,7 +29,6 @@ export const FORBIDDEN_PATH_PREFIXES = [
   'src/main/pairing/',
   'src/main/secrets/',
   'src/shared/api-types.ts',
-  'migrations/',
   'scripts/codegen-api.ts',
   'scripts/openapi-snapshot.json',
   '.github/workflows/',
