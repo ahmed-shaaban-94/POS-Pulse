@@ -29,6 +29,7 @@ import { SessionManager } from './operator/session-manager.js';
 import { SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
+import { LifecycleCascade } from './operator/lifecycle-cascade.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
@@ -334,6 +335,20 @@ app
       sessionManager: operatorSessionManager,
     });
     operatorInactivityMonitor.start();
+
+    // T051b + T051d — lifecycle cascade for terminal-revocation (FR-014) and
+    // account-disabled-mid-session edge cases. The cascade holds the session-
+    // manager reference so the future US7 401-interceptor can call
+    // operatorLifecycleCascade.notifyTerminalRevoked() /
+    // operatorLifecycleCascade.notifyAccountDisabled() without importing any
+    // singleton. Exported as a module-level let so future interceptors can
+    // reach it; it is NOT exposed to the renderer bridge.
+    const operatorLifecycleCascade = new LifecycleCascade({
+      sessionManager: operatorSessionManager,
+      logger: mainLogger,
+    });
+    // Suppress "declared but never read" until the US7 interceptor wires it.
+    void operatorLifecycleCascade;
 
     // T048 — construct the audit-events outbox chain on the shared DB handle.
     // Lazy statement preparation in bindAuditEventsStoreDb ensures migration
