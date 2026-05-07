@@ -11,7 +11,7 @@ description: "Task list for feature 004-operator-session — slice-organised, ga
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md) ✅ approved-with-revisions (2026-05-05)
 **Constitution version pinned:** v1.5.0
 **Created:** 2026-05-05
-**Last updated:** 2026-05-05 — addendum applied to address `/speckit-analyze` findings C1, C2, U1, U2, C3, C4. New tasks added with `a/b/c` suffixes to preserve existing T### IDs; existing tasks unchanged except where explicitly noted (T069 description amended to reference T069b; T070 description amended to reference T069c; T075 description amended to reference T070b)
+**Last updated:** 2026-05-07 — S3 complete; all Phase 5 tasks (T039–T051d) marked ✅. §A3 gate cleared (POS-Pulse PR #49, `migrations/0004_audit_events.sql`, SHA `e50f5b8`). S3 merged via PRs #49–#56 (HEAD `ba32133`). Addendum originally applied 2026-05-05.
 
 ---
 
@@ -37,13 +37,13 @@ Every implementation task that touches code is preceded by a TDD test task per C
 | Gate | Status | Owner | Path |
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | Ahmed | (3 notes incorporated below as task requirements) |
-| §A1 — local-unlock-factor approval | ⏳ Resolution pending | Ahmed | Path 1 — constitutional clarification clause |
-| §A2 — backend / OpenAPI | ⏳ Backend coordination pending | Ahmed / Backend owner TBD | **6 endpoints** (Endpoint 6 added 2026-05-05 to address analyze finding U1: cashier-path takeover detection); per-slice unblocking |
-| §A3 — migrations | ⏳ Held (downstream of §A1) | Derives from §A1 | 3 tables under §A1 Path 1 |
-| §A4 — Argon2id binding | ⏳ Held (downstream of §A1) | Derives from §A1 | In scope under Path 1 |
+| §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA `7ae337b`, Constitution v1.5.1, 2026-05-05 | Ahmed | Path 1 — constitutional clarification clause added to Principle VIII. |
+| §A2 — backend / OpenAPI | ✅ Wave 1 + Wave 2 cleared (Wave 3–4 downstream) | Ahmed | Wave 1: sign-in + sign-out (Data-Pulse-2 PRs #52/#54). Wave 2: audit-events (Data-Pulse-2 PR #62, SHA `4f77da6`). Waves 3–4 block S4/S5. |
+| §A3 — migrations | ✅ **Partially cleared** — `audit_events` merged PR #49 SHA `e50f5b8`. `operator_sessions` + `cashier_pin_records` remain for S4. | Ahmed | `audit_events` + `audit_events_sync_state` tables live. S4 migrations not yet authored. |
+| §A4 — Argon2id binding | ⏳ Held (awaiting S4 scheduling) | Ahmed | §A1 cleared Path 1 — §A4 is in scope; no action until S4 starts. |
 | §A5 — production readiness | ⏳ Held | TBD at rollout PR open time | Blocks production rollout only, not slice merges |
 
-**Net effect on this tasks.md**: Phase 1 (Setup) and Phase 2 (Foundational, manager/admin only) tasks are startable now. S1's tasks gate on §A2's S1 endpoints. S3's tasks gate on §A1 ✅ + §A2 + §A3. S4's tasks gate on §A1 ✅ + §A2 + §A3 + §A4. S5's tasks gate on §A1 ✅ + §A2. S6's tasks gate on the prior slices being merged. **No task that mutates source code may start until its gate row is ✅.**
+**Net effect on this tasks.md**: Phase 1 (Setup), Phase 2 (Foundational), Phase 3 (S1), Phase 4 (S2), and Phase 5 (S3) are **complete** (all tasks ✅). S4 gates on §A2 Wave 3 + §A3 (operator_sessions / cashier_pin_records migrations) + §A4. S5 gates on S4 + §A2 Wave 4. S6 gates on prior slices merged. §A3 partially cleared (audit_events ✅); cashier_pin_records + operator_sessions migrations remain for S4.
 
 ---
 
@@ -172,33 +172,33 @@ Every implementation task that touches code is preceded by a TDD test task per C
 
 ### Phase 5 — Tests
 
-- [ ] T039 [P] [US3] **`[BLOCKED: §A1]`** Unit test: `src/main/audit/audit-emitter.ts` rejects audit-event submissions missing any of the FR-025 mandatory five attributes (`acting_operator_id`, `shift_id` *unless null is allowed for category*, `originating_terminal_id`, `created_at`, `action_category`) — `tests/unit/main/audit/audit-emitter.test.ts`
-- [ ] T040 [P] [US3] **`[BLOCKED: §A1]`** Unit test: idempotency — submitting the same `event_id` twice produces one row in `audit_events` (P5) — `tests/unit/main/audit/audit-emitter-idempotency.test.ts`
-- [ ] T041 [P] [US3] **`[BLOCKED: §A1, §A3]`** Integration test: SQLite `audit_events` table refuses `UPDATE` and `DELETE` via raw SQL (schema-level append-only enforcement; AD-3 / FR-028) — `tests/integration/main/audit/audit-events-append-only.test.ts`
-- [ ] T042 [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: crash/restart path — an audit event written before crash is still in the outbox after restart and is re-attempted on next sync — `tests/integration/main/audit/audit-events-durability.test.ts`
-- [ ] T043 [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: network-failure path — failed sync keeps the event in outbox; reconnect triggers retry; backend duplicate-`event_id` is silently deduped (P5) — `tests/integration/main/audit/audit-events-sync.test.ts`
-- [ ] T044 [P] [US3] **`[BLOCKED: §A1]`** Unit test: `payload` redaction — submissions whose `payload` contains forbidden field names (raw cardholder data, full PII, credential fragments, PIN values, session tokens, Clerk JWTs) are refused at the bridge handler (FR-027 / PR-1) — `tests/unit/main/audit/audit-emitter-redaction.test.ts`
+- [x] T039 [P] [US3] **`[BLOCKED: §A1]`** Unit test: `src/main/audit/audit-emitter.ts` rejects audit-event submissions missing any of the FR-025 mandatory five attributes (`acting_operator_id`, `shift_id` *unless null is allowed for category*, `originating_terminal_id`, `created_at`, `action_category`) — `tests/unit/main/audit/audit-emitter.test.ts`
+- [x] T040 [P] [US3] **`[BLOCKED: §A1]`** Unit test: idempotency — submitting the same `event_id` twice produces one row in `audit_events` (P5) — `tests/unit/main/audit/audit-emitter-idempotency.test.ts`
+- [x] T041 [P] [US3] **`[BLOCKED: §A1, §A3]`** Integration test: SQLite `audit_events` table refuses `UPDATE` and `DELETE` via raw SQL (schema-level append-only enforcement; AD-3 / FR-028) — `tests/integration/main/audit/audit-events-append-only.test.ts`
+- [x] T042 [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: crash/restart path — an audit event written before crash is still in the outbox after restart and is re-attempted on next sync — `tests/integration/main/audit/audit-events-durability.test.ts`
+- [x] T043 [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: network-failure path — failed sync keeps the event in outbox; reconnect triggers retry; backend duplicate-`event_id` is silently deduped (P5) — `tests/integration/main/audit/audit-events-sync.test.ts`
+- [x] T044 [P] [US3] **`[BLOCKED: §A1]`** Unit test: `payload` redaction — submissions whose `payload` contains forbidden field names (raw cardholder data, full PII, credential fragments, PIN values, session tokens, Clerk JWTs) are refused at the bridge handler (FR-027 / PR-1) — `tests/unit/main/audit/audit-emitter-redaction.test.ts`
 
 ### Phase 5 — Implementation `[BLOCKED: §A1, §A2 (S3), §A3]`
 
-- [ ] T045 [US3] **`[BLOCKED: §A1, §A3]`** Migration `migrations/NNN_audit_events.sql`: `audit_events` table with append-only triggers (deny `UPDATE`, deny `DELETE`), unique `(event_id, tenant_id)` index, plus the sibling `audit_events_sync_state` table for the mutable `synced_at` column. Schema per data-model.md §"Entity 5 — AuditEvent". — depends on §A3 approval
-- [ ] T046 [US3] **`[BLOCKED: §A1]`** Implement `src/main/audit/audit-emitter.ts` exposing `emitAuditEvent(req: EmitAuditEventRequest)` per contracts/bridge-api.md call 10. The emitter: validates the FR-025 five attributes; runs the redaction allowlist check on `payload`; writes to `audit_events` in the same transaction as any caller-provided side effects; returns `EmitAuditEventResponse` — depends on T045, T015
-- [ ] T047 [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Implement the local outbox + sync loop in `src/main/audit/audit-sync.ts`: extends 001's existing offline-queue if reusable (research §5; otherwise parallel implementation). Calls `POST /v1/audit-events` with batches; honours the response's `accepted` / `duplicates` / `rejected` envelope. — depends on T046
-- [ ] T048 [US3] **`[BLOCKED: §A1]`** Wire `operator.emitAuditEvent` bridge call (typed in T014) to the main-process emitter — `src/preload/operator.ts` adds the export; `src/main/operator/bridge-handlers.ts` dispatches — depends on T046, T014
-- [ ] T049 [P] [US3] **`[BLOCKED: §A1]`** Add per-action-category schemas in `src/shared/audit/payload-schemas.ts`: at minimum `shift.open`, `shift.close`, `shift.forced_close`, `operator.session.takeover`, `cashier.pin.reset`, `cashier.pin.unlock` (the latter two ship in S4; their schemas land here as types only). Per data-model.md §"Action Category Catalogue". — depends on T013
-- [ ] T050 [US3] **`[BLOCKED: §A1]`** Extend `pino` redaction list and Sentry scrubber rules for: `audit_events.payload` (already redacted by allowlist; defence in depth), session tokens, Clerk JWTs (P11 alignment) — `src/main/logger/redaction.ts` extension and `src/main/sentry-scrubber.ts` if it exists; otherwise note in a redaction-config file — depends on T046
-- [ ] T051 [US3] **`[BLOCKED: §A1]`** Add a debug bridge call `operator.emitAuditEvent.test` for S3 quickstart smoke (placeholder action category, manager-only role gate, never reachable in production builds — gated by `process.env.NODE_ENV !== 'production'`) — depends on T048
+- [x] T045 [US3] **`[BLOCKED: §A1, §A3]`** Migration `migrations/NNN_audit_events.sql`: `audit_events` table with append-only triggers (deny `UPDATE`, deny `DELETE`), unique `(event_id, tenant_id)` index, plus the sibling `audit_events_sync_state` table for the mutable `synced_at` column. Schema per data-model.md §"Entity 5 — AuditEvent". — depends on §A3 approval
+- [x] T046 [US3] **`[BLOCKED: §A1]`** Implement `src/main/audit/audit-emitter.ts` exposing `emitAuditEvent(req: EmitAuditEventRequest)` per contracts/bridge-api.md call 10. The emitter: validates the FR-025 five attributes; runs the redaction allowlist check on `payload`; writes to `audit_events` in the same transaction as any caller-provided side effects; returns `EmitAuditEventResponse` — depends on T045, T015
+- [x] T047 [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Implement the local outbox + sync loop in `src/main/audit/audit-sync.ts`: extends 001's existing offline-queue if reusable (research §5; otherwise parallel implementation). Calls `POST /v1/audit-events` with batches; honours the response's `accepted` / `duplicates` / `rejected` envelope. — depends on T046
+- [x] T048 [US3] **`[BLOCKED: §A1]`** Wire `operator.emitAuditEvent` bridge call (typed in T014) to the main-process emitter — `src/preload/operator.ts` adds the export; `src/main/operator/bridge-handlers.ts` dispatches — depends on T046, T014
+- [x] T049 [P] [US3] **`[BLOCKED: §A1]`** Add per-action-category schemas in `src/shared/audit/payload-schemas.ts`: at minimum `shift.open`, `shift.close`, `shift.forced_close`, `operator.session.takeover`, `cashier.pin.reset`, `cashier.pin.unlock` (the latter two ship in S4; their schemas land here as types only). Per data-model.md §"Action Category Catalogue". — depends on T013
+- [x] T050 [US3] **`[BLOCKED: §A1]`** Extend `pino` redaction list and Sentry scrubber rules for: `audit_events.payload` (already redacted by allowlist; defence in depth), session tokens, Clerk JWTs (P11 alignment) — `src/main/logger/redaction.ts` extension and `src/main/sentry-scrubber.ts` if it exists; otherwise note in a redaction-config file — depends on T046
+- [x] T051 [US3] **`[BLOCKED: §A1]`** Add a debug bridge call `operator.emitAuditEvent.test` for S3 quickstart smoke (placeholder action category, manager-only role gate, never reachable in production builds — gated by `process.env.NODE_ENV !== 'production'`) — depends on T048
 
 #### C2 addendum — FR-014 + account-disabled-mid-session lifecycle terminators (added 2026-05-05)
 
 Two test+implementation pairs covering the spec's session-termination cascade for: (a) terminal token / device-token revocation under FR-014 + the "Terminal token revoked while operator signed in" Edge Case, and (b) the "Operator account disabled mid-session" Edge Case. Both end the active operator session immediately, with distinct `end_cause` values per data-model.md §"Entity 2 — OperatorSession". Both ship in S3 because they consume the audit-emitter (T046) for the lifecycle audit event.
 
-- [ ] T051a [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: terminal-token revocation cascade — given an active operator session on a paired terminal, when the device token is revoked (e.g., the platform admin app revokes it; 002's existing `401 device_revoked` path fires), then the operator session terminates within the next bridge call, the `operator_sessions` row records `end_cause = 'terminal_session_terminated'`, the shell returns to 002's pre-pairing surface (NOT to `/sign-in` — the terminal is no longer paired), and offline-queued audit events from this session remain in the local outbox for later sync (P3 — no silent data loss) — `tests/integration/main/operator/terminal-revocation-cascade.test.ts`
-- [ ] T051b [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Implement terminal-revocation listener in `src/main/operator/lifecycle-cascade.ts`: subscribes to 002's existing device-token-revocation signal; on revocation, terminates any active operator session with `end_cause = 'terminal_session_terminated'`; emits no PIN values or credential fragments in any log line; the cascade event itself is NOT a sensitive-action audit event (FR-014 governs session termination, not action attribution; the operator-session row is the durable record), but a low-severity diagnostic log entry MAY be written via `pino` with the operator id as an opaque reference per FR-032 — depends on T046, T028
-- [ ] T051c [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: operator-account-disabled-mid-session cascade — given an active operator session, when the operator's Clerk account becomes disabled (detected on the next privileged bridge call returning a generic 401 / disabled-account refusal), then the operator session terminates with `end_cause = 'account_disabled_mid_session'`, the shell returns to `/sign-in` (the terminal IS still paired; only the operator's account is disabled), the user-visible message is generic per NFR-003 / PR-2 ("credentials not recognised"), and the cascade is durable across application restart — `tests/integration/main/operator/account-disabled-cascade.test.ts`
-- [ ] T051d [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Implement account-disabled listener in `src/main/operator/lifecycle-cascade.ts` (extends the same module from T051b): on detecting a disabled-account response from any privileged bridge call, terminates the active operator session with `end_cause = 'account_disabled_mid_session'`; the cascade is generic to the user (no disclosure that the account specifically was disabled vs another failure mode); a low-severity diagnostic log entry MAY be written with the opaque operator id per FR-032; the operator-session row is the durable record — depends on T046, T028, T051b
+- [x] T051a [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: terminal-token revocation cascade — given an active operator session on a paired terminal, when the device token is revoked (e.g., the platform admin app revokes it; 002's existing `401 device_revoked` path fires), then the operator session terminates within the next bridge call, the `operator_sessions` row records `end_cause = 'terminal_session_terminated'`, the shell returns to 002's pre-pairing surface (NOT to `/sign-in` — the terminal is no longer paired), and offline-queued audit events from this session remain in the local outbox for later sync (P3 — no silent data loss) — `tests/integration/main/operator/terminal-revocation-cascade.test.ts`
+- [x] T051b [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Implement terminal-revocation listener in `src/main/operator/lifecycle-cascade.ts`: subscribes to 002's existing device-token-revocation signal; on revocation, terminates any active operator session with `end_cause = 'terminal_session_terminated'`; emits no PIN values or credential fragments in any log line; the cascade event itself is NOT a sensitive-action audit event (FR-014 governs session termination, not action attribution; the operator-session row is the durable record), but a low-severity diagnostic log entry MAY be written via `pino` with the operator id as an opaque reference per FR-032 — depends on T046, T028
+- [x] T051c [P] [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Integration test: operator-account-disabled-mid-session cascade — given an active operator session, when the operator's Clerk account becomes disabled (detected on the next privileged bridge call returning a generic 401 / disabled-account refusal), then the operator session terminates with `end_cause = 'account_disabled_mid_session'`, the shell returns to `/sign-in` (the terminal IS still paired; only the operator's account is disabled), the user-visible message is generic per NFR-003 / PR-2 ("credentials not recognised"), and the cascade is durable across application restart — `tests/integration/main/operator/account-disabled-cascade.test.ts`
+- [x] T051d [US3] **`[BLOCKED: §A1, §A2 (S3)]`** Implement account-disabled listener in `src/main/operator/lifecycle-cascade.ts` (extends the same module from T051b): on detecting a disabled-account response from any privileged bridge call, terminates the active operator session with `end_cause = 'account_disabled_mid_session'`; the cascade is generic to the user (no disclosure that the account specifically was disabled vs another failure mode); a low-severity diagnostic log entry MAY be written with the opaque operator id per FR-032; the operator-session row is the durable record — depends on T046, T028, T051b
 
-**Checkpoint S3:** Audit-event scaffold is durable; reviewer can emit a placeholder audit event from a manager session and observe the row in `audit_events` (with the five mandatory attributes), the row's append-only-ness via raw SQL test, the cross-process redaction smoke continuing to pass, and the sync loop reconciling on reconnect. **Plus**: terminal-revocation and account-disabled cascades terminate active sessions cleanly with the correct `end_cause` values. Quickstart Slice 3 walkthrough passes.
+**Checkpoint S3: ✅ COMPLETE (2026-05-07)** — All S3 tasks merged via PRs #49–#56 (HEAD `ba32133`). Audit-event scaffold is durable; append-only enforcement verified; sync loop reconciles on reconnect; cross-process redaction smoke passes; terminal-revocation and account-disabled cascades implemented with correct `end_cause` values. Quickstart Slice 3 walkthrough passes.
 
 ---
 
@@ -342,22 +342,23 @@ These tasks live for the duration of the feature's life and are NOT part of any 
 ```
 S0 (Visual Direction) ✅
   │
-  ├──► §A1 owner (Ahmed, Path 1) ──► §A1 ✅ ──► unlocks S3, S4, S5
-  ├──► §A2 owner (Ahmed / Backend TBD) ──► per-endpoint delivery ──► unlocks S1/S3/S4/S5 per subset
+  ├──► §A1 ✅ (PR #39, SHA 7ae337b, 2026-05-05)
+  ├──► §A2 Wave 1 ✅ + Wave 2 ✅ (Waves 3–4 downstream)
+  ├──► §A3 ✅ (PR #49, SHA e50f5b8 — audit_events; operator_sessions + cashier_pin_records S4)
   │
-  ├──► Phase 1: Setup (T001–T005) ──── parallel with §A1/§A2 work; STARTABLE NOW
+  ├──► Phase 1: Setup (T001–T005) ✅
   │
-  ├──► Phase 2: Foundational (T006–T017) ──► STARTABLE NOW (manager/admin path; cashier path stubbed)
+  ├──► Phase 2: Foundational (T006–T017) ✅
   │       │
-  │       └──► Phase 3 (S1): Manager/admin sign-in (T018–T034) ──── BLOCKED on §A2 (S1 endpoints)
+  │       └──► Phase 3 (S1): Manager/admin sign-in (T018–T034) ✅ (PR #46)
   │               │
-  │               └──► Phase 4 (S2): Bridge security review (T035–T038) ──── BLOCKED on S1 merged
+  │               └──► Phase 4 (S2): Bridge security review (T035–T038) ✅ (PR #47)
   │                       │
-  │                       └──► Phase 5 (S3): Audit scaffolding (T039–T051) ──── BLOCKED on §A1, §A2 (S3), §A3
+  │                       └──► Phase 5 (S3): Audit scaffolding (T039–T051d) ✅ (PRs #49–#56, HEAD ba32133)
   │                               │
-  │                               └──► Phase 6 (S4): Cashier sign-in (T052–T082) ──── BLOCKED on §A1, §A2 (S4), §A3, §A4
+  │                               └──► Phase 6 (S4): Cashier sign-in (T052–T082) ──── BLOCKED on §A2 Wave 3 + §A3 (S4 migrations) + §A4
   │                                       │
-  │                                       └──► Phase 7 (S5): Forced close (T083–T093) ──── BLOCKED on §A1, §A2 (S5)
+  │                                       └──► Phase 7 (S5): Forced close (T083–T093) ──── BLOCKED on S4 + §A2 Wave 4
   │                                               │
   │                                               └──► Phase 8 (S6): Final polish (T094–T099) ──── BLOCKED on prior slices merged
   │                                                       │
@@ -443,4 +444,4 @@ All **114** tasks follow the strict checklist format:
 
 ---
 
-**End of tasks.** 102 tasks across 8 phases, slice-organised, gate-explicit, dependency-aware. The next coordination action is **§A1 Path 1 amendment work** (Ahmed) and **§A2 backend counterpart identification** (Ahmed → backend team). Phase 1 + Phase 2 + S1's tests (T006–T025) are startable now; everything past T025 holds for §A2 (S1 endpoints) at minimum, with deeper gates per slice.
+**End of tasks.** 114 tasks across 8 phases, slice-organised, gate-explicit, dependency-aware. **S3 is complete (2026-05-07)** — all Phase 5 tasks (T039–T051d) merged via PRs #49–#56 (HEAD `ba32133`). Phases 1–5 (S0–S3) are done. The next coordination action is **§A2 Wave 3 delivery** (roster + takeover/confirm + active-session endpoints) and **§A3 S4 migrations** (operator_sessions + cashier_pin_records) to unblock S4. §A4 (Argon2id) is also needed for S4.
