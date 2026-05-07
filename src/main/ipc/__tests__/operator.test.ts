@@ -13,6 +13,8 @@ import type { SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
 import type { SessionManager } from '../../operator/session-manager.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
+import type { AuditEmitter } from '../../audit/audit-emitter.js';
+import type { PairingStore } from '../../pairing/store.js';
 
 /**
  * 004-operator-session — IPC `operator:*` handler tests.
@@ -75,6 +77,19 @@ function fakeInactivityMonitor(): {
   return { monitor, reportActivity };
 }
 
+function fakeAuditEmitter(): AuditEmitter {
+  return { emit: vi.fn() } as unknown as AuditEmitter;
+}
+
+function fakePairingStore(): PairingStore {
+  const store: PairingStore = {
+    getStatus: vi.fn(() => Promise.resolve({ kind: 'unpaired' as const })),
+    persist: vi.fn(),
+    clear: vi.fn(),
+  };
+  return store;
+}
+
 function register(opts: {
   signIn?: SignInResponse | (() => SignInResponse) | (() => never);
   signOut?: SignOutResponse;
@@ -91,6 +106,8 @@ function register(opts: {
     signOutHandler: fakeSignOutHandler(opts.signOut ?? { kind: 'signed_out' }),
     sessionManager,
     inactivityMonitor: inactivity.monitor,
+    auditEmitter: fakeAuditEmitter(),
+    pairingStore: fakePairingStore(),
   });
   const get = (channel: string): IpcHandler => {
     const fn = handlers.get(channel);
@@ -121,19 +138,22 @@ const SAMPLE_VIEW: OperatorSessionBridgeView = {
 const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
 describe('registerOperatorHandlers — channel registration', () => {
-  it('registers all four operator:* channels exactly once', () => {
+  it('registers all five operator:* channels exactly once', () => {
     const { ipcMain, handle } = makeIpcMain();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
       signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
       sessionManager: fakeSessionManager(null),
       inactivityMonitor: fakeInactivityMonitor().monitor,
+      auditEmitter: fakeAuditEmitter(),
+      pairingStore: fakePairingStore(),
     });
     const registered = handle.mock.calls.map((c) => c[0] as string);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_IN);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_OUT);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT);
     // Each channel registered exactly once.
     for (const channel of registered) {
       expect(registered.filter((c) => c === channel)).toHaveLength(1);

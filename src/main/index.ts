@@ -14,6 +14,8 @@ import { createSecretStore } from './secrets/index.js';
 import { createLogger } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
+import { AuditEmitter } from './audit/audit-emitter.js';
+import { bindAuditEventsStoreDb } from './audit/audit-events-store.js';
 import { createNetwork } from './pairing/network.js';
 import { createPairingService } from './pairing/service.js';
 import { createPairingLog } from './pairing/log.js';
@@ -332,11 +334,20 @@ app
       sessionManager: operatorSessionManager,
     });
     operatorInactivityMonitor.start();
+
+    // T048 — construct the audit-events outbox chain on the shared DB handle.
+    // Lazy statement preparation in bindAuditEventsStoreDb ensures migration
+    // T045 has already run before the first emit call.
+    const auditEventsStore = bindAuditEventsStoreDb(dbHandle);
+    const auditEmitter = new AuditEmitter(auditEventsStore);
+
     registerOperatorHandlers(ipcMain, {
       signInHandler: operatorSignInHandler,
       signOutHandler: operatorSignOutHandler,
       sessionManager: operatorSessionManager,
       inactivityMonitor: operatorInactivityMonitor,
+      auditEmitter,
+      pairingStore,
     });
 
     createWindow();

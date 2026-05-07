@@ -7,6 +7,39 @@ import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 
 /**
+ * T048 — `operator.emitAuditEvent` bridge surface.
+ *
+ * The renderer supplies only the fields it owns. Trusted enrichment
+ * (acting_operator_id, tenant_id, branch_id, originating_terminal_id,
+ * session_id, created_at) is applied by the main-process handler
+ * from SessionManager and PairingStore — these MUST NOT cross the
+ * renderer→main direction (FR-013 / Constitution VII).
+ *
+ * `action_category` is typed as `string` here (not `ActionCategory`)
+ * so the preload layer remains forward-compatible if new categories
+ * are added to the server contract before a client rebuild. The
+ * main-process handler validates it at the AuditEmitter boundary.
+ */
+export interface EmitAuditEventRequest {
+  /** Client-generated UUID v4 (P5 idempotency key). */
+  event_id: string;
+  /** Closed-set action category (validated main-side). */
+  action_category: string;
+  /** Shift id; omit for non-shift-scoped categories. */
+  shift_id?: string;
+  /** Optional second identity for supervisor-approved actions. */
+  approving_supervisor_id?: string;
+  /** Per-category structured payload. Forbidden keys refused main-side. */
+  payload: Record<string, unknown>;
+}
+
+export interface EmitAuditEventResponse {
+  kind: 'emitted';
+  /** Echoes the client-supplied event_id for idempotency confirmation. */
+  event_id: string;
+}
+
+/**
  * 002-terminal-pairing: the `pairing` namespace exposed by the preload
  * bridge. Interface-only at the foundational layer — the preload stub
  * throws "not implemented" until US1 (getStatus) and US2 (submit) wire
@@ -136,6 +169,23 @@ export interface OperatorBridgeAPI {
    * missing from the bridge surface).
    */
   _reportActivity(): void;
+
+  /**
+   * T048 — Emit one audit event to the local outbox.
+   *
+   * The renderer supplies only the fields it owns (`EmitAuditEventRequest`);
+   * the main-process handler enriches the trusted fields from session
+   * state and pairing state before delegating to `AuditEmitter.emit()`.
+   *
+   * Resolves with `{ kind: 'emitted', event_id }` on success.
+   * Resolves with `{ kind: 'refused', category }` on any failure
+   * (no session → `not_signed_in`; bad payload / forbidden key →
+   * `invalid_input`). Never rejects.
+   *
+   * Idempotent: submitting the same `event_id` twice is a no-op (P5 /
+   * INSERT OR IGNORE at the SQL layer).
+   */
+  emitAuditEvent(req: EmitAuditEventRequest): Promise<EmitAuditEventResponse | OperatorRefusal>;
 }
 
 export interface PreloadBridgeAPI {
