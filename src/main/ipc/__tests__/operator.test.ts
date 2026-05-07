@@ -138,7 +138,7 @@ const SAMPLE_VIEW: OperatorSessionBridgeView = {
 const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
 describe('registerOperatorHandlers — channel registration', () => {
-  it('registers all five operator:* channels exactly once', () => {
+  it('registers all six operator:* channels exactly once', () => {
     const { ipcMain, handle } = makeIpcMain();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
@@ -154,6 +154,7 @@ describe('registerOperatorHandlers — channel registration', () => {
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE);
     // Each channel registered exactly once.
     for (const channel of registered) {
       expect(registered.filter((c) => c === channel)).toHaveLength(1);

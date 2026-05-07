@@ -12,6 +12,8 @@ export const OPERATOR_IPC_CHANNELS = {
   GET_CURRENT_SESSION: 'operator:get-current-session',
   REPORT_ACTIVITY: 'operator:_report-activity',
   EMIT_AUDIT_EVENT: 'operator:emit-audit-event',
+  /** T051 — debug bridge smoke; never reachable in production builds. */
+  EMIT_AUDIT_EVENT_SMOKE: 'operator:_emit-audit-event-smoke',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

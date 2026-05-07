@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import type {
@@ -161,6 +163,50 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
         return { kind: 'emitted', event_id: req.event_id };
       } catch {
         // Generic refusal — error message MUST NOT cross the bridge (PR-2 / NFR-003).
+        return refuseInvalid();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE,
+    async (): Promise<EmitAuditEventResponse | OperatorRefusal> => {
+      // Production guard: this path is for S3 quickstart smoke only.
+      if (process.env['NODE_ENV'] === 'production') {
+        return refuseInvalid();
+      }
+
+      const session = sessionManager.getCurrent();
+      if (session === null) {
+        return { kind: 'refused', category: 'not_signed_in' };
+      }
+
+      // Manager-tier gate: cashier cannot call this debug path.
+      if (session.role === 'cashier') {
+        return { kind: 'refused', category: 'role_mismatch' };
+      }
+
+      const pairingStatus = await pairingStore.getStatus();
+      const originating_terminal_id =
+        pairingStatus.kind === 'paired' ? pairingStatus.terminal_id : '';
+
+      const event_id = randomUUID();
+      try {
+        auditEmitter.emit({
+          event_id,
+          tenant_id: session.tenant_id,
+          branch_id: session.branch_id,
+          originating_terminal_id,
+          acting_operator_id: session.operator_id,
+          session_id: session.id,
+          shift_id: null,
+          action_category: 'shift.open',
+          created_at: new Date().toISOString(),
+          approving_supervisor_id: null,
+          payload: { smoke: true },
+        });
+        return { kind: 'emitted', event_id };
+      } catch {
         return refuseInvalid();
       }
     },

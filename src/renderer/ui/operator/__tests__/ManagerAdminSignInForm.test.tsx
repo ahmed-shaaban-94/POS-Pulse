@@ -49,6 +49,9 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
     emitAuditEvent: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
     ),
+    _emitAuditEventSmoke: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
+    ),
   };
   return { bridge, signInMock };
 }
@@ -206,6 +209,9 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       emitAuditEvent: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
+      _emitAuditEventSmoke: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -244,6 +250,9 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       emitAuditEvent: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
+      _emitAuditEventSmoke: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -273,6 +282,9 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       getCurrentSession: vi.fn(() => Promise.resolve(null)),
       _reportActivity: vi.fn(),
       emitAuditEvent: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
+      ),
+      _emitAuditEventSmoke: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
     };
