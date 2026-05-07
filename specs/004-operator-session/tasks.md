@@ -37,9 +37,9 @@ Every implementation task that touches code is preceded by a TDD test task per C
 | Gate | Status | Owner | Path |
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | Ahmed | (3 notes incorporated below as task requirements) |
-| §A1 — local-unlock-factor approval | ⏳ Resolution pending | Ahmed | Path 1 — constitutional clarification clause |
+| §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA `7ae337b`, Constitution v1.5.1, 2026-05-05 | Ahmed | Path 1 — constitutional clarification clause added to Principle VIII. |
 | §A2 — backend / OpenAPI | ✅ Wave 1 + Wave 2 cleared (Wave 3–4 downstream) | Ahmed | Wave 1: sign-in + sign-out (Data-Pulse-2 PRs #52/#54). Wave 2: audit-events (Data-Pulse-2 PR #62, SHA `4f77da6`). Waves 3–4 block S4/S5. |
-| §A3 — migrations | ✅ **Cleared** — POS-Pulse PR #49, `migrations/0004_audit_events.sql`, SHA `e50f5b8`. | Ahmed | `audit_events` + `audit_events_sync_state` tables live. `operator_sessions` + `cashier_pin_records` remain (S4). |
+| §A3 — migrations | ✅ **Partially cleared** — `audit_events` merged PR #49 SHA `e50f5b8`. `operator_sessions` + `cashier_pin_records` remain for S4. | Ahmed | `audit_events` + `audit_events_sync_state` tables live. S4 migrations not yet authored. |
 | §A4 — Argon2id binding | ⏳ Held (awaiting S4 scheduling) | Ahmed | §A1 cleared Path 1 — §A4 is in scope; no action until S4 starts. |
 | §A5 — production readiness | ⏳ Held | TBD at rollout PR open time | Blocks production rollout only, not slice merges |
 
