@@ -73,3 +73,25 @@ describe('main/index.ts wires the operator namespace (004 S1)', () => {
     expect(source).not.toMatch(/from\s+['"]@clerk\/clerk-js['"]/);
   });
 });
+
+describe('main/index.ts wires the audit-event outbox (004 T048)', () => {
+  const source = readFileSync(INDEX_PATH, 'utf-8');
+
+  it('imports AuditEmitter from ./audit/audit-emitter', () => {
+    expect(source).toContain('AuditEmitter');
+    expect(source).toContain("from './audit/audit-emitter.js'");
+  });
+
+  it('imports bindAuditEventsStoreDb from ./audit/audit-events-store', () => {
+    expect(source).toContain('bindAuditEventsStoreDb');
+    expect(source).toContain("from './audit/audit-events-store.js'");
+  });
+
+  it('passes auditEmitter to registerOperatorHandlers', () => {
+    expect(source).toContain('auditEmitter,');
+  });
+
+  it('passes pairingStore to registerOperatorHandlers (trusted terminal_id source)', () => {
+    expect(source).toContain('pairingStore,');
+  });
+});

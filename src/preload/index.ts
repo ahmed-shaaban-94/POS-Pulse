@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
+  EmitAuditEventRequest,
+  EmitAuditEventResponse,
   OperatorBridgeAPI,
   OperatorSessionBridgeView,
   PairingBridgeAPI,
@@ -8,6 +10,7 @@ import type {
   SignInResponse,
   SignOutResponse,
 } from '../shared/bridge-api';
+import type { OperatorRefusal } from '../shared/audit/event-shape';
 import type { LogRecord } from '../shared/log-record';
 import type { AppConfig } from '../shared/app-config';
 import {
@@ -61,6 +64,10 @@ const operator: OperatorBridgeAPI = {
       OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION,
     ) as Promise<OperatorSessionBridgeView | null>,
   _reportActivity: () => void ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY),
+  emitAuditEvent: (req: EmitAuditEventRequest) =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT, req) as Promise<
+      EmitAuditEventResponse | OperatorRefusal
+    >,
 };
 
 const api: PreloadBridgeAPI = {

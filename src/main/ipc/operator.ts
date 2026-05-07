@@ -1,6 +1,8 @@
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import type {
+  EmitAuditEventRequest,
+  EmitAuditEventResponse,
   ManagerAdminSignInRequest,
   OperatorSessionBridgeView,
   SignInResponse,
@@ -11,18 +13,20 @@ import type { SignInHandler } from '../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../operator/sign-out-handler.js';
 import type { SessionManager } from '../operator/session-manager.js';
 import type { InactivityMonitor } from '../operator/inactivity-monitor.js';
-import { OperatorRefusalError } from '../../shared/audit/event-shape.js';
+import type { PairingStore } from '../pairing/store.js';
+import {
+  OperatorRefusalError,
+  type OperatorRefusal,
+  type ActionCategory,
+} from '../../shared/audit/event-shape.js';
+import type { AuditEmitter } from '../audit/audit-emitter.js';
 
 /**
- * 004-operator-session — `operator:*` IPC handlers (S1 wave 1 surface).
+ * 004-operator-session — `operator:*` IPC handlers (S1 wave 1 + T048).
  *
  * Mirrors the pattern from `src/main/ipc/pairing.ts`. Boundary input
  * validation refuses generically (PR-2 / NFR-003) — we never echo the
  * rejected payload into the thrown error message (Constitution VII).
- *
- * Cashier-PIN, takeover-confirm, roster, audit-event-emit, and PIN
- * management channels are §A1-gated and intentionally NOT registered
- * here; their handlers land in S3 / S4 with their slices.
  */
 
 export interface OperatorHandlerDeps {
@@ -30,9 +34,13 @@ export interface OperatorHandlerDeps {
   signOutHandler: SignOutHandler;
   sessionManager: SessionManager;
   inactivityMonitor: InactivityMonitor;
+  /** T048 — audit-event emission. */
+  auditEmitter: AuditEmitter;
+  /** T048 — source of originating_terminal_id (trusted enrichment). */
+  pairingStore: PairingStore;
 }
 
-function refuseInvalid(): SignInResponse {
+function refuseInvalid(): OperatorRefusal {
   return { kind: 'refused', category: 'invalid_input' };
 }
 
@@ -48,8 +56,35 @@ function asManagerAdminRequest(value: unknown): ManagerAdminSignInRequest | null
   };
 }
 
+function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v['event_id'] !== 'string') return null;
+  if (typeof v['action_category'] !== 'string') return null;
+  if (typeof v['payload'] !== 'object' || v['payload'] === null || Array.isArray(v['payload'])) {
+    return null;
+  }
+  const req: EmitAuditEventRequest = {
+    event_id: v['event_id'],
+    action_category: v['action_category'],
+    payload: v['payload'] as Record<string, unknown>,
+  };
+  if (typeof v['shift_id'] === 'string') req.shift_id = v['shift_id'];
+  if (typeof v['approving_supervisor_id'] === 'string') {
+    req.approving_supervisor_id = v['approving_supervisor_id'];
+  }
+  return req;
+}
+
 export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
-  const { signInHandler, signOutHandler, sessionManager, inactivityMonitor } = deps;
+  const {
+    signInHandler,
+    signOutHandler,
+    sessionManager,
+    inactivityMonitor,
+    auditEmitter,
+    pairingStore,
+  } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.SIGN_IN,
@@ -86,4 +121,48 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   ipcMain.handle(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY, (): void => {
     inactivityMonitor.reportActivity();
   });
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<EmitAuditEventResponse | OperatorRefusal> => {
+      // Session gate: acting_operator_id comes from main-process session only.
+      const session = sessionManager.getCurrent();
+      if (session === null) {
+        return { kind: 'refused', category: 'not_signed_in' };
+      }
+
+      const req = asEmitAuditEventRequest(request);
+      if (req === null) {
+        return refuseInvalid();
+      }
+
+      // Trusted enrichment: terminal_id comes from pairing state.
+      const pairingStatus = await pairingStore.getStatus();
+      const originating_terminal_id =
+        pairingStatus.kind === 'paired' ? pairingStatus.terminal_id : '';
+
+      try {
+        auditEmitter.emit({
+          event_id: req.event_id,
+          tenant_id: session.tenant_id,
+          branch_id: session.branch_id,
+          originating_terminal_id,
+          acting_operator_id: session.operator_id,
+          session_id: session.id,
+          shift_id: req.shift_id ?? null,
+          action_category: req.action_category as ActionCategory,
+          created_at: new Date().toISOString(),
+          approving_supervisor_id: req.approving_supervisor_id ?? null,
+          payload: req.payload,
+        });
+        return { kind: 'emitted', event_id: req.event_id };
+      } catch {
+        // Generic refusal — error message MUST NOT cross the bridge (PR-2 / NFR-003).
+        return refuseInvalid();
+      }
+    },
+  );
 }

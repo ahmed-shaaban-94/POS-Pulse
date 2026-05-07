@@ -11,6 +11,7 @@ export const OPERATOR_IPC_CHANNELS = {
   SIGN_OUT: 'operator:sign-out',
   GET_CURRENT_SESSION: 'operator:get-current-session',
   REPORT_ACTIVITY: 'operator:_report-activity',
+  EMIT_AUDIT_EVENT: 'operator:emit-audit-event',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];
