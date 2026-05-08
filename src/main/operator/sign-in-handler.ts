@@ -12,6 +12,13 @@ import type { ClerkExchanger } from './clerk-client.js';
 import type { BackendClient } from './backend-client.js';
 import type { SessionManager } from './session-manager.js';
 import type { JwtHolder } from './jwt-holder.js';
+import type { DatabaseHandle } from '../db/client.js';
+import type { SafeStorageLike } from '../secrets/safe-storage.js';
+import type { PairingStore } from '../pairing/store.js';
+import { CheckActiveSessionHandler } from './check-active-session.js';
+import { unsealPinMaterial } from './pin-seal.js';
+import { verifyPinWithWindow, rowMatchesScope, type PinScope } from './pin-lockout.js';
+import type { PinRow } from './pin-credential.js';
 
 /**
  * 004-operator-session T026 — manager/admin sign-in handler.
@@ -56,6 +63,7 @@ export interface SignInHandlerDeps {
 
 const REFUSE_INVALID: OperatorRefusal = { kind: 'refused', category: 'invalid_input' };
 const REFUSE_NO_CONN: OperatorRefusal = { kind: 'refused', category: 'no_connection' };
+const REFUSE_RATE_LIMITED: OperatorRefusal = { kind: 'refused', category: 'rate_limited' };
 
 export class SignInHandler {
   constructor(private readonly deps: SignInHandlerDeps) {}
@@ -161,5 +169,204 @@ export class SignInHandler {
 
   private logSuccess(kind: 'signed_in' | 'takeover_required'): void {
     this.deps.logger?.info({ event: 'operator.sign_in.outcome', kind }, 'sign-in outcome');
+  }
+}
+
+/**
+ * 004-operator-session T069 — cashier sign-in handler.
+ *
+ * AD-2: PIN verified locally via Argon2id (T066). The plaintext PIN NEVER
+ * reaches the backend, any logger, or the renderer (PR-1 / FR-030).
+ *
+ * Flow:
+ *   1. Verify terminal is paired (provides tenant/branch/terminal scope).
+ *   2. Fetch sealed cashier_pin_records row from SQLite by composite PK.
+ *   3. PR-4 scope guard — row must match the requested scope.
+ *   4. Unseal pin_hash + pin_salt via safeStorage (DPAPI on Windows).
+ *   5. Verify PIN via verifyPinWithWindow (handles PR-3 expired-lockout reset).
+ *   6. Persist only safe lockout-state columns (failed_attempt_count, lockout_until).
+ *   7. On match: check for an active session (T069b); return takeover_required or signed_in.
+ */
+
+/** DB row returned by the cashier_pin_records SELECT. Local to this module. */
+interface CashierPinDbRow {
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+  cashier_clerk_user_id: string;
+  pin_hash: Buffer;
+  pin_salt: Buffer;
+  failed_attempt_count: number;
+  lockout_until: string | null;
+}
+
+/**
+ * Request shape for the cashier sign-in path.
+ * Defined here (not in bridge-api.ts) — IPC wiring is a separate task.
+ */
+export interface CashierSignInRequest {
+  kind: 'cashier';
+  cashier_clerk_user_id: string;
+  /** Plaintext PIN — consumed by verifyPinWithWindow, never persisted or logged. */
+  pin: string;
+  /** Display name used to populate the local session record. */
+  display_name: string;
+}
+
+export interface CashierSignInHandlerDeps {
+  db: DatabaseHandle;
+  safeStorage: SafeStorageLike;
+  sessionManager: SessionManager;
+  checkActiveSession: CheckActiveSessionHandler;
+  pairingStore: PairingStore;
+  /** Optional logger. Tests omit it. */
+  logger?: Logger;
+}
+
+export class CashierSignInHandler {
+  constructor(private readonly deps: CashierSignInHandlerDeps) {}
+
+  async signIn(req: CashierSignInRequest): Promise<SignInResponse> {
+    // 1. Terminal scope — must be paired to know tenant/branch/terminal
+    const pairingStatus = await this.deps.pairingStore.getStatus();
+    if (pairingStatus.kind !== 'paired') {
+      this.logRefusal('invalid_input', 'not_paired');
+      return REFUSE_INVALID;
+    }
+
+    const scope: PinScope = {
+      tenant_id: pairingStatus.tenant_id,
+      branch_id: pairingStatus.branch_id,
+      terminal_id: pairingStatus.terminal_id,
+      cashier_clerk_user_id: req.cashier_clerk_user_id,
+    };
+
+    // 2. Fetch sealed pin row
+    type SelectStmt = { get(...p: unknown[]): CashierPinDbRow | undefined };
+    const sealedRow = (
+      this.deps.db.prepare(
+        `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id,
+                pin_hash, pin_salt, failed_attempt_count, lockout_until
+           FROM cashier_pin_records
+          WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND cashier_clerk_user_id = ?`,
+      ) as SelectStmt
+    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, scope.cashier_clerk_user_id);
+
+    if (sealedRow === undefined) {
+      this.logRefusal('invalid_input', 'not_found');
+      return REFUSE_INVALID;
+    }
+
+    // 3. PR-4 scope guard — defense-in-depth: queried row must match the scope
+    if (!rowMatchesScope(sealedRow, scope)) {
+      this.logRefusal('invalid_input', 'scope_mismatch');
+      return REFUSE_INVALID;
+    }
+
+    // 4. Unseal pin material (DPAPI on Windows; throws if ciphertext is tampered)
+    const unsealed = unsealPinMaterial(
+      { pin_hash: sealedRow.pin_hash, pin_salt: sealedRow.pin_salt },
+      this.deps.safeStorage,
+    );
+    const pinRow: PinRow = {
+      pin_hash: unsealed.pin_hash,
+      pin_salt: unsealed.pin_salt,
+      failed_attempt_count: sealedRow.failed_attempt_count,
+      lockout_until: sealedRow.lockout_until,
+    };
+
+    // 5. Verify PIN — verifyPinWithWindow handles PR-3 expired-lockout reset
+    const result = await verifyPinWithWindow(req.pin, pinRow);
+
+    if (result.kind === 'locked_out') {
+      // Active lockout — do NOT write to DB (lockout_until is already set)
+      this.logRefusal('rate_limited', 'locked_out');
+      return REFUSE_RATE_LIMITED;
+    }
+
+    if (result.kind === 'no_match') {
+      // Persist only the safe lockout-state columns (PR-1: no PIN in DB write)
+      this.persistLockoutState(scope, result.newFailedCount, result.newLockoutUntil);
+      this.logRefusal('invalid_input', 'wrong_pin');
+      return REFUSE_INVALID;
+    }
+
+    // result.kind === 'match' — reset failure counter in DB
+    this.persistLockoutState(scope, 0, null);
+
+    // 6. Check for an existing active session for this cashier (T069b)
+    const activeCheck = await this.deps.checkActiveSession.checkActiveSession(
+      req.cashier_clerk_user_id,
+    );
+    if (activeCheck.kind === 'refused') {
+      this.logRefusal(activeCheck.category, 'active_session_check');
+      return activeCheck;
+    }
+    if (activeCheck.kind === 'active') {
+      this.logSuccess('takeover_required');
+      return { kind: 'takeover_required' } satisfies TakeoverRequiredResponse;
+    }
+
+    // 7. No active session — create local in-memory session
+    // AD-2: cashier PIN path is local-only; backend_session_id is empty.
+    const record = this.deps.sessionManager.create({
+      operator_id: req.cashier_clerk_user_id,
+      display_name: req.display_name,
+      role: 'cashier',
+      tenant_id: scope.tenant_id,
+      branch_id: scope.branch_id,
+      backend_session_id: '',
+    });
+
+    this.logSuccess('signed_in');
+    return {
+      kind: 'signed_in',
+      session: {
+        id: record.id,
+        operator_id: record.operator_id,
+        display_name: record.display_name,
+        role: record.role,
+        tenant_id: record.tenant_id,
+        branch_id: record.branch_id,
+        started_at: record.started_at,
+      },
+    } satisfies SignInSuccessResponse;
+  }
+
+  /** Write failed_attempt_count and lockout_until to cashier_pin_records. */
+  private persistLockoutState(
+    scope: PinScope,
+    failed_attempt_count: number,
+    lockout_until: string | null,
+  ): void {
+    type RunStmt = { run(...p: unknown[]): unknown };
+    (
+      this.deps.db.prepare(
+        `UPDATE cashier_pin_records
+            SET failed_attempt_count = ?, lockout_until = ?
+          WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND cashier_clerk_user_id = ?`,
+      ) as RunStmt
+    ).run(
+      failed_attempt_count,
+      lockout_until,
+      scope.tenant_id,
+      scope.branch_id,
+      scope.terminal_id,
+      scope.cashier_clerk_user_id,
+    );
+  }
+
+  private logRefusal(category: string, stage: string): void {
+    this.deps.logger?.info(
+      { event: 'operator.cashier_sign_in.refused', category, stage },
+      'cashier sign-in refused',
+    );
+  }
+
+  private logSuccess(kind: 'signed_in' | 'takeover_required'): void {
+    this.deps.logger?.info(
+      { event: 'operator.cashier_sign_in.outcome', kind },
+      'cashier sign-in outcome',
+    );
   }
 }
