@@ -52,6 +52,7 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
     _emitAuditEventSmoke: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
     ),
+    listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
   };
   return { bridge, signInMock };
 }
@@ -212,6 +213,7 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       _emitAuditEventSmoke: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
+      listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -253,6 +255,7 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       _emitAuditEventSmoke: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
+      listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -287,6 +290,7 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       _emitAuditEventSmoke: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
+      listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');

@@ -28,6 +28,7 @@ import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
 import { SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
+import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
@@ -331,6 +332,10 @@ app
       },
       logger: mainLogger,
     });
+    const operatorRosterHandler = new RosterHandler({
+      backend: operatorBackend,
+      logger: mainLogger,
+    });
     const operatorInactivityMonitor = new InactivityMonitor({
       sessionManager: operatorSessionManager,
     });
@@ -359,6 +364,7 @@ app
     registerOperatorHandlers(ipcMain, {
       signInHandler: operatorSignInHandler,
       signOutHandler: operatorSignOutHandler,
+      rosterHandler: operatorRosterHandler,
       sessionManager: operatorSessionManager,
       inactivityMonitor: operatorInactivityMonitor,
       auditEmitter,
