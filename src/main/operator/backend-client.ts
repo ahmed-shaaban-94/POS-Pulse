@@ -1,14 +1,17 @@
 /**
- * 004-operator-session — Data-Pulse-2 client for Wave 1 endpoints.
+ * 004-operator-session — Data-Pulse-2 client for Wave 1 + Wave 3 endpoints.
  *
  * Defines the local request/response types matching the merged
- * Wave 1 contract (per owner decision: do NOT regenerate
- * `src/shared/api-types.ts` from OpenAPI in S1). The shapes here
+ * Wave 1 and Wave 3 contracts (per owner decision: do NOT regenerate
+ * `src/shared/api-types.ts` from OpenAPI in S1/S4). The shapes here
  * mirror `specs/004-operator-session/contracts/backend-endpoints.md`
- * Endpoints 2 + 3 verbatim.
+ * Endpoints 1–4 verbatim.
  *
- *   POST /api/pos/v1/operators/sign-in
- *   POST /api/pos/v1/operators/sign-out
+ *   POST /api/pos/v1/operators/sign-in          (Wave 1 — Endpoint 2)
+ *   POST /api/pos/v1/operators/sign-out          (Wave 1 — Endpoint 3)
+ *   GET  /api/pos/v1/operators/roster            (Wave 3 — Endpoint 1)
+ *   POST /api/pos/v1/operators/takeover/confirm  (Wave 3 — Endpoint 4)
+ *   GET  /api/pos/v1/operators/active-session    (Wave 3 — Endpoint 6)
  *
  * The Clerk JWT travels in the `Authorization: Bearer …` header; the
  * device token travels in the platform's existing terminal-token
@@ -16,10 +19,12 @@
  * password NEVER appears anywhere in this layer (Wave 1 path b /
  * AD-2). The body of `/sign-in` carries `kind` + a
  * `device_token_attestation` — no `password`, no `identifier`,
- * no `pin`.
+ * no `pin`. The cashier PIN NEVER crosses this layer (AD-2).
  */
 
 import type { Role } from '../../shared/operator/role.js';
+
+// ─── Wave 1 — Sign-in ────────────────────────────────────────────────────────
 
 export interface BackendSignInRequest {
   /** Discriminator. Wave 1 only ships `manager_admin`. */
@@ -55,6 +60,8 @@ export type BackendSignInResponse =
   | { kind: 'refused' }
   | { kind: 'no_connection' };
 
+// ─── Wave 1 — Sign-out ───────────────────────────────────────────────────────
+
 export interface BackendSignOutRequest {
   session_id: string;
 }
@@ -64,6 +71,51 @@ export type BackendSignOutResponse =
   | { kind: 'refused' }
   | { kind: 'no_connection' };
 
+// ─── Wave 3 — Roster (Endpoint 1) ────────────────────────────────────────────
+
+export interface BackendRosterCashier {
+  id: string;
+  display_name: string;
+  /** Literal type: only cashier-role rows cross this layer (FR-006 / FR-031). */
+  role: 'cashier';
+}
+
+export interface BackendRosterSuccess {
+  kind: 'roster';
+  cashiers: BackendRosterCashier[];
+}
+
+export type BackendRosterResponse =
+  | BackendRosterSuccess
+  | { kind: 'refused' }
+  | { kind: 'no_connection' };
+
+// ─── Wave 3 — Takeover confirm (Endpoint 4) ──────────────────────────────────
+
+export interface BackendTakeoverConfirmRequest {
+  /** Client-generated UUID v4 for P5 idempotency. */
+  event_id: string;
+  operator_id: string;
+  device_token_attestation: string;
+}
+
+/** Success envelope is identical to sign-in per Endpoint 4 contract. */
+export type BackendTakeoverConfirmResponse =
+  | BackendSignInSuccess
+  | { kind: 'refused' }
+  | { kind: 'no_connection' };
+
+// ─── Wave 3 — Active session (Endpoint 6) ────────────────────────────────────
+
+/** Binary envelope — minimum-disclosure per FR-013. No extra fields. */
+export type BackendActiveSessionResponse =
+  | { kind: 'none' }
+  | { kind: 'active' }
+  | { kind: 'refused' }
+  | { kind: 'no_connection' };
+
+// ─── Client interface ─────────────────────────────────────────────────────────
+
 /**
  * Protocol the handler depends on. The production implementation
  * (`createBackendClient` below) wraps `fetch` with the device-token +
@@ -72,10 +124,24 @@ export type BackendSignOutResponse =
 export interface BackendClient {
   signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse>;
   signOut(req: BackendSignOutRequest, jwt: string): Promise<BackendSignOutResponse>;
+  /** GET /api/pos/v1/operators/roster — no JWT; device token authenticates. */
+  listRoster(branchId: string): Promise<BackendRosterResponse>;
+  /** POST /api/pos/v1/operators/takeover/confirm */
+  confirmTakeover(
+    req: BackendTakeoverConfirmRequest,
+    jwt: string,
+  ): Promise<BackendTakeoverConfirmResponse>;
+  /** GET /api/pos/v1/operators/active-session — no JWT (cashier path); AD-2 invariant enforced. */
+  getActiveSession(operatorId: string): Promise<BackendActiveSessionResponse>;
 }
+
+// ─── Paths and defaults ───────────────────────────────────────────────────────
 
 const SIGN_IN_PATH = '/api/pos/v1/operators/sign-in';
 const SIGN_OUT_PATH = '/api/pos/v1/operators/sign-out';
+const ROSTER_PATH = '/api/pos/v1/operators/roster';
+const TAKEOVER_CONFIRM_PATH = '/api/pos/v1/operators/takeover/confirm';
+const ACTIVE_SESSION_PATH = '/api/pos/v1/operators/active-session';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export interface CreateBackendClientDeps {
@@ -88,31 +154,20 @@ export interface CreateBackendClientDeps {
 }
 
 /**
- * Production `BackendClient` for Data-Pulse-2 Wave 1 endpoints.
- *
- * - `POST /api/pos/v1/operators/sign-in`
- *     Headers: `Authorization: Bearer <jwt>`, `Content-Type: application/json`.
- *     Body (verbatim per Wave 1 contract): `{ kind: 'manager_admin',
- *     device_token_attestation }`. **NEVER** sends `password`,
- *     `identifier`, or `pin`.
- *
- * - `POST /api/pos/v1/operators/sign-out`
- *     Headers: `Authorization: Bearer <jwt>`, `Content-Type: application/json`.
- *     Body: `{ session_id }`.
+ * Production `BackendClient` for Data-Pulse-2 Wave 1 + Wave 3 endpoints.
  *
  * Resolve-on-reachable / reject-only-on-transport contract (matching
  * 002's `network.ts`): every backend response — including 4xx/5xx —
  * resolves to a typed result. Network errors (DNS/TLS/refused/timeout)
  * resolve to `{ kind: 'no_connection' }`. The function NEVER throws,
- * so the sign-in handler does not need a try/catch wrapper.
+ * so callers do not need a try/catch wrapper.
  *
  * Failure-mode collapse: every 4xx/5xx maps to `refused` (PR-2 — no
- * factor distinction). The single exception is `takeover_required`,
- * which Data-Pulse-2 returns as `{ kind: 'takeover_required' }` in
- * the success body per the Wave 1 contract — surfaced verbatim.
+ * factor distinction).
  *
  * Redaction: the `Authorization` header value (the JWT) is held only
  * in the `init.headers` object passed to fetch and never logged.
+ * No PIN data ever enters any method in this client (AD-2).
  */
 export function createBackendClient(deps: CreateBackendClientDeps): BackendClient {
   const { fetch: fetchImpl, baseUrl } = deps;
@@ -166,8 +221,78 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
       // regardless of body shape.
       return { kind: 'signed_out' };
     },
+
+    async listRoster(branchId: string): Promise<BackendRosterResponse> {
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          `${root}${ROSTER_PATH}?branch_id=${encodeURIComponent(branchId)}`,
+          { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
+        );
+      } catch {
+        return { kind: 'no_connection' };
+      }
+      if (!response.ok) return { kind: 'refused' };
+      let parsed: unknown;
+      try {
+        parsed = (await response.json()) as unknown;
+      } catch {
+        return { kind: 'refused' };
+      }
+      return interpretRosterResponse(parsed);
+    },
+
+    async confirmTakeover(
+      req: BackendTakeoverConfirmRequest,
+      jwt: string,
+    ): Promise<BackendTakeoverConfirmResponse> {
+      let response: Response;
+      try {
+        response = await fetchImpl(`${root}${TAKEOVER_CONFIRM_PATH}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${jwt}`,
+          },
+          body: JSON.stringify(req),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch {
+        return { kind: 'no_connection' };
+      }
+      if (!response.ok) return { kind: 'refused' };
+      let parsed: unknown;
+      try {
+        parsed = (await response.json()) as unknown;
+      } catch {
+        return { kind: 'refused' };
+      }
+      return interpretTakeoverConfirmResponse(parsed);
+    },
+
+    async getActiveSession(operatorId: string): Promise<BackendActiveSessionResponse> {
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}`,
+          { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
+        );
+      } catch {
+        return { kind: 'no_connection' };
+      }
+      if (!response.ok) return { kind: 'refused' };
+      let parsed: unknown;
+      try {
+        parsed = (await response.json()) as unknown;
+      } catch {
+        return { kind: 'refused' };
+      }
+      return interpretActiveSessionResponse(parsed);
+    },
   };
 }
+
+// ─── Response interpreters ────────────────────────────────────────────────────
 
 function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
@@ -206,4 +331,36 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
       issued_at: sess['issued_at'],
     },
   };
+}
+
+function interpretRosterResponse(parsed: unknown): BackendRosterResponse {
+  if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
+  const v = parsed as Record<string, unknown>;
+  if (!Array.isArray(v['cashiers'])) return { kind: 'refused' };
+  const cashiers: BackendRosterCashier[] = [];
+  for (const entry of v['cashiers']) {
+    if (typeof entry !== 'object' || entry === null) return { kind: 'refused' };
+    const e = entry as Record<string, unknown>;
+    if (typeof e['id'] !== 'string') return { kind: 'refused' };
+    if (typeof e['display_name'] !== 'string') return { kind: 'refused' };
+    if (e['role'] !== 'cashier') return { kind: 'refused' };
+    // Allowlist: id, display_name, role only — extra fields stripped by construction.
+    cashiers.push({ id: e['id'], display_name: e['display_name'], role: 'cashier' });
+  }
+  return { kind: 'roster', cashiers };
+}
+
+function interpretTakeoverConfirmResponse(parsed: unknown): BackendTakeoverConfirmResponse {
+  const res = interpretSignInResponse(parsed);
+  // takeover_required is not a valid confirm outcome — treat as refused.
+  if (res.kind === 'takeover_required') return { kind: 'refused' };
+  return res;
+}
+
+function interpretActiveSessionResponse(parsed: unknown): BackendActiveSessionResponse {
+  if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
+  const v = parsed as Record<string, unknown>;
+  if (v['kind'] === 'none') return { kind: 'none' };
+  if (v['kind'] === 'active') return { kind: 'active' };
+  return { kind: 'refused' };
 }

@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-07 (S3 complete — all Phase 5 tasks merged via POS-Pulse PRs #49–#56, HEAD `ba32133`; §A3 cleared — `migrations/0004_audit_events.sql` merged in PR #49)
+**Last updated:** 2026-05-08 (all S4 gates cleared — §A2 Wave 3 via Data-Pulse-2 PR #70; §A3 fully cleared via POS-Pulse PR #60; §A4 cleared via POS-Pulse PR #59; S4 implementation may begin)
 
 ---
 
@@ -25,14 +25,15 @@ invoked", and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **S3 complete (2026-05-07).** Slice 0 ✅ (approved-with-revisions
-  2026-05-05). §A1 ✅ (PR #39, SHA `7ae337b`, Constitution v1.5.1,
-  2026-05-05). §A2 Wave 1 ✅ (sign-in + sign-out, Data-Pulse-2 PRs #52/#54,
-  2026-05-06) + Wave 2 ✅ (audit-events, Data-Pulse-2 PR #62, SHA `4f77da6`,
-  2026-05-07). §A3 ✅ (`migrations/0004_audit_events.sql`, POS-Pulse PR #49,
-  SHA `e50f5b8`). S1 ✅ (PR #46). S2 ✅ (PR #47). S3 ✅ (PRs #49–#56,
-  HEAD `ba32133`). **Next: S4 — awaiting §A2 Wave 3 (roster + takeover +
-  active-session endpoints) + §A3 S4 migrations + §A4 (Argon2id).**
+- **Phase:** **S4 ready — all gates cleared (2026-05-08).** Slice 0 ✅
+  (approved-with-revisions 2026-05-05). §A1 ✅ (PR #39, SHA `7ae337b`,
+  Constitution v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅
+  (roster + takeover/confirm + active-session, Data-Pulse-2 PR #70,
+  2026-05-08). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
+  operator_sessions + cashier_pin_records PR #60, 2026-05-08). §A4 ✅
+  (argon2 0.44.0, POS-Pulse PR #59, 2026-05-08). S1 ✅ (PR #46). S2 ✅
+  (PR #47). S3 ✅ (PRs #49–#56, HEAD `ba32133`). **S4 implementation may
+  begin.**
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -42,8 +43,9 @@ invoked", and it is updated in place as coordination items resolve.
   resolved on 2026-05-05.
 - **`/speckit-tasks`:** ✅ **Invoked and complete.** `tasks.md` generated
   2026-05-05; addendum applied same day.
-- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. S4–S6 ⏳ blocked
-  on §A2 Wave 3 + §A3 S4 migrations + §A4 (S4) and successive gates.
+- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — all gates
+  cleared; implementation may begin.** S5–S6 ⏳ blocked on S4 + §A2 Wave 4
+  and successive gates.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 This file tracks coordination state only.
@@ -195,27 +197,19 @@ invoked. They are independent and may be worked in parallel.
 
 ### 4. §A3 migrations
 
-- **Status:** ✅ **Partially cleared — `audit_events` migration merged.**
-  POS-Pulse PR #49 (`feat/004-s3-audit-events-migration`), SHA `e50f5b8`,
-  merged 2026-05-07. `migrations/0004_audit_events.sql` live: append-only
-  triggers, composite PK `(event_id, tenant_id)`, `audit_events_sync_state`
-  sibling table. S3 is now complete. Remaining S4 migrations
-  (`operator_sessions`, `cashier_pin_records`) are not yet authored and must
-  be reviewed + merged before S4 implementation tasks may start.
-- **Required action:** Author + review + merge `operator_sessions` and
-  `cashier_pin_records` migrations (per data-model.md §"Entity 2" and §"Entity 6")
-  when S4 is scheduled.
-- **Unblocks (when ready):** S4 (`cashier_pin_records`, `operator_sessions`).
+- **Status:** ✅ **Fully cleared.** `audit_events` migration merged
+  POS-Pulse PR #49, SHA `e50f5b8`, 2026-05-07. `operator_sessions` +
+  `cashier_pin_records` migrations merged POS-Pulse PR #60, 2026-05-08.
+  All three S4 tables are live.
+- **Required action:** None. §A3 is fully cleared for S4.
+- **Unblocks:** S4 is now unblocked from the §A3 perspective.
 
 ### 5. §A4 Argon2id / package dependency
 
-- **Status:** ⏳ **Active — awaiting S4 scheduling.** §A1 cleared via Path 1
-  (2026-05-05) — §A4 is confirmed in scope. No action required until S4 is
-  scheduled; the `argon2` package install (T063) is the first S4 gate task.
-- **Required action:** When S4 begins, install `argon2` via a dedicated PR
-  (T063) reviewed against constitution Tech Stack rules before any PIN
-  implementation tasks start.
-- **Unblocks (when ready):** S4 only.
+- **Status:** ✅ **Cleared.** `argon2` 0.44.0 installed via POS-Pulse PR #59,
+  2026-05-08. T063 complete.
+- **Required action:** None. §A4 is cleared.
+- **Unblocks:** S4 PIN implementation is now unblocked.
 
 ### 6. §A5 production readiness
 
@@ -240,8 +234,9 @@ invoked. They are independent and may be worked in parallel.
 | §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA 7ae337b, 2026-05-05T20:53:45Z, Constitution v1.5.1 | **Ahmed** | **Path 1** — constitutional clarification clause added to Principle VIII; Clerk remains sole human IdP. |
 | §A2 — backend / OpenAPI (Wave 1) | ✅ **Wave 1 cleared** — `POST /api/pos/v1/operators/sign-in` (Data-Pulse-2 PR #52, SHA `a765862`) + `POST /api/pos/v1/operators/sign-out` (Data-Pulse-2 PR #54, SHA `14a4787`) both merged to Data-Pulse-2 main 2026-05-06. **POS-Pulse S1 unblocked; S1 not yet started.** Waves 2–4 remain downstream. | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented. B-1 (PR #43) + B-2 complete. Wave 1 delivered with Clerk JWKS verification (Q1 = Yes, Q2 = path (b)); password never sent to Data-Pulse-2; cashier PIN stays local-only (AD-2 / §A1). |
 | §A2 — backend / OpenAPI (Wave 2) | ✅ **Wave 2 cleared** — `POST /api/pos/v1/audit-events` merged via Data-Pulse-2 PR #62, SHA `4f77da6`, 2026-05-07. **S3 §A2 dependency cleared.** | **Ahmed** | Wave 2 delivered; S3 now holds on §A3 only. |
-| §A3 — migrations | ✅ **Partially cleared** — `audit_events` migration merged PR #49 SHA `e50f5b8`. `operator_sessions` + `cashier_pin_records` remain for S4. | **Ahmed** | §A1 Path 1; audit_events live; S4 migrations not yet authored. |
-| §A4 — Argon2id binding | ⏳ **Active — awaiting S4 scheduling** | **Ahmed** | §A1 Path 1 confirmed §A4 in scope. Install via T063 when S4 begins. |
+| §A2 — backend / OpenAPI (Wave 3) | ✅ **Wave 3 cleared** — `GET /api/pos/v1/operators/roster`, `POST /api/pos/v1/operators/takeover/confirm`, `GET /api/pos/v1/operators/active-session` merged via Data-Pulse-2 PR #70, 2026-05-08. **S4 §A2 dependency cleared.** | **Ahmed** | Wave 3 delivered; S4 now holds on §A3 + §A4 (both also cleared). |
+| §A3 — migrations | ✅ **Fully cleared** — `audit_events` PR #49 SHA `e50f5b8`; `operator_sessions` + `cashier_pin_records` PR #60. | **Ahmed** | All three S4 tables live. S4 may proceed from §A3 perspective. |
+| §A4 — Argon2id binding | ✅ **Cleared** — argon2 0.44.0 installed (POS-Pulse PR #59), 2026-05-08. T063 complete. | **Ahmed** | S4 PIN implementation may proceed. |
 | §A5 — production readiness | ⏳ Held | _Assigned at rollout PR open time_ | Blocks production rollout only. |
 
 ---
@@ -273,15 +268,15 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- ❌ S4 (cashier PIN sign-in) — **not started.** Blocked on §A2 Wave 3 + §A3 S4 migrations + §A4.
+- S4 (cashier PIN sign-in) — **implementation begun (2026-05-08).** All gates cleared (§A2 Wave 3 ✅, §A3 ✅, §A4 ✅). Backend-client Wave 3 extension merged (roster, takeover/confirm, active-session types and methods). Remaining S4 tasks (T052–T082) in progress.
 - ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 + §A2 Wave 4.
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
-- ❌ No `package.json` changes or packages installed (§A4 / `argon2` not yet installed).
+- §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
 - ❌ No S4/S5 DB migrations authored.
 - ❌ No sales / cart / payments / tender / receipts / inventory /
   reports / KPIs / analytics work.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅.
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. **All S4 gates cleared 2026-05-08**; S4 implementation begun.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 
@@ -311,10 +306,10 @@ agents and humans should read this file (and `plan.md`) first to know
 ---
 
 **End of coordination file.** §A1 ✅ (PR #39, SHA `7ae337b`, Constitution
-v1.5.1, 2026-05-05). §A2 Wave 1 ✅ (sign-in + sign-out, Data-Pulse-2
-PRs #52 + #54, 2026-05-06) + Wave 2 ✅ (audit-events, Data-Pulse-2 PR #62,
-SHA `4f77da6`, 2026-05-07). §A3 ✅ for S3 (audit_events migration PR #49,
-SHA `e50f5b8`; S4 migrations remain). **S3 complete — all Phase 5 tasks
-(T039–T051d) merged via POS-Pulse PRs #49–#56, HEAD `ba32133`, 2026-05-07.**
-S4 holds on §A2 Wave 3 + §A3 S4 migrations + §A4. §A5 is a later-rollout
-gate. S4–S6 not yet started.
+v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
+PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
+operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
+POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 implementation
+may begin.** S3 complete (2026-05-07), all Phase 5 tasks (T039–T051d) merged
+via POS-Pulse PRs #49–#56, HEAD `ba32133`. §A5 is a later-rollout gate.
+S5–S6 not yet started.

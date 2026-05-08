@@ -223,3 +223,363 @@ describe('createBackendClient — sign-out request shape', () => {
     expect(res).toEqual({ kind: 'no_connection' });
   });
 });
+
+describe('createBackendClient — roster request shape', () => {
+  const HAPPY_ROSTER_BODY = {
+    kind: 'roster',
+    cashiers: [
+      { id: 'c-1', display_name: 'Cashier One', role: 'cashier' },
+      { id: 'c-2', display_name: 'Cashier Two', role: 'cashier' },
+    ],
+  };
+
+  it('GETs /api/pos/v1/operators/roster with branch_id query param', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.listRoster('branch-abc');
+
+    expect(captured).toHaveLength(1);
+    const call = captured[0];
+    expect(call?.url).toBe(`${BASE}/api/pos/v1/operators/roster?branch_id=branch-abc`);
+    expect(call?.init.method).toBe('GET');
+  });
+
+  it('encodes special characters in branch_id', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.listRoster('branch/with spaces&special');
+    expect(captured[0]?.url).toContain(encodeURIComponent('branch/with spaces&special'));
+  });
+
+  it('NEVER includes an Authorization header (no JWT on roster path)', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.listRoster('b1');
+    const headers = captured[0]?.init.headers as Record<string, string> | undefined;
+    expect(headers?.['Authorization']).toBeUndefined();
+    expect(headers?.['authorization']).toBeUndefined();
+  });
+
+  it('NEVER includes pin / password in the request', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.listRoster('b1');
+    const serialized = JSON.stringify({
+      url: captured[0]?.url,
+      headers: captured[0]?.init.headers,
+    });
+    expect(serialized).not.toContain('pin');
+    expect(serialized).not.toContain('password');
+  });
+
+  it('parses roster response and surfaces cashiers array', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('roster');
+    if (res.kind === 'roster') {
+      expect(res.cashiers).toHaveLength(2);
+      expect(res.cashiers[0]).toEqual({ id: 'c-1', display_name: 'Cashier One', role: 'cashier' });
+    }
+  });
+
+  it('strips extra fields from each cashier entry (allowlist defence-in-depth)', async () => {
+    const body = {
+      kind: 'roster',
+      cashiers: [
+        {
+          id: 'c-1',
+          display_name: 'Cashier One',
+          role: 'cashier',
+          email: 'secret@example.com',
+          phone: '+1234567890',
+          password_hash: 'should-not-appear',
+        },
+      ],
+    };
+    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('roster');
+    if (res.kind === 'roster') {
+      const cashier = res.cashiers[0];
+      expect(cashier).toEqual({ id: 'c-1', display_name: 'Cashier One', role: 'cashier' });
+      expect(JSON.stringify(cashier)).not.toContain('email');
+      expect(JSON.stringify(cashier)).not.toContain('password_hash');
+    }
+  });
+
+  it('returns refused when any cashier entry has a non-cashier role', async () => {
+    const body = {
+      kind: 'roster',
+      cashiers: [{ id: 'm-1', display_name: 'Manager', role: 'manager' }],
+    };
+    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('refused');
+  });
+
+  it('accepts an empty cashiers array', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify({ kind: 'roster', cashiers: [] }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res).toEqual({ kind: 'roster', cashiers: [] });
+  });
+
+  it('collapses 4xx/5xx to refused', async () => {
+    for (const status of [400, 401, 403, 500]) {
+      const { fetchImpl } = captureFetch(new Response('{}', { status }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.listRoster('b1');
+      expect(res.kind).toBe('refused');
+    }
+  });
+
+  it('returns no_connection on network failure', async () => {
+    const fetchImpl = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('no_connection');
+  });
+
+  it('returns refused on malformed JSON body', async () => {
+    const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('refused');
+  });
+});
+
+describe('createBackendClient — takeover-confirm request shape', () => {
+  const HAPPY_TAKEOVER_BODY = {
+    kind: 'signed_in',
+    operator: {
+      id: 'clerk-user-2',
+      display_name: 'Manager Two',
+      role: 'manager',
+      tenant_id: 't1',
+      branch_id: 'b1',
+    },
+    operator_session: {
+      id: 'be-sess-2',
+      issued_at: '2026-05-08T00:00:00.000Z',
+    },
+  };
+
+  it('POSTs to /api/pos/v1/operators/takeover/confirm with Authorization Bearer and exact body', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_TAKEOVER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.confirmTakeover(
+      {
+        event_id: 'uuid-v4-123',
+        operator_id: 'clerk-user-2',
+        device_token_attestation: 'attest-456',
+      },
+      'eyJ.takeover.jwt',
+    );
+
+    expect(captured).toHaveLength(1);
+    const call = captured[0];
+    expect(call?.url).toBe(`${BASE}/api/pos/v1/operators/takeover/confirm`);
+    expect(call?.init.method).toBe('POST');
+    const headers = call?.init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer eyJ.takeover.jwt');
+    expect(headers['Content-Type']).toBe('application/json');
+    const body = JSON.parse(bodyAsString(call?.init.body)) as Record<string, unknown>;
+    expect(body).toEqual({
+      event_id: 'uuid-v4-123',
+      operator_id: 'clerk-user-2',
+      device_token_attestation: 'attest-456',
+    });
+  });
+
+  it('NEVER includes pin / password in the request body or headers', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_TAKEOVER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.confirmTakeover(
+      { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+      'jwt-1',
+    );
+    const serialized = JSON.stringify({
+      headers: captured[0]?.init.headers,
+      body: captured[0]?.init.body,
+    });
+    expect(serialized).not.toContain('pin');
+    expect(serialized).not.toContain('password');
+  });
+
+  it('parses signed_in response and surfaces operator + session', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(HAPPY_TAKEOVER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.confirmTakeover(
+      { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+      'jwt-1',
+    );
+    expect(res.kind).toBe('signed_in');
+    if (res.kind === 'signed_in') {
+      expect(res.operator.id).toBe('clerk-user-2');
+      expect(res.operator_session.id).toBe('be-sess-2');
+    }
+  });
+
+  it('maps takeover_required from backend to refused (not a valid confirm outcome)', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify({ kind: 'takeover_required' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.confirmTakeover(
+      { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+      'jwt-1',
+    );
+    expect(res.kind).toBe('refused');
+  });
+
+  it('collapses 4xx/5xx to refused', async () => {
+    for (const status of [400, 401, 403, 409, 500]) {
+      const { fetchImpl } = captureFetch(new Response('{}', { status }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.confirmTakeover(
+        { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+        'jwt-1',
+      );
+      expect(res.kind).toBe('refused');
+    }
+  });
+
+  it('returns no_connection on network failure', async () => {
+    const fetchImpl = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.confirmTakeover(
+      { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+      'jwt-1',
+    );
+    expect(res.kind).toBe('no_connection');
+  });
+
+  it('returns refused on malformed JSON body', async () => {
+    const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.confirmTakeover(
+      { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+      'jwt-1',
+    );
+    expect(res.kind).toBe('refused');
+  });
+});
+
+describe('createBackendClient — active-session request shape', () => {
+  it('GETs /api/pos/v1/operators/active-session with operator_id query param', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getActiveSession('clerk-user-3');
+
+    expect(captured).toHaveLength(1);
+    const call = captured[0];
+    expect(call?.url).toBe(`${BASE}/api/pos/v1/operators/active-session?operator_id=clerk-user-3`);
+    expect(call?.init.method).toBe('GET');
+  });
+
+  it('encodes special characters in operator_id', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getActiveSession('user@domain.com');
+    expect(captured[0]?.url).toContain(encodeURIComponent('user@domain.com'));
+  });
+
+  it('NEVER includes an Authorization header (no JWT on active-session path — AD-2)', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getActiveSession('op1');
+    const headers = captured[0]?.init.headers as Record<string, string> | undefined;
+    expect(headers?.['Authorization']).toBeUndefined();
+    expect(headers?.['authorization']).toBeUndefined();
+  });
+
+  it('NEVER includes pin / password in the request (AD-2 invariant)', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getActiveSession('op1');
+    const serialized = JSON.stringify({
+      url: captured[0]?.url,
+      headers: captured[0]?.init.headers,
+    });
+    expect(serialized).not.toContain('pin');
+    expect(serialized).not.toContain('password');
+  });
+
+  it('returns {kind: "none"} when no active session exists', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getActiveSession('op1');
+    expect(res).toEqual({ kind: 'none' });
+  });
+
+  it('returns {kind: "active"} when an active session exists', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify({ kind: 'active' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getActiveSession('op1');
+    expect(res).toEqual({ kind: 'active' });
+  });
+
+  it('returns refused on unknown kind (minimum-disclosure — binary shape only per FR-013)', async () => {
+    const body = { kind: 'some_unexpected_value', extra_field: 'should not surface' };
+    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getActiveSession('op1');
+    expect(res.kind).toBe('refused');
+  });
+
+  it('collapses 4xx/5xx to refused', async () => {
+    for (const status of [400, 401, 403, 500]) {
+      const { fetchImpl } = captureFetch(new Response('{}', { status }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.getActiveSession('op1');
+      expect(res.kind).toBe('refused');
+    }
+  });
+
+  it('returns no_connection on network failure', async () => {
+    const fetchImpl = vi.fn(() => Promise.reject(new Error('ETIMEDOUT')));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getActiveSession('op1');
+    expect(res.kind).toBe('no_connection');
+  });
+
+  it('returns refused on malformed JSON body', async () => {
+    const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getActiveSession('op1');
+    expect(res.kind).toBe('refused');
+  });
+});

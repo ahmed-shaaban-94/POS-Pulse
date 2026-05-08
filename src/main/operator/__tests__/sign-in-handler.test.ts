@@ -48,6 +48,9 @@ function fakeBackend(
   return {
     signIn: vi.fn(signIn),
     signOut: vi.fn(signOut),
+    listRoster: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+    confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+    getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
   };
 }
 
