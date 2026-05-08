@@ -72,6 +72,7 @@ function operatorBridge(opts: {
     _emitAuditEventSmoke: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
     ),
+    listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
   };
 }
 

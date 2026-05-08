@@ -10,6 +10,7 @@ import type { AuditEventsStore } from '../../audit/audit-emitter.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
 import type { SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
+import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { SessionManager } from '../../operator/session-manager.js';
 import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
@@ -42,6 +43,12 @@ function fakeSignOutHandler(): SignOutHandler {
 
 function fakeInactivityMonitor(): InactivityMonitor {
   return { reportActivity: vi.fn() } as unknown as InactivityMonitor;
+}
+
+function fakeRosterHandler(): RosterHandler {
+  return {
+    listRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+  } as unknown as RosterHandler;
 }
 
 function fakeStore(): AuditEventsStore & { inserted: AuditEvent[] } {
@@ -116,6 +123,7 @@ function setup(opts: {
   registerOperatorHandlers(ipcMain, {
     signInHandler: fakeSignInHandler(),
     signOutHandler: fakeSignOutHandler(),
+    rosterHandler: fakeRosterHandler(),
     sessionManager: fakeSessionManager(opts.session ?? null),
     inactivityMonitor: fakeInactivityMonitor(),
     auditEmitter: emitter,
@@ -139,6 +147,7 @@ describe('operator:_emit-audit-event-smoke — channel registration', () => {
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler(),
       signOutHandler: fakeSignOutHandler(),
+      rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(null),
       inactivityMonitor: fakeInactivityMonitor(),
       auditEmitter: new AuditEmitter(store),
@@ -321,6 +330,7 @@ describe('operator:_emit-audit-event-smoke — unpaired terminal', () => {
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler(),
       signOutHandler: fakeSignOutHandler(),
+      rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(session),
       inactivityMonitor: fakeInactivityMonitor(),
       auditEmitter: new AuditEmitter(store),

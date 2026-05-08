@@ -13,6 +13,7 @@ import type { PairingStore } from '../../pairing/store.js';
 import type { SessionManager } from '../../operator/session-manager.js';
 import type { SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
+import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
 
 /**
@@ -112,6 +113,12 @@ function fakeInactivityMonitor(): InactivityMonitor {
   return { reportActivity: vi.fn(), start: vi.fn() } as unknown as InactivityMonitor;
 }
 
+function fakeRosterHandler(): RosterHandler {
+  return {
+    listRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+  } as unknown as RosterHandler;
+}
+
 interface SetupOpts {
   sessionManager?: SessionManager;
   auditEmitter?: AuditEmitter;
@@ -127,6 +134,7 @@ function setup(opts: SetupOpts = {}) {
   registerOperatorHandlers(ipcMain, {
     signInHandler: fakeSignInHandler(),
     signOutHandler: fakeSignOutHandler(),
+    rosterHandler: fakeRosterHandler(),
     sessionManager,
     inactivityMonitor: fakeInactivityMonitor(),
     auditEmitter,
@@ -156,6 +164,7 @@ describe('operator:emit-audit-event — channel registration', () => {
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler(),
       signOutHandler: fakeSignOutHandler(),
+      rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(),
       inactivityMonitor: fakeInactivityMonitor(),
       auditEmitter: fakeAuditEmitter(),

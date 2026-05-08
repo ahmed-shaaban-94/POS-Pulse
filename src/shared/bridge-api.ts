@@ -124,6 +124,26 @@ export interface SignOutResponse {
 }
 
 /**
+ * T070b — bridge view of a single cashier on the branch roster.
+ *
+ * Strict minimum-disclosure: only `{id, display_name, role}` cross the
+ * bridge (FR-006, FR-031). Email, phone, password hash, PIN material,
+ * and audit history MUST NOT appear here.
+ */
+export interface BranchRosterCashier {
+  id: string;
+  display_name: string;
+  role: 'cashier';
+}
+
+export interface ListBranchRosterSuccess {
+  kind: 'roster';
+  cashiers: BranchRosterCashier[];
+}
+
+export type ListBranchRosterResponse = ListBranchRosterSuccess | OperatorRefusal;
+
+/**
  * `operator.*` namespace. Manager/admin paths only at S1; cashier,
  * takeover-confirm, roster, audit-event-emit, and PIN management land
  * in later slices behind their gates.
@@ -195,6 +215,16 @@ export interface OperatorBridgeAPI {
    * Hardcoded `action_category: 'shift.open'`, `payload: { smoke: true }`.
    */
   _emitAuditEventSmoke(): Promise<EmitAuditEventResponse | OperatorRefusal>;
+
+  /**
+   * T070b — list cashiers on the terminal's paired branch.
+   *
+   * Manager and admin roles only (cashier → `role_mismatch`). Returns only
+   * `{id, display_name, role: 'cashier'}` per entry — no email, phone,
+   * PIN material, or audit history crosses the bridge (FR-006, FR-031).
+   * Branch scope comes from the active operator session (trusted main-side).
+   */
+  listBranchRoster(): Promise<ListBranchRosterResponse>;
 }
 
 export interface PreloadBridgeAPI {

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type {
   EmitAuditEventRequest,
   EmitAuditEventResponse,
+  ListBranchRosterResponse,
   OperatorBridgeAPI,
   OperatorSessionBridgeView,
   PairingBridgeAPI,
@@ -72,6 +73,10 @@ const operator: OperatorBridgeAPI = {
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE) as Promise<
       EmitAuditEventResponse | OperatorRefusal
     >,
+  listBranchRoster: () =>
+    ipcRenderer.invoke(
+      OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
+    ) as Promise<ListBranchRosterResponse>,
 };
 
 const api: PreloadBridgeAPI = {

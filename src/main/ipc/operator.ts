@@ -5,6 +5,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import type {
   EmitAuditEventRequest,
   EmitAuditEventResponse,
+  ListBranchRosterResponse,
   ManagerAdminSignInRequest,
   OperatorSessionBridgeView,
   SignInResponse,
@@ -13,6 +14,7 @@ import type {
 import { OPERATOR_IPC_CHANNELS } from '../../shared/operator/channels.js';
 import type { SignInHandler } from '../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../operator/sign-out-handler.js';
+import type { RosterHandler } from '../operator/roster-handler.js';
 import type { SessionManager } from '../operator/session-manager.js';
 import type { InactivityMonitor } from '../operator/inactivity-monitor.js';
 import type { PairingStore } from '../pairing/store.js';
@@ -22,6 +24,7 @@ import {
   type ActionCategory,
 } from '../../shared/audit/event-shape.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
+import { requireRole } from '../operator/role-enforcement.js';
 
 /**
  * 004-operator-session — `operator:*` IPC handlers (S1 wave 1 + T048).
@@ -34,6 +37,8 @@ import type { AuditEmitter } from '../audit/audit-emitter.js';
 export interface OperatorHandlerDeps {
   signInHandler: SignInHandler;
   signOutHandler: SignOutHandler;
+  /** T070b — branch roster handler. */
+  rosterHandler: RosterHandler;
   sessionManager: SessionManager;
   inactivityMonitor: InactivityMonitor;
   /** T048 — audit-event emission. */
@@ -82,6 +87,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   const {
     signInHandler,
     signOutHandler,
+    rosterHandler,
     sessionManager,
     inactivityMonitor,
     auditEmitter,
@@ -165,6 +171,26 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
         // Generic refusal — error message MUST NOT cross the bridge (PR-2 / NFR-003).
         return refuseInvalid();
       }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
+    async (): Promise<ListBranchRosterResponse> => {
+      const session = sessionManager.getCurrent();
+      if (session === null) {
+        return { kind: 'refused', category: 'not_signed_in' };
+      }
+      // AD-1: requireRole is the primary role-enforcement gate (T015).
+      try {
+        requireRole(['manager', 'admin'], session);
+      } catch (err) {
+        if (err instanceof OperatorRefusalError) {
+          return { kind: 'refused', category: err.category };
+        }
+        return refuseInvalid();
+      }
+      return rosterHandler.listRoster(session.branch_id);
     },
   );
 
