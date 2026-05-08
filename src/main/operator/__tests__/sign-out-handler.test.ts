@@ -20,6 +20,9 @@ function fakeBackend(result: BackendSignOutResponse, calls: unknown[] = []): Bac
   return {
     signIn: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     signOut: vi.fn(signOut),
+    listRoster: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+    confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+    getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
   };
 }
 
@@ -66,6 +69,9 @@ describe('SignOutHandler', () => {
     const stuckBackend: BackendClient = {
       signIn: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
       signOut: vi.fn(() => new Promise<BackendSignOutResponse>(() => undefined)), // never resolves
+      listRoster: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+      confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+      getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     };
     const handler = new SignOutHandler({
       backend: stuckBackend,

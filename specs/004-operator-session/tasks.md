@@ -11,7 +11,7 @@ description: "Task list for feature 004-operator-session — slice-organised, ga
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md) ✅ approved-with-revisions (2026-05-05)
 **Constitution version pinned:** v1.5.0
 **Created:** 2026-05-05
-**Last updated:** 2026-05-07 — S3 complete; all Phase 5 tasks (T039–T051d) marked ✅. §A3 gate cleared (POS-Pulse PR #49, `migrations/0004_audit_events.sql`, SHA `e50f5b8`). S3 merged via PRs #49–#56 (HEAD `ba32133`). Addendum originally applied 2026-05-05.
+**Last updated:** 2026-05-08 — All S4 gates cleared: §A2 Wave 3 cleared (Data-Pulse-2 PR #70 — roster + takeover/confirm + active-session endpoints); §A3 fully cleared (operator_sessions + cashier_pin_records migrations, POS-Pulse PR #60); §A4 cleared (argon2 0.44.0, POS-Pulse PR #59). S4 implementation may begin. S3 complete; all Phase 5 tasks (T039–T051d) marked ✅. S3 merged via PRs #49–#56 (HEAD `ba32133`).
 
 ---
 
@@ -38,12 +38,12 @@ Every implementation task that touches code is preceded by a TDD test task per C
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | Ahmed | (3 notes incorporated below as task requirements) |
 | §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA `7ae337b`, Constitution v1.5.1, 2026-05-05 | Ahmed | Path 1 — constitutional clarification clause added to Principle VIII. |
-| §A2 — backend / OpenAPI | ✅ Wave 1 + Wave 2 cleared (Wave 3–4 downstream) | Ahmed | Wave 1: sign-in + sign-out (Data-Pulse-2 PRs #52/#54). Wave 2: audit-events (Data-Pulse-2 PR #62, SHA `4f77da6`). Waves 3–4 block S4/S5. |
-| §A3 — migrations | ✅ **Partially cleared** — `audit_events` merged PR #49 SHA `e50f5b8`. `operator_sessions` + `cashier_pin_records` remain for S4. | Ahmed | `audit_events` + `audit_events_sync_state` tables live. S4 migrations not yet authored. |
-| §A4 — Argon2id binding | ⏳ Held (awaiting S4 scheduling) | Ahmed | §A1 cleared Path 1 — §A4 is in scope; no action until S4 starts. |
+| §A2 — backend / OpenAPI | ✅ Wave 1 + Wave 2 + Wave 3 cleared (Wave 4 downstream) | Ahmed | Wave 1: sign-in + sign-out (Data-Pulse-2 PRs #52/#54). Wave 2: audit-events (Data-Pulse-2 PR #62, SHA `4f77da6`). Wave 3: roster + takeover/confirm + active-session (Data-Pulse-2 PR #70). Wave 4 blocks S5. |
+| §A3 — migrations | ✅ **Fully cleared** — `audit_events` PR #49 SHA `e50f5b8`; `operator_sessions` + `cashier_pin_records` PR #60. | Ahmed | All three S4 tables live. S4 may proceed from §A3 perspective. |
+| §A4 — Argon2id binding | ✅ **Cleared** — argon2 0.44.0 installed (POS-Pulse PR #59). | Ahmed | T063 complete. S4 PIN implementation may proceed. |
 | §A5 — production readiness | ⏳ Held | TBD at rollout PR open time | Blocks production rollout only, not slice merges |
 
-**Net effect on this tasks.md**: Phase 1 (Setup), Phase 2 (Foundational), Phase 3 (S1), Phase 4 (S2), and Phase 5 (S3) are **complete** (all tasks ✅). S4 gates on §A2 Wave 3 + §A3 (operator_sessions / cashier_pin_records migrations) + §A4. S5 gates on S4 + §A2 Wave 4. S6 gates on prior slices merged. §A3 partially cleared (audit_events ✅); cashier_pin_records + operator_sessions migrations remain for S4.
+**Net effect on this tasks.md**: Phase 1 (Setup), Phase 2 (Foundational), Phase 3 (S1), Phase 4 (S2), and Phase 5 (S3) are **complete** (all tasks ✅). **All S4 gates cleared (2026-05-08):** §A1 ✅, §A2 Wave 3 ✅, §A3 ✅ (all migrations live), §A4 ✅ (argon2 0.44.0). S4 implementation may begin. S5 gates on S4 + §A2 Wave 4. S6 gates on prior slices merged.
 
 ---
 
@@ -356,7 +356,7 @@ S0 (Visual Direction) ✅
   │                       │
   │                       └──► Phase 5 (S3): Audit scaffolding (T039–T051d) ✅ (PRs #49–#56, HEAD ba32133)
   │                               │
-  │                               └──► Phase 6 (S4): Cashier sign-in (T052–T082) ──── BLOCKED on §A2 Wave 3 + §A3 (S4 migrations) + §A4
+  │                               └──► Phase 6 (S4): Cashier sign-in (T052–T082) ──── READY (all gates cleared: §A1 ✅, §A2 Wave 3 ✅, §A3 ✅, §A4 ✅)
   │                                       │
   │                                       └──► Phase 7 (S5): Forced close (T083–T093) ──── BLOCKED on S4 + §A2 Wave 4
   │                                               │
@@ -444,4 +444,4 @@ All **114** tasks follow the strict checklist format:
 
 ---
 
-**End of tasks.** 114 tasks across 8 phases, slice-organised, gate-explicit, dependency-aware. **S3 is complete (2026-05-07)** — all Phase 5 tasks (T039–T051d) merged via PRs #49–#56 (HEAD `ba32133`). Phases 1–5 (S0–S3) are done. The next coordination action is **§A2 Wave 3 delivery** (roster + takeover/confirm + active-session endpoints) and **§A3 S4 migrations** (operator_sessions + cashier_pin_records) to unblock S4. §A4 (Argon2id) is also needed for S4.
+**End of tasks.** 114 tasks across 8 phases, slice-organised, gate-explicit, dependency-aware. **S3 is complete (2026-05-07)** — all Phase 5 tasks (T039–T051d) merged via PRs #49–#56 (HEAD `ba32133`). Phases 1–5 (S0–S3) are done. **All S4 gates cleared (2026-05-08):** §A2 Wave 3 ✅ (Data-Pulse-2 PR #70 — roster + takeover/confirm + active-session), §A3 ✅ (operator_sessions + cashier_pin_records, POS-Pulse PR #60), §A4 ✅ (argon2 0.44.0, POS-Pulse PR #59). **S4 implementation is now unblocked.**
