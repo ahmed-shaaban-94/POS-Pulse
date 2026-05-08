@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Renderer icon</title>
+  <desc id="desc">React renderer shell icon.</desc>
+  <rect width="96" height="96" rx="20" fill="#eff6ff"/>
+  <rect x="18" y="22" width="60" height="46" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="4"/>
+  <path d="M28 36h18M28 48h34M28 60h24" stroke="#0f766e" stroke-width="4" stroke-linecap="round"/>
+  <rect x="38" y="74" width="20" height="6" rx="3" fill="#334155"/>
+</svg>
