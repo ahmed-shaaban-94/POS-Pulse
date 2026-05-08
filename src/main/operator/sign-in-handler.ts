@@ -263,17 +263,26 @@ export class CashierSignInHandler {
       return REFUSE_INVALID;
     }
 
-    // 4. Unseal pin material (DPAPI on Windows; throws if ciphertext is tampered)
-    const unsealed = unsealPinMaterial(
-      { pin_hash: sealedRow.pin_hash, pin_salt: sealedRow.pin_salt },
-      this.deps.safeStorage,
-    );
-    const pinRow: PinRow = {
-      pin_hash: unsealed.pin_hash,
-      pin_salt: unsealed.pin_salt,
-      failed_attempt_count: sealedRow.failed_attempt_count,
-      lockout_until: sealedRow.lockout_until,
-    };
+    // 4. Unseal pin material (DPAPI on Windows; throws if ciphertext is tampered/corrupt).
+    // Catch any decrypt error and return a generic refusal — raw storage errors must not
+    // propagate out of the sign-in path (PR-1: no ciphertext, hash, salt, or cashier id
+    // in logs or returned values).
+    let pinRow: PinRow;
+    try {
+      const unsealed = unsealPinMaterial(
+        { pin_hash: sealedRow.pin_hash, pin_salt: sealedRow.pin_salt },
+        this.deps.safeStorage,
+      );
+      pinRow = {
+        pin_hash: unsealed.pin_hash,
+        pin_salt: unsealed.pin_salt,
+        failed_attempt_count: sealedRow.failed_attempt_count,
+        lockout_until: sealedRow.lockout_until,
+      };
+    } catch {
+      this.logRefusal('invalid_input', 'pin_unseal');
+      return REFUSE_INVALID;
+    }
 
     // 5. Verify PIN — verifyPinWithWindow handles PR-3 expired-lockout reset
     const result = await verifyPinWithWindow(req.pin, pinRow);

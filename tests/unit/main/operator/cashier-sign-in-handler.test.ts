@@ -334,3 +334,41 @@ describe('CashierSignInHandler — PR-1 PIN redaction', () => {
     expect(JSON.stringify(result)).not.toContain(SENSITIVE_PIN);
   });
 });
+
+describe('CashierSignInHandler — tampered/corrupt sealed material', () => {
+  it('returns generic invalid_input when pin_hash ciphertext is corrupted', async () => {
+    const corruptRow: TestDbRow = {
+      ...baseRow,
+      pin_hash: Buffer.from('not-a-valid-ciphertext', 'utf8'),
+    };
+    const handler = makeHandler({ db: makeDb(corruptRow) });
+    const result = await handler.signIn(makeRequest());
+    expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+
+  it('returns generic invalid_input when pin_salt ciphertext is corrupted', async () => {
+    const corruptRow: TestDbRow = {
+      ...baseRow,
+      pin_salt: Buffer.from('not-a-valid-ciphertext', 'utf8'),
+    };
+    const handler = makeHandler({ db: makeDb(corruptRow) });
+    const result = await handler.signIn(makeRequest());
+    expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+
+  it('response does not contain the PIN or raw decrypt error details', async () => {
+    const SENSITIVE_PIN = '1234';
+    const corruptRow: TestDbRow = {
+      ...baseRow,
+      pin_hash: Buffer.from('corrupted', 'utf8'),
+    };
+    const handler = makeHandler({ db: makeDb(corruptRow) });
+    const result = await handler.signIn(makeRequest({ pin: SENSITIVE_PIN }));
+    expect(result).toEqual({ kind: 'refused', category: 'invalid_input' });
+    const serialised = JSON.stringify(result);
+    expect(serialised).not.toContain(SENSITIVE_PIN);
+    expect(serialised).not.toContain('ciphertext');
+    expect(serialised).not.toContain('corrupted');
+    expect(serialised).not.toContain('decryptString');
+  });
+});
