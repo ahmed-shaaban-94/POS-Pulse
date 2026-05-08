@@ -6,16 +6,19 @@ import { unlockPinRow, verifyPinWithWindow } from '../../../../src/main/operator
 /**
  * 004-operator-session T054 — PR-3 lockout policy tests.
  *
- * Verifies the rolling-window lockout state machine in pin-lockout.ts:
+ * Verifies the schema-compatible threshold lockout in pin-lockout.ts:
  *
- *  - 5 consecutive failures triggers lockout (newLockoutUntil set).
- *  - Subsequent attempts during active lockout return locked_out even
- *    with the correct PIN (PR-3).
- *  - Expired lockout resets the failure count (rolling window): the next
- *    failure starts the counter at 1, not at the pre-lockout value.
+ *  - 5 cumulative failures triggers lockout (newLockoutUntil set).
+ *  - Active lockout blocks all attempts, even with correct PIN (PR-3).
+ *  - Expired lockout resets failed_attempt_count to 0 (post-lockout expiry
+ *    reset); next failure starts counter at 1, not at pre-lockout value.
  *  - Expired lockout + correct PIN → match (lockout fully released).
  *  - Manager unlock (unlockPinRow) clears lockout_until and
  *    failed_attempt_count; subsequent verification succeeds (PR-3 release).
+ *
+ * Note: true "5 failures within 5 minutes" pre-lockout rolling window is not
+ * implementable with the current schema (no failure-window timestamp column).
+ * This tests the lockout foundation allowed by the existing schema.
  *
  * Performance: one Argon2id hash computed in beforeAll; shared across all
  * tests to keep the suite fast (see T052 note).
@@ -78,11 +81,11 @@ describe('verifyPinWithWindow — active lockout', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Rolling window — expired lockout resets the failure count
+// Post-lockout expiry reset — expired lockout resets the failure count
 // ---------------------------------------------------------------------------
 
-describe('verifyPinWithWindow — rolling window (expired lockout)', () => {
-  it('expired lockout + correct PIN returns match (window reset, no new lockout)', async () => {
+describe('verifyPinWithWindow — post-lockout expiry reset', () => {
+  it('expired lockout + correct PIN returns match (lockout released, count reset to 0)', async () => {
     // Simulate a row that was locked out but the window has since passed.
     const result = await verifyPinWithWindow(
       CORRECT_PIN,
@@ -92,7 +95,7 @@ describe('verifyPinWithWindow — rolling window (expired lockout)', () => {
   });
 
   it('expired lockout + wrong PIN resets counter to 1 (not 6)', async () => {
-    // The rolling window discards the pre-lockout count when the window expires.
+    // Expired lockout resets failed_attempt_count to 0; one wrong attempt → newFailedCount 1.
     const result = await verifyPinWithWindow(
       WRONG_PIN,
       rowWith({ failed_attempt_count: 5, lockout_until: pastTs() }),
@@ -105,8 +108,8 @@ describe('verifyPinWithWindow — rolling window (expired lockout)', () => {
     expect(result.newLockoutUntil).toBeNull();
   });
 
-  it('expired lockout + 4 wrong PINs in sequence do not trigger lockout', async () => {
-    // After window reset, 4 failures are still below threshold.
+  it('expired lockout + 1 wrong PIN produces newFailedCount 1 (below lockout threshold)', async () => {
+    // Expiry reset clears count to 0; one wrong attempt → count 1, below threshold (no new lockout).
     const result = await verifyPinWithWindow(
       WRONG_PIN,
       rowWith({ failed_attempt_count: 5, lockout_until: pastTs() }),

@@ -5,12 +5,13 @@
  * guarantee that the PIN value cannot reach pino or any other log surface
  * from this module (PR-1 / FR-030).
  *
- * Rolling-window design (constraint: existing schema has no first_failed_at
- * column — only failed_attempt_count + lockout_until):
- *   When the lockout window has expired, the failure count is reset to 0
- *   before delegating to verifyPin. This implements the "5-minute rolling
- *   window" — failures older than the lockout window no longer count toward
- *   the threshold.
+ * Schema-compatible lockout design (existing schema: failed_attempt_count +
+ * lockout_until only — no first_failed_at / failed_window_started_at):
+ *   5 cumulative failures → lockout_until set to now + 5 min.
+ *   Active lockout blocks all attempts. Expired lockout resets
+ *   failed_attempt_count to 0 before verification (post-lockout expiry reset).
+ *   True "5 failures within 5 minutes" pre-lockout rolling window would
+ *   require a failure-window timestamp column (not in current schema).
  *
  * Caller contract (same as pin-credential.ts):
  *   Pure compute — does NOT write to DB.
@@ -49,12 +50,12 @@ export function rowMatchesScope(row: ScopedPinRow, scope: PinScope): boolean {
 }
 
 /**
- * PR-3 rolling-window verifier.
+ * PR-3 threshold lockout verifier (schema-compatible).
  *
- * If the lockout window has expired (lockout_until is in the past), resets
- * failed_attempt_count to 0 before delegating to verifyPin — implementing
- * the rolling 5-minute window: once the window elapses, prior failures no
- * longer count toward the lockout threshold.
+ * Post-lockout expiry reset: if lockout_until is in the past, resets
+ * failed_attempt_count to 0 before delegating to verifyPin. This clears
+ * the failure count once the lockout window elapses — not a pre-lockout
+ * rolling-window guard (current schema has no failure-window timestamp).
  *
  * Active lockouts (lockout_until in the future) are passed through unchanged;
  * verifyPin returns { kind: 'locked_out' } directly.
