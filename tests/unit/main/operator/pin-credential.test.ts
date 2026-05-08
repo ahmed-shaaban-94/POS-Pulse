@@ -7,6 +7,7 @@ import type { PinRow } from '../../../../src/main/operator/pin-credential.js';
  * 004-operator-session T052 — Argon2id PIN verifier unit tests.
  *
  * Verifies:
+ *  - hashPin returns BLOB-compatible Buffer types (schema: BLOB NOT NULL).
  *  - Correct PIN passes verification.
  *  - Wrong PIN fails and increments failed_attempt_count.
  *  - failed_attempt_count increments monotonically per call.
@@ -38,13 +39,21 @@ function rowWith(overrides: Partial<PinRow>): PinRow {
   return { ...storedRow, ...overrides };
 }
 
-describe('hashPin', () => {
-  it('produces a PHC-formatted Argon2id string', () => {
-    expect(storedRow.pin_hash).toMatch(/^\$argon2id\$/);
+describe('hashPin — BLOB-compatible output', () => {
+  it('pin_hash is a Buffer (schema: BLOB NOT NULL)', () => {
+    expect(Buffer.isBuffer(storedRow.pin_hash)).toBe(true);
   });
 
-  it('pin_salt is a 32-character hex string (16 bytes)', () => {
-    expect(storedRow.pin_salt).toMatch(/^[0-9a-f]{32}$/);
+  it('pin_hash decodes to a PHC-formatted Argon2id string', () => {
+    expect(storedRow.pin_hash.toString('utf8')).toMatch(/^\$argon2id\$/);
+  });
+
+  it('pin_salt is a Buffer (schema: BLOB NOT NULL)', () => {
+    expect(Buffer.isBuffer(storedRow.pin_salt)).toBe(true);
+  });
+
+  it('pin_salt is exactly 16 bytes', () => {
+    expect(storedRow.pin_salt.byteLength).toBe(16);
   });
 });
 
