@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Operator session icon</title>
+  <desc id="desc">Operator identity and active session icon.</desc>
+  <rect width="96" height="96" rx="20" fill="#f1f5f9"/>
+  <circle cx="48" cy="34" r="15" fill="#2563eb"/>
+  <path d="M22 76c4-16 14-24 26-24s22 8 26 24" fill="#0f766e"/>
+  <rect x="58" y="18" width="20" height="24" rx="8" fill="#f59e0b"/>
+  <path d="M65 30h6" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+</svg>

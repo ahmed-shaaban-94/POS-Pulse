@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">Local database icon</title>
+  <desc id="desc">Local SQLite database icon.</desc>
+  <rect width="96" height="96" rx="20" fill="#ecfdf5"/>
+  <ellipse cx="48" cy="26" rx="27" ry="12" fill="#0f766e"/>
+  <path d="M21 26v34c0 7 12 12 27 12s27-5 27-12V26" fill="#115e59"/>
+  <path d="M21 43c0 7 12 12 27 12s27-5 27-12M21 60c0 7 12 12 27 12s27-5 27-12" fill="none" stroke="#ccfbf1" stroke-width="4"/>
+  <text x="48" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="800" fill="#ffffff">SQL</text>
+</svg>
