@@ -59,6 +59,12 @@ jobs:
       - name: Test with coverage
         run: npm test -- --coverage
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+
       # `npm run package:dir` packs whatever sits under `dist/` per
       # electron-builder.yml's `files` glob; the `package:dir` script
       # does NOT chain `build`. CI must populate `dist/` first (D1).
