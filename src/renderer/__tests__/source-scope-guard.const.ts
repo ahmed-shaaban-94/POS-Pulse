@@ -35,3 +35,13 @@ export const FORBIDDEN_PATH_PREFIXES = [
 ] as const satisfies readonly string[];
 
 export type ForbiddenPathPrefix = (typeof FORBIDDEN_PATH_PREFIXES)[number];
+
+/**
+ * CI-maintenance branches (prefix `ci/`) are the sole exception to the
+ * `.github/workflows/` block — their purpose IS CI config.  All other
+ * forbidden prefixes remain blocked even on `ci/` branches.
+ */
+export const CI_MAINTENANCE_BRANCH_PREFIX = 'ci/' as const;
+export const CI_MAINTENANCE_EXEMPT_PREFIXES = [
+  '.github/workflows/',
+] as const satisfies readonly ForbiddenPathPrefix[];

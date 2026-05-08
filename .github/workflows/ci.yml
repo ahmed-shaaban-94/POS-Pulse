@@ -56,8 +56,20 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # postinstall (electron-rebuild -f -w better-sqlite3) rebuilds argon2
+      # for Electron's ABI as a side-effect, making it incompatible with the
+      # plain Node 20 process that Vitest forks use. Rebuild argon2 here for
+      # Node 20 so the test suite can load it without a segfault.
+      - name: Rebuild argon2 for Node 20 ABI (test suite)
+        run: npm rebuild argon2
+
       - name: Test with coverage
         run: npm test -- --coverage
+
+      # Restore argon2 to Electron ABI before packaging so the installed app
+      # loads the correct native binary at runtime.
+      - name: Rebuild argon2 for Electron ABI (packaging)
+        run: npx electron-rebuild -f -w argon2
 
       # `npm run package:dir` packs whatever sits under `dist/` per
       # electron-builder.yml's `files` glob; the `package:dir` script

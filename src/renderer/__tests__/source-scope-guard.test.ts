@@ -1,6 +1,10 @@
 import { execSync } from 'node:child_process';
 import { describe, it, expect } from 'vitest';
-import { FORBIDDEN_PATH_PREFIXES } from './source-scope-guard.const';
+import {
+  FORBIDDEN_PATH_PREFIXES,
+  CI_MAINTENANCE_BRANCH_PREFIX,
+  CI_MAINTENANCE_EXEMPT_PREFIXES,
+} from './source-scope-guard.const';
 
 /**
  * T006 — Static no-touch source-scope guard.
@@ -88,8 +92,35 @@ describe('source-scope guard (T006)', () => {
       .map((l) => l.trim())
       .filter(Boolean);
 
+    // ci/ branches are permitted to modify .github/workflows/ — that is
+    // their sole purpose. All other forbidden prefixes stay blocked.
+    //
+    // Branch detection: GitHub Actions checks out a detached HEAD for PRs,
+    // so `git rev-parse --abbrev-ref HEAD` returns "HEAD". Read the CI env
+    // vars first (GITHUB_HEAD_REF for PRs, GITHUB_REF_NAME for pushes),
+    // falling back to git for local runs.
+    const currentBranch =
+      process.env['GITHUB_HEAD_REF'] ||
+      process.env['GITHUB_REF_NAME'] ||
+      (() => {
+        try {
+          return execSync('git rev-parse --abbrev-ref HEAD', {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }).trim();
+        } catch {
+          return '';
+        }
+      })();
+
+    const effectiveForbidden = currentBranch.startsWith(CI_MAINTENANCE_BRANCH_PREFIX)
+      ? FORBIDDEN_PATH_PREFIXES.filter(
+          (p) => !(CI_MAINTENANCE_EXEMPT_PREFIXES as readonly string[]).includes(p),
+        )
+      : FORBIDDEN_PATH_PREFIXES;
+
     const violations = changedFiles.filter((file) =>
-      FORBIDDEN_PATH_PREFIXES.some((prefix) => file === prefix || file.startsWith(prefix)),
+      effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)),
     );
 
     expect(violations, `Forbidden paths modified by this branch: ${violations.join(', ')}`).toEqual(
