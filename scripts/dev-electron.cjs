@@ -20,15 +20,15 @@ function cleanDistDir(dir) {
   }
 }
 
-// Clean dist/shared (ESM main-process shared modules) and dist/preload-cjs
-// (CJS preload output) so stale artefacts from a previous compile cannot
-// shadow the freshly-compiled files.
+// Clean dist/shared (ESM main-process shared modules) and dist/preload
+// (bundled CJS preload) so stale artefacts from a previous build cannot
+// shadow the freshly-bundled files.
 function cleanDistShared() {
   cleanDistDir(path.join(ROOT, 'dist', 'shared'));
 }
 
-function cleanDistPreloadCjs() {
-  cleanDistDir(path.join(ROOT, 'dist', 'preload-cjs'));
+function cleanDistPreload() {
+  cleanDistDir(path.join(ROOT, 'dist', 'preload'));
 }
 
 waitOn(
@@ -73,17 +73,16 @@ waitOn(
     }
 
     // Clean stale dist artefacts before compiling.
-    console.log('[dev-electron] Cleaning stale dist/shared and dist/preload-cjs...');
+    console.log('[dev-electron] Cleaning stale dist/shared and dist/preload...');
     cleanDistShared();
-    cleanDistPreloadCjs();
+    cleanDistPreload();
 
-    // Compile order matters: preload (CommonJS) FIRST, then main (ESM).
-    // Both tsconfigs include src/shared/**/* in their compilation.
-    // tsconfig.preload.json emits CJS; tsconfig.main.json emits ESM.
-    // Running main LAST ensures dist/shared/*.js are ESM, matching the
-    // ESM import statements in dist/main/**/*.js.
-    console.log('[dev-electron] Compiling preload (CJS)...');
-    execSync('npx tsc -p tsconfig.preload.json', { stdio: 'inherit', cwd: ROOT });
+    // Bundle preload FIRST so dist/preload/index.js (a CJS IIFE with
+    // electron externalised) is ready before Electron launches.  Vite
+    // inlines all local shared modules so sandbox require() restrictions
+    // cannot prevent contextBridge.exposeInMainWorld from running.
+    console.log('[dev-electron] Bundling preload (Vite CJS)...');
+    execSync('npx vite build --config vite.config.preload.ts', { stdio: 'inherit', cwd: ROOT });
     console.log('[dev-electron] Compiling main process (ESM)...');
     execSync('npx tsc -p tsconfig.main.json', { stdio: 'inherit', cwd: ROOT });
 

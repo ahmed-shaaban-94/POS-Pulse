@@ -110,7 +110,7 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      preload: path.join(__dirname, '../preload-cjs/preload/index.js'),
+      preload: path.join(__dirname, '../preload/index.js'),
     },
   });
 
