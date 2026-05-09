@@ -8,11 +8,8 @@ const fs = require('fs');
 const ROOT = path.join(__dirname, '..');
 const DEV_PORT = 5173;
 
-// Remove stale dist/shared output before compiling so that a prior CJS
-// preload compile cannot shadow the ESM main-process shared modules.
-// Only removes generated JS + map files — never touches source files.
-function cleanDistShared() {
-  const dir = path.join(ROOT, 'dist', 'shared');
+// Remove stale JS + map files from a dist subdirectory — never touches source files.
+function cleanDistDir(dir) {
   if (!fs.existsSync(dir)) return;
   for (const entry of fs.readdirSync(dir, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
@@ -23,9 +20,20 @@ function cleanDistShared() {
   }
 }
 
+// Clean dist/shared (ESM main-process shared modules) and dist/preload
+// (bundled CJS preload) so stale artefacts from a previous build cannot
+// shadow the freshly-bundled files.
+function cleanDistShared() {
+  cleanDistDir(path.join(ROOT, 'dist', 'shared'));
+}
+
+function cleanDistPreload() {
+  cleanDistDir(path.join(ROOT, 'dist', 'preload'));
+}
+
 waitOn(
   {
-    resources: [`http://127.0.0.1:${DEV_PORT}`],
+    resources: [`http://localhost:${DEV_PORT}`],
     timeout: 60000,
   },
   (err) => {
@@ -47,7 +55,7 @@ waitOn(
         'node',
         [
           '-e',
-          `require('http').get('http://127.0.0.1:${DEV_PORT}/', (r) => { process.stdout.write(JSON.stringify(r.headers)); r.resume(); }).on('error', () => process.stdout.write('{}'));`,
+          `require('http').get('http://localhost:${DEV_PORT}/', (r) => { process.stdout.write(JSON.stringify(r.headers)); r.resume(); }).on('error', () => process.stdout.write('{}'));`,
         ],
         { cwd: ROOT, timeout: 5000 },
       ).toString();
@@ -57,24 +65,24 @@ waitOn(
       // is present the most likely culprit is a stale non-Vite server.
       if (!headers['x-powered-by'] && !headers['etag'] && !headers['vary']) {
         console.warn(
-          `[dev-electron] Warning: http://127.0.0.1:${DEV_PORT}/ answered but may be a stale server. Proceeding.`,
+          `[dev-electron] Warning: http://localhost:${DEV_PORT}/ answered but may be a stale server. Proceeding.`,
         );
       }
     } catch {
       // Header check is best-effort; do not abort.
     }
 
-    // Clean stale shared dist artefacts before compiling.
-    console.log('[dev-electron] Cleaning stale dist/shared...');
+    // Clean stale dist artefacts before compiling.
+    console.log('[dev-electron] Cleaning stale dist/shared and dist/preload...');
     cleanDistShared();
+    cleanDistPreload();
 
-    // Compile order matters: preload (CommonJS) FIRST, then main (ESM).
-    // Both tsconfigs include src/shared/**/* in their compilation.
-    // tsconfig.preload.json emits CJS; tsconfig.main.json emits ESM.
-    // Running main LAST ensures dist/shared/*.js are ESM, matching the
-    // ESM import statements in dist/main/**/*.js.
-    console.log('[dev-electron] Compiling preload (CJS)...');
-    execSync('npx tsc -p tsconfig.preload.json', { stdio: 'inherit', cwd: ROOT });
+    // Bundle preload FIRST so dist/preload/index.js (a CJS IIFE with
+    // electron externalised) is ready before Electron launches.  Vite
+    // inlines all local shared modules so sandbox require() restrictions
+    // cannot prevent contextBridge.exposeInMainWorld from running.
+    console.log('[dev-electron] Bundling preload (Vite CJS)...');
+    execSync('npx vite build --config vite.config.preload.ts', { stdio: 'inherit', cwd: ROOT });
     console.log('[dev-electron] Compiling main process (ESM)...');
     execSync('npx tsc -p tsconfig.main.json', { stdio: 'inherit', cwd: ROOT });
 

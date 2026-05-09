@@ -134,7 +134,9 @@ function createWindow(): void {
   const csp = isDev
     ? [
         "default-src 'self' http://localhost:5173;",
-        "script-src 'self' http://localhost:5173;",
+        // 'unsafe-inline' required for @vitejs/plugin-react preamble injection
+        // (inline <script type="module"> in <head>) — dev only, never in prod.
+        "script-src 'self' 'unsafe-inline' http://localhost:5173;",
         "style-src 'self' 'unsafe-inline' http://localhost:5173;",
         "img-src 'self' data:;",
         "connect-src 'self' ws://localhost:5173 http://localhost:5173;",
