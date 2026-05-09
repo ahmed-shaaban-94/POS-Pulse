@@ -1,5 +1,7 @@
 import type { Logger } from 'pino';
 
+import { randomUUID } from 'node:crypto';
+
 import type {
   ManagerAdminSignInRequest,
   SignInResponse,
@@ -19,6 +21,7 @@ import { CheckActiveSessionHandler } from './check-active-session.js';
 import { unsealPinMaterial } from './pin-seal.js';
 import { verifyPinWithWindow, rowMatchesScope, type PinScope } from './pin-lockout.js';
 import type { PinRow } from './pin-credential.js';
+import { ProtoSessionStore } from './takeover-handler.js';
 
 /**
  * 004-operator-session T026 — manager/admin sign-in handler.
@@ -50,6 +53,11 @@ export interface SignInHandlerDeps {
   sessionManager: SessionManager;
   /** Terminal-side proof of device-token possession (per 002). */
   deviceTokenAttestation: () => Promise<string> | string;
+  /**
+   * Shared proto-session store. Populated when signIn returns
+   * `takeover_required`; consumed by TakeoverHandler.confirmTakeover.
+   */
+  protoStore: ProtoSessionStore;
   /**
    * Optional JWT holder. Production wires `createJwtHolder()`; tests
    * may omit. When present, the Clerk JWT is recorded against the
@@ -115,8 +123,22 @@ export class SignInHandler {
       return REFUSE_INVALID;
     }
     if (backend.kind === 'takeover_required') {
+      const pending_takeover_id = randomUUID();
+      // tenant_id and branch_id are not available from the backend takeover_required
+      // response (FR-013 minimum-disclosure). TakeoverHandler.confirmTakeover uses
+      // the backend confirm response (Endpoint 4) for authoritative scope values.
+      this.deps.protoStore.set({
+        pending_takeover_id,
+        operator_id: exchange.operator_id,
+        display_name: exchange.display_name,
+        role: exchange.role,
+        tenant_id: '',
+        branch_id: '',
+        jwt: exchange.jwt,
+        created_at: Date.now(),
+      });
       this.logSuccess('takeover_required');
-      return { kind: 'takeover_required' } satisfies TakeoverRequiredResponse;
+      return { kind: 'takeover_required', pending_takeover_id } satisfies TakeoverRequiredResponse;
     }
 
     // 3. Manager / admin only at S1. Cashier-role identities cannot
@@ -219,6 +241,11 @@ export interface CashierSignInHandlerDeps {
   sessionManager: SessionManager;
   checkActiveSession: CheckActiveSessionHandler;
   pairingStore: PairingStore;
+  /**
+   * Shared proto-session store. Populated when signIn returns
+   * `takeover_required`; consumed by TakeoverHandler.confirmTakeover.
+   */
+  protoStore: ProtoSessionStore;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -312,8 +339,19 @@ export class CashierSignInHandler {
       return activeCheck;
     }
     if (activeCheck.kind === 'active') {
+      const pending_takeover_id = randomUUID();
+      this.deps.protoStore.set({
+        pending_takeover_id,
+        operator_id: req.cashier_clerk_user_id,
+        display_name: req.display_name,
+        role: 'cashier',
+        tenant_id: scope.tenant_id,
+        branch_id: scope.branch_id,
+        jwt: null,
+        created_at: Date.now(),
+      });
       this.logSuccess('takeover_required');
-      return { kind: 'takeover_required' } satisfies TakeoverRequiredResponse;
+      return { kind: 'takeover_required', pending_takeover_id } satisfies TakeoverRequiredResponse;
     }
 
     // 7. No active session — create local in-memory session

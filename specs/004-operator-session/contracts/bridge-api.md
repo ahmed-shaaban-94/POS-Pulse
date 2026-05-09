@@ -26,7 +26,7 @@ export interface BridgeApi {
     signOut: () => Promise<SignOutResponse>;
     getCurrentSession: () => Promise<CurrentSessionResponse>;
     confirmTakeover: (req: ConfirmTakeoverRequest) => Promise<ConfirmTakeoverResponse>;
-    cancelTakeover: () => Promise<void>;
+    cancelTakeover: (req: CancelTakeoverRequest) => Promise<CancelTakeoverResponse>;
     forceCloseShift: (req: ForceCloseShiftRequest) => Promise<ForceCloseShiftResponse>;
     resetCashierPin: (req: ResetCashierPinRequest) => Promise<ResetCashierPinResponse>;  // 🔒 §A1-gated
     unlockCashier: (req: UnlockCashierRequest) => Promise<UnlockCashierResponse>;        // 🔒 §A1-gated
@@ -160,12 +160,20 @@ interface SignInResponse {
 ```ts
 interface TakeoverRequiredResponse {
   kind: 'takeover_required';
-  // No identification of the prior terminal/operator/timestamp (FR-013).
-  // The renderer simply renders the TakeoverPrompt modal.
+  /**
+   * Opaque capability token (UUID v4). The renderer passes this back to
+   * `confirmTakeover` or `cancelTakeover`. It is NOT a session id, operator
+   * id, or any identifying field — it is a short-lived (60s TTL) one-time
+   * token that authorises the completion or abandonment of the takeover.
+   * No identification of the prior terminal/operator/timestamp is conveyed
+   * (FR-013 / Alternative A proto-session map).
+   */
+  pending_takeover_id: string;
 }
 ```
 
-The renderer follows up with `confirmTakeover` or `cancelTakeover`.
+The renderer follows up with `confirmTakeover` or `cancelTakeover`, passing
+the `pending_takeover_id` token.
 
 **Role gate**: None — this is the sign-in entry point.
 
@@ -281,22 +289,33 @@ proceeding with sign-in on the current terminal.
 
 ```ts
 interface ConfirmTakeoverRequest {
-  event_id: string;  // client-generated UUID v4 (P5 idempotency)
+  /**
+   * The opaque capability token returned in `TakeoverRequiredResponse`.
+   * Validated against the in-memory proto-session store (60s TTL).
+   * One-time use — consumed on success or hard backend refusal.
+   */
+  pending_takeover_id: string;
 }
 ```
 
-**Output (success)**: Identical to `SignInResponse` (a session is now active
-on this terminal). A `operator.session.takeover` audit event is emitted with
-the `event_id` as its idempotency key.
+**Output (success)**: Identical to `SignInSuccessResponse` (a session is now
+active on this terminal). An `operator.session.takeover` audit event is
+emitted (best-effort — audit failure does not abort the flow).
 
 **Role gate**: None — this completes a sign-in flow.
+
+**Implementation note — cashier path (AD-2)**:
+Cashier operators have no Clerk JWT, so Endpoint 4's `Authorization: Bearer`
+header cannot be satisfied. The cashier `confirmTakeover` creates the new
+session locally without a backend call (identical to the cashier sign-in
+path). See `TakeoverHandler.confirmCashierTakeover` and issue #85.
 
 **Failure modes**:
 
 | Cause | Refusal category |
 |:--|:--|
-| No takeover in progress (e.g., the prior session was already terminated by a different cause) | `state_invalid` |
-| Network unreachable | `no_connection` |
+| `pending_takeover_id` is empty, unknown, or expired (TTL 60s) | `invalid_input` |
+| Network unreachable (manager/admin path only) | `no_connection` |
 
 **Side effects**:
 
@@ -304,10 +323,13 @@ the `event_id` as its idempotency key.
   with `end_at = now`, `end_cause = 'superseded_by_takeover'`.
 - A new `operator_sessions` row is created on the current terminal.
 - An `operator.session.takeover` audit event is emitted.
-- The prior terminal is signalled to return to `/sign-in` (mechanism: the
-  prior terminal's `getCurrentSession` will start returning `signed_out` on
-  next call; an explicit notification channel MAY also be used — research
-  decision deferred to S4 task).
+- The prior terminal discovers the takeover passively: the backend terminates
+  the superseded session (Endpoint 4 side effect); the prior terminal's next
+  `getCurrentSession` backend-validation call will return `signed_out`.
+  Terminal A's local `SessionManager` is an in-process singleton that is NOT
+  directly invalidated by this handler (separate OS processes). An explicit
+  backend-driven push notification is deferred — see follow-up issue filed
+  from PR #100 (T069c terminal-A invalidation gap).
 
 **Backend dependency**: §A2 — `POST /v1/operators/takeover/confirm`.
 
@@ -317,13 +339,31 @@ the `event_id` as its idempotency key.
 
 **Purpose**: Cancel the takeover prompt without proceeding.
 
-**Input**: `void`.
+**Input**:
 
-**Output**: `void`.
+```ts
+interface CancelTakeoverRequest {
+  /**
+   * The opaque capability token returned in `TakeoverRequiredResponse`.
+   * The proto-session is discarded. Idempotent — unknown or already-expired
+   * tokens are silently accepted.
+   */
+  pending_takeover_id: string;
+}
+```
+
+**Output**:
+
+```ts
+interface CancelTakeoverResponse {
+  kind: 'cancelled';
+}
+```
 
 **Role gate**: None.
 
-**Failure modes**: None expected.
+**Failure modes**: None expected. Returns `{ kind: 'cancelled' }` for any
+input including an unknown `pending_takeover_id` (idempotent).
 
 **Side effects**: The `operatorSessionStore` returns to `signedOut`. No
 session is created. No audit event is emitted. The prior session on the

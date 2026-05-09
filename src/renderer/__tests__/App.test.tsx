@@ -46,6 +46,10 @@ function stubBridge(status: PairingStatus): PreloadBridgeAPI {
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
       listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+      confirmTakeover: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
     },
   };
 }

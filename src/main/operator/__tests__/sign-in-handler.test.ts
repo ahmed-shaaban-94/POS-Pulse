@@ -5,6 +5,7 @@ import { SessionManager } from '../session-manager.js';
 import { createJwtHolder } from '../jwt-holder.js';
 import type { ClerkExchanger, ClerkExchangeResult } from '../clerk-client.js';
 import type { BackendClient, BackendSignInResponse } from '../backend-client.js';
+import { ProtoSessionStore } from '../takeover-handler.js';
 
 /**
  * 004-operator-session T026 + T023 + T025 — sign-in handler, manager/admin path.
@@ -89,6 +90,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk,
       backend,
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest-123',
     });
 
@@ -115,6 +117,7 @@ describe('SignInHandler — manager/admin path', () => {
       backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
       sessionManager,
       jwtHolder,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     await handler.signIn({
@@ -136,6 +139,7 @@ describe('SignInHandler — manager/admin path', () => {
       backend: fakeBackend({ kind: 'takeover_required' }),
       sessionManager,
       jwtHolder,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     await handler.signIn({
@@ -158,6 +162,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk,
       backend,
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest-123',
     });
 
@@ -191,6 +196,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk,
       backend,
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
 
@@ -210,6 +216,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk: fakeClerk({ kind: 'refused' }),
       backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     const res = await handler.signIn({
@@ -226,6 +233,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk: fakeClerk({ kind: 'no_connection' }),
       backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     const res = await handler.signIn({
@@ -242,6 +250,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk: fakeClerk(HAPPY_CLERK_RESULT),
       backend: fakeBackend({ kind: 'no_connection' }),
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     const res = await handler.signIn({
@@ -258,6 +267,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk: fakeClerk(HAPPY_CLERK_RESULT),
       backend: fakeBackend({ kind: 'refused' }),
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     const res = await handler.signIn({
@@ -268,12 +278,14 @@ describe('SignInHandler — manager/admin path', () => {
     expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
   });
 
-  it('surfaces takeover_required without identifying detail (FR-013)', async () => {
+  it('surfaces takeover_required with capability token, no identifying detail (FR-013)', async () => {
     const sessionManager = new SessionManager();
+    const protoStore = new ProtoSessionStore();
     const handler = new SignInHandler({
       clerk: fakeClerk(HAPPY_CLERK_RESULT),
       backend: fakeBackend({ kind: 'takeover_required' }),
       sessionManager,
+      protoStore,
       deviceTokenAttestation: () => 'attest',
     });
     const res = await handler.signIn({
@@ -281,11 +293,15 @@ describe('SignInHandler — manager/admin path', () => {
       identifier: 'i',
       password: 'p',
     });
-    expect(res).toEqual({ kind: 'takeover_required' });
-    // No new session was created; the prompt UX (S4) must run before
-    // confirmation. S1 leaves the FSM in `takeoverPrompt` and the
-    // operator manually returns to /sign-in (cancel) — actual
-    // confirmation lands in S4.
+    expect(res.kind).toBe('takeover_required');
+    if (res.kind !== 'takeover_required') return;
+    // pending_takeover_id is an opaque token; verify shape only.
+    expect(typeof res.pending_takeover_id).toBe('string');
+    expect(res.pending_takeover_id.length).toBeGreaterThan(0);
+    // FR-013: no operator identity, no prior-terminal id in the response.
+    expect(res).not.toHaveProperty('operator_id');
+    expect(res).not.toHaveProperty('tenant_id');
+    // No new session was created; the prompt UX (S4) must run before confirmation.
     expect(sessionManager.getCurrent()).toBeNull();
   });
 
@@ -302,6 +318,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk: fakeClerk(HAPPY_CLERK_RESULT),
       backend: fakeBackend(cashierBackend),
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
     const res = await handler.signIn({
@@ -333,6 +350,7 @@ describe('SignInHandler — manager/admin path', () => {
       clerk: fakeClerk(HAPPY_CLERK_RESULT),
       backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
       sessionManager,
+      protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
       logger,
     });

@@ -32,6 +32,7 @@ import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
+import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
 
@@ -306,21 +307,24 @@ app
       baseUrl: apiBaseUrl,
       fetch: globalThis.fetch.bind(globalThis),
     });
+    const operatorProtoStore = new ProtoSessionStore();
     const clerkExchanger = resolveClerkExchanger(mainLogger);
+    const deviceTokenAttestation = async (): Promise<string> => {
+      const status = await pairingStore.getStatus();
+      if (status.kind !== 'paired') return '';
+      const token = await secretStore.get(DEVICE_TOKEN_KEY);
+      return token ?? '';
+    };
     const operatorSignInHandler = new SignInHandler({
       clerk: clerkExchanger,
       backend: operatorBackend,
       sessionManager: operatorSessionManager,
       jwtHolder: operatorJwtHolder,
+      protoStore: operatorProtoStore,
       // Wave 1: device-token attestation = the device token itself
       // (read from SecretStore via the pairingStore). The backend
       // verifies it server-side. The token is NEVER logged.
-      deviceTokenAttestation: async () => {
-        const status = await pairingStore.getStatus();
-        if (status.kind !== 'paired') return '';
-        const token = await secretStore.get(DEVICE_TOKEN_KEY);
-        return token ?? '';
-      },
+      deviceTokenAttestation,
       logger: mainLogger,
     });
     const operatorSignOutHandler = new SignOutHandler({
@@ -361,6 +365,17 @@ app
     const auditEventsStore = bindAuditEventsStoreDb(dbHandle);
     const auditEmitter = new AuditEmitter(auditEventsStore);
 
+    const operatorTakeoverHandler = new TakeoverHandler({
+      protoStore: operatorProtoStore,
+      sessionManager: operatorSessionManager,
+      backend: operatorBackend,
+      jwtHolder: operatorJwtHolder,
+      auditEmitter,
+      pairingStore,
+      deviceTokenAttestation,
+      logger: mainLogger,
+    });
+
     registerOperatorHandlers(ipcMain, {
       signInHandler: operatorSignInHandler,
       signOutHandler: operatorSignOutHandler,
@@ -369,6 +384,7 @@ app
       inactivityMonitor: operatorInactivityMonitor,
       auditEmitter,
       pairingStore,
+      takeoverHandler: operatorTakeoverHandler,
     });
 
     createWindow();

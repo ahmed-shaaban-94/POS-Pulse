@@ -57,9 +57,9 @@ describe('operator bridge typed surface (T008)', () => {
     >();
   });
 
-  it('TakeoverRequiredResponse carries no identifying detail (FR-013)', () => {
+  it('TakeoverRequiredResponse carries capability token but no identifying detail (FR-013)', () => {
     type Keys = keyof TakeoverRequiredResponse;
-    // Only `kind` — no terminal label, no timestamp, no operator id.
-    expectTypeOf<Keys>().toEqualTypeOf<'kind'>();
+    // Only `kind` + `pending_takeover_id` — no terminal label, no timestamp, no operator id.
+    expectTypeOf<Keys>().toEqualTypeOf<'kind' | 'pending_takeover_id'>();
   });
 });

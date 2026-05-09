@@ -101,6 +101,34 @@ export interface SignInSuccessResponse {
 export interface TakeoverRequiredResponse {
   kind: 'takeover_required';
   // No identification of the prior terminal/operator/timestamp (FR-013).
+  /**
+   * Capability token for the pending takeover. Must be supplied to
+   * `confirmTakeover` or `cancelTakeover`. Expires after 60 seconds.
+   * Opaque to the renderer — do not inspect or log its value (PR-1).
+   */
+  pending_takeover_id: string;
+}
+
+/**
+ * T070 — request to confirm a pending takeover.
+ * The renderer supplies only the capability token; all session material
+ * comes from the main-process proto-session store (FR-013 / PR-1).
+ */
+export interface ConfirmTakeoverRequest {
+  pending_takeover_id: string;
+}
+
+export type ConfirmTakeoverResponse = SignInSuccessResponse;
+
+/**
+ * T071 — request to cancel a pending takeover.
+ */
+export interface CancelTakeoverRequest {
+  pending_takeover_id: string;
+}
+
+export interface CancelTakeoverResponse {
+  kind: 'cancelled';
 }
 
 /**
@@ -225,6 +253,25 @@ export interface OperatorBridgeAPI {
    * Branch scope comes from the active operator session (trusted main-side).
    */
   listBranchRoster(): Promise<ListBranchRosterResponse>;
+
+  /**
+   * T070 — confirm a pending takeover using the capability token returned
+   * by `signIn`. Creates the new session and emits the
+   * `operator.session.takeover` audit event.
+   *
+   * On success: `{ kind: 'signed_in', session }`.
+   * On `no_connection`: proto-session is retained; caller may retry.
+   * On any other failure: `{ kind: 'refused', category: 'invalid_input' }`.
+   * Token expires after 60 seconds (NFR-003).
+   */
+  confirmTakeover(req: ConfirmTakeoverRequest): Promise<ConfirmTakeoverResponse | OperatorRefusal>;
+
+  /**
+   * T071 — cancel a pending takeover. Discards the proto-session;
+   * returns `{ kind: 'cancelled' }` idempotently even if the token is
+   * unknown or already expired. No audit event. No session change.
+   */
+  cancelTakeover(req: CancelTakeoverRequest): Promise<CancelTakeoverResponse>;
 }
 
 export interface PreloadBridgeAPI {

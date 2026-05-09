@@ -8,6 +8,7 @@ import { SignOutHandler } from '../main/operator/sign-out-handler.js';
 import { SessionManager } from '../main/operator/session-manager.js';
 import type { ClerkExchanger, ClerkExchangeResult } from '../main/operator/clerk-client.js';
 import type { BackendClient, BackendSignInResponse } from '../main/operator/backend-client.js';
+import { ProtoSessionStore } from '../main/operator/takeover-handler.js';
 
 /**
  * 004-operator-session T025 — cross-process redaction smoke (extends
@@ -190,6 +191,7 @@ describe('T025 — operator sign-in cross-process redaction', () => {
         clerk: scenario.clerk(),
         backend: scenario.backend(),
         sessionManager: new SessionManager(),
+        protoStore: new ProtoSessionStore(),
         deviceTokenAttestation: () => 'attest',
         logger,
       });

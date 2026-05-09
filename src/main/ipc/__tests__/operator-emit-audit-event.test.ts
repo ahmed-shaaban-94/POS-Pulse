@@ -15,6 +15,7 @@ import type { SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
 import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
+import type { TakeoverHandler } from '../../operator/takeover-handler.js';
 
 /**
  * T048 — operator:emit-audit-event IPC handler tests.
@@ -119,6 +120,15 @@ function fakeRosterHandler(): RosterHandler {
   } as unknown as RosterHandler;
 }
 
+function fakeTakeoverHandler(): TakeoverHandler {
+  return {
+    confirmTakeover: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+  } as unknown as TakeoverHandler;
+}
+
 interface SetupOpts {
   sessionManager?: SessionManager;
   auditEmitter?: AuditEmitter;
@@ -139,6 +149,7 @@ function setup(opts: SetupOpts = {}) {
     inactivityMonitor: fakeInactivityMonitor(),
     auditEmitter,
     pairingStore,
+    takeoverHandler: fakeTakeoverHandler(),
   });
 
   const emitAuditEvent = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT);
@@ -169,6 +180,7 @@ describe('operator:emit-audit-event — channel registration', () => {
       inactivityMonitor: fakeInactivityMonitor(),
       auditEmitter: fakeAuditEmitter(),
       pairingStore: fakePairingStore(),
+      takeoverHandler: fakeTakeoverHandler(),
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT)).toBe(true);
   });
