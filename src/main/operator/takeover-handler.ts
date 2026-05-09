@@ -95,6 +95,29 @@ export interface TakeoverHandlerDeps {
  * T071: `cancelTakeover` — pure local discard. No backend call, no audit
  * event, no session change. Returns `{ kind: 'cancelled' }` idempotently.
  *
+ * Cashier path — Endpoint 4 is skipped (AD-2):
+ *   Cashier sessions are local-only. Cashier operators have no Clerk JWT to
+ *   present to Endpoint 4's `Authorization: Bearer` header, so calling
+ *   `backend.confirmTakeover` would always produce `refused`. The cashier
+ *   takeover therefore creates the new session locally without a backend
+ *   round-trip, mirroring the cashier sign-in path. Tracked in issue #85
+ *   (cashier-path Endpoint 4 constraint).
+ *
+ * Terminal-A passive polling (T069c):
+ *   Terminal A discovers the takeover at its next `getCurrentSession` poll,
+ *   when the backend has terminated the superseded session (Endpoint 4 side
+ *   effect). The local `SessionManager` on terminal A's process is
+ *   independent and is NOT ended by this handler. A backend-driven
+ *   invalidation or push notification is deferred to a follow-up task
+ *   (see issue filed from PR #100).
+ *
+ * Audit emission (FR-025 / FR-026):
+ *   `emitTakeoverAudit` is best-effort: audit failure does NOT abort the
+ *   sign-in flow. This mirrors the backend contract (Endpoint 4's audit
+ *   event is emitted client-side via Endpoint 5 — Endpoint 4 itself does
+ *   not guarantee audit delivery). The try/catch is intentional; the catch
+ *   body is deliberately empty per PR-1 (no credential detail in logs).
+ *
  * Security invariants:
  *   - No JWT, PIN, or credential material crosses the bridge (PR-1).
  *   - No factor-distinguishing refusal categories (NFR-003 / PR-2).
@@ -191,7 +214,8 @@ export class TakeoverHandler {
   private async confirmCashierTakeover(
     proto: ProtoSession,
   ): Promise<ConfirmTakeoverResponse | OperatorRefusal> {
-    // AD-2: cashier sessions are local-only; Endpoint 4 is skipped.
+    // AD-2: cashier sessions are local-only; no Clerk JWT exists for the
+    // cashier identity, so Endpoint 4 cannot be called. See class-level JSDoc.
     const event_id = randomUUID();
 
     const record = this.deps.sessionManager.create({

@@ -339,6 +339,57 @@ describe('TakeoverHandler — confirmTakeover: cashier path (backend skipped)', 
   });
 });
 
+describe('TakeoverHandler — audit failure is best-effort', () => {
+  it('still returns signed_in for manager path even when auditEmitter.emit throws', async () => {
+    const store = makeProtoStore();
+    const proto = buildManagerProto();
+    store.set(proto);
+    const throwingEmitter: AuditEmitter = {
+      emit: vi.fn(() => {
+        throw new Error('DB write failed');
+      }),
+    } as unknown as AuditEmitter;
+    const handler = new TakeoverHandler({
+      protoStore: store,
+      sessionManager: makeSessionManager(),
+      backend: makeBackend('signed_in'),
+      jwtHolder: makeJwtHolder(),
+      auditEmitter: throwingEmitter,
+      pairingStore: makePairedStore(),
+      deviceTokenAttestation: () => 'att-token',
+    });
+    const result = await handler.confirmTakeover({
+      pending_takeover_id: proto.pending_takeover_id,
+    });
+    // Audit failure must not abort the sign-in flow (best-effort per class-level JSDoc).
+    expect(result.kind).toBe('signed_in');
+  });
+
+  it('still returns signed_in for cashier path even when auditEmitter.emit throws', async () => {
+    const store = makeProtoStore();
+    const proto = buildCashierProto();
+    store.set(proto);
+    const throwingEmitter: AuditEmitter = {
+      emit: vi.fn(() => {
+        throw new Error('DB write failed');
+      }),
+    } as unknown as AuditEmitter;
+    const handler = new TakeoverHandler({
+      protoStore: store,
+      sessionManager: makeSessionManager(),
+      backend: makeBackend(),
+      jwtHolder: makeJwtHolder(),
+      auditEmitter: throwingEmitter,
+      pairingStore: makePairedStore(),
+      deviceTokenAttestation: () => 'att-token',
+    });
+    const result = await handler.confirmTakeover({
+      pending_takeover_id: proto.pending_takeover_id,
+    });
+    expect(result.kind).toBe('signed_in');
+  });
+});
+
 describe('TakeoverHandler — cancelTakeover', () => {
   it('returns { kind: "cancelled" } for a valid pending id', async () => {
     const store = makeProtoStore();
