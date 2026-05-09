@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
 import {
@@ -7,9 +7,11 @@ import {
   type ProtoSession,
 } from '../../../../src/main/operator/takeover-handler.js';
 import type { SessionManager } from '../../../../src/main/operator/session-manager.js';
+import type { CreateSessionInput } from '../../../../src/main/operator/session-manager.js';
 import type { BackendClient } from '../../../../src/main/operator/backend-client.js';
 import type { JwtHolder } from '../../../../src/main/operator/jwt-holder.js';
 import type { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
+import type { AuditEvent } from '../../../../src/shared/audit/event-shape.js';
 import type { PairingStore } from '../../../../src/main/pairing/store.js';
 
 // --- helpers ---
@@ -34,7 +36,7 @@ function makePairedStore(terminal_id = 'term-1'): PairingStore {
 function makeSessionManager(): SessionManager {
   let current: ReturnType<SessionManager['getCurrent']> = null;
   return {
-    create: vi.fn((input) => {
+    create: vi.fn((input: CreateSessionInput) => {
       const record = {
         id: randomUUID(),
         operator_id: input.operator_id,
@@ -93,11 +95,13 @@ function makeJwtHolder(): JwtHolder {
     set: vi.fn((id: string, jwt: string) => store.set(id, jwt)),
     get: vi.fn((id: string) => store.get(id) ?? null),
     clear: vi.fn((id: string) => store.delete(id)),
-  } as unknown as JwtHolder;
+  };
 }
 
-function makeAuditEmitter(): AuditEmitter {
-  return { emit: vi.fn() } as unknown as AuditEmitter;
+function makeAuditEmitter(): { emitter: AuditEmitter; emitFn: ReturnType<typeof vi.fn> } {
+  const emitFn = vi.fn();
+  const emitter = { emit: emitFn } as unknown as AuditEmitter;
+  return { emitter, emitFn };
 }
 
 function makeProtoStore(): ProtoSessionStore {
@@ -137,12 +141,13 @@ function buildCashierProto(overrides: Partial<ProtoSession> = {}): ProtoSession 
 describe('TakeoverHandler — confirmTakeover: invalid/missing pending_takeover_id', () => {
   it('returns refused/invalid_input for empty string id', async () => {
     const store = makeProtoStore();
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -152,12 +157,13 @@ describe('TakeoverHandler — confirmTakeover: invalid/missing pending_takeover_
 
   it('returns refused/invalid_input when id not in store', async () => {
     const store = makeProtoStore();
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -169,12 +175,13 @@ describe('TakeoverHandler — confirmTakeover: invalid/missing pending_takeover_
     const store = makeProtoStore();
     const proto = buildManagerProto({ created_at: Date.now() - 61_000 }); // expired
     store.set(proto);
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -191,12 +198,13 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     const proto = buildManagerProto();
     store.set(proto);
     const sm = makeSessionManager();
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: sm,
       backend: makeBackend('signed_in'),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -213,32 +221,33 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
-    const auditEmitter = makeAuditEmitter();
+    const { emitter, emitFn } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend('signed_in'),
       jwtHolder: makeJwtHolder(),
-      auditEmitter,
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
-    expect(auditEmitter.emit).toHaveBeenCalledOnce();
-    const emittedEvent = (auditEmitter.emit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
-    expect(emittedEvent?.action_category).toBe('operator.session.takeover');
+    expect(emitFn).toHaveBeenCalledOnce();
+    const [emittedEvent] = emitFn.mock.calls[0] as [AuditEvent];
+    expect(emittedEvent.action_category).toBe('operator.session.takeover');
   });
 
   it('discards proto-session after successful confirm (idempotency: second call returns invalid_input)', async () => {
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend('signed_in'),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -253,12 +262,13 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend('no_connection'),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -278,12 +288,13 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend('refused'),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -302,12 +313,15 @@ describe('TakeoverHandler — confirmTakeover: cashier path (backend skipped)', 
     const proto = buildCashierProto();
     store.set(proto);
     const backend = makeBackend('signed_in');
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const confirmTakeoverFn = backend.confirmTakeover as ReturnType<typeof vi.fn>;
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend,
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -315,27 +329,27 @@ describe('TakeoverHandler — confirmTakeover: cashier path (backend skipped)', 
       pending_takeover_id: proto.pending_takeover_id,
     });
     expect(result.kind).toBe('signed_in');
-    expect(backend.confirmTakeover).not.toHaveBeenCalled();
+    expect(confirmTakeoverFn).not.toHaveBeenCalled();
   });
 
   it('emits audit event for cashier takeover confirm', async () => {
     const store = makeProtoStore();
     const proto = buildCashierProto();
     store.set(proto);
-    const auditEmitter = makeAuditEmitter();
+    const { emitter, emitFn } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter,
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
-    expect(auditEmitter.emit).toHaveBeenCalledOnce();
-    const emittedEvent = (auditEmitter.emit as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
-    expect(emittedEvent?.action_category).toBe('operator.session.takeover');
+    expect(emitFn).toHaveBeenCalledOnce();
+    const [emittedEvent] = emitFn.mock.calls[0] as [AuditEvent];
+    expect(emittedEvent.action_category).toBe('operator.session.takeover');
   });
 });
 
@@ -344,7 +358,7 @@ describe('TakeoverHandler — audit failure is best-effort', () => {
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
-    const throwingEmitter: AuditEmitter = {
+    const throwingEmitter = {
       emit: vi.fn(() => {
         throw new Error('DB write failed');
       }),
@@ -369,7 +383,7 @@ describe('TakeoverHandler — audit failure is best-effort', () => {
     const store = makeProtoStore();
     const proto = buildCashierProto();
     store.set(proto);
-    const throwingEmitter: AuditEmitter = {
+    const throwingEmitter = {
       emit: vi.fn(() => {
         throw new Error('DB write failed');
       }),
@@ -395,12 +409,13 @@ describe('TakeoverHandler — cancelTakeover', () => {
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -412,12 +427,13 @@ describe('TakeoverHandler — cancelTakeover', () => {
 
   it('returns { kind: "cancelled" } idempotently for an unknown id (already cancelled or never existed)', async () => {
     const store = makeProtoStore();
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -429,12 +445,13 @@ describe('TakeoverHandler — cancelTakeover', () => {
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
@@ -446,18 +463,18 @@ describe('TakeoverHandler — cancelTakeover', () => {
     const store = makeProtoStore();
     const proto = buildManagerProto();
     store.set(proto);
-    const auditEmitter = makeAuditEmitter();
+    const { emitter, emitFn } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter,
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
     await handler.cancelTakeover({ pending_takeover_id: proto.pending_takeover_id });
-    expect(auditEmitter.emit).not.toHaveBeenCalled();
+    expect(emitFn).not.toHaveBeenCalled();
   });
 
   it('does not change the active session on cancel', async () => {
@@ -465,17 +482,22 @@ describe('TakeoverHandler — cancelTakeover', () => {
     const proto = buildManagerProto();
     store.set(proto);
     const sm = makeSessionManager();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const createFn = sm.create as ReturnType<typeof vi.fn>;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const endFn = sm.end as ReturnType<typeof vi.fn>;
+    const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: sm,
       backend: makeBackend(),
       jwtHolder: makeJwtHolder(),
-      auditEmitter: makeAuditEmitter(),
+      auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
     await handler.cancelTakeover({ pending_takeover_id: proto.pending_takeover_id });
-    expect(sm.create).not.toHaveBeenCalled();
-    expect(sm.end).not.toHaveBeenCalled();
+    expect(createFn).not.toHaveBeenCalled();
+    expect(endFn).not.toHaveBeenCalled();
   });
 });
