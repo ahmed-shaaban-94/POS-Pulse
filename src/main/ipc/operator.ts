@@ -280,10 +280,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,
-    async (
-      _event: IpcMainInvokeEvent,
-      request: unknown,
-    ): Promise<CancelTakeoverResponse> => {
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<CancelTakeoverResponse> => {
       const req = asCancelTakeoverRequest(request);
       if (req === null) return { kind: 'cancelled' };
       return takeoverHandler.cancelTakeover(req);

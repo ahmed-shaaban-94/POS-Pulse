@@ -82,10 +82,9 @@ const operator: OperatorBridgeAPI = {
       OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
     ) as Promise<ListBranchRosterResponse>,
   confirmTakeover: (req: ConfirmTakeoverRequest) =>
-    ipcRenderer.invoke(
-      OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
-      req,
-    ) as Promise<ConfirmTakeoverResponse | import('../shared/audit/event-shape').OperatorRefusal>,
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM, req) as Promise<
+      ConfirmTakeoverResponse | import('../shared/audit/event-shape').OperatorRefusal
+    >,
   cancelTakeover: (req: CancelTakeoverRequest) =>
     ipcRenderer.invoke(
       OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,

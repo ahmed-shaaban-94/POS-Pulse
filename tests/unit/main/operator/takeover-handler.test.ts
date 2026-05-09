@@ -60,9 +60,7 @@ function makeSessionManager(): SessionManager {
   } as unknown as SessionManager;
 }
 
-function makeBackend(
-  kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_in',
-): BackendClient {
+function makeBackend(kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_in'): BackendClient {
   const signedInResponse =
     kind === 'signed_in'
       ? {
