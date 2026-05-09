@@ -237,7 +237,7 @@ type Role = 'cashier' | 'manager' | 'admin';
 The `signedIn.operator.id` is the **stable Clerk-backed operator identity**, not
 any PIN-record id. Audit attribution everywhere uses this id (AD-3 / FR-025).
 
-### Addendum 2026-05-05 (post-/speckit-analyze finding U2) — terminal-A notification mechanism
+### Addendum 2026-05-05 (post-/speckit-analyze finding U2) — terminal-A notification mechanism (resolved 2026-05-09 via T069c)
 
 After a takeover is confirmed on terminal B (per FR-013 and bridge-api.md
 Call 5 — `operator.confirmTakeover`), terminal A must transition to
@@ -252,23 +252,68 @@ whichever first" (spec FR-013). Two mechanisms can achieve this:
   backend-side push notification (WebSocket / SSE / similar) to terminal
   A; terminal A's local state transitions immediately.
 
-**Decision: deferred to S4 implementation phase.** This addendum
-establishes that the choice is a deliberate research decision tracked in
-`tasks.md` (a dedicated task gates `operator.confirmTakeover` on this
-choice being recorded). The deferral is principled, not negligent: the
-backend's existing push-notification infrastructure (or its absence) is
-not yet documented in 002's plan, so deciding the mechanism without
-backend-team input would commit POS Pulse to an integration shape that
-may not match the platform's broader push patterns.
+**Decision (T069c — 2026-05-09): passive polling via the existing
+`operator.getCurrentSession` path.**
 
-**Constraints on the eventual choice (binding on whichever is picked)**:
+Terminal A discovers that its session was superseded by polling
+`operator.getCurrentSession` (IPC channel `OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION`
+— `'operator:get-current-session'`, defined in
+`src/shared/operator/channels.ts`). When terminal B's
+`operator.confirmTakeover` call causes the backend (Endpoint 4 —
+`POST /api/pos/v1/operators/takeover/confirm`) to terminate the prior
+operator session with `end_cause = 'superseded_by_takeover'`, terminal A's
+next `getCurrentSession` poll returns `{ kind: 'signed_out' }`. The
+renderer maps `signed_out` to the `signedOut` FSM state and redirects to
+`/sign-in`. Poll interval MUST be ≤ 30 s; the transition MUST also fire
+immediately on the next genuine operator interaction (whichever comes
+first — FR-013).
+
+### Rationale
+
+**Smallest safe change consistent with the current architecture.** No
+WebSocket, SSE, or other push-transport infrastructure exists in
+`src/main/operator/` or in the platform's documented 002 pairing surface.
+Introducing a push channel solely for terminal-A takeover notification
+would add a new server-side component, a new connection-lifecycle concern,
+and a new IPC surface — all for a signal that the existing
+`getCurrentSession` polling path can deliver within the FR-013 30-second
+budget at a poll interval of ≤ 30 s.
+
+**No new IPC channel is introduced.** The existing
+`OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION` channel is reused verbatim.
+This preserves the P8 constraint (no bridge expansion beyond the
+`operator.*` namespace defined in `contracts/bridge-api.md`) and is the
+minimum-surface decision consistent with the constraint stub established in
+this addendum on 2026-05-05.
+
+**No sensitive data reaches terminal A's renderer.** The `getCurrentSession`
+response on terminal A is the `OperatorSessionBridgeView | null`
+projection produced by `SessionManager.getCurrentBridgeView()`
+(`src/main/operator/session-manager.ts:55–66`). That projection strips
+`backend_session_id` and `last_activity_at`; when the session has ended,
+the entire response reduces to `{ kind: 'signed_out' }`. Terminal A's
+renderer therefore receives only a session-state outcome — never any of
+the following:
+
+- Terminal B's identity, label, or device-token.
+- Terminal B operator's PIN material (PIN is local-only per AD-2 and
+  is never present in any `operator.*` bridge response by construction).
+- Any Clerk JWT, `device_token`, or `device_token_attestation`.
+- Any sensitive-action audit payload.
+- Any timestamp or operator metadata from terminal B's session.
+
+This is the minimum-disclosure guarantee required by FR-013: terminal A's
+user-visible signal is the generic `/sign-in` redirect — "you have been
+signed out — please sign in again" — with no terminal-B identification.
+
+### Binding constraints (carried forward from 2026-05-05 stub; now binding on passive polling)
 
 - Terminal A MUST NOT accept any new operator interaction that would
   create a sensitive-action audit record between the takeover
-  confirmation on B and A's own transition (FR-013 — takeover-window
-  edge case). Whether passive or active, the local guard on terminal A's
-  bridge handlers MUST refuse such interactions; the *display* of the
-  prior operator's name on A is permitted briefly but MUST clear within
+  confirmation on B and A's own `signedOut` transition (FR-013 —
+  takeover-window edge case). The local guard on terminal A's bridge
+  handlers MUST refuse such interactions. The *display* of the prior
+  operator's name on A is permitted briefly but MUST clear within
   30 seconds.
 - The mechanism MUST honour FR-013's minimum-disclosure: terminal A's
   user-visible signal that the session ended is generic ("you have been
@@ -276,13 +321,30 @@ may not match the platform's broader push patterns.
   timestamp.
 - The mechanism MUST NOT introduce a new IPC channel beyond the
   `operator.*` namespace defined in `contracts/bridge-api.md` (P8
-  enforcement; no smuggled bridge expansion).
+  enforcement). Passive polling satisfies this by reusing
+  `GET_CURRENT_SESSION`.
 
-When S4 schedules the takeover confirmation handler (`operator.confirmTakeover`),
-the prior task in the slice records the chosen mechanism and any
-backend-side dependency (e.g., a WebSocket channel name if active is
-chosen) in this addendum. Until then, this addendum is the canonical
-record that the choice is parked, not forgotten.
+### T070 must follow this mechanism
+
+`operator.confirmTakeover` (T070 — `src/main/operator/takeover-handler.ts`)
+MUST implement the following and nothing more for terminal-A notification:
+
+1. Call Endpoint 4 (`POST /api/pos/v1/operators/takeover/confirm`), which
+   terminates the prior operator session server-side with
+   `end_cause = 'superseded_by_takeover'`.
+2. Update the local `operator_sessions` row for the prior session (if
+   tracked on terminal B) with `end_at` and `end_cause =
+   'superseded_by_takeover'`.
+3. Emit the `operator.session.takeover` audit event via `AuditEmitter`.
+4. Create the new `operator_sessions` row for terminal B's session.
+5. **Do NOT** push any notification to terminal A. Terminal A discovers
+   the supersession at its next `getCurrentSession` poll (poll interval
+   ≤ 30 s). No additional backend call, WebSocket, SSE, or new IPC
+   channel is opened by `confirmTakeover`.
+
+T070's implementation is complete when the above five steps are satisfied
+and the existing `GET_CURRENT_SESSION` polling path on terminal A delivers
+`{ kind: 'signed_out' }` within the FR-013 30-second budget.
 
 ---
 
