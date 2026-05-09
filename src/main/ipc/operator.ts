@@ -3,6 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import type {
+  CancelTakeoverRequest,
+  CancelTakeoverResponse,
+  ConfirmTakeoverRequest,
+  ConfirmTakeoverResponse,
   EmitAuditEventRequest,
   EmitAuditEventResponse,
   ListBranchRosterResponse,
@@ -25,6 +29,7 @@ import {
 } from '../../shared/audit/event-shape.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import { requireRole } from '../operator/role-enforcement.js';
+import type { TakeoverHandler } from '../operator/takeover-handler.js';
 
 /**
  * 004-operator-session — `operator:*` IPC handlers (S1 wave 1 + T048).
@@ -45,6 +50,8 @@ export interface OperatorHandlerDeps {
   auditEmitter: AuditEmitter;
   /** T048 — source of originating_terminal_id (trusted enrichment). */
   pairingStore: PairingStore;
+  /** T070 / T071 — takeover confirm and cancel handler. */
+  takeoverHandler: TakeoverHandler;
 }
 
 function refuseInvalid(): OperatorRefusal {
@@ -83,6 +90,22 @@ function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
   return req;
 }
 
+function asConfirmTakeoverRequest(value: unknown): ConfirmTakeoverRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v['pending_takeover_id'] !== 'string' || v['pending_takeover_id'].length === 0) {
+    return null;
+  }
+  return { pending_takeover_id: v['pending_takeover_id'] };
+}
+
+function asCancelTakeoverRequest(value: unknown): CancelTakeoverRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v['pending_takeover_id'] !== 'string') return null;
+  return { pending_takeover_id: v['pending_takeover_id'] };
+}
+
 export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
   const {
     signInHandler,
@@ -92,6 +115,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
     inactivityMonitor,
     auditEmitter,
     pairingStore,
+    takeoverHandler,
   } = deps;
 
   ipcMain.handle(
@@ -235,6 +259,34 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       } catch {
         return refuseInvalid();
       }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<ConfirmTakeoverResponse | OperatorRefusal> => {
+      const req = asConfirmTakeoverRequest(request);
+      if (req === null) return refuseInvalid();
+      try {
+        return await takeoverHandler.confirmTakeover(req);
+      } catch {
+        return refuseInvalid();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<CancelTakeoverResponse> => {
+      const req = asCancelTakeoverRequest(request);
+      if (req === null) return { kind: 'cancelled' };
+      return takeoverHandler.cancelTakeover(req);
     },
   );
 }

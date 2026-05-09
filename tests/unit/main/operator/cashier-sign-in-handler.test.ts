@@ -14,6 +14,7 @@ import type {
 } from '../../../../src/main/operator/check-active-session.js';
 import { SessionManager } from '../../../../src/main/operator/session-manager.js';
 import type { DatabaseHandle } from '../../../../src/main/db/client.js';
+import { ProtoSessionStore } from '../../../../src/main/operator/takeover-handler.js';
 
 /**
  * 004-operator-session T069 — cashier sign-in handler unit tests.
@@ -162,6 +163,7 @@ function makeHandler(
     pairingStore: PairingStore;
     checkActiveSession: CheckActiveSessionHandler;
     sessionManager: SessionManager;
+    protoStore: ProtoSessionStore;
   }> = {},
 ): CashierSignInHandler {
   return new CashierSignInHandler({
@@ -170,6 +172,7 @@ function makeHandler(
     sessionManager: overrides.sessionManager ?? new SessionManager(),
     checkActiveSession: overrides.checkActiveSession ?? makeCheckActive({ kind: 'none' }),
     pairingStore: overrides.pairingStore ?? makePairedStore(),
+    protoStore: overrides.protoStore ?? new ProtoSessionStore(),
   });
 }
 
@@ -295,14 +298,19 @@ describe('CashierSignInHandler — correct PIN, no active session', () => {
 });
 
 describe('CashierSignInHandler — correct PIN, active session exists', () => {
-  it('returns takeover_required without creating a new session', async () => {
+  it('returns takeover_required with capability token without creating a new session', async () => {
     const sm = new SessionManager();
     const handler = makeHandler({
       checkActiveSession: makeCheckActive({ kind: 'active' }),
       sessionManager: sm,
     });
     const result = await handler.signIn(makeRequest());
-    expect(result).toEqual({ kind: 'takeover_required' });
+    expect(result.kind).toBe('takeover_required');
+    if (result.kind !== 'takeover_required') return;
+    // FR-013: no identifying detail other than the opaque capability token.
+    expect(typeof result.pending_takeover_id).toBe('string');
+    expect(result.pending_takeover_id.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('operator_id');
     expect(sm.getCurrent()).toBeNull();
   });
 });

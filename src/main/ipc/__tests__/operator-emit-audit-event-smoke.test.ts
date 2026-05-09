@@ -15,6 +15,7 @@ import type { SessionManager } from '../../operator/session-manager.js';
 import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
 import type { PairingStore } from '../../pairing/store.js';
+import type { TakeoverHandler } from '../../operator/takeover-handler.js';
 
 /**
  * T051 — `operator:_emit-audit-event-smoke` IPC handler tests.
@@ -77,6 +78,15 @@ function fakeSessionManager(session: OperatorSessionRecord | null): SessionManag
   } as unknown as SessionManager;
 }
 
+function fakeTakeoverHandler(): TakeoverHandler {
+  return {
+    confirmTakeover: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+  } as unknown as TakeoverHandler;
+}
+
 function fakePairingStore(terminal_id = 'term-1'): PairingStore {
   return {
     getStatus: vi.fn(() =>
@@ -128,6 +138,7 @@ function setup(opts: {
     inactivityMonitor: fakeInactivityMonitor(),
     auditEmitter: emitter,
     pairingStore: fakePairingStore(opts.terminalId ?? 'term-1'),
+    takeoverHandler: fakeTakeoverHandler(),
   });
   const smokeHandler = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE);
   if (!smokeHandler) throw new Error('smoke handler not registered');
@@ -152,6 +163,7 @@ describe('operator:_emit-audit-event-smoke — channel registration', () => {
       inactivityMonitor: fakeInactivityMonitor(),
       auditEmitter: new AuditEmitter(store),
       pairingStore: fakePairingStore(),
+      takeoverHandler: fakeTakeoverHandler(),
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE)).toBe(true);
   });
@@ -335,6 +347,7 @@ describe('operator:_emit-audit-event-smoke — unpaired terminal', () => {
       inactivityMonitor: fakeInactivityMonitor(),
       auditEmitter: new AuditEmitter(store),
       pairingStore,
+      takeoverHandler: fakeTakeoverHandler(),
     });
     const handler = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE);
     if (!handler) throw new Error('handler not registered');

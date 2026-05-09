@@ -53,6 +53,10 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
       Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
     ),
     listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+    confirmTakeover: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
   };
   return { bridge, signInMock };
 }
@@ -66,7 +70,10 @@ function refusedResponse(): Promise<SignInResponse> {
 }
 
 function takeoverResponse(): Promise<SignInResponse> {
-  return Promise.resolve({ kind: 'takeover_required' as const });
+  return Promise.resolve({
+    kind: 'takeover_required' as const,
+    pending_takeover_id: 'test-pending-id-0000',
+  });
 }
 
 beforeEach(() => {
@@ -214,6 +221,10 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
       listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+      confirmTakeover: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -256,6 +267,10 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
       listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+      confirmTakeover: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -291,6 +306,10 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
         Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
       ),
       listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+      confirmTakeover: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
