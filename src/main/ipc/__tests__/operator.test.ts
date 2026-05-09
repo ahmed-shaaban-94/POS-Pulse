@@ -279,3 +279,112 @@ describe('operator:_report-activity', () => {
     expect(reportActivity).toHaveBeenCalledTimes(1);
   });
 });
+
+// ─── Takeover confirm / cancel IPC boundary tests ──────────────────────────
+
+function makeTakeoverHandler(opts: {
+  confirmResult?: object;
+  shouldThrow?: boolean;
+}): { handler: TakeoverHandler; confirmFn: ReturnType<typeof vi.fn> } {
+  const confirmFn = vi.fn(() => {
+    if (opts.shouldThrow) throw new Error('unexpected inner error');
+    return Promise.resolve(
+      opts.confirmResult ?? { kind: 'refused' as const, category: 'invalid_input' as const },
+    );
+  });
+  const handler = {
+    confirmTakeover: confirmFn,
+    cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+  } as unknown as TakeoverHandler;
+  return { handler, confirmFn };
+}
+
+function getHandler(
+  handlers: Map<string, IpcHandler>,
+  channel: string,
+): IpcHandler {
+  const fn = handlers.get(channel);
+  if (fn === undefined) throw new Error(`channel ${channel} not registered`);
+  return fn;
+}
+
+function registerWithTakeover(takeoverHandler: TakeoverHandler): Map<string, IpcHandler> {
+  const { ipcMain, handlers } = makeIpcMain();
+  registerOperatorHandlers(ipcMain, {
+    signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+    signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
+    rosterHandler: fakeRosterHandler(),
+    sessionManager: fakeSessionManager(null),
+    inactivityMonitor: fakeInactivityMonitor().monitor,
+    auditEmitter: fakeAuditEmitter(),
+    pairingStore: fakePairingStore(),
+    takeoverHandler,
+  });
+  return handlers;
+}
+
+describe('operator:takeover-confirm — boundary input validation', () => {
+  it('refuses invalid_input when request is not an object', async () => {
+    const { handler } = makeTakeoverHandler({});
+    const handlers = registerWithTakeover(handler);
+    const confirmChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
+    for (const bad of [null, undefined, 'string', 42, true]) {
+      const res = await confirmChannel(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+  });
+
+  it('refuses invalid_input when pending_takeover_id is missing or empty', async () => {
+    const { handler } = makeTakeoverHandler({});
+    const handlers = registerWithTakeover(handler);
+    const confirmChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
+    for (const bad of [{}, { pending_takeover_id: '' }, { pending_takeover_id: 42 }]) {
+      const res = await confirmChannel(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+  });
+
+  it('forwards a well-formed request to takeoverHandler.confirmTakeover', async () => {
+    const successResult = {
+      kind: 'signed_in' as const,
+      session: SAMPLE_VIEW,
+    };
+    const { handler, confirmFn } = makeTakeoverHandler({ confirmResult: successResult });
+    const handlers = registerWithTakeover(handler);
+    const confirmChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
+    const res = await confirmChannel(FAKE_EVENT, { pending_takeover_id: 'tok-uuid-001' });
+    expect(res).toEqual(successResult);
+    expect(confirmFn).toHaveBeenCalledWith({ pending_takeover_id: 'tok-uuid-001' });
+  });
+
+  it('maps unexpected inner throws to a generic invalid_input refusal', async () => {
+    const { handler } = makeTakeoverHandler({ shouldThrow: true });
+    const handlers = registerWithTakeover(handler);
+    const confirmChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
+    const res = await confirmChannel(FAKE_EVENT, { pending_takeover_id: 'tok-uuid-002' });
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+});
+
+describe('operator:takeover-cancel — boundary behaviour', () => {
+  it('returns cancelled when request is not an object (lenient — always cancels)', async () => {
+    const { handler } = makeTakeoverHandler({});
+    const handlers = registerWithTakeover(handler);
+    const cancelChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL);
+    for (const bad of [null, undefined, 'string', 42]) {
+      const res = await cancelChannel(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'cancelled' });
+    }
+  });
+
+  it('forwards a well-formed cancel request to takeoverHandler.cancelTakeover', async () => {
+    const { handler } = makeTakeoverHandler({});
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const cancelFn = handler.cancelTakeover as ReturnType<typeof vi.fn>;
+    const handlers = registerWithTakeover(handler);
+    const cancelChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL);
+    const res = await cancelChannel(FAKE_EVENT, { pending_takeover_id: 'tok-uuid-003' });
+    expect(res).toEqual({ kind: 'cancelled' });
+    expect(cancelFn).toHaveBeenCalledWith({ pending_takeover_id: 'tok-uuid-003' });
+  });
+});
