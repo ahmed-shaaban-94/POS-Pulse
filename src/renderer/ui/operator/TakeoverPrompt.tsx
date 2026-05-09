@@ -90,10 +90,10 @@ export function TakeoverPrompt({
           className="takeover-prompt__title"
           data-testid="takeover-prompt-title"
         >
-          Continue sign-in?
+          You are already signed in on another POS terminal in this branch.
         </h2>
         <p className="takeover-prompt__body" data-testid="takeover-prompt-body">
-          A session is currently active on another terminal. Signing in here will end that session.
+          Continue here and sign out there?
         </p>
 
         <div className="takeover-prompt__feedback" role="status" aria-live="polite">

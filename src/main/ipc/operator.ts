@@ -29,7 +29,6 @@ import {
   type ActionCategory,
 } from '../../shared/audit/event-shape.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
-import { requireRole } from '../operator/role-enforcement.js';
 import type { TakeoverHandler } from '../operator/takeover-handler.js';
 
 /**
@@ -229,20 +228,14 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
     async (): Promise<ListBranchRosterResponse> => {
-      const session = sessionManager.getCurrent();
-      if (session === null) {
-        return { kind: 'refused', category: 'not_signed_in' };
-      }
-      // AD-1: requireRole is the primary role-enforcement gate (T015).
-      try {
-        requireRole(['manager', 'admin'], session);
-      } catch (err) {
-        if (err instanceof OperatorRefusalError) {
-          return { kind: 'refused', category: err.category };
-        }
+      // Pre-sign-in roster: sourced from pairing state, not an operator session.
+      // The /sign-in route fetches the roster before any operator has signed in;
+      // the paired terminal_id provides the branch scope.
+      const pairingStatus = await pairingStore.getStatus();
+      if (pairingStatus.kind !== 'paired') {
         return refuseInvalid();
       }
-      return rosterHandler.listRoster(session.branch_id);
+      return rosterHandler.listRoster(pairingStatus.branch_id);
     },
   );
 

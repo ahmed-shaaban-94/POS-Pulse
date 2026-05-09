@@ -21,8 +21,9 @@ import { SIGN_IN_REFUSAL_COPY } from '../ui/operator/messages.js';
  *   - `cancelTakeover`   → back to cashier PIN entry
  *
  * #101 boundary: no terminal-A invalidation, no 30-second assertion,
- * no T056 assertion. Terminal A discovers the takeover passively at its
- * next getCurrentSession poll.
+ * no T056 assertion. Terminal A discovers session invalidation only after
+ * a backend-validated call fails, an app restart, or once #101 implements
+ * backend probe/push. getCurrentSession is local-only until #101.
  */
 
 export interface SignInRouteProps {

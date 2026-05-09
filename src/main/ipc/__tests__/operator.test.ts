@@ -4,6 +4,8 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { registerOperatorHandlers } from '../operator.js';
 import { OPERATOR_IPC_CHANNELS } from '../../../shared/operator/channels.js';
 import type {
+  BranchRosterCashier,
+  ListBranchRosterResponse,
   OperatorSessionBridgeView,
   SignInResponse,
   SignOutResponse,
@@ -371,6 +373,109 @@ describe('operator:takeover-confirm — boundary input validation', () => {
     const confirmChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
     const res = await confirmChannel(FAKE_EVENT, { pending_takeover_id: 'tok-uuid-002' });
     expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+});
+
+// ─── Pre-sign-in roster (T070b contract fix) ──────────────────────────────────
+
+function makePairedPairingStore(
+  branch_id = 'branch-roster-1',
+  cashiers?: BranchRosterCashier[],
+): {
+  pairingStore: PairingStore;
+  rosterHandler: RosterHandler;
+} {
+  const pairingStore: PairingStore = {
+    getStatus: vi.fn(() =>
+      Promise.resolve({
+        kind: 'paired' as const,
+        tenant_id: 'tenant-1',
+        branch_id,
+        terminal_id: 'term-1',
+        terminal_label: 'Counter',
+        paired_at: 1735689600,
+      }),
+    ),
+    persist: vi.fn(),
+    clear: vi.fn(),
+  };
+  const resolvedCashiers: BranchRosterCashier[] = cashiers ?? [
+    { id: 'cashier-1', display_name: 'Alice', role: 'cashier' as const },
+  ];
+  const rosterHandler: RosterHandler = {
+    listRoster: vi.fn(() =>
+      Promise.resolve({ kind: 'roster' as const, cashiers: resolvedCashiers }),
+    ),
+  } as unknown as RosterHandler;
+  return { pairingStore, rosterHandler };
+}
+
+function registerWithPairingStore(
+  pairingStore: PairingStore,
+  rosterHandler?: RosterHandler,
+): Map<string, IpcHandler> {
+  const { ipcMain, handlers } = makeIpcMain();
+  registerOperatorHandlers(ipcMain, {
+    signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+    cashierSignInHandler: fakeCashierSignInHandler(),
+    signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
+    rosterHandler:
+      rosterHandler ??
+      ({
+        listRoster: vi.fn(() => Promise.resolve({ kind: 'roster', cashiers: [] })),
+      } as unknown as RosterHandler),
+    sessionManager: fakeSessionManager(null),
+    inactivityMonitor: fakeInactivityMonitor().monitor,
+    auditEmitter: fakeAuditEmitter(),
+    pairingStore,
+    takeoverHandler: fakeTakeoverHandler(),
+  });
+  return handlers;
+}
+
+describe('operator:list-branch-roster — pre-sign-in access', () => {
+  it('returns roster when terminal is paired and no operator session exists', async () => {
+    const { pairingStore, rosterHandler } = makePairedPairingStore('branch-1');
+    const handlers = registerWithPairingStore(pairingStore, rosterHandler);
+    const rosterChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
+    const res = (await rosterChannel(FAKE_EVENT)) as ListBranchRosterResponse;
+    expect(res.kind).toBe('roster');
+  });
+
+  it('passes branch_id from pairing state to rosterHandler (no session)', async () => {
+    const { pairingStore, rosterHandler } = makePairedPairingStore('branch-999');
+    const handlers = registerWithPairingStore(pairingStore, rosterHandler);
+    const rosterChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
+    await rosterChannel(FAKE_EVENT);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(rosterHandler.listRoster).toHaveBeenCalledWith('branch-999');
+  });
+
+  it('refuses with invalid_input when terminal is unpaired', async () => {
+    const unpaired: PairingStore = {
+      getStatus: vi.fn(() => Promise.resolve({ kind: 'unpaired' as const })),
+      persist: vi.fn(),
+      clear: vi.fn(),
+    };
+    const handlers = registerWithPairingStore(unpaired);
+    const rosterChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
+    const res = await rosterChannel(FAKE_EVENT);
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+  });
+
+  it('response roster contains only minimum-disclosure fields (no email/phone/PIN fields)', async () => {
+    const cashiersFromBackend: BranchRosterCashier[] = [
+      { id: 'c-1', display_name: 'Bob', role: 'cashier' as const },
+    ];
+    const { pairingStore, rosterHandler } = makePairedPairingStore('branch-1', cashiersFromBackend);
+    const handlers = registerWithPairingStore(pairingStore, rosterHandler);
+    const rosterChannel = getHandler(handlers, OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
+    const res = (await rosterChannel(FAKE_EVENT)) as ListBranchRosterResponse;
+    const serialised = JSON.stringify(res);
+    expect(serialised).not.toContain('email');
+    expect(serialised).not.toContain('phone');
+    expect(serialised).not.toContain('pin');
+    expect(serialised).not.toContain('password');
   });
 });
 

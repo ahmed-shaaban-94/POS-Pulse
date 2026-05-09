@@ -26,7 +26,7 @@ import { useEffect, type JSX, type KeyboardEvent } from 'react';
  */
 
 export const PIN_MIN_LENGTH = 4;
-export const PIN_MAX_LENGTH = 8;
+export const PIN_MAX_LENGTH = 6;
 
 export interface PinPadProps {
   /** Current PIN value (parent-controlled). Max PIN_MAX_LENGTH digits. */
@@ -39,7 +39,8 @@ export interface PinPadProps {
   disabled?: boolean;
 }
 
-const DIGIT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'] as const;
+// Layout: 1 2 3 / 4 5 6 / 7 8 9 / ⌫ 0 ↵  (12 keys, Enter inside grid row 4)
+const DIGIT_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '↵'] as const;
 
 export function PinPad(props: PinPadProps): JSX.Element {
   const { value, onChange, onSubmit, disabled = false } = props;
@@ -103,9 +104,6 @@ export function PinPad(props: PinPadProps): JSX.Element {
 
       <div className="pin-pad__grid" role="group" aria-label="PIN entry">
         {DIGIT_KEYS.map((key, idx) => {
-          if (key === '') {
-            return <span key={idx} className="pin-pad__key--spacer" aria-hidden="true" />;
-          }
           if (key === '⌫') {
             return (
               <button
@@ -127,6 +125,22 @@ export function PinPad(props: PinPadProps): JSX.Element {
               </button>
             );
           }
+          if (key === '↵') {
+            return (
+              <button
+                key={idx}
+                type="button"
+                className="pin-pad__key pin-pad__key--enter"
+                data-testid="pin-pad-enter"
+                aria-label="Enter"
+                aria-disabled={!canSubmit || disabled}
+                disabled={disabled}
+                onClick={handleEnter}
+              >
+                ↵
+              </button>
+            );
+          }
           return (
             <button
               key={idx}
@@ -144,18 +158,6 @@ export function PinPad(props: PinPadProps): JSX.Element {
           );
         })}
       </div>
-
-      <button
-        type="button"
-        className="pin-pad__key pin-pad__key--enter"
-        data-testid="pin-pad-enter"
-        aria-label="Enter"
-        aria-disabled={!canSubmit || disabled}
-        disabled={disabled}
-        onClick={handleEnter}
-      >
-        Enter
-      </button>
     </div>
   );
 }

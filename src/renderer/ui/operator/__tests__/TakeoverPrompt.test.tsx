@@ -96,6 +96,34 @@ describe('TakeoverPrompt — rendering', () => {
     expect(screen.getByTestId('takeover-prompt-cancel')).toBeInTheDocument();
     expect(screen.getByTestId('takeover-prompt-confirm')).toBeInTheDocument();
   });
+
+  it('title text matches visual-direction spec verbatim', () => {
+    const bridge = makeBridge();
+    render(<TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />);
+    expect(screen.getByTestId('takeover-prompt-title').textContent).toBe(
+      'You are already signed in on another POS terminal in this branch.',
+    );
+  });
+
+  it('body text matches visual-direction spec verbatim', () => {
+    const bridge = makeBridge();
+    render(<TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />);
+    expect(screen.getByTestId('takeover-prompt-body').textContent).toBe(
+      'Continue here and sign out there?',
+    );
+  });
+
+  it('primary button label is "Continue here"', () => {
+    const bridge = makeBridge();
+    render(<TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />);
+    expect(screen.getByTestId('takeover-prompt-confirm').textContent).toBe('Continue here');
+  });
+
+  it('secondary button label is "Cancel"', () => {
+    const bridge = makeBridge();
+    render(<TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />);
+    expect(screen.getByTestId('takeover-prompt-cancel').textContent).toBe('Cancel');
+  });
 });
 
 describe('TakeoverPrompt — FR-013 minimum-disclosure', () => {
