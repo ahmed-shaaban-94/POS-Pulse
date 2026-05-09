@@ -14,6 +14,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    // Fail loudly if port 5173 is occupied instead of silently using 5174+.
+    // dev-electron.cjs waits on exactly port 5173; a port mismatch would
+    // attach Electron to a stale server from a previous dev session.
+    strictPort: true,
+    host: '127.0.0.1',
   },
   resolve: {
     alias: {
