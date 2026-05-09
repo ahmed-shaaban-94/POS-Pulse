@@ -282,10 +282,10 @@ describe('operator:_report-activity', () => {
 
 // ─── Takeover confirm / cancel IPC boundary tests ──────────────────────────
 
-function makeTakeoverHandler(opts: {
-  confirmResult?: object;
-  shouldThrow?: boolean;
-}): { handler: TakeoverHandler; confirmFn: ReturnType<typeof vi.fn> } {
+function makeTakeoverHandler(opts: { confirmResult?: object; shouldThrow?: boolean }): {
+  handler: TakeoverHandler;
+  confirmFn: ReturnType<typeof vi.fn>;
+} {
   const confirmFn = vi.fn(() => {
     if (opts.shouldThrow) throw new Error('unexpected inner error');
     return Promise.resolve(
@@ -299,10 +299,7 @@ function makeTakeoverHandler(opts: {
   return { handler, confirmFn };
 }
 
-function getHandler(
-  handlers: Map<string, IpcHandler>,
-  channel: string,
-): IpcHandler {
+function getHandler(handlers: Map<string, IpcHandler>, channel: string): IpcHandler {
   const fn = handlers.get(channel);
   if (fn === undefined) throw new Error(`channel ${channel} not registered`);
   return fn;
