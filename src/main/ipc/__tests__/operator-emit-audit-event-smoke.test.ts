@@ -8,7 +8,7 @@ import type { OperatorRefusal } from '../../../shared/audit/event-shape.js';
 import { AuditEmitter } from '../../audit/audit-emitter.js';
 import type { AuditEventsStore } from '../../audit/audit-emitter.js';
 import type { AuditEvent } from '../../../shared/audit/event-shape.js';
-import type { SignInHandler } from '../../operator/sign-in-handler.js';
+import type { CashierSignInHandler, SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
 import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { SessionManager } from '../../operator/session-manager.js';
@@ -36,6 +36,14 @@ const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
 function fakeSignInHandler(): SignInHandler {
   return { signIn: vi.fn() } as unknown as SignInHandler;
+}
+
+function fakeCashierSignInHandler(): CashierSignInHandler {
+  return {
+    signIn: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as CashierSignInHandler;
 }
 
 function fakeSignOutHandler(): SignOutHandler {
@@ -132,6 +140,7 @@ function setup(opts: {
   const { ipcMain, handlers } = makeIpcMain();
   registerOperatorHandlers(ipcMain, {
     signInHandler: fakeSignInHandler(),
+    cashierSignInHandler: fakeCashierSignInHandler(),
     signOutHandler: fakeSignOutHandler(),
     rosterHandler: fakeRosterHandler(),
     sessionManager: fakeSessionManager(opts.session ?? null),
@@ -157,6 +166,7 @@ describe('operator:_emit-audit-event-smoke — channel registration', () => {
     const store = fakeStore();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler(),
+      cashierSignInHandler: fakeCashierSignInHandler(),
       signOutHandler: fakeSignOutHandler(),
       rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(null),
@@ -341,6 +351,7 @@ describe('operator:_emit-audit-event-smoke — unpaired terminal', () => {
     };
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler(),
+      cashierSignInHandler: fakeCashierSignInHandler(),
       signOutHandler: fakeSignOutHandler(),
       rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(session),

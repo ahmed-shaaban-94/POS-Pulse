@@ -41,7 +41,7 @@ export interface OperatorSessionView {
 export type OperatorSessionState =
   | { kind: 'signedOut'; lastRefusal?: RefusalCategory }
   | { kind: 'signingIn' }
-  | { kind: 'takeoverPrompt' }
+  | { kind: 'takeoverPrompt'; pending_takeover_id: string }
   | { kind: 'signedIn'; session: OperatorSessionView }
   | { kind: 'signingOut' };
 
@@ -52,8 +52,12 @@ export interface OperatorSessionStore {
   /** Sign-in resolved with a session; FSM moves signingIn → signedIn. */
   resolveSignedIn(session: OperatorSessionView): void;
   /** Sign-in resolved with takeover-required; FSM moves signingIn → takeoverPrompt. */
-  promptTakeover(): void;
-  /** Sign-in resolved with refusal; FSM moves signingIn → signedOut (carrying the category). */
+  promptTakeover(pending_takeover_id: string): void;
+  /**
+   * Sign-in resolved with refusal; FSM moves signingIn OR takeoverPrompt → signedOut
+   * (carrying the category). Used for both initial sign-in refusals and
+   * confirmTakeover non-retriable refusals (invalid_input).
+   */
   refuseSignIn(category: RefusalCategory): void;
   /** Operator clears the inline refusal (Note 1 — first new keystroke). */
   clearRefusal(): void;
@@ -83,15 +87,15 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
       return { state: { kind: 'signedIn', session } };
     });
   },
-  promptTakeover: () => {
+  promptTakeover: (pending_takeover_id) => {
     set((s) => {
       if (s.state.kind !== 'signingIn') return s;
-      return { state: { kind: 'takeoverPrompt' } };
+      return { state: { kind: 'takeoverPrompt', pending_takeover_id } };
     });
   },
   refuseSignIn: (category) => {
     set((s) => {
-      if (s.state.kind !== 'signingIn') return s;
+      if (s.state.kind !== 'signingIn' && s.state.kind !== 'takeoverPrompt') return s;
       return { state: { kind: 'signedOut', lastRefusal: category } };
     });
   },

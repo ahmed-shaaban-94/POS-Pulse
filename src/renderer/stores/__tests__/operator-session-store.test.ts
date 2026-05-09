@@ -60,7 +60,7 @@ describe('operator-session-store FSM (T011)', () => {
   it('signingIn → takeoverPrompt → signedOut (cancel branch)', () => {
     const store = useOperatorSessionStore.getState();
     store.beginSignIn();
-    store.promptTakeover();
+    store.promptTakeover('pending-test-id');
     expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
     store.cancelTakeover();
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
@@ -70,7 +70,7 @@ describe('operator-session-store FSM (T011)', () => {
     // Confirm UX wires in S4; the FSM transition itself is reachable now.
     const store = useOperatorSessionStore.getState();
     store.beginSignIn();
-    store.promptTakeover();
+    store.promptTakeover('pending-test-id');
     store.resolveSignedIn(SAMPLE_SESSION);
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
   });
@@ -111,7 +111,7 @@ describe('operator-session-store FSM (T011)', () => {
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
 
     store.beginSignIn();
-    store.promptTakeover();
+    store.promptTakeover('pending-test-id');
     // Now in takeoverPrompt; another beginSignIn MUST be a no-op.
     store.beginSignIn();
     expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');

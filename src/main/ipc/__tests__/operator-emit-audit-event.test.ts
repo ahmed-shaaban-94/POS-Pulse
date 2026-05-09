@@ -11,7 +11,7 @@ import {
 } from '../../audit/audit-emitter.js';
 import type { PairingStore } from '../../pairing/store.js';
 import type { SessionManager } from '../../operator/session-manager.js';
-import type { SignInHandler } from '../../operator/sign-in-handler.js';
+import type { CashierSignInHandler, SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
 import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
@@ -104,6 +104,14 @@ function fakeSignInHandler(): SignInHandler {
   return { signIn: vi.fn() } as unknown as SignInHandler;
 }
 
+function fakeCashierSignInHandler(): CashierSignInHandler {
+  return {
+    signIn: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as CashierSignInHandler;
+}
+
 function fakeSignOutHandler(): SignOutHandler {
   return {
     signOut: vi.fn(() => Promise.resolve({ kind: 'signed_out' as const })),
@@ -143,6 +151,7 @@ function setup(opts: SetupOpts = {}) {
 
   registerOperatorHandlers(ipcMain, {
     signInHandler: fakeSignInHandler(),
+    cashierSignInHandler: fakeCashierSignInHandler(),
     signOutHandler: fakeSignOutHandler(),
     rosterHandler: fakeRosterHandler(),
     sessionManager,
@@ -174,6 +183,7 @@ describe('operator:emit-audit-event — channel registration', () => {
     const { ipcMain, handlers } = makeIpcMain();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler(),
+      cashierSignInHandler: fakeCashierSignInHandler(),
       signOutHandler: fakeSignOutHandler(),
       rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(),

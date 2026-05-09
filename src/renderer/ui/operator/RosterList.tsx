@@ -3,16 +3,15 @@ import type { JSX } from 'react';
 import { roleDisplayName, type Role } from '../../../shared/operator/role.js';
 
 /**
- * 004-operator-session T030 — RosterList (S1 inert).
+ * 004-operator-session T030 / T075 — RosterList.
  *
  * Renders a list of cashiers with display name + role badge ONLY
- * (FR-006 / FR-031 — no email, no phone, no audit history). S1 leaves
- * this component INERT: the data wiring (calling `operator.list-
- * BranchRoster`) lands with S4 (T070b) under §A1 / §A2 (S4 endpoints).
+ * (FR-006 / FR-031 — no email, no phone, no audit history).
  *
- * S1 callers pass an empty `cashiers` list; the component renders its
- * own "Manager / admin sign-in only at this stage" empty-state copy
- * so the surface is honest about what's available right now.
+ * S1 rendered this inert. S4 (T075) activates selection:
+ *   - Pass `onSelect` + `selectedId` to enable interactive mode.
+ *   - Each cashier becomes a `<button type="button">` inside its `<li>`.
+ *   - `data-cashier-id` and `data-role` are preserved for test targeting.
  */
 
 export interface RosterEntry {
@@ -25,15 +24,20 @@ export interface RosterListProps {
   /** Empty in S1; populated from `operator.listBranchRoster` in S4. */
   cashiers: ReadonlyArray<RosterEntry>;
   /**
-   * S1: when true, the surface renders the "manager / admin sign-in
-   * only at this stage" message. S4 flips this to false on the
-   * cashier sign-in surface.
+   * S1: when true, the surface renders the inert empty-state message.
+   * S4 passes false (or omits) when cashiers are available.
    */
   inert?: boolean;
+  /** S4: called when a cashier item is selected. */
+  onSelect?: (cashier: RosterEntry) => void;
+  /** S4: id of the currently selected cashier (highlights the row). */
+  selectedId?: string | undefined;
 }
 
 export function RosterList(props: RosterListProps): JSX.Element {
-  if (props.inert === true || props.cashiers.length === 0) {
+  const { cashiers, inert, onSelect, selectedId } = props;
+
+  if (inert === true || cashiers.length === 0) {
     return (
       <section
         aria-label="Cashier roster"
@@ -56,13 +60,37 @@ export function RosterList(props: RosterListProps): JSX.Element {
       data-state="active"
       className="roster-list"
     >
-      <ul className="roster-list__items">
-        {props.cashiers.map((c) => (
-          <li key={c.id} className="roster-list__item" data-cashier-id={c.id}>
-            <span className="roster-list__name">{c.display_name}</span>
-            <span className="roster-list__role" data-role={c.role}>
-              {roleDisplayName(c.role)}
-            </span>
+      <ul className="roster-list__items" role="listbox" aria-label="Select cashier">
+        {cashiers.map((c) => (
+          <li
+            key={c.id}
+            className={`roster-list__item${c.id === selectedId ? ' roster-list__item--selected' : ''}`}
+            data-cashier-id={c.id}
+            role="option"
+            aria-selected={c.id === selectedId}
+          >
+            {onSelect !== undefined ? (
+              <button
+                type="button"
+                className="roster-list__item-btn"
+                data-testid={`roster-item-${c.id}`}
+                onClick={() => {
+                  onSelect(c);
+                }}
+              >
+                <span className="roster-list__name">{c.display_name}</span>
+                <span className="roster-list__role" data-role={c.role}>
+                  {roleDisplayName(c.role)}
+                </span>
+              </button>
+            ) : (
+              <>
+                <span className="roster-list__name">{c.display_name}</span>
+                <span className="roster-list__role" data-role={c.role}>
+                  {roleDisplayName(c.role)}
+                </span>
+              </>
+            )}
           </li>
         ))}
       </ul>

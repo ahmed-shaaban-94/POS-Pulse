@@ -9,7 +9,7 @@ import type {
   SignOutResponse,
 } from '../../../shared/bridge-api.js';
 import { OperatorRefusalError } from '../../../shared/audit/event-shape.js';
-import type { SignInHandler } from '../../operator/sign-in-handler.js';
+import type { CashierSignInHandler, SignInHandler } from '../../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../operator/sign-out-handler.js';
 import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { SessionManager } from '../../operator/session-manager.js';
@@ -98,6 +98,14 @@ function fakePairingStore(): PairingStore {
   return store;
 }
 
+function fakeCashierSignInHandler(): CashierSignInHandler {
+  return {
+    signIn: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as CashierSignInHandler;
+}
+
 function fakeTakeoverHandler(): TakeoverHandler {
   return {
     confirmTakeover: vi.fn(() =>
@@ -120,6 +128,7 @@ function register(opts: {
   const inactivity = fakeInactivityMonitor();
   registerOperatorHandlers(ipcMain, {
     signInHandler: fakeSignInHandler(opts.signIn ?? { kind: 'refused', category: 'invalid_input' }),
+    cashierSignInHandler: fakeCashierSignInHandler(),
     signOutHandler: fakeSignOutHandler(opts.signOut ?? { kind: 'signed_out' }),
     rosterHandler: fakeRosterHandler(),
     sessionManager,
@@ -161,6 +170,7 @@ describe('registerOperatorHandlers — channel registration', () => {
     const { ipcMain, handle } = makeIpcMain();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+      cashierSignInHandler: fakeCashierSignInHandler(),
       signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
       rosterHandler: fakeRosterHandler(),
       sessionManager: fakeSessionManager(null),
@@ -309,6 +319,7 @@ function registerWithTakeover(takeoverHandler: TakeoverHandler): Map<string, Ipc
   const { ipcMain, handlers } = makeIpcMain();
   registerOperatorHandlers(ipcMain, {
     signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+    cashierSignInHandler: fakeCashierSignInHandler(),
     signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
     rosterHandler: fakeRosterHandler(),
     sessionManager: fakeSessionManager(null),

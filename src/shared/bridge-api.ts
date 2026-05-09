@@ -132,8 +132,7 @@ export interface CancelTakeoverResponse {
 }
 
 /**
- * Manager/admin sign-in request shape. The cashier branch
- * `{ kind: 'cashier'; ... }` is §A1-gated and added in S4.
+ * Manager/admin sign-in request shape.
  */
 export interface ManagerAdminSignInRequest {
   kind: 'manager_admin';
@@ -143,7 +142,24 @@ export interface ManagerAdminSignInRequest {
   password: string;
 }
 
-export type SignInRequest = ManagerAdminSignInRequest;
+/**
+ * S4 / T075 — cashier sign-in request shape.
+ *
+ * AD-2: PIN verified locally via Argon2id. The plaintext PIN NEVER
+ * reaches the backend, any logger, or the renderer response (PR-1).
+ * Crosses the bridge ONCE on input; consumed by CashierSignInHandler.
+ */
+export interface CashierSignInRequest {
+  kind: 'cashier';
+  /** Clerk user id of the cashier (from the branch roster). */
+  cashier_clerk_user_id: string;
+  /** Plaintext PIN — consumed by the verifier, never persisted or logged. */
+  pin: string;
+  /** Display name used to populate the local session record. */
+  display_name: string;
+}
+
+export type SignInRequest = ManagerAdminSignInRequest | CashierSignInRequest;
 
 export type SignInResponse = SignInSuccessResponse | TakeoverRequiredResponse | OperatorRefusal;
 
