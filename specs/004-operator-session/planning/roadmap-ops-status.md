@@ -1,8 +1,8 @@
 # Roadmap & Ops Status — POS-Pulse 004-operator-session
 
-**Snapshot date:** 2026-05-09
-**Author:** Read-only ops review agent
-**Scope:** Read-only audit of GitHub roadmap, PR/issue state, and gate alignment for `specs/004-operator-session`. **No issue edits performed.** No source code modified.
+**Snapshot date:** 2026-05-09 (updated post-PR #100)
+**Author:** Read-only ops review agent (initial); updated by docs(004) PR on 2026-05-09
+**Scope:** Read-only audit of GitHub roadmap, PR/issue state, and gate alignment for `specs/004-operator-session`. **No issue edits performed in the original snapshot.** §9 and issue table updated to reflect PR #100 merge and issue hygiene (issues #85 and #101 reopened).
 
 > Advisory only. Every recommendation in §8 ("Recommended issue-body updates") is **awaiting maintainer approval before any edit**.
 
@@ -123,7 +123,7 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 | # | Title | State | Labels | Assignee | Milestone | Depends on (gates) | Blocking / unblocking notes |
 |:-:|:--|:--|:--|:--|:--|:--|:--|
 | **#84** | 004 S4 — cashier sign-in handler | **CLOSED** (2026-05-08) | type:feature, status:ready, feature:004-operator-session | — | — | §A1 ✅, §A2 Wave 3 ✅, §A3 ✅, §A4 ✅ | PR #94 covered T069 cashier sign-in handler (main-process only). Depends on T069a + T069b (PR #64). |
-| **#85** | 004 S4 — takeover confirm handler | **OPEN, ready** | type:feature, status:ready | — | — | §A1 ✅, §A2 Wave 3 ✅; **also depends on T069c notification-mechanism decision** | Implements `operator.confirmTakeover` (T070) + `operator.cancelTakeover` (T071). Calls `BackendClient.confirmTakeover`. Main-process scope only. **Hard prerequisite: T069c decision (passive polling vs active push) → research.md §3 addendum.** |
+| **#85** | 004 S4 — takeover confirm handler | **OPEN (reopened 2026-05-09)** | type:feature, status:ready | — | — | §A1 ✅, §A2 Wave 3 ✅ | T070 + T071 manager/admin path merged via PR #100 (SHA `deb689a`). **Remains open for cashier-path Endpoint 4 / AD-2 constraint.** Cashier sessions are local-only; no Clerk JWT; `BackendClient.confirmTakeover` cannot be called for cashier path without violating AD-2. See `src/main/operator/takeover-handler.ts` class-level JSDoc and `coordination.md` §"Takeover follow-up classification before UI". |
 | **#86** | 004 S4 — PinPad and TakeoverPrompt UI activation | **OPEN, ready** | type:feature, status:ready | — | — | §A1 ✅, §A2 Wave 3 ✅; depends on #85 main-process surface AND a `CashierSignInRequest` bridge-type addition | Implements T074 (PinPad), T075 (cashier-path activation on `sign-in.tsx`), T076 (TakeoverPrompt), T077 (renderer takeover wiring). **Hard prerequisite: #85 must merge first.** **Soft prerequisite: bridge type export (see §7c below).** |
 | **#87** | 004 S4 — closeout and coordination update | **OPEN, ready** | type:docs, status:ready | — | — | All S4 implementation PRs merged | Updates `tasks.md` + `coordination.md`; records validation status; documents remaining S5 blockers. **Hard prerequisite: all earlier S4 PRs merged.** |
 
@@ -159,6 +159,7 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 
 | # | Title | State | Head branch | Merged at | Notes |
 |:-:|:--|:--|:--|:--|:--|
+| **#100** | feat(004-s4): T070 + T071 — takeover confirm/cancel | **MERGED** | `feat/004-s4-takeover-confirm-T070-T071` | **2026-05-09T14:03:26Z** | T070 + T071 (manager/admin path). Related to #85, #101. Does not close #85 or #101. |
 | #95 | docs: refresh repository README and assets | MERGED | `docs/repo-readme-assets-refresh` | 2026-05-08T22:29:31Z | Non-004 docs polish. |
 | **#94** | feat(004): S4 cashier sign-in handler — T069 | **MERGED** | `feat/004-s4-cashier-sign-in-T069` | **2026-05-08T22:17:02Z** | Closes #84. T069. |
 | #93 | feat(004): S4 safeStorage seal for cashier_pin_records rows — T068 | MERGED | `feat/004-s4-pin-seal-T068` | 2026-05-08T21:19:07Z | Closes #83. T068. |
@@ -227,9 +228,21 @@ Each step is marked with its prerequisite. Execute top-down. Steps 7c and 7b may
 
 ### 7b. Issue #85 — takeover confirm + cancel handlers (T070 + T071)
 
-**Prerequisite:** 7a (T069c decision).
-**Scope:** main-process only. Implements `operator.confirmTakeover` (T070) and `operator.cancelTakeover` (T071) in `src/main/operator/takeover-handler.ts`. Uses `BackendClient.confirmTakeover` (already merged via PR #61). Emits `operator.session.takeover` audit event via T046 (already merged via PR #50). Sets prior session's `end_at` + `end_cause = 'superseded_by_takeover'`. Minimum disclosure (FR-013). Out of scope: TakeoverPrompt UI; Data-Pulse-2 changes.
-**Closes:** #85.
+**Status (2026-05-09):** T070 + T071 manager/admin path **MERGED** via PR #100
+(SHA `deb689a`). Issue #85 is **OPEN** (reopened 2026-05-09) because the
+cashier-path Endpoint 4 / AD-2 constraint remains unresolved. The cashier
+confirm path skips `BackendClient.confirmTakeover` (no Clerk JWT available
+per AD-2); this is documented in `takeover-handler.ts` class-level JSDoc.
+
+The remaining work for #85 is the cashier-path resolution: either (a)
+document that cashier takeover-confirm is fully local (AD-2 confirmed,
+no backend call ever), closing #85 with a docs-only PR, or (b) resolve
+the Endpoint 4 JWT requirement discrepancy (see `planning/takeover-confirm-plan.md`
+§5 and §11 Risk #3).
+
+**Does NOT close:** #85 until the cashier-path decision is recorded.
+**Prerequisite for original scope (now complete):** 7a (T069c — passive
+polling decision recorded in `takeover-handler.ts` class-level JSDoc).
 
 ### 7c. Bridge type export — `CashierSignInRequest` on the public `SignInRequest` discriminated union
 
@@ -254,9 +267,29 @@ with `CashierSignInRequest` re-exported (or duplicated minimally) from `src/shar
 
 ### 7d. Issue #86 — PinPad + TakeoverPrompt UI activation
 
-**Prerequisite:** 7b merged AND 7c merged (or both folded into 7b).
-**Scope:** T074 (PinPad component), T075 (cashier-path activation on `src/renderer/routes/sign-in.tsx`, calls `operator.signIn` cashier variant; uses `operator.listBranchRoster` from PR #63), T076 (TakeoverPrompt modal), T077 (renderer takeover wiring: `signingIn` → `takeover_required` → `takeoverPrompt`; calls `operator.confirmTakeover`/`operator.cancelTakeover`).
-**Closes:** #86.
+**Prerequisite:** 7b merged (manager/admin path — ✅ PR #100) AND 7c merged
+(or both folded into 7b). The cashier-path remainder of #85 does NOT block
+#86's terminal-B UI work.
+
+**#101 constraint (2026-05-09 decision — see `coordination.md` §"Takeover
+follow-up classification before UI"):**
+- **#86 MAY proceed** with PinPad + TakeoverPrompt terminal-B UI activation.
+- **#86 MUST NOT** include a passing T056 integration-test assertion that
+  "terminal A returns to `/sign-in` within 30 seconds." That assertion is
+  architecturally blocked by #101 (each Electron process has independent
+  in-memory `SessionManager`; terminal B's `confirmTakeover` cannot push a
+  sign-out to terminal A's process). Screenshot acceptance criteria for #86
+  are terminal-B-only.
+- Full S4 takeover flow CANNOT be marked complete in #87 closeout until #101
+  is resolved or explicitly waived.
+
+**Scope:** T074 (PinPad component), T075 (cashier-path activation on
+`src/renderer/routes/sign-in.tsx`, calls `operator.signIn` cashier variant;
+uses `operator.listBranchRoster` from PR #63), T076 (TakeoverPrompt modal),
+T077 (renderer takeover wiring: `signingIn` → `takeover_required` →
+`takeoverPrompt`; calls `operator.confirmTakeover`/`operator.cancelTakeover`).
+**Closes:** #86 (with explicit acknowledgment that T056 terminal-A assertion
+is deferred to #101 resolution).
 
 ### 7e. Remaining S4 tasks
 
@@ -378,7 +411,8 @@ introduces ZERO new backend endpoints (AD-2 invariant from §A1).
 | 4 | Project board #4 ("POS-Pulse Roadmap — 004 Operator Session") shows items #65–#71 as Done while the canonical issue tracker (#82–#87 mirrors) shows three of them OPEN. The board appears to be a legacy mirror. | Medium | Owner sweeps board #4 at next 004 closeout, OR archives it if board #5 is the canonical roadmap. **Advisory only — not edited here.** |
 | 5 | T079/T080 ("stuck-shift count badge") have a cyclic dependency: visibility row + badge component live in S4, but the count data feed lives in S5. | Medium | Owner picks: ship T080 with a placeholder `0` source and let S5 wire the live count, OR defer T080 to S5. Document the choice when 7d/7e ships. |
 | 6 | `CashierSignInRequest` is defined in `src/main/operator/sign-in-handler.ts` (main-process scope) but **NOT** exported on the public bridge surface (`src/shared/bridge-api.ts` line 118 still says `SignInRequest = ManagerAdminSignInRequest`). The renderer cannot type-check a cashier sign-in call today. | High (UI-blocking) | Widen the bridge type union as part of 7b or 7c before issue #86 opens. |
-| 7 | Coordination.md still narrates "S4 implementation begun (2026-05-08). Remaining S4 tasks (T052–T082) in progress." — accurate as of 2026-05-08 but several listed tasks have since merged. | Low | Issue #87 closeout will refresh this. |
+| 7 | Coordination.md still narrated "S4 implementation begun (2026-05-08). Remaining S4 tasks (T052–T082) in progress." — stale as of 2026-05-09. | Low | Updated by docs(004) PR (this file). `coordination.md` also updated. |
+| 8 | **Issue #101 (terminal-A passive polling gap):** Terminal A discovers a remote takeover only at its next `getCurrentSession` poll. No active push mechanism exists. The T056 integration-test happy-path assertion ("terminal A returns to `/sign-in` within 30 s") is architecturally blocked until #101 resolves. Accidentally merging a T056 test with a 30-second terminal-A assertion before #101 lands would produce a flaky or permanently skipped test. | **High** | #86 PR description and screenshot acceptance criteria MUST explicitly exclude terminal-A behaviour. #87 closeout MUST NOT mark full takeover flow complete until #101 resolves or is waived. See `coordination.md` §"Takeover follow-up classification before UI". |
 
 ---
 
