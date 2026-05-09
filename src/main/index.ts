@@ -26,8 +26,9 @@ import {
 } from './operator/clerk-client.js';
 import { createBackendClient } from './operator/backend-client.js';
 import { SessionManager } from './operator/session-manager.js';
-import { SignInHandler } from './operator/sign-in-handler.js';
+import { CashierSignInHandler, SignInHandler } from './operator/sign-in-handler.js';
 import { SignOutHandler } from './operator/sign-out-handler.js';
+import { CheckActiveSessionHandler } from './operator/check-active-session.js';
 import { RosterHandler } from './operator/roster-handler.js';
 import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
@@ -327,6 +328,18 @@ app
       deviceTokenAttestation,
       logger: mainLogger,
     });
+    const checkActiveSessionHandler = new CheckActiveSessionHandler({
+      backend: operatorBackend,
+    });
+    const operatorCashierSignInHandler = new CashierSignInHandler({
+      db: dbHandle,
+      safeStorage,
+      sessionManager: operatorSessionManager,
+      checkActiveSession: checkActiveSessionHandler,
+      pairingStore,
+      protoStore: operatorProtoStore,
+      logger: mainLogger,
+    });
     const operatorSignOutHandler = new SignOutHandler({
       backend: operatorBackend,
       sessionManager: operatorSessionManager,
@@ -378,6 +391,7 @@ app
 
     registerOperatorHandlers(ipcMain, {
       signInHandler: operatorSignInHandler,
+      cashierSignInHandler: operatorCashierSignInHandler,
       signOutHandler: operatorSignOutHandler,
       rosterHandler: operatorRosterHandler,
       sessionManager: operatorSessionManager,

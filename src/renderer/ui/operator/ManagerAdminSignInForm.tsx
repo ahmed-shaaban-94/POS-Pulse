@@ -80,7 +80,7 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
       if (response.kind === 'signed_in') {
         useOperatorSessionStore.getState().resolveSignedIn(response.session);
       } else if (response.kind === 'takeover_required') {
-        useOperatorSessionStore.getState().promptTakeover();
+        useOperatorSessionStore.getState().promptTakeover(response.pending_takeover_id);
       } else {
         useOperatorSessionStore.getState().refuseSignIn(response.category);
       }

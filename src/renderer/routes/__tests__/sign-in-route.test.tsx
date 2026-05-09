@@ -4,8 +4,10 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { AppRouter } from '../../router.js';
+import { SignInRoute } from '../sign-in.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import type {
+  ListBranchRosterResponse,
   ManagerAdminSignInRequest,
   OperatorBridgeAPI,
   OperatorSessionBridgeView,
@@ -56,8 +58,25 @@ function pairedBridge(): PairingBridgeAPI {
   };
 }
 
+const CASHIER = {
+  id: 'cashier-1',
+  display_name: 'Alice Smith',
+  role: 'cashier' as const,
+};
+
+const CASHIER_SESSION: OperatorSessionBridgeView = {
+  id: 'sess-cashier',
+  operator_id: 'cashier-1',
+  display_name: 'Alice Smith',
+  role: 'cashier',
+  tenant_id: 't1',
+  branch_id: 'b1',
+  started_at: '2026-05-06T00:00:00.000Z',
+};
+
 function operatorBridge(opts: {
   signIn?: (req: ManagerAdminSignInRequest) => Promise<SignInResponse>;
+  listBranchRoster?: () => Promise<ListBranchRosterResponse>;
 }): OperatorBridgeAPI {
   const defaultSignIn: (req: ManagerAdminSignInRequest) => Promise<SignInResponse> = () =>
     Promise.resolve({ kind: 'signed_in' as const, session: SESSION });
@@ -72,7 +91,9 @@ function operatorBridge(opts: {
     _emitAuditEventSmoke: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'not_signed_in' as const }),
     ),
-    listBranchRoster: vi.fn(() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+    listBranchRoster: vi.fn(
+      opts.listBranchRoster ?? (() => Promise.resolve({ kind: 'roster' as const, cashiers: [] })),
+    ),
     confirmTakeover: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
@@ -140,5 +161,182 @@ describe('AppRouter + sign-out (T024)', () => {
     store.beginSignOut();
     store.resolveSignedOut();
     expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+  });
+});
+
+// ─── SignInRoute cashier path (T075 / T077) ──────────────────────────────────
+// Tests render <SignInRoute> directly to isolate cashier-flow branches without
+// the full AppRouter + pairing overhead.
+
+function renderSignInRoute(bridge: OperatorBridgeAPI) {
+  return render(<SignInRoute operator={bridge} />);
+}
+
+describe('SignInRoute — roster fetch', () => {
+  it('populates the roster when listBranchRoster resolves with cashiers', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() =>
+      expect(screen.getByTestId(`roster-item-${CASHIER.id}`)).toBeInTheDocument(),
+    );
+  });
+
+  it('shows no_connection alert when roster returns no_connection category', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () =>
+        Promise.resolve({ kind: 'refused' as const, category: 'no_connection' as const }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+  });
+
+  it('shows no alert for non-no_connection refusal (soft failure)', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () =>
+        Promise.resolve({ kind: 'refused' as const, category: 'role_mismatch' as const }),
+    });
+    renderSignInRoute(bridge);
+    // Roster fetch resolves; no error shown (role_mismatch is silently ignored).
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const rosterMock = vi.mocked(bridge.listBranchRoster);
+    await waitFor(() => {
+      expect(rosterMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('swallows a thrown exception from listBranchRoster (best-effort)', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.reject(new Error('network failure')),
+    });
+    renderSignInRoute(bridge);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const rosterMock = vi.mocked(bridge.listBranchRoster);
+    await waitFor(() => {
+      expect(rosterMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('SignInRoute — cashier selection', () => {
+  it('shows the PIN section after a cashier is selected', async () => {
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() =>
+      expect(screen.getByTestId(`roster-item-${CASHIER.id}`)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(`roster-item-${CASHIER.id}`));
+    expect(screen.getByTestId('pin-section')).toBeInTheDocument();
+    expect(screen.getByTestId('pin-cashier-name')).toHaveTextContent(CASHIER.display_name);
+  });
+
+  it('Back button dismisses the PIN section', async () => {
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() =>
+      expect(screen.getByTestId(`roster-item-${CASHIER.id}`)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(`roster-item-${CASHIER.id}`));
+    await user.click(screen.getByTestId('cashier-pin-cancel'));
+    expect(screen.queryByTestId('pin-section')).not.toBeInTheDocument();
+  });
+});
+
+describe('SignInRoute — cashier sign-in responses', () => {
+  async function setupCashierWithPin(bridge: OperatorBridgeAPI) {
+    const user = userEvent.setup();
+    renderSignInRoute(bridge);
+    await waitFor(() =>
+      expect(screen.getByTestId(`roster-item-${CASHIER.id}`)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(`roster-item-${CASHIER.id}`));
+    // Enter 4 digits via the PinPad digit buttons.
+    for (const d of ['1', '2', '3', '4']) {
+      await user.click(screen.getByTestId(`pin-pad-key-${d}`));
+    }
+    return user;
+  }
+
+  it('signed_in response transitions store to signedIn', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () => Promise.resolve({ kind: 'signed_in' as const, session: CASHIER_SESSION }),
+    });
+    const user = await setupCashierWithPin(bridge);
+    await user.click(screen.getByTestId('pin-pad-enter'));
+    await waitFor(() => {
+      expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    });
+  });
+
+  it('takeover_required response shows the TakeoverPrompt overlay', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () =>
+        Promise.resolve({
+          kind: 'takeover_required' as const,
+          pending_takeover_id: 'takeover-1',
+          cashier_clerk_user_id: CASHIER.id,
+          display_name: CASHIER.display_name,
+        }),
+    });
+    const user = await setupCashierWithPin(bridge);
+    await user.click(screen.getByTestId('pin-pad-enter'));
+    await waitFor(() => {
+      expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
+    });
+  });
+
+  it('refused response shows the inline cashier error', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    });
+    const user = await setupCashierWithPin(bridge);
+    await user.click(screen.getByTestId('pin-pad-enter'));
+    await waitFor(() => expect(screen.getByTestId('cashier-sign-in-error')).toBeInTheDocument());
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+  });
+
+  it('IPC exception shows the inline cashier error (catch branch)', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+      signIn: () => Promise.reject(new Error('ipc crash')),
+    });
+    const user = await setupCashierWithPin(bridge);
+    await user.click(screen.getByTestId('pin-pad-enter'));
+    await waitFor(() => expect(screen.getByTestId('cashier-sign-in-error')).toBeInTheDocument());
+  });
+});
+
+describe('SignInRoute — FSM reset clears PIN (signedOut effect)', () => {
+  it('FSM transition back to signedOut resets the spinner', async () => {
+    // Directly manipulate the store to exercise the useEffect on fsm.kind.
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+    });
+    const user = userEvent.setup();
+    renderSignInRoute(bridge);
+    await waitFor(() =>
+      expect(screen.getByTestId(`roster-item-${CASHIER.id}`)).toBeInTheDocument(),
+    );
+    await user.click(screen.getByTestId(`roster-item-${CASHIER.id}`));
+    // Trigger a signingIn → signedOut transition via the store.
+    useOperatorSessionStore.getState().beginSignIn();
+    await waitFor(() => expect(screen.getByTestId('cashier-sign-in-spinner')).toBeInTheDocument());
+    useOperatorSessionStore.getState().refuseSignIn('invalid_input');
+    await waitFor(() =>
+      expect(screen.queryByTestId('cashier-sign-in-spinner')).not.toBeInTheDocument(),
+    );
   });
 });

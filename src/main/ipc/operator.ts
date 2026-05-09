@@ -5,6 +5,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
+  CashierSignInRequest,
   ConfirmTakeoverRequest,
   ConfirmTakeoverResponse,
   EmitAuditEventRequest,
@@ -16,7 +17,7 @@ import type {
   SignOutResponse,
 } from '../../shared/bridge-api.js';
 import { OPERATOR_IPC_CHANNELS } from '../../shared/operator/channels.js';
-import type { SignInHandler } from '../operator/sign-in-handler.js';
+import type { CashierSignInHandler, SignInHandler } from '../operator/sign-in-handler.js';
 import type { SignOutHandler } from '../operator/sign-out-handler.js';
 import type { RosterHandler } from '../operator/roster-handler.js';
 import type { SessionManager } from '../operator/session-manager.js';
@@ -28,7 +29,6 @@ import {
   type ActionCategory,
 } from '../../shared/audit/event-shape.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
-import { requireRole } from '../operator/role-enforcement.js';
 import type { TakeoverHandler } from '../operator/takeover-handler.js';
 
 /**
@@ -41,6 +41,8 @@ import type { TakeoverHandler } from '../operator/takeover-handler.js';
 
 export interface OperatorHandlerDeps {
   signInHandler: SignInHandler;
+  /** S4 / T075 — cashier PIN sign-in handler. */
+  cashierSignInHandler: CashierSignInHandler;
   signOutHandler: SignOutHandler;
   /** T070b — branch roster handler. */
   rosterHandler: RosterHandler;
@@ -67,6 +69,26 @@ function asManagerAdminRequest(value: unknown): ManagerAdminSignInRequest | null
     kind: 'manager_admin',
     identifier: v['identifier'],
     password: v['password'],
+  };
+}
+
+function asCashierRequest(value: unknown): CashierSignInRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (v['kind'] !== 'cashier') return null;
+  if (
+    typeof v['cashier_clerk_user_id'] !== 'string' ||
+    v['cashier_clerk_user_id'].length === 0 ||
+    typeof v['pin'] !== 'string' ||
+    v['pin'].length === 0 ||
+    typeof v['display_name'] !== 'string'
+  )
+    return null;
+  return {
+    kind: 'cashier',
+    cashier_clerk_user_id: v['cashier_clerk_user_id'],
+    pin: v['pin'],
+    display_name: v['display_name'],
   };
 }
 
@@ -109,6 +131,7 @@ function asCancelTakeoverRequest(value: unknown): CancelTakeoverRequest | null {
 export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
   const {
     signInHandler,
+    cashierSignInHandler,
     signOutHandler,
     rosterHandler,
     sessionManager,
@@ -121,12 +144,16 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.SIGN_IN,
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<SignInResponse> => {
-      const req = asManagerAdminRequest(request);
-      if (req === null) {
-        return refuseInvalid();
-      }
       try {
-        return await signInHandler.signIn(req);
+        const cashierReq = asCashierRequest(request);
+        if (cashierReq !== null) {
+          return await cashierSignInHandler.signIn(cashierReq);
+        }
+        const managerAdminReq = asManagerAdminRequest(request);
+        if (managerAdminReq !== null) {
+          return await signInHandler.signIn(managerAdminReq);
+        }
+        return refuseInvalid();
       } catch (err) {
         // Generic refusal on any unexpected throw. The error MUST NOT
         // surface its message via the bridge (Constitution VII). We
@@ -201,20 +228,14 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
     async (): Promise<ListBranchRosterResponse> => {
-      const session = sessionManager.getCurrent();
-      if (session === null) {
-        return { kind: 'refused', category: 'not_signed_in' };
-      }
-      // AD-1: requireRole is the primary role-enforcement gate (T015).
-      try {
-        requireRole(['manager', 'admin'], session);
-      } catch (err) {
-        if (err instanceof OperatorRefusalError) {
-          return { kind: 'refused', category: err.category };
-        }
+      // Pre-sign-in roster: sourced from pairing state, not an operator session.
+      // The /sign-in route fetches the roster before any operator has signed in;
+      // the paired terminal_id provides the branch scope.
+      const pairingStatus = await pairingStore.getStatus();
+      if (pairingStatus.kind !== 'paired') {
         return refuseInvalid();
       }
-      return rosterHandler.listRoster(session.branch_id);
+      return rosterHandler.listRoster(pairingStatus.branch_id);
     },
   );
 
