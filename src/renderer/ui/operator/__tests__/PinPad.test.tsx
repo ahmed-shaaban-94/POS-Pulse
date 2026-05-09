@@ -248,3 +248,32 @@ describe('PinPad — hardware numpad (keydown)', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
+
+describe('PinPad — backspace onKeyDown handler', () => {
+  it('pressing Enter on the backspace button triggers handleBackspace', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const onChange = vi.fn();
+    renderPinPad('1234', onChange);
+    const backspaceBtn = screen.getByTestId('pin-pad-backspace');
+    fireEvent.keyDown(backspaceBtn, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('123');
+  });
+
+  it('pressing Space on the backspace button triggers handleBackspace', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const onChange = vi.fn();
+    renderPinPad('1234', onChange);
+    const backspaceBtn = screen.getByTestId('pin-pad-backspace');
+    fireEvent.keyDown(backspaceBtn, { key: ' ' });
+    expect(onChange).toHaveBeenCalledWith('123');
+  });
+
+  it('pressing other keys on the backspace button is a no-op', async () => {
+    const { fireEvent } = await import('@testing-library/react');
+    const onChange = vi.fn();
+    renderPinPad('1234', onChange);
+    const backspaceBtn = screen.getByTestId('pin-pad-backspace');
+    fireEvent.keyDown(backspaceBtn, { key: 'a' });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
