@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev:vite": "vite --host 127.0.0.1 --port 5173 --strictPort",
+    "dev:vite": "vite --port 5173 --strictPort",
     "dev:electron": "node scripts/dev-electron.cjs",
     "dev": "concurrently --names \"vite,electron\" -c \"cyan,yellow\" \"npm run dev:vite\" \"npm run dev:electron\"",
     "build:renderer": "vite build",
