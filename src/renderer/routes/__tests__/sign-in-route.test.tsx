@@ -203,7 +203,11 @@ describe('SignInRoute — roster fetch', () => {
     });
     renderSignInRoute(bridge);
     // Roster fetch resolves; no error shown (role_mismatch is silently ignored).
-    await waitFor(() => expect(bridge.listBranchRoster).toHaveBeenCalled());
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const rosterMock = vi.mocked(bridge.listBranchRoster);
+    await waitFor(() => {
+      expect(rosterMock).toHaveBeenCalled();
+    });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -212,7 +216,11 @@ describe('SignInRoute — roster fetch', () => {
       listBranchRoster: () => Promise.reject(new Error('network failure')),
     });
     renderSignInRoute(bridge);
-    await waitFor(() => expect(bridge.listBranchRoster).toHaveBeenCalled());
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const rosterMock = vi.mocked(bridge.listBranchRoster);
+    await waitFor(() => {
+      expect(rosterMock).toHaveBeenCalled();
+    });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
@@ -272,9 +280,9 @@ describe('SignInRoute — cashier sign-in responses', () => {
     });
     const user = await setupCashierWithPin(bridge);
     await user.click(screen.getByTestId('pin-pad-enter'));
-    await waitFor(() =>
-      expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn'),
-    );
+    await waitFor(() => {
+      expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    });
   });
 
   it('takeover_required response shows the TakeoverPrompt overlay', async () => {
@@ -291,9 +299,9 @@ describe('SignInRoute — cashier sign-in responses', () => {
     });
     const user = await setupCashierWithPin(bridge);
     await user.click(screen.getByTestId('pin-pad-enter'));
-    await waitFor(() =>
-      expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt'),
-    );
+    await waitFor(() => {
+      expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
+    });
   });
 
   it('refused response shows the inline cashier error', async () => {
