@@ -296,7 +296,7 @@ handlers. Two follow-up issues were intentionally left open:
 | Issue | Title | Why open |
 |:--:|:--|:--|
 | #85 | 004 S4 — takeover confirm handler | Cashier-path Endpoint 4 / AD-2 constraint: cashier sessions are local-only and carry no Clerk JWT; `BackendClient.confirmTakeover` cannot be called for the cashier path without violating AD-2. The cashier confirm path remains documented as a gap in `src/main/operator/takeover-handler.ts` (class-level JSDoc). |
-| #101 | T069c: terminal-A passive polling gap | Terminal A discovers the takeover only at its next `getCurrentSession` poll; there is no active push from terminal B's confirm handler. Each Electron process has independent in-memory `SessionManager` state. The gap is architectural and was deferred at spec time. |
+| #101 | T069c: terminal-A passive polling gap | Terminal A does **not** currently discover a remote takeover through `GET_CURRENT_SESSION` — that handler returns local `SessionManager` state only and never probes the backend. Terminal A learns its session was superseded only after a backend-authenticated call fails with an auth error, on app restart, or after #101 implements a backend probe, push, or invalidation mechanism. There is no active push from terminal B's confirm handler. Each Electron process has independent in-memory `SessionManager` state. The gap is architectural and was deferred at spec time. |
 
 ### Decision: how #101 affects issue #86
 
@@ -341,7 +341,7 @@ distinct parts of the takeover UX:
 | Option | Description | Gate |
 |:--|:--|:--|
 | A — passive polling accepted | Document that the 30-second SLA is backend-side (Endpoint 4 terminates terminal-A's backend session), not a POS-Pulse push guarantee. Waive T056's "within 30 s" assertion for the POS-Pulse integration test layer. | Owner decision only. |
-| B — periodic poll enhancement | Terminal A polls `operator.getCurrentSession` on a shorter cycle (e.g. every 5 s) while a session is active; the backend 401 / empty response triggers local sign-out. | Small renderer/main change; no new IPC channel. |
+| B — backend-probe poll | Add a periodic backend-authenticated call from terminal A's main process (e.g. every 5 s); a 401 / session-not-found response triggers local `sessionManager.end()`. Note: `operator.getCurrentSession` (the existing IPC channel) is local-only and would NOT detect the invalidation — a new or modified call that actually reaches the backend is required. | Small main-process change; no new IPC channel needed if an existing backend-authenticated path can be reused. |
 | C — server-sent events / WebSocket push | Backend pushes a session-invalidation signal; terminal A's main process listens and calls `sessionManager.end()`. | New backend endpoint + new POS-Pulse listener; larger scope. |
 
 The choice among A/B/C is deferred to the issue #101 resolution PR.
