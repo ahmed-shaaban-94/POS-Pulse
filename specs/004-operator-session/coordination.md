@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-08 (all S4 gates cleared — §A2 Wave 3 via Data-Pulse-2 PR #70; §A3 fully cleared via POS-Pulse PR #60; §A4 cleared via POS-Pulse PR #59; S4 implementation may begin)
+**Last updated:** 2026-05-09 (PR #100 merged — T070 + T071 manager/admin takeover confirm/cancel; #85 and #101 reopened; #101-vs-#86 decision recorded — see §"Takeover follow-up classification before UI")
 
 ---
 
@@ -25,15 +25,19 @@ invoked", and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **S4 ready — all gates cleared (2026-05-08).** Slice 0 ✅
-  (approved-with-revisions 2026-05-05). §A1 ✅ (PR #39, SHA `7ae337b`,
-  Constitution v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅
-  (roster + takeover/confirm + active-session, Data-Pulse-2 PR #70,
-  2026-05-08). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
+- **Phase:** **S4 in progress.** Slice 0 ✅ (approved-with-revisions
+  2026-05-05). §A1 ✅ (PR #39, SHA `7ae337b`, Constitution v1.5.1,
+  2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (roster +
+  takeover/confirm + active-session, Data-Pulse-2 PR #70, 2026-05-08).
+  §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
   operator_sessions + cashier_pin_records PR #60, 2026-05-08). §A4 ✅
   (argon2 0.44.0, POS-Pulse PR #59, 2026-05-08). S1 ✅ (PR #46). S2 ✅
-  (PR #47). S3 ✅ (PRs #49–#56, HEAD `ba32133`). **S4 implementation may
-  begin.**
+  (PR #47). S3 ✅ (PRs #49–#56, HEAD `ba32133`). **S4 implementation
+  in progress.** T070 + T071 (manager/admin takeover confirm/cancel) ✅
+  (PR #100, merge SHA `deb689a`, 2026-05-09). Open S4 follow-ups: #85
+  (cashier-path Endpoint 4 / AD-2 constraint), #86 (PinPad +
+  TakeoverPrompt UI), #87 (S4 closeout). #101 (terminal-A passive
+  polling gap) open as a post-S4 or S5 follow-up.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -43,9 +47,10 @@ invoked", and it is updated in place as coordination items resolve.
   resolved on 2026-05-05.
 - **`/speckit-tasks`:** ✅ **Invoked and complete.** `tasks.md` generated
   2026-05-05; addendum applied same day.
-- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — all gates
-  cleared; implementation may begin.** S5–S6 ⏳ blocked on S4 + §A2 Wave 4
-  and successive gates.
+- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — in
+  progress.** T070 + T071 ✅ (PR #100). Remaining S4 work: #85, #86,
+  #87 (and T072/T073/T074/T075/T076/T077/T078/T079/T080/T081/T082).
+  S5–S6 ⏳ blocked on S4 complete + §A2 Wave 4.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 This file tracks coordination state only.
@@ -268,17 +273,80 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- S4 (cashier PIN sign-in) — **implementation begun (2026-05-08).** All gates cleared (§A2 Wave 3 ✅, §A3 ✅, §A4 ✅). Backend-client Wave 3 extension merged (roster, takeover/confirm, active-session types and methods). Remaining S4 tasks (T052–T082) in progress.
-- ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 + §A2 Wave 4.
+- S4 — **in progress.** Merged: T052–T055, T063–T071 (PRs #59, #60, #61, #63, #64, #90, #91, #92, #93, #94, #100). Remaining S4 tasks: T072–T082 (cashier-management surface, PIN reset/unlock, PinPad + TakeoverPrompt UI, stuck-shift badge, role-enforcement, redaction log sites).
+- ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 complete + §A2 Wave 4.
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
 - §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
-- ❌ No S4/S5 DB migrations authored.
+- ❌ No S5 DB migrations authored.
 - ❌ No sales / cart / payments / tender / receipts / inventory /
   reports / KPIs / analytics work.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. **All S4 gates cleared 2026-05-08**; S4 implementation begun.
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. S4 in progress (all gates cleared 2026-05-08; T070 + T071 merged 2026-05-09 via PR #100).
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
+
+---
+
+## Takeover follow-up classification before UI (2026-05-09)
+
+**Context.** PR #100 (merge SHA `deb689a`, 2026-05-09) landed
+T070 + T071 — the manager/admin takeover confirm/cancel main-process
+handlers. Two follow-up issues were intentionally left open:
+
+| Issue | Title | Why open |
+|:--:|:--|:--|
+| #85 | 004 S4 — takeover confirm handler | Cashier-path Endpoint 4 / AD-2 constraint: cashier sessions are local-only and carry no Clerk JWT; `BackendClient.confirmTakeover` cannot be called for the cashier path without violating AD-2. The cashier confirm path remains documented as a gap in `src/main/operator/takeover-handler.ts` (class-level JSDoc). |
+| #101 | T069c: terminal-A passive polling gap | Terminal A does **not** currently discover a remote takeover through `GET_CURRENT_SESSION` — that handler returns local `SessionManager` state only and never probes the backend. Terminal A learns its session was superseded only after a backend-authenticated call fails with an auth error, on app restart, or after #101 implements a backend probe, push, or invalidation mechanism. There is no active push from terminal B's confirm handler. Each Electron process has independent in-memory `SessionManager` state. The gap is architectural and was deferred at spec time. |
+
+### Decision: how #101 affects issue #86
+
+Issue #86 (PinPad + TakeoverPrompt UI activation) covers two logically
+distinct parts of the takeover UX:
+
+1. **Terminal-B prompt UI** — rendering the `TakeoverPrompt` modal on
+   terminal B after `signIn` returns `{ kind: 'takeover_required' }`,
+   wiring `confirmTakeover` / `cancelTakeover`, and the cashier `PinPad`
+   component.
+
+2. **Terminal-A auto-return** — the acceptance criterion that "terminal A
+   returns to `/sign-in` within 30 seconds" (T056 integration test
+   happy-path assertion, `roadmap-ops-status.md` §7b).
+
+**Ruling:**
+
+- **#86 MAY proceed** with visual direction and terminal-B TakeoverPrompt
+  UI activation. The blocking precondition is #85 merge (main-process
+  surface), not #101.
+
+- **#86 MUST NOT claim** the full takeover happy-path acceptance criterion
+  that includes terminal-A returning to `/sign-in` within 30 seconds.
+  The T056 integration test row that asserts "terminal A returns to
+  sign-in within 30 s" (from `planning/takeover-confirm-plan.md` §8.1
+  test #6 / `planning/ui-pinpad-takeover-visual-direction.md` §7 /
+  `tasks.md` T056) **remains blocked by #101**.
+
+- **Screenshot acceptance criteria for #86** must explicitly exclude any
+  assertion about terminal-A session state. The `<TakeoverPrompt>` UI
+  acceptance is terminal-B-only: modal mounts, "Continue here" calls
+  `confirmTakeover`, bridge returns `{ kind: 'signed_in' }`, modal
+  closes, and the renderer transitions to the signed-in dashboard.
+  Terminal-A state is NOT observable from terminal B's renderer tests.
+
+- **Full S4 takeover flow cannot be marked complete** (in #87 closeout or
+  in any coordination status update) until #101 is resolved or explicitly
+  waived by the project owner via a recorded decision in this file.
+
+### Resolution options for #101 (for reference, not decided here)
+
+| Option | Description | Gate |
+|:--|:--|:--|
+| A — passive polling accepted | Document that the 30-second SLA is backend-side (Endpoint 4 terminates terminal-A's backend session), not a POS-Pulse push guarantee. Waive T056's "within 30 s" assertion for the POS-Pulse integration test layer. | Owner decision only. |
+| B — backend-probe poll | Add a periodic backend-authenticated call from terminal A's main process (e.g. every 5 s); a 401 / session-not-found response triggers local `sessionManager.end()`. Note: `operator.getCurrentSession` (the existing IPC channel) is local-only and would NOT detect the invalidation — a new or modified call that actually reaches the backend is required. | Small main-process change; no new IPC channel needed if an existing backend-authenticated path can be reused. |
+| C — server-sent events / WebSocket push | Backend pushes a session-invalidation signal; terminal A's main process listens and calls `sessionManager.end()`. | New backend endpoint + new POS-Pulse listener; larger scope. |
+
+The choice among A/B/C is deferred to the issue #101 resolution PR.
+No #86 PR may assert terminal-A behaviour until the choice is made
+and the implementation (if any) lands.
 
 ---
 
@@ -309,7 +377,8 @@ agents and humans should read this file (and `plan.md`) first to know
 v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
 PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
 operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
-POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 implementation
-may begin.** S3 complete (2026-05-07), all Phase 5 tasks (T039–T051d) merged
-via POS-Pulse PRs #49–#56, HEAD `ba32133`. §A5 is a later-rollout gate.
-S5–S6 not yet started.
+POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 in progress.**
+T070 + T071 ✅ (PR #100, SHA `deb689a`, 2026-05-09). #85 and #101 open
+(see §"Takeover follow-up classification before UI"). #86 may proceed
+(terminal-B UI only; terminal-A SLA blocked by #101). S3 complete
+(2026-05-07). §A5 is a later-rollout gate. S5–S6 not yet started.
