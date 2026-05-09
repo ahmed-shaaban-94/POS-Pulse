@@ -9,11 +9,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev:vite": "vite",
+    "dev:vite": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "dev:electron": "node scripts/dev-electron.cjs",
     "dev": "concurrently --names \"vite,electron\" -c \"cyan,yellow\" \"npm run dev:vite\" \"npm run dev:electron\"",
     "build:renderer": "vite build",
-    "build:main": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json",
+    "build:main": "tsc -p tsconfig.preload.json && tsc -p tsconfig.main.json",
     "build": "npm run build:renderer && npm run build:main",
     "codegen:api": "tsx scripts/codegen-api.ts",
     "codegen:verify": "tsx scripts/verify-codegen.ts",
