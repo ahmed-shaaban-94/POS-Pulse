@@ -7,6 +7,7 @@ import * as spacing from '../spacing';
 import * as typography from '../typography';
 import * as radius from '../radius';
 import * as shadow from '../shadow';
+import * as motion from '../motion';
 import { density } from '../density';
 import { touchTarget } from '../touch';
 import { connectionState } from '../connection-state';
@@ -174,6 +175,68 @@ describe('design token parity (T008)', () => {
           key,
         );
       }
+    });
+  });
+
+  describe('S1 additive token parity (T016)', () => {
+    it('--color-surface-sunken CSS var exists', () => {
+      expect(cssVars).toContain('--color-surface-sunken');
+    });
+
+    it('colors.surfaceSunken TS export exists and references the correct CSS var', () => {
+      expect(colors.surfaceSunken).toBe('var(--color-surface-sunken)');
+    });
+
+    it('--shadow-inset CSS var exists', () => {
+      expect(cssVars).toContain('--shadow-inset');
+    });
+
+    it('shadow.shadow.inset TS export exists and references the correct CSS var', () => {
+      expect(shadow.shadow.inset).toBe('var(--shadow-inset)');
+    });
+
+    it('--space-9 CSS var exists', () => {
+      expect(cssVars).toContain('--space-9');
+    });
+
+    it('spacing.spacing[9] TS export exists and references the correct CSS var', () => {
+      expect(spacing.spacing[9]).toBe('var(--space-9)');
+    });
+
+    it('--duration-1 CSS var exists', () => {
+      expect(cssVars).toContain('--duration-1');
+    });
+
+    it('--duration-2 CSS var exists', () => {
+      expect(cssVars).toContain('--duration-2');
+    });
+
+    it('--duration-3 CSS var exists', () => {
+      expect(cssVars).toContain('--duration-3');
+    });
+
+    it('--duration-4 CSS var exists', () => {
+      expect(cssVars).toContain('--duration-4');
+    });
+
+    it('--ease-out CSS var exists', () => {
+      expect(cssVars).toContain('--ease-out');
+    });
+
+    it('--ease-in-out CSS var exists', () => {
+      expect(cssVars).toContain('--ease-in-out');
+    });
+
+    it('motion.duration has keys 1, 2, 3, 4 each referencing the correct CSS var', () => {
+      expect(motion.duration[1]).toBe('var(--duration-1)');
+      expect(motion.duration[2]).toBe('var(--duration-2)');
+      expect(motion.duration[3]).toBe('var(--duration-3)');
+      expect(motion.duration[4]).toBe('var(--duration-4)');
+    });
+
+    it('motion.easing has keys out and inOut each referencing the correct CSS var', () => {
+      expect(motion.easing.out).toBe('var(--ease-out)');
+      expect(motion.easing.inOut).toBe('var(--ease-in-out)');
     });
   });
 });

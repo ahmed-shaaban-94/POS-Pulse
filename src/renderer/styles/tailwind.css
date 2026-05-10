@@ -114,6 +114,22 @@
   --shadow-card: 0 1px 2px rgba(15, 29, 46, 0.04), 0 8px 24px rgba(15, 29, 46, 0.06);
   --shadow-pane: 0 18px 60px rgba(15, 29, 46, 0.1);
   --shadow-overlay: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+  /* S1 additive */
+  --shadow-inset: inset 0 1px 0 rgba(15, 29, 46, 0.04), inset 0 0 0 1px rgba(15, 29, 46, 0.04);
+
+  /* ── S1 additive — sunken surface colour ────────────────────────────── */
+  --color-surface-sunken: #eef2f6;
+
+  /* ── S1 additive — spacing step 9 ──────────────────────────────────── */
+  --space-9: 96px;
+
+  /* ── S1 additive — motion tokens ───────────────────────────────────── */
+  --duration-1: 80ms;
+  --duration-2: 150ms;
+  --duration-3: 220ms;
+  --duration-4: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.25, 1);
+  --ease-in-out: cubic-bezier(0.45, 0.05, 0.25, 1);
 }
 
 @theme {

@@ -6,4 +6,5 @@ export const shadow = {
   card: 'var(--shadow-card)',
   pane: 'var(--shadow-pane)',
   overlay: 'var(--shadow-overlay)',
+  inset: 'var(--shadow-inset)',
 } as const;

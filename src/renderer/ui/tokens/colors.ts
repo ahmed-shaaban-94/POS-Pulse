@@ -3,6 +3,7 @@ export const background = 'var(--color-background)';
 export const surface = 'var(--color-surface)';
 export const surfaceMuted = 'var(--color-surface-muted)';
 export const surfaceElevated = 'var(--color-surface-elevated)';
+export const surfaceSunken = 'var(--color-surface-sunken)';
 
 /* Ink */
 export const text = 'var(--color-text)';
