@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-09 (PR #100 merged — T070 + T071 manager/admin takeover confirm/cancel; #85 and #101 reopened; #101-vs-#86 decision recorded — see §"Takeover follow-up classification before UI")
+**Last updated:** 2026-05-10 (PR #103 merged — T074–T077 PinPad + TakeoverPrompt UI activation; PR #105 merged — dev bootstrap stabilisation CSP + preload Vite bundle; #86 open per owner discretion; #85 open cashier-path AD-2; #101 open terminal-A session-invalidation gap; #87 open S4 closeout)
 
 ---
 
@@ -33,11 +33,16 @@ invoked", and it is updated in place as coordination items resolve.
   operator_sessions + cashier_pin_records PR #60, 2026-05-08). §A4 ✅
   (argon2 0.44.0, POS-Pulse PR #59, 2026-05-08). S1 ✅ (PR #46). S2 ✅
   (PR #47). S3 ✅ (PRs #49–#56, HEAD `ba32133`). **S4 implementation
-  in progress.** T070 + T071 (manager/admin takeover confirm/cancel) ✅
-  (PR #100, merge SHA `deb689a`, 2026-05-09). Open S4 follow-ups: #85
-  (cashier-path Endpoint 4 / AD-2 constraint), #86 (PinPad +
-  TakeoverPrompt UI), #87 (S4 closeout). #101 (terminal-A passive
-  polling gap) open as a post-S4 or S5 follow-up.
+  in progress.** T052–T077 ✅: T074–T077 (PinPad + TakeoverPrompt UI)
+  merged PR #103 (SHA `e9904e6`, 2026-05-09); T070 + T071
+  (manager/admin takeover confirm/cancel) merged PR #100 (SHA
+  `deb689a`, 2026-05-09). Dev bootstrap stabilised by PR #105 (CSP +
+  preload Vite bundle, 2026-05-09). Open S4 follow-ups: #85
+  (cashier-path Endpoint 4 / AD-2 constraint), #86 (open per owner
+  discretion — #103 implemented T074–T077; closure at owner's choice),
+  #87 (S4 closeout — this PR). #101 (terminal-A session-invalidation
+  gap) open as a post-S4 or S5 follow-up. Remaining S4 tasks: T072,
+  T073, T078–T082.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -48,9 +53,12 @@ invoked", and it is updated in place as coordination items resolve.
 - **`/speckit-tasks`:** ✅ **Invoked and complete.** `tasks.md` generated
   2026-05-05; addendum applied same day.
 - **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — in
-  progress.** T070 + T071 ✅ (PR #100). Remaining S4 work: #85, #86,
-  #87 (and T072/T073/T074/T075/T076/T077/T078/T079/T080/T081/T082).
-  S5–S6 ⏳ blocked on S4 complete + §A2 Wave 4.
+  progress.** T052–T077 ✅ (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
+  #94/#99/#100/#103). Remaining S4 tasks: T072, T073, T078–T082
+  (cashier-management, PIN reset/unlock, stuck-shift badge,
+  route-guard, redaction log sites). #85 open (cashier-path AD-2),
+  #86 open (owner discretion), #101 open (terminal-A gap). #87 open
+  (S4 closeout). S5–S6 ⏳ blocked on S4 complete + §A2 Wave 4.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 This file tracks coordination state only.
@@ -273,7 +281,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- S4 — **in progress.** Merged: T052–T055, T063–T071 (PRs #59, #60, #61, #63, #64, #90, #91, #92, #93, #94, #100). Remaining S4 tasks: T072–T082 (cashier-management surface, PIN reset/unlock, PinPad + TakeoverPrompt UI, stuck-shift badge, role-enforcement, redaction log sites).
+- S4 — **in progress.** Merged: T052–T077 (PRs #59, #60, #61, #63, #64, #90, #91, #92, #93, #94, #99, #100, #103). PR #105 (dev bootstrap stabilisation) merged separately. Remaining S4 tasks: T072, T073, T078–T082 (cashier-management surface, PIN reset/unlock, stuck-shift badge, route-guard, redaction log sites).
 - ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 complete + §A2 Wave 4.
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
 - §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
@@ -281,7 +289,7 @@ This file tracks coordination state. The following work has **not yet started**:
 - ❌ No sales / cart / payments / tender / receipts / inventory /
   reports / KPIs / analytics work.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. S4 in progress (all gates cleared 2026-05-08; T070 + T071 merged 2026-05-09 via PR #100).
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. S4 in progress (all gates cleared 2026-05-08; T052–T077 merged via PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103; dev bootstrap stabilised PR #105; 2026-05-09).
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 
@@ -377,8 +385,12 @@ agents and humans should read this file (and `plan.md`) first to know
 v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
 PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
 operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
-POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 in progress.**
-T070 + T071 ✅ (PR #100, SHA `deb689a`, 2026-05-09). #85 and #101 open
-(see §"Takeover follow-up classification before UI"). #86 may proceed
-(terminal-B UI only; terminal-A SLA blocked by #101). S3 complete
+POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 in progress
+(2026-05-10).** T052–T077 ✅ (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
+#94/#99/#100/#103). PR #103 merged T074–T077 PinPad + TakeoverPrompt UI
+(2026-05-09). PR #105 stabilised dev bootstrap (CSP + preload Vite bundle,
+2026-05-09). #85 open (cashier-path AD-2 gap — see §"Takeover follow-up
+classification before UI"). #86 open per owner discretion (#103 implemented
+T074–T077). #101 open (terminal-A session-invalidation gap). #87 open
+(S4 closeout). Remaining S4 tasks: T072, T073, T078–T082. S3 complete
 (2026-05-07). §A5 is a later-rollout gate. S5–S6 not yet started.
