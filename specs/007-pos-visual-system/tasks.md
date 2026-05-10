@@ -992,7 +992,7 @@ FR-015 catalogue.
   `codegen:verify` confirms no incidental `src/shared/api-types.ts`
   drift (S5 is renderer-only — IPC and bridge surfaces are unchanged).
 
-- [ ] T082 [S5] **Capture S5 contact sheet** — Cashier roster (default
+- [X] T082 [S5] **Capture S5 contact sheet** — Cashier roster (default
   + roster-picked + empty), Manager / admin sign-in (default +
   entering + submitting + variant A / B / C refusal), PIN entry
   (default + pin-entering + error + submitting), TakeoverPrompt
