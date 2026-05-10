@@ -167,9 +167,7 @@ describe('axe baseline smoke — S2 primitives (T042)', () => {
   });
 
   it('Toast danger: no axe violations', async () => {
-    const { container } = render(
-      <Toast intent="danger" title="Offline" durationMs={0} />,
-    );
+    const { container } = render(<Toast intent="danger" title="Offline" durationMs={0} />);
     await expectNoAxeViolations(container);
   });
 

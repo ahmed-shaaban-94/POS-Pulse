@@ -12,12 +12,7 @@ export function StatusBanner({ state, message }: StatusBannerProps): JSX.Element
   }
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="status-banner"
-      data-state={state}
-    >
+    <div role="status" aria-live="polite" className="status-banner" data-state={state}>
       {message}
     </div>
   );

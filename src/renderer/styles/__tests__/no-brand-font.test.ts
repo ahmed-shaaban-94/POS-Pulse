@@ -26,18 +26,14 @@ const styleContents = collectCssFiles(STYLES_DIR);
 
 describe('no-proprietary-brand-font guard (T018)', () => {
   it('no @font-face under src/renderer/styles references Inter Tight', () => {
-    const fontFaceBlocks = [...styleContents.matchAll(/@font-face\s*\{[^}]*\}/gs)].map((m) =>
-      m[0],
-    );
+    const fontFaceBlocks = [...styleContents.matchAll(/@font-face\s*\{[^}]*\}/gs)].map((m) => m[0]);
     for (const block of fontFaceBlocks) {
       expect(block).not.toMatch(/Inter Tight/i);
     }
   });
 
   it('JetBrains Mono is not a primary font face (must only appear in --font-family-mono fallback chain)', () => {
-    const fontFaceBlocks = [...styleContents.matchAll(/@font-face\s*\{[^}]*\}/gs)].map((m) =>
-      m[0],
-    );
+    const fontFaceBlocks = [...styleContents.matchAll(/@font-face\s*\{[^}]*\}/gs)].map((m) => m[0]);
     for (const block of fontFaceBlocks) {
       expect(block).not.toMatch(/JetBrains Mono/i);
     }

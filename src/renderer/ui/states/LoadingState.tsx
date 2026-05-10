@@ -10,13 +10,13 @@ interface LoadingStateProps {
 function SkeletonRows(): JSX.Element {
   const widths = ['75%', '60%', '80%', '50%', '70%'];
   return (
-    <div data-variant="skeleton" aria-hidden="true" className="loading-state loading-state--skeleton">
+    <div
+      data-variant="skeleton"
+      aria-hidden="true"
+      className="loading-state loading-state--skeleton"
+    >
       {widths.map((w, i) => (
-        <div
-          key={i}
-          className="loading-state__skeleton-row"
-          style={{ width: w }}
-        />
+        <div key={i} className="loading-state__skeleton-row" style={{ width: w }} />
       ))}
     </div>
   );

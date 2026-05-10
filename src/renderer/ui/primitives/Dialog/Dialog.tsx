@@ -71,7 +71,11 @@ export function Dialog({
         <div className="dialog-panel__body">{children}</div>
         <div className="dialog-panel__actions">
           {secondaryAction && (
-            <button type="button" className="btn btn--ghost btn--md" onClick={secondaryAction.onClick}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--md"
+              onClick={secondaryAction.onClick}
+            >
               {secondaryAction.label}
             </button>
           )}
