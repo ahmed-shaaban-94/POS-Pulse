@@ -645,6 +645,148 @@ body {
     background-color: var(--color-background);
   }
 
+  /* ── Top Bar Sub-regions (T049 S3) ──────────────────────────────────── */
+
+  .top-bar__left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .top-bar__right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .top-bar__wordmark {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    white-space: nowrap;
+    flex-shrink: 0;
+    letter-spacing: -0.01em;
+  }
+
+  /* Terminal chip: sunken surface + mono font, never device token */
+  .top-bar__terminal-chip {
+    display: inline-flex;
+    align-items: center;
+    padding-inline: var(--space-2);
+    block-size: 24px;
+    border-radius: var(--radius-control);
+    background-color: var(--color-surface-sunken);
+    font-family: var(--font-family-mono);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--color-border);
+  }
+
+  /* ── Identity Strip Sub-elements (T051 S3) ───────────────────────────── */
+
+  .identity-strip__tenant {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 2;
+    min-inline-size: 0;
+  }
+
+  .identity-strip__branch {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-inline-size: 0;
+  }
+
+  .identity-strip__terminal {
+    font-family: var(--font-family-mono);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+    background-color: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    padding-inline: var(--space-2);
+    block-size: 24px;
+    display: inline-flex;
+    align-items: center;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .identity-strip__sep {
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  /* ── CenterStage layout primitive (T054 S3) ──────────────────────────── */
+
+  .center-stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: 100vh;
+    inline-size: 100%;
+    background-color: var(--color-background);
+    overflow: auto;
+  }
+
+  /* ── Workspace layout primitive (T055 S3) ────────────────────────────── */
+
+  .workspace {
+    display: flex;
+    flex-direction: column;
+    max-inline-size: 1280px;
+    inline-size: 100%;
+    padding-inline: var(--space-7);
+    padding-block: var(--space-6);
+    gap: var(--space-4);
+    overflow-y: auto;
+    block-size: 100%;
+  }
+
+  .workspace__header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .workspace__title {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+  }
+
+  .workspace__banner {
+    flex-shrink: 0;
+  }
+
+  .workspace__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: var(--space-4);
+    min-block-size: 0;
+  }
+
   /* ── Placeholder Panes ───────────────────────────────────────────────── */
 
   .placeholder-pane {

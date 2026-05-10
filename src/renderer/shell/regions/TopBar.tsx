@@ -26,6 +26,18 @@ const BANNER_MESSAGES: Record<Exclude<ConnectionState, 'online'>, string> = {
   syncing: 'Syncing…',
 };
 
+/**
+ * T049 [S3] — TopBar restyle.
+ *
+ * Left cluster: SmartDataPulse wordmark · branch · terminal chip.
+ * Right cluster: ConnectionIndicator + OperatorSlot (sign out button
+ * is part of OperatorSlot when a session is active).
+ * StatusBanner renders below the bar for non-online states.
+ *
+ * The terminal chip uses .top-bar__terminal-chip which maps to
+ * --color-surface-sunken bg + --font-family-mono in CSS.
+ * Device token is never rendered.
+ */
 export function TopBar({
   tenantId,
   branchId,
@@ -33,13 +45,22 @@ export function TopBar({
   connectionState,
 }: TopBarProps): JSX.Element {
   return (
-    <header role="banner" className="top-bar">
-      <IdentityStrip tenantId={tenantId} branchId={branchId} terminalLabel={terminalLabel} />
+    <>
+      <header role="banner" className="top-bar">
+        <div className="top-bar__left">
+          <span className="top-bar__wordmark" aria-label="SmartDataPulse">
+            SmartDataPulse
+          </span>
+          <IdentityStrip tenantId={tenantId} branchId={branchId} terminalLabel={terminalLabel} />
+        </div>
+        <div className="top-bar__right">
+          <ConnectionIndicator state={connectionState} />
+          <OperatorSlot />
+        </div>
+      </header>
       {connectionState !== 'online' && (
         <StatusBanner state={connectionState} message={BANNER_MESSAGES[connectionState]} />
       )}
-      <ConnectionIndicator state={connectionState} />
-      <OperatorSlot />
-    </header>
+    </>
   );
 }

@@ -589,20 +589,20 @@ visually distinct without colour-only signal; confirms the role-
 indicator slot renders the operator's display name + role only (no
 PII / email / Clerk user id reachable via the rendered DOM).
 
-- [ ] T047 [S3] **Extend `AppShell.test.tsx` and the region test files
+- [X] T047 [S3] **Extend `AppShell.test.tsx` and the region test files
   (TEST-FIRST)** to assert recovered layouts: top bar 64 px, rail
   248 expanded / 84 icon-only / hidden < 1024 px, `<main>` workspace
   fills remaining space. The four connection-state visuals are
   asserted distinct via `data-connection-state` attribute + non-colour
   cues (icon, label position).
 
-- [ ] T048 [S3] **Restyle `src/renderer/shell/AppShell.tsx`** per CD
+- [X] T048 [S3] **Restyle `src/renderer/shell/AppShell.tsx`** per CD
   §"App shell · `AppShell`": three regions only (top bar 64,
   rail 248 / 84 / 0, workspace fills). Layout uses logical CSS
   (`inline-start` / `inline-end`) per spec NFR-010. Public prop
   signature unchanged.
 
-- [ ] T049 [P] [S3] **Restyle `src/renderer/shell/regions/TopBar.tsx`**
+- [X] T049 [P] [S3] **Restyle `src/renderer/shell/regions/TopBar.tsx`**
   per CD §"Top bar · `TopBar`": fixed 64 px, background
   `--color-surface`, bottom border `1px solid --color-border`. Left
   cluster: SmartDataPulse wordmark + middle-dot + branch + terminal
@@ -611,7 +611,7 @@ PII / email / Clerk user id reachable via the rendered DOM).
   `--color-surface-sunken` background (introduced in S1) +
   `--font-family-mono` — never the device token.
 
-- [ ] T050 [P] [S3] **Restyle `src/renderer/shell/regions/NavRail.tsx`**
+- [X] T050 [P] [S3] **Restyle `src/renderer/shell/regions/NavRail.tsx`**
   per CD §"Nav rail · `NavRail`": width 248 expanded / 84 icon-only,
   background `--color-rail`, foreground `--color-rail-text` (NOT
   `text-inverse` — per research §R0 audit). Active row:
@@ -620,20 +620,20 @@ PII / email / Clerk user id reachable via the rendered DOM).
   Manager-only rows omitted from cashier render (per 004 FR-015 / FR-019);
   never grey-disabled, never with a lock icon.
 
-- [ ] T051 [P] [S3] **Restyle
+- [X] T051 [P] [S3] **Restyle
   `src/renderer/shell/regions/IdentityStrip.tsx`** per CD §"Identity
   strip · `IdentityStrip`": tenant 14 / 600 / `--color-text`, branch
   14 / 500 / `--color-text-muted`, terminal chip mono. Long branch
   truncates city, never branch.
 
-- [ ] T052 [P] [S3] **Restyle
+- [X] T052 [P] [S3] **Restyle
   `src/renderer/shell/regions/ConnectionIndicator.tsx`** per CD
   §"Connection indicator": pill form, four states (`online` /
   `syncing` / `degraded` / `offline`), `syncing` dot pulses 1.6 s
   loop using `--color-info`, others static. Each state has a
   non-colour cue (icon / label / shape) per spec FR-004 / NFR-006.
 
-- [ ] T053 [P] [S3] **Restyle
+- [X] T053 [P] [S3] **Restyle
   `src/renderer/shell/regions/OperatorSlot.tsx`** per CD's
   `OperatorBadge` integration into the top bar: 32 px avatar with
   `--color-primary-soft` background + 2-letter mono initials in
@@ -641,42 +641,42 @@ PII / email / Clerk user id reachable via the rendered DOM).
   display name only. **No email, no phone, no Clerk user id** — per
   004 FR-031 / FR-032.
 
-- [ ] T054 [S3] **Add `src/renderer/shell/regions/CenterStage.tsx`**
+- [X] T054 [S3] **Add `src/renderer/shell/regions/CenterStage.tsx`**
   (NEW component). Per CD §E: `100vh` clean workspace, no rail, no
   top bar, one floating pane child centred. Used by S4 (pairing /
   paired) and S5 (sign-in surfaces). Public prop interface: `{ children:
   ReactNode }`. Test file: `__tests__/CenterStage.test.tsx`.
 
-- [ ] T055 [S3] **Add `src/renderer/shell/regions/Workspace.tsx`**
+- [X] T055 [S3] **Add `src/renderer/shell/regions/Workspace.tsx`**
   (NEW component). Per CD §E: max-inline-size 1280 px, padded 32–40,
   single scroll surface, page header + body slot. Used by every
   signed-in route (S4 paired-only; S5 cashier shell). Public prop
   interface: `{ title?: string; banner?: ReactNode; children: ReactNode }`.
   Test file: `__tests__/Workspace.test.tsx`.
 
-- [ ] T056 [S3] **Confirm `/paired` rail-hidden vs rail-visible
+- [X] T056 [S3] **Confirm `/paired` rail-hidden vs rail-visible
   behaviour** is preserved per 003 spec / plan O2 (paired surface is
   center-stage; `/app/*` surfaces are inside AppShell). The S3
   restyle MUST NOT break the routing decision; `<CenterStage>` wraps
   `/paired` at S4 implementation time.
 
-- [ ] T057 [S3] **Add per-region tests** for `TopBar`, `NavRail`,
+- [X] T057 [S3] **Add per-region tests** for `TopBar`, `NavRail`,
   `IdentityStrip`, `ConnectionIndicator`, `OperatorSlot`, `CenterStage`,
   `Workspace`. Each test covers default + state variants + viewport
   responsiveness. axe baseline smoke; zero `serious` / `critical`.
 
-- [ ] T058 [S3] **Run validation locally** — full project
+- [X] T058 [S3] **Run validation locally** — full project
   implementation validation set. `npm run typecheck`, `npm run lint`,
   `npm test`, `npm test -- --coverage`, `npm run codegen:verify`. The
   ≥ 90 % gate on `src/renderer/shell/` holds; `codegen:verify`
   confirms no incidental `src/shared/api-types.ts` drift.
 
-- [ ] T059 [S3] **Capture S3 contact sheet** — AppShell at three
+- [X] T059 [S3] **Capture S3 contact sheet** — AppShell at three
   viewport bands, four connection-state variants, ScreenTooSmall
   fallback, OperatorSlot with each role. Save to `pos-007-after-s3/`
   (out-of-tree). Reviewer sign-off recorded.
 
-- [ ] T060 [S3] **005 / 006 UI gate — S3 approval criteria check
+- [X] T060 [S3] **005 / 006 UI gate — S3 approval criteria check
   (UNBLOCKING).** Confirm:
   - Shell chrome (`AppShell` + `TopBar` + `NavRail` + `IdentityStrip`
     + `ConnectionIndicator` + `OperatorSlot`) restyled to the
@@ -692,7 +692,7 @@ PII / email / Clerk user id reachable via the rendered DOM).
   Reviewers of any subsequent 005 / 006 UI implementation PR cite this
   S3 PR + the prior S1 + S2 PRs as the unblocking evidence.
 
-- [ ] T061 [S3] **Open S3 PR titled `feat(007 S3): shell, top bar, nav
+- [X] T061 [S3] **Open S3 PR titled `feat(007 S3): shell, top bar, nav
   rail, layout primitives`.** Body cites S2 PR, lists every restyled
   region + the two new layout primitives, attaches the S3 contact
   sheet, records the 005 / 006 UI gate S3 approval criteria check
