@@ -1049,13 +1049,13 @@ without further amendment. The auditor checklist in
 visual-reference-adjudication.md is sufficient to confirm a future PR
 inherits 007's recovery without copying generated source.
 
-- [ ] T084 [S6] **Amend
+- [X] T084 [S6] **Amend
   `specs/007-pos-visual-system/contracts/screenshot-acceptance.md`**
   with lessons from S0–S5: any tuned pixel-diff thresholds, any
   additional state-matrix entries, any additional forbidden-content
   rules. Document each amendment with the slice PR that motivated it.
 
-- [ ] T085 [S6] **Author
+- [X] T085 [S6] **Author
   `specs/007-pos-visual-system/regression-checklist.md`** (or expand
   the auditor checklist in visual-reference-adjudication.md) with the
   six load-bearing items: (1) token additivity (no rename / repurpose

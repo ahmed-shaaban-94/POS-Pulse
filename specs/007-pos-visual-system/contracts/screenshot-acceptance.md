@@ -227,16 +227,47 @@ description, citing the three 007 slice PRs (S1 PR #, S2 PR #, S3 PR #).
 
 ## Amendment history
 
-This contract is amended by S6's implementing PR after the S0–S5
-slices have run their course. Amendments may include:
+### S6 — 2026-05-10 — Final accepted evidence types and forbidden-content lessons (S0–S5)
 
-- Per-surface pixel-diff threshold tuning (recorded with the
-  measurement evidence that motivated the change).
-- Additional forbidden-content rules learned from review (e.g. a
-  surface that turned out to leak a previously-unanticipated string).
-- Amendments to the per-surface state matrix when a new state is
-  introduced (e.g. a "stuck-shift" state reaching cashier visibility
-  by mistake — recorded as an additional forbidden state).
+**Motivating slice:** S6 docs/007-s6-visual-recovery-final-gate
+
+#### Accepted evidence types per slice
+
+| Slice | Evidence format | Storage location |
+|:------|:----------------|:-----------------|
+| S0 | Visual reference adjudication decision table embedded in PR body | PR 109 body |
+| S1 | Token delta table (tokens added, sample usage) embedded in PR body | PR 113 body |
+| S2 | Shared-primitives coverage table (component × variant) embedded in PR body | PR 114 body |
+| S3 | Shell layout contact sheet table (surface × viewport) embedded in PR body | PR 115 body |
+| S4 | 16 Playwright PNG screenshots (8 surfaces × 2 viewports) stored out-of-tree | `Downloads/pos-007-after-s4/` (local only, not committed) |
+| S5 | 19 Vitest happy-dom HTML serialisations + `CONTACT-SHEET-S5.md` evidence index stored out-of-tree | `Downloads/pos-007-after-s5/` (local only, not committed) |
+
+Out-of-tree storage (S4, S5) is intentional: binary and heavyweight HTML artefacts are not committed
+to the repository. The evidence exists on the reviewer's machine for the duration of the review
+window; the PR body references the artefact set by name and count.
+
+#### Forbidden-content rules learned from S4
+
+- **Hidden text in terminal-state overlays**: `PairedScreen` and similar surfaces that conditionally
+  show/hide detail blocks must not expose operator identifiers, drawer totals, or branch KPIs in
+  any hidden DOM subtree. A surface that passes visual inspection can still leak a string via
+  `display:none` or `aria-hidden` — the forbidden-content audit must grep serialised DOM, not
+  only the visible paint. No automated test; enforced by the contact-sheet grep audit on every
+  PR that modifies a terminal-state surface.
+
+#### Forbidden-content rules learned from S5
+
+- **PIN dot-only markup (PR-1)**: PIN digits must never appear as text content in the DOM. The
+  PinPad component represents each entered digit as a dot marker with `data-state="filled"` — no
+  numeric character, no aria-label that reads a digit. Automated guard: `PinPad.dot-only-guard.test.tsx`
+  (9 assertions).
+- **TakeoverPrompt minimum-disclosure (FR-013)**: The takeover prompt surface must not render the
+  pending terminal name, other operator's identity, other operator's role, a timestamp, or any CTA
+  that implies the operator can learn the cause ("View details", "Why am I seeing this", "Show
+  details"). Automated guard: `TakeoverPrompt.forbidden-strings.test.tsx` (10 assertions).
+- **Cashier-Forbidden Information walling (FR-006/FR-031)**: Cashier-facing surfaces must not
+  render shift totals, KPIs, drawer cash amounts, operator IDs, or management-only identifiers.
+  Automated guard: `cashier-walling.test.tsx` (5 assertions).
 
 Any amendment is a documented change to this contract; the change
 takes effect for every PR opened after the amendment merges.
