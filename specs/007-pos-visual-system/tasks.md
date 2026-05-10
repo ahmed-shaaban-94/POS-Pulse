@@ -402,7 +402,7 @@ pixel-diff thresholds.
   Record the three confirmations in the S1 PR description with diff
   excerpts.
 
-- [ ] T028 [S1] **Open S1 PR titled `feat(007 S1): token layer additive
+- [X] T028 [S1] **Open S1 PR titled `feat(007 S1): token layer additive
   deltas`.** Body cites the S0 baseline PR, lists every additive token
   added with its CSS-var + TS-export name, attaches the S1 contact
   sheet (out-of-tree path), records the 005 / 006 UI gate S1 approval
