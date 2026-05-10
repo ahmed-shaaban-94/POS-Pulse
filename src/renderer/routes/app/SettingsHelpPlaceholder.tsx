@@ -10,6 +10,7 @@
  */
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
+import { Workspace } from '../../shell/regions/Workspace';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -43,9 +44,10 @@ export function SettingsHelpPlaceholder(): JSX.Element {
   }
 
   return (
-    <section className="placeholder-pane">
-      <h1>Settings / Help</h1>
-      <p>Settings and help functionality coming soon.</p>
-    </section>
+    <Workspace title="Settings / Help">
+      <section className="placeholder-pane">
+        <p>Settings and help functionality coming soon.</p>
+      </section>
+    </Workspace>
   );
 }

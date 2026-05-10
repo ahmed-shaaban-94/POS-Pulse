@@ -730,42 +730,42 @@ holds (unpaired terminals route to `/pairing` and cannot reach
 `/app/*`); (c) `/paired` shows the "Continue to dashboard →"
 affordance. May run after S3 in parallel with S5.
 
-- [ ] T062 [S4] **Run existing pairing-flow test suite (TEST-FIRST).**
+- [x] T062 [S4] **Run existing pairing-flow test suite (TEST-FIRST).**
   Confirm 002's pairing tests pass on the current code before S4
   changes anything. The S4 restyle MUST keep these tests green.
 
-- [ ] T063 [S4] **Restyle `src/renderer/routes/pairing/PairingScreen.tsx`**
+- [x] T063 [S4] **Restyle `src/renderer/routes/pairing/PairingScreen.tsx`**
   per CD §"03 · Screens" §01–§02: single 560 px center-stage card on
   a clean workspace; no top bar, no rail; brand mark in 4 × 24 navy
   keyline at top-left. Wraps in `<CenterStage>` (new from S3).
   Pairing copy unchanged.
 
-- [ ] T064 [P] [S4] **Restyle
+- [x] T064 [P] [S4] **Restyle
   `src/renderer/routes/pairing/PairingForm.tsx`** per CD §01: pairing
   code input is mono 36 px / 700 / 0.18em uppercase letter-spacing in a
   sunken well (`--color-surface-sunken` from S1, `--shadow-inset` from
   S1). Refresh-code button is `secondary` variant. No flow change.
 
-- [ ] T065 [P] [S4] **Restyle
+- [x] T065 [P] [S4] **Restyle
   `src/renderer/routes/paired/PairedScreen.tsx`** per CD §03: centred
   success check (38 px circle), success pill `PAIRED`, display H1
   `Ready`, body line `"This terminal is linked to <branch>"`, primary
   CTA `Continue` that navigates to `/app/dashboard`. Wraps in
   `<CenterStage>`. Preserve the "Continue to dashboard →" affordance.
 
-- [ ] T066 [S4] **Confirm pairing-bypass contract holds.** Run the
+- [x] T066 [S4] **Confirm pairing-bypass contract holds.** Run the
   existing 002 test `src/renderer/__tests__/pairing-gate.test.tsx`
   and confirm: (a) unpaired terminals route to `/pairing` and cannot
   reach `/app/*`; (b) the bridge surface is unchanged (no new IPC
   channel, no preload-bridge expansion).
 
-- [ ] T067 [S4] **No `_reference/Data-Pulse/` import; no copy-paste
+- [x] T067 [S4] **No `_reference/Data-Pulse/` import; no copy-paste
   from any reference.** A `git diff origin/main...HEAD` audit
   confirms zero JSX / HTML / CSS lifted from `claude-design/` or
   `figma-make/`. The static no-touch source-scope guard runs and
   passes.
 
-- [ ] T068 [S4] **Run validation locally** — full project
+- [x] T068 [S4] **Run validation locally** — full project
   implementation validation set. `npm run typecheck`, `npm run lint`,
   `npm test`, `npm test -- --coverage`, `npm run codegen:verify`.
   Existing 002 tests (`PairingScreen.test.tsx`, `PairingForm.test.tsx`,
@@ -773,13 +773,13 @@ affordance. May run after S3 in parallel with S5.
   `codegen:verify` confirms no incidental `src/shared/api-types.ts`
   drift (S4 is renderer-only).
 
-- [ ] T069 [S4] **Capture S4 contact sheet** — `/pairing` (unpaired,
+- [x] T069 [S4] **Capture S4 contact sheet** — `/pairing` (unpaired,
   pairing-in-progress, paired-success, error) + `/paired`
   (default, "Continue to dashboard" affordance) at 1280 × 800 +
   1024 × 768. Save to `pos-007-after-s4/` (out-of-tree). Reviewer
   sign-off recorded.
 
-- [ ] T070a [S4] **(analyze finding C2, 2026-05-10)** **Wrap each
+- [x] T070a [S4] **(analyze finding C2, 2026-05-10)** **Wrap each
   existing `app/*Placeholder.tsx` route in the S3 `<Workspace>`
   layout primitive** so spec FR-002 (every existing route uses the
   recovered visual language) and FR-013 (every existing route page
