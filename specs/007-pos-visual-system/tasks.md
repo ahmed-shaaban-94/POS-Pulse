@@ -1049,13 +1049,13 @@ without further amendment. The auditor checklist in
 visual-reference-adjudication.md is sufficient to confirm a future PR
 inherits 007's recovery without copying generated source.
 
-- [ ] T084 [S6] **Amend
+- [X] T084 [S6] **Amend
   `specs/007-pos-visual-system/contracts/screenshot-acceptance.md`**
   with lessons from S0–S5: any tuned pixel-diff thresholds, any
   additional state-matrix entries, any additional forbidden-content
   rules. Document each amendment with the slice PR that motivated it.
 
-- [ ] T085 [S6] **Author
+- [X] T085 [S6] **Author
   `specs/007-pos-visual-system/regression-checklist.md`** (or expand
   the auditor checklist in visual-reference-adjudication.md) with the
   six load-bearing items: (1) token additivity (no rename / repurpose
@@ -1065,7 +1065,7 @@ inherits 007's recovery without copying generated source.
   proprietary brand fonts beyond Inter. Each item names the test file
   that enforces it and the slice that introduced the test.
 
-- [ ] T086 [S6] **Confirm the 005 / 006 UI gate audit trail.** A note
+- [X] T086 [S6] **Confirm the 005 / 006 UI gate audit trail.** A note
   in S6 PR body confirms: S1 PR merged with the four ticked criteria,
   S2 PR merged with the four ticked criteria, S3 PR merged with the
   four ticked criteria. The note is the final reference any future
@@ -1079,7 +1079,7 @@ inherits 007's recovery without copying generated source.
   in this tasks file (per the "not for every slice" rule); every
   prior implementation slice ran the same set **minus** `package:dir`.
 
-- [ ] T088 [S6] **Open S6 PR titled `docs(007 S6): visual recovery
+- [X] T088 [S6] **Open S6 PR titled `docs(007 S6): visual recovery
   acceptance + regression checklist final`.** Body cites every prior
   007 slice PR, attaches the regression checklist, confirms the
   005 / 006 UI gate audit trail (T086), records final
