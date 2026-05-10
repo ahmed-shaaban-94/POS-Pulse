@@ -773,11 +773,16 @@ affordance. May run after S3 in parallel with S5.
   `codegen:verify` confirms no incidental `src/shared/api-types.ts`
   drift (S4 is renderer-only).
 
-- [ ] T069 [S4] **BLOCKED — awaiting Electron app launch for PNG capture.** Capture S4 contact sheet — `/pairing` (unpaired,
-  pairing-in-progress, paired-success, error) + `/paired`
-  (default, "Continue" affordance) + six placeholder Workspace routes at 1280 × 800 +
-  1024 × 768. Save to `pos-007-after-s4/` (out-of-tree). Reviewer
-  sign-off recorded. Markdown-only CONTACT-SHEET-S4.md exists but PNG renders not yet captured.
+- [x] T069 [S4] Capture S4 contact sheet — `/pairing` (unpaired state) + `/paired`
+  (paired state, Continue affordance) + six placeholder Workspace routes at 1280 × 800 +
+  1024 × 768. Saved to `pos-007-after-s4/` (out-of-tree, not committed). 16 PNGs captured
+  via out-of-tree Playwright script against Vite dev server (2026-05-10):
+  `pairing--1280x800.png`, `pairing--1024x768.png`, `paired--1280x800.png`,
+  `paired--1024x768.png`, `app-dashboard--1280x800.png`, `app-dashboard--1024x768.png`,
+  `app-sales--1280x800.png`, `app-sales--1024x768.png`, `app-cart--1280x800.png`,
+  `app-cart--1024x768.png`, `app-checkout--1280x800.png`, `app-checkout--1024x768.png`,
+  `app-inventory--1280x800.png`, `app-inventory--1024x768.png`,
+  `app-settings--1280x800.png`, `app-settings--1024x768.png`.
 
 - [x] T070a [S4] **(analyze finding C2, 2026-05-10)** **Wrap each
   existing `app/*Placeholder.tsx` route in the S3 `<Workspace>`
