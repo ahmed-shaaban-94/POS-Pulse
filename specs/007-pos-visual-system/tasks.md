@@ -1065,7 +1065,7 @@ inherits 007's recovery without copying generated source.
   proprietary brand fonts beyond Inter. Each item names the test file
   that enforces it and the slice that introduced the test.
 
-- [ ] T086 [S6] **Confirm the 005 / 006 UI gate audit trail.** A note
+- [X] T086 [S6] **Confirm the 005 / 006 UI gate audit trail.** A note
   in S6 PR body confirms: S1 PR merged with the four ticked criteria,
   S2 PR merged with the four ticked criteria, S3 PR merged with the
   four ticked criteria. The note is the final reference any future
@@ -1079,7 +1079,7 @@ inherits 007's recovery without copying generated source.
   in this tasks file (per the "not for every slice" rule); every
   prior implementation slice ran the same set **minus** `package:dir`.
 
-- [ ] T088 [S6] **Open S6 PR titled `docs(007 S6): visual recovery
+- [X] T088 [S6] **Open S6 PR titled `docs(007 S6): visual recovery
   acceptance + regression checklist final`.** Body cites every prior
   007 slice PR, attaches the regression checklist, confirms the
   005 / 006 UI gate audit trail (T086), records final
