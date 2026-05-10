@@ -60,11 +60,11 @@ describe('PairedScreen continue-to-dashboard (T053)', () => {
     await waitFor(() => expect(screen.getByTestId('route-pairing')).toBeInTheDocument());
   });
 
-  it('/paired is not a dead-end — shows "Continue to dashboard" button', async () => {
+  it('/paired is not a dead-end — shows "Continue" button', async () => {
     const bridge = makeBridge();
     renderWithRouter(bridge);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /continue to dashboard/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument(),
     );
   });
 
@@ -81,9 +81,9 @@ describe('PairedScreen continue-to-dashboard (T053)', () => {
     const bridge = makeBridge();
     renderWithRouter(bridge);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /continue to dashboard/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /continue to dashboard/i }));
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
     await waitFor(() => expect(screen.getByTestId('route-app-dashboard')).toBeInTheDocument());
   });
 
@@ -95,9 +95,9 @@ describe('PairedScreen continue-to-dashboard (T053)', () => {
     const lsSpy = vi.spyOn(window, 'localStorage', 'get');
     renderWithRouter(bridge);
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /continue to dashboard/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument(),
     );
-    await user.click(screen.getByRole('button', { name: /continue to dashboard/i }));
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
     expect(fetchMock).not.toHaveBeenCalled();
     expect(lsSpy).not.toHaveBeenCalled();
     lsSpy.mockRestore();

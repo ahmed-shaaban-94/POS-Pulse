@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { PairingForm } from './PairingForm';
 import { InvalidStateBanner } from './InvalidStateBanner';
+import { CenterStage } from '../../shell/regions/CenterStage';
 import type { PairingBridgeAPI } from '../../../shared/bridge-api';
 import type { PairingStatus } from '../../../shared/pairing-types';
 
@@ -48,15 +49,17 @@ export function PairingScreen(props: PairingScreenProps): JSX.Element {
   // when omitted. exactOptionalPropertyTypes forbids `{ pairing: undefined }`.
   const formProps = props.pairing !== undefined ? { pairing: props.pairing } : {};
   return (
-    <main className="pairing-screen" data-testid="route-pairing" {...reasonAttr}>
-      {props.invalidReason !== undefined && <InvalidStateBanner reason={props.invalidReason} />}
-      <div className="pairing-screen__card">
-        <div className="pairing-screen__brand">
-          <h1>POS Pulse</h1>
-          <p>Enter the pairing code shown in the admin portal.</p>
+    <CenterStage>
+      <main className="pairing-screen__root" data-testid="route-pairing" {...reasonAttr}>
+        {props.invalidReason !== undefined && <InvalidStateBanner reason={props.invalidReason} />}
+        <div className="pairing-screen__card">
+          <div className="pairing-screen__brand">
+            <h1>POS Pulse</h1>
+            <p>Enter the pairing code shown in the admin portal.</p>
+          </div>
+          <PairingForm {...formProps} />
         </div>
-        <PairingForm {...formProps} />
-      </div>
-    </main>
+      </main>
+    </CenterStage>
   );
 }

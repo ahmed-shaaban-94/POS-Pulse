@@ -7,6 +7,7 @@
  */
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
+import { Workspace } from '../../shell/regions/Workspace';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -37,9 +38,10 @@ export function CartPlaceholder(): JSX.Element {
   }
 
   return (
-    <section className="placeholder-pane">
-      <h1>Cart</h1>
-      <p>Cart functionality coming soon.</p>
-    </section>
+    <Workspace title="Cart">
+      <section className="placeholder-pane">
+        <p>Cart functionality coming soon.</p>
+      </section>
+    </Workspace>
   );
 }

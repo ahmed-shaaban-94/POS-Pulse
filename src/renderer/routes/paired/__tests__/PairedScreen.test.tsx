@@ -8,12 +8,18 @@ import type { PairingBridgeAPI } from '../../../../shared/bridge-api';
 import type { PairingStatus } from '../../../../shared/pairing-types';
 
 /**
- * 002-terminal-pairing T032 — `PairedScreen` tests.
+ * 002-terminal-pairing T032 / S4-restyle — `PairedScreen` tests.
  *
  * The screen calls `bridge.pairing.getStatus()` itself on mount
  * (Option B from the readiness review): this decouples it from the
  * boot router's state machine, so a fresh navigation from the form
  * lands on a route that re-fetches its own data.
+ *
+ * S4 visual contract (T065): the screen shows a PAIRED pill, H1 "Ready",
+ * and a body line "This terminal is linked to {branch_id}". The four data
+ * attributes on the root <main> are preserved for machine-readable use
+ * (router test, automation). tenant_id / terminal_id / terminal_label are
+ * not required as visible text.
  *
  * Security policy: the `paired` PairingStatus branch type explicitly
  * omits `device_token`. The test injects a sentinel string into the
@@ -93,7 +99,7 @@ describe('PairedScreen — happy path (T032)', () => {
     });
   });
 
-  it('renders tenant_id, branch_id, terminal_id, terminal_label as visible text', async () => {
+  it('renders the S4 visual contract: PAIRED pill, H1 Ready, branch body line, Continue CTA', async () => {
     const { bridge } = makeBridge();
     renderInRouter(bridge);
 
@@ -101,15 +107,13 @@ describe('PairedScreen — happy path (T032)', () => {
       expect(screen.getByTestId('route-paired')).toBeInTheDocument();
     });
 
-    // Each field is visible in the rendered tree (text node, not just
-    // a data attribute). Tests are lenient about formatting — they
-    // assert substring presence.
-    const root = screen.getByTestId('route-paired');
-    const text = root.textContent;
-    expect(text).toContain(PAIRED_STATUS.tenant_id);
-    expect(text).toContain(PAIRED_STATUS.branch_id);
-    expect(text).toContain(PAIRED_STATUS.terminal_id);
-    expect(text).toContain(PAIRED_STATUS.terminal_label);
+    // S4 visual contract (T065): visible elements the operator reads.
+    expect(screen.getByRole('heading', { name: /^ready$/i })).toBeInTheDocument();
+    expect(screen.getByText(/PAIRED/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`This terminal is linked to ${PAIRED_STATUS.branch_id}`, 'i')),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
   });
 
   it('preserves the data-testid="route-paired" attribute (router test compatibility)', async () => {
