@@ -852,7 +852,7 @@ affordance. May run after S3 in parallel with S5.
   **Validation:** part of T068 — full project implementation
   validation set is sufficient; no new validation step.
 
-- [ ] T070 [S4] **Open S4 PR titled `feat(007 S4): pairing and
+- [x] T070 [S4] **Open S4 PR titled `feat(007 S4): pairing and
   terminal-state surfaces`.** Body cites S3 PR (already-merged at this
   point, 005 / 006 UI gate already unblocked), lists the restyled
   routes (pairing + paired **+ the six placeholder routes wrapped in
