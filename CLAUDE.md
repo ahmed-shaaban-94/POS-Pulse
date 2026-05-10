@@ -14,33 +14,29 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 ## Active feature
 
 <!-- SPECKIT START -->
-**Active feature:** `specs/004-operator-session` — **status: planning complete (v1.1); §A1-gated before implementation**
-- Spec: [specs/004-operator-session/spec.md](specs/004-operator-session/spec.md)
-- Plan: [specs/004-operator-session/plan.md](specs/004-operator-session/plan.md)
-- Research: [specs/004-operator-session/research.md](specs/004-operator-session/research.md)
-- Data model: [specs/004-operator-session/data-model.md](specs/004-operator-session/data-model.md)
-- Contracts: [specs/004-operator-session/contracts/](specs/004-operator-session/contracts/)
-  - [bridge-api.md](specs/004-operator-session/contracts/bridge-api.md) — `operator.*` preload bridge
-  - [backend-endpoints.md](specs/004-operator-session/contracts/backend-endpoints.md) — backend OpenAPI dependencies (§A2-gated)
-  - [role-visibility-matrix.md](specs/004-operator-session/contracts/role-visibility-matrix.md) — canonical FR-015 / FR-017 / FR-018 matrix
-- Quickstart: [specs/004-operator-session/quickstart.md](specs/004-operator-session/quickstart.md)
-- Checklist: [specs/004-operator-session/checklists/requirements.md](specs/004-operator-session/checklists/requirements.md)
+**Active feature:** `specs/007-pos-visual-system` — **status: S1 + S2 + S3 merged; 005/006 UI gate UNBLOCKED; S4 next**
+- Spec: [specs/007-pos-visual-system/spec.md](specs/007-pos-visual-system/spec.md)
+- Plan: [specs/007-pos-visual-system/plan.md](specs/007-pos-visual-system/plan.md)
+- Tasks: [specs/007-pos-visual-system/tasks.md](specs/007-pos-visual-system/tasks.md)
+- Research: [specs/007-pos-visual-system/research.md](specs/007-pos-visual-system/research.md)
+- Contracts: [specs/007-pos-visual-system/contracts/](specs/007-pos-visual-system/contracts/)
 
-**Approval gates before implementation slices** (plan.md §"Approval Gates"):
-- §A1 — local-unlock-factor approval (LOAD-BEARING, blocks Slices 3–6)
-- §A2 — backend OpenAPI endpoints (blocks Slices 1, 3, 4, 5)
-- §A3 — three new SQLite tables (blocks Slices 3, 4)
-- §A4 — Argon2id binding install (blocks Slice 4 only; obsolete if §A1 → Alternative 1)
-- §A5 — Production Readiness (blocks production rollout, not slice merges)
+**Slice status:**
+- S0 — Visual reference adjudication (complete, PR #109)
+- S1 — Token layer + global CSS foundation (complete, PR #113)
+- S2 — Shared primitives polish (complete, PR #114)
+- S3 — Shell, sidebar, topbar, route layout primitives (complete, PR #115)
+- S4 — Pairing and terminal-state surfaces (**next**)
+- S5 — Operator sign-in, roster, PinPad, TakeoverPrompt, OperatorBadge
+- S6 — Screenshot / contact-sheet acceptance + regression checklist
 
-**Next phase**: Slice 0 (visual direction — non-code) is the immediate next step
-per FR-033. After Slice 0 review, `/speckit-tasks` produces the per-slice work
-list, scheduled behind §A1–§A4.
+**005/006 UI gate:** UNBLOCKED — S1 + S2 + S3 merged with reviewer-ticked T060 criteria.
 
 **Previous features (complete)**:
 - `specs/001-foundation` — Foundation (Electron + Vite + TS + tests + CI).
 - `specs/002-terminal-pairing` — Terminal pairing (device token, branch scope).
 - `specs/003-pos-ui-shell` — POS UI shell (design tokens, navigation, role-indicator slot).
+- `specs/004-operator-session` — Operator session (planning complete v1.1; §A1-gated before implementation).
 <!-- SPECKIT END -->
 
 ## Spec Kit workflow
