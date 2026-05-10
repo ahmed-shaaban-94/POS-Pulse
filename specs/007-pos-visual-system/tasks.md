@@ -161,7 +161,7 @@ state matrix, pixel-diff thresholds, and forbidden-content rules are all
 present; opens the out-of-tree baseline contact sheet and confirms it
 covers every existing route at both viewport bands.
 
-- [ ] T001 [S0] **Verify the visual-reference-adjudication contract**
+- [X] T001 [S0] **Verify the visual-reference-adjudication contract**
   against [./plan.md](./plan.md) §"Visual Reference Adjudication" and
   [./spec.md](./spec.md) FR-051. Confirm: source-of-truth order matches
   (repo > Claude Design > Figma Make > generated code); every adopt /
@@ -175,7 +175,7 @@ covers every existing route at both viewport bands.
   Output: a one-paragraph confirmation in the S0 PR description. NO
   changes to the contract unless drift is found.
 
-- [ ] T002 [S0] **Verify the screenshot-acceptance contract** against
+- [X] T002 [S0] **Verify the screenshot-acceptance contract** against
   [./plan.md](./plan.md) §"Test Strategy" and the per-slice
   screenshot-acceptance gates. Confirm: viewport matrix
   (1280 × 800 + 1024 × 768) present; per-surface state matrix lists
@@ -189,7 +189,7 @@ covers every existing route at both viewport bands.
   Report any drift before proceeding. NO changes to the contract
   unless drift is found.
 
-- [ ] T003 [S0] **Set up the out-of-tree baseline directory.** Create
+- [X] T003 [S0] **Set up the out-of-tree baseline directory.** Create
   `C:\Users\user\Downloads\pos-007-baseline\` (Windows) or
   `/c/Users/user/Downloads/pos-007-baseline/` (Git Bash). This directory
   is the canonical "before" baseline location. Subdirectories per
@@ -198,7 +198,7 @@ covers every existing route at both viewport bands.
   `screen-too-small/`). The baseline directory MUST NOT be inside the
   repo working tree.
 
-- [ ] T004 [S0] **Capture baseline contact sheet for the existing pairing
+- [X] T004 [S0] **Capture baseline contact sheet for the existing pairing
   surface.** Render `/pairing` at 1280 × 800 and 1024 × 768; capture
   PNG to `pos-007-baseline/pairing/` for default + pairing-in-progress
   + paired-success + error states. Tooling: Playwright if available, or
@@ -206,24 +206,24 @@ covers every existing route at both viewport bands.
   no Clerk user id, no PII visible in any captured screenshot
   (forbidden-content rule).
 
-- [ ] T005 [P] [S0] **Capture baseline contact sheet for `/paired`.**
+- [X] T005 [P] [S0] **Capture baseline contact sheet for `/paired`.**
   Render at 1280 × 800 + 1024 × 768; capture default + "Continue to
   dashboard →" affordance state. Save to `pos-007-baseline/paired/`.
 
-- [ ] T006 [P] [S0] **Capture baseline contact sheet for sign-in
+- [X] T006 [P] [S0] **Capture baseline contact sheet for sign-in
   cashier.** Render the cashier sign-in surface (roster + PIN pad);
   capture default, roster-picked, pin-entering (1-of-6 / full), error
   flash, locked-out, submitting states at 1280 × 800 + 1024 × 768. Save
   to `pos-007-baseline/sign-in-cashier/`. **Forbidden-content audit:**
   no PIN value visible in any state; PIN dot row markup is dot-only.
 
-- [ ] T007 [P] [S0] **Capture baseline contact sheet for sign-in
+- [X] T007 [P] [S0] **Capture baseline contact sheet for sign-in
   manager / admin.** Render the manager / admin password form; capture
   default, entering, submitting, generic-failure variant A, variant B
   (rate-limited), variant C (no connection). Save to
   `pos-007-baseline/sign-in-manager/`.
 
-- [ ] T008 [P] [S0] **Capture baseline contact sheet for TakeoverPrompt.**
+- [X] T008 [P] [S0] **Capture baseline contact sheet for TakeoverPrompt.**
   Render the takeover modal in default-prompted, confirming, error
   states. Save to `pos-007-baseline/takeover/`. **Forbidden-string
   audit:** the captured DOM under `[data-testid="takeover-prompt"]`
@@ -231,7 +231,7 @@ covers every existing route at both viewport bands.
   `Cashier ` / `Manager` / `Admin` (other-operator role), 4-digit time
   pattern, `View details` / `Why am I seeing this` / `Show details`.
 
-- [ ] T009 [P] [S0] **Capture baseline contact sheet for the signed-in
+- [X] T009 [P] [S0] **Capture baseline contact sheet for the signed-in
   shell (cashier role).** Render the AppShell with cashier OperatorBadge,
   four connection-state variants (`online` / `degraded` / `offline` /
   `syncing`), at 1280 × 800 + 1024 × 768. Save to
@@ -241,7 +241,7 @@ covers every existing route at both viewport bands.
   KPIs, manager-review data, audit log surfaces, admin surfaces, other
   operators' shift data) visible in the cashier shell.
 
-- [ ] T010 [P] [S0] **Capture baseline contact sheet for placeholder
+- [X] T010 [P] [S0] **Capture baseline contact sheet for placeholder
   routes.** Render Dashboard, Sales, Cart, Receipt / Checkout, Inventory,
   Settings / Help placeholders in default + loading + empty + error
   variants at 1280 × 800. Save to `pos-007-baseline/placeholders/`.
@@ -249,31 +249,31 @@ covers every existing route at both viewport bands.
   `tender.*` and `totals.*` slots in the Receipt placeholder remain
   layout-only with the "Reserved for 005-checkout-payments" body.
 
-- [ ] T011 [P] [S0] **Capture baseline contact sheet for `ScreenTooSmall`
+- [X] T011 [P] [S0] **Capture baseline contact sheet for `ScreenTooSmall`
   fallback.** Render at < 1024 px effective width. Save to
   `pos-007-baseline/screen-too-small/`. Confirm no mobile hamburger
   drawer is rendered at any width.
 
-- [ ] T012 [S0] **Document current visual deficiencies in the S0 PR
+- [X] T012 [S0] **Document current visual deficiencies in the S0 PR
   description.** Without changing source, list per-surface what reads
   "primitive" vs the recovered language target (e.g. "pairing card
   shadow too soft", "rail accent stripe missing on active row",
   "PinPad keys not 64 × 64"). The deficiency list informs S1–S5
   prioritisation; it does NOT itself produce code changes.
 
-- [ ] T013 [S0] **Confirm no design-generated code was copied** during
+- [X] T013 [S0] **Confirm no design-generated code was copied** during
   S0 capture. A `git status` of the repo shows zero changes outside
   `specs/007-pos-visual-system/` (and even there, only an optional
   amendment to `screenshot-acceptance.md` if threshold tuning was
   required per plan §O1). The baseline screenshots remain out-of-tree.
 
-- [ ] T014 [S0] **(Optional, only if drift found in T001 / T002)** Amend
+- [X] T014 [S0] **(Optional, only if drift found in T001 / T002)** Amend
   `specs/007-pos-visual-system/contracts/screenshot-acceptance.md` to
   tune per-surface pixel-diff thresholds based on the baseline capture's
   measured noise. Document the measurement evidence in the S0 PR
   description.
 
-- [ ] T015 [S0] **Open S0 PR titled `docs(007 S0): visual reference
+- [X] T015 [S0] **Open S0 PR titled `docs(007 S0): visual reference
   adjudication review + baseline capture`.** Body cites the merged
   contracts (PR #109), lists per-surface baseline locations
   (out-of-tree paths), confirms forbidden-content audits passed,
