@@ -309,7 +309,7 @@ repurpose / removal of any existing 003 token name; visually compares
 the slice's contact sheet against the S0 baseline at the documented
 pixel-diff thresholds.
 
-- [ ] T016 [S1] **Extend `src/renderer/ui/tokens/__tests__/tokens.test.ts`
+- [X] T016 [S1] **Extend `src/renderer/ui/tokens/__tests__/tokens.test.ts`
   parity test (TEST-FIRST).** Add assertions covering every additive
   token planned for S1: `--color-surface-sunken`, `--shadow-inset`,
   `--space-9`, `--duration-1` / `--duration-2` / `--duration-3` /
@@ -317,7 +317,7 @@ pixel-diff thresholds.
   initially (additive tokens don't exist yet); this confirms it's
   exercised.
 
-- [ ] T017 [S1] **Add additive tokens to
+- [X] T017 [S1] **Add additive tokens to
   `src/renderer/styles/tailwind.css`.** Per research §R0:
   - Color: `--color-surface-sunken: #EEF2F6` (distinct from existing
     `--color-surface-elevated`; use for PIN well, slot chips, keypad
@@ -334,7 +334,7 @@ pixel-diff thresholds.
   `#0E1B2A` to CD's exact `#0B1726` if S0 reviewer prefers; otherwise
   preserve. Document the choice in the PR description.
 
-- [ ] T018 [S1] **Add `no-proprietary-brand-font` guard test under
+- [X] T018 [S1] **Add `no-proprietary-brand-font` guard test under
   `src/renderer/styles/__tests__/no-brand-font.test.ts`.** Asserts:
   zero `@font-face` declarations under `src/renderer/styles/` reference
   `Inter Tight` (must remain absent), `JetBrains Mono` as a primary
@@ -344,7 +344,7 @@ pixel-diff thresholds.
   'Segoe UI', system-ui` (per FR-052 / A10). Asserts the live
   `--font-family-mono` chain begins with `ui-monospace`.
 
-- [ ] T019 [S1] **Add `no-prefers-color-scheme-follower` guard test
+- [X] T019 [S1] **Add `no-prefers-color-scheme-follower` guard test
   under `src/renderer/styles/__tests__/no-dark-mode.test.ts`.** Asserts:
   no source file under `src/renderer/styles/` or `src/renderer/ui/`
   references `prefers-color-scheme` outside an explicit
@@ -352,43 +352,43 @@ pixel-diff thresholds.
   007). Asserts no `.dark { … }` selector exists under
   `src/renderer/styles/`. Per spec FR-052.
 
-- [ ] T020 [P] [S1] **Add additive token TS exports to
+- [X] T020 [P] [S1] **Add additive token TS exports to
   `src/renderer/ui/tokens/colors.ts`.** Add `surfaceSunken =
   'var(--color-surface-sunken)'` after the existing `surfaceElevated`
   export. Existing exports verbatim preserved. Re-exported from
   `src/renderer/ui/tokens/index.ts` if it aggregates.
 
-- [ ] T021 [P] [S1] **Add additive token TS exports to
+- [X] T021 [P] [S1] **Add additive token TS exports to
   `src/renderer/ui/tokens/shadow.ts`.** Add `inset =
   'var(--shadow-inset)'`. Existing exports verbatim preserved.
 
-- [ ] T022 [P] [S1] **Add additive token TS exports to
+- [X] T022 [P] [S1] **Add additive token TS exports to
   `src/renderer/ui/tokens/spacing.ts`.** Add `9: 'var(--space-9)'`.
   Existing entries `0..8` verbatim preserved.
 
-- [ ] T023 [P] [S1] **Add new motion-token module
+- [X] T023 [P] [S1] **Add new motion-token module
   `src/renderer/ui/tokens/motion.ts`.** Exports: `duration` (object
   with `1`, `2`, `3`, `4` keys), `easing` (object with `out` /
   `inOut`). Re-export from `src/renderer/ui/tokens/index.ts`.
 
-- [ ] T024 [S1] **Run the parity test (T016) green.** All additive
+- [X] T024 [S1] **Run the parity test (T016) green.** All additive
   tokens now have both CSS-var entries and TS exports with matching
   names. The compact-density dead-token guard from 003 still passes.
 
-- [ ] T025 [S1] **Run validation locally** — full project
+- [X] T025 [S1] **Run validation locally** — full project
   implementation validation set. `npm run typecheck`, `npm run lint`,
   `npm test`, `npm test -- --coverage`, `npm run codegen:verify`. All
   green; the existing ≥ 90 % coverage gate on `src/renderer/ui/`
   holds; `codegen:verify` confirms no incidental
   `src/shared/api-types.ts` drift.
 
-- [ ] T026 [S1] **Capture S1 contact sheet** of every existing route at
+- [X] T026 [S1] **Capture S1 contact sheet** of every existing route at
   1280 × 800 + 1024 × 768, comparing against the S0 baseline. Save to
   `pos-007-after-s1/` (out-of-tree). Confirm pixel-diff ≤ 0.5 % for
   layout-stable surfaces, ≤ 1.5 % for animated regions. Reviewer
   sign-off recorded in the PR description.
 
-- [ ] T027 [S1] **005 / 006 UI gate — S1 approval criteria check.**
+- [X] T027 [S1] **005 / 006 UI gate — S1 approval criteria check.**
   Confirm by `git diff origin/main...HEAD` of the slice PR:
   - Zero rename / repurpose / removal of any existing 003 token name
     (auditable by listing every modified `src/renderer/ui/tokens/*.ts`
