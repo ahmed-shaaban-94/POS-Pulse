@@ -76,7 +76,7 @@ describe('TopBar S3 restyle (T057)', () => {
 
   it('no device_token visible in DOM', () => {
     const { container } = renderTopBar();
-    const text = container.textContent ?? '';
+    const text = container.textContent;
     expect(text).not.toMatch(/device_token/i);
     expect(text).not.toMatch(/tok_/);
   });

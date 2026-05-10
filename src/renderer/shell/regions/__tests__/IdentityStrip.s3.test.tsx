@@ -70,7 +70,7 @@ describe('IdentityStrip S3 restyle (T057)', () => {
     const { container } = render(
       <IdentityStrip tenantId="Acme" branchId="Downtown" terminalLabel="T1" />,
     );
-    const text = container.textContent ?? '';
+    const text = container.textContent;
     expect(text).not.toMatch(/device_token/i);
     expect(text).not.toMatch(/tok_/);
     expect(text).not.toMatch(/jwt/i);

@@ -103,7 +103,7 @@ describe('AppShell layout — T047 (BEM class assertions)', () => {
   // Four connection-state visuals are distinct — assert via data-connection-state
   it.each(['online', 'degraded', 'offline', 'syncing'] as const)(
     'connection state=%s produces distinct data-connection-state attribute',
-    (state) => {
+    () => {
       const { container } = renderShell();
       // Artificially verify the ConnectionIndicator renders with this state
       // by checking the indicator exists; state is injected via the dev ?conn= toggle in prod.
