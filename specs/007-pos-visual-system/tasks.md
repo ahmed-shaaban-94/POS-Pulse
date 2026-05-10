@@ -1004,7 +1004,7 @@ FR-015 catalogue.
   initial). The TakeoverPrompt screenshot's DOM contains zero
   forbidden strings (T072 set).
 
-- [ ] T083 [S5] **Open S5 PR titled `feat(007 S5): operator sign-in,
+- [X] T083 [S5] **Open S5 PR titled `feat(007 S5): operator sign-in,
   roster, PinPad, TakeoverPrompt, OperatorBadge`.** Body cites S3 PR
   (gate-tickable evidence already merged), lists every restyled
   operator surface, attaches the S5 contact sheet, confirms PIN
