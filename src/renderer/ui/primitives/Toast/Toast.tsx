@@ -28,17 +28,17 @@ export function Toast({
   }, [durationMs, onDismiss]);
 
   return (
-    <div role={isUrgent ? 'alert' : 'status'} data-intent={intent}>
-      <span>{title}</span>
-      {description && <p>{description}</p>}
+    <div role={isUrgent ? 'alert' : 'status'} data-intent={intent} className="toast">
+      <span className="toast__title">{title}</span>
+      {description && <p className="toast__detail">{description}</p>}
       {onDismiss && (
         <button
           type="button"
           aria-label="Dismiss notification"
           onClick={onDismiss}
-          style={{ minHeight: '44px', minWidth: '44px' }}
+          className="btn btn--ghost btn--md toast__dismiss"
         >
-          ×
+          &times;
         </button>
       )}
     </div>

@@ -433,21 +433,21 @@ primitive test suites and confirms all pass without prop-signature
 changes; runs the touch-target invariant test on `Button` and confirms
 ≥ 44 × 44 CSS px.
 
-- [ ] T029 [S2] **Extend `Button.test.tsx` (TEST-FIRST)** to cover the
+- [X] T029 [S2] **Extend `Button.test.tsx` (TEST-FIRST)** to cover the
   recovered primary / secondary / ghost / destructive variants per CD
   `02-components.md`. Touch-target invariant test extended to cover
   `md` (44 px) and `lg` (52 px) sizes; small `sm` (36 px) is allowed
   ONLY for non-touch-primary surfaces (e.g. caption-area cancel) per
   CD. Public prop signature unchanged.
 
-- [ ] T030 [P] [S2] **Restyle `src/renderer/ui/primitives/Button/Button.tsx`**
+- [X] T030 [P] [S2] **Restyle `src/renderer/ui/primitives/Button/Button.tsx`**
   per CD §"Buttons": padding, height (44 / 52 / 36), radius
   `--radius-control` (10 px), hover behaviour (no transform),
   variants `primary / secondary / ghost / destructive`, loading state
   (label + 16 px spinner left, button disabled). Disabled state opacity
   0.5. **Public prop signature unchanged.** No new prop.
 
-- [ ] T031 [P] [S2] **Restyle `src/renderer/ui/primitives/Card/Card.tsx`**
+- [X] T031 [P] [S2] **Restyle `src/renderer/ui/primitives/Card/Card.tsx`**
   per CD §"Cards": background `--color-surface`, border `1px solid
   --color-border`, radius `--radius-card` (14 px), shadow
   `--shadow-card`, inner padding `--space-6` (32 px). Drop any
@@ -455,14 +455,14 @@ changes; runs the touch-target invariant test on `Button` and confirms
   border darkens to primary-50 %; no shadow change. Public prop
   signature unchanged.
 
-- [ ] T032 [P] [S2] **Restyle `src/renderer/ui/primitives/Input/Input.tsx`**
+- [X] T032 [P] [S2] **Restyle `src/renderer/ui/primitives/Input/Input.tsx`**
   per CD §"Forms · `Input`, `Field`": 44 px tall (52 px in large),
   padding 0 14, border `1px solid --color-border`, radius
   `--radius-control`. Background `--color-surface`. Focus uses
   `--color-focus-ring`; error border `--color-danger`. Public prop
   signature unchanged.
 
-- [ ] T033 [P] [S2] **Restyle `src/renderer/ui/primitives/Dialog/Dialog.tsx`**
+- [X] T033 [P] [S2] **Restyle `src/renderer/ui/primitives/Dialog/Dialog.tsx`**
   per CD §"Dialogs / modals": centred 480 px wide (560 px in lg),
   padding 28 / 28 / 24 / 28, background `--color-surface`, border
   `1px solid --color-border`, radius `--radius-card`, shadow
@@ -470,33 +470,33 @@ changes; runs the touch-target invariant test on `Button` and confirms
   backdrop-filter blur**. Action row right-aligned, 12 px gap, ghost
   left of primary. Public prop signature unchanged.
 
-- [ ] T034 [P] [S2] **Restyle `src/renderer/ui/primitives/StatusBanner/StatusBanner.tsx`**
+- [X] T034 [P] [S2] **Restyle `src/renderer/ui/primitives/StatusBanner/StatusBanner.tsx`**
   per CD §"Status pills · `Badge`, `StatusBanner`": 48 px tall, soft
   background, hairline bottom border. Always non-blocking — never
   replaces page content. Four state intents (success / warning /
   danger / info); `info` is the syncing intent that pulses (1.6 s
   loop). Public prop signature unchanged.
 
-- [ ] T035 [P] [S2] **Restyle
+- [X] T035 [P] [S2] **Restyle
   `src/renderer/ui/primitives/Badge/Badge.tsx`** per CD §"Status
   pills": pill shape (`--radius-pill`), height 26 px, semantic-soft
   background, dot 8 px solid semantic colour. Public prop signature
   unchanged.
 
-- [ ] T036 [P] [S2] **Restyle
+- [X] T036 [P] [S2] **Restyle
   `src/renderer/ui/primitives/Toast/Toast.tsx`** per CD §"Components"
   Toast guidance: inset shadow, soft background, mono detail line.
   Use only for non-blocking confirmations (sign-out, sync). Refusals
   remain inline, NOT toast (per `messages.ts`). Public prop signature
   unchanged.
 
-- [ ] T037 [P] [S2] **Restyle
+- [X] T037 [P] [S2] **Restyle
   `src/renderer/ui/primitives/Table/Table.tsx`** per CD §"Components"
   Table guidance: header / row roles, internal divider hairline
   `--color-border-soft`. No KPI / dashboard table styling — Table is
   layout-only for 007. Public prop signature unchanged.
 
-- [ ] T038 [S2] **Restyle
+- [X] T038 [S2] **Restyle
   `src/renderer/ui/states/LoadingState.tsx`** per CD §"Loading states":
   two patterns — (a) **in-shell skeleton** using the real `AppShell`
   chrome with body as a stack of `--color-surface-sunken` pill rows
@@ -507,40 +507,40 @@ changes; runs the touch-target invariant test on `Button` and confirms
   signature gains a documented additive `variant` prop ONLY** — see
   user's "safe additive prop" carve-out. Per-task explicit scope.
 
-- [ ] T039 [P] [S2] **Restyle
+- [X] T039 [P] [S2] **Restyle
   `src/renderer/ui/states/EmptyState.tsx`** per CD §"Empty states":
   headline 22 / 700, one short-sentence body, single CTA. No
   illustration; no emoji. Lives inside the chrome where the data would
   have been; never replaces shell. Public prop signature unchanged.
 
-- [ ] T040 [P] [S2] **Restyle
+- [X] T040 [P] [S2] **Restyle
   `src/renderer/ui/states/ErrorState.tsx`** per CD §"Error states":
   same layout as Empty. Icon: 32 px `--color-danger-soft` circle with
   stroke icon. Distinct from refusal — used for *the system*, not
   *the user*. Public prop signature unchanged.
 
-- [ ] T041 [S2] **`prefers-reduced-motion` invariance test** under
+- [X] T041 [S2] **`prefers-reduced-motion` invariance test** under
   `src/renderer/ui/__tests__/reduced-motion.test.tsx` covering Toast
   fade, Dialog fade-in, LoadingState skeleton pulse, StatusBanner
   syncing pulse. Each animation degrades to immediate state swap when
   `prefers-reduced-motion: reduce` is asserted. Per spec NFR-007.
 
-- [ ] T042 [S2] **axe baseline smoke** on every restyled primitive in
+- [X] T042 [S2] **axe baseline smoke** on every restyled primitive in
   default / hover / focus / disabled / loading / empty / error variants
   via `expectNoAxeViolations()`. Zero `serious` or `critical`
   violations.
 
-- [ ] T043 [S2] **Run validation locally** — full project
+- [X] T043 [S2] **Run validation locally** — full project
   implementation validation set. `npm run typecheck`, `npm run lint`,
   `npm test`, `npm test -- --coverage`, `npm run codegen:verify`. The
   ≥ 90 % gate on `src/renderer/ui/` holds; `codegen:verify` confirms
   no incidental `src/shared/api-types.ts` drift.
 
-- [ ] T044 [S2] **Capture S2 contact sheet** — per-primitive variants
+- [X] T044 [S2] **Capture S2 contact sheet** — per-primitive variants
   and states at 1280 × 800. Save to `pos-007-after-s2/` (out-of-tree).
   Reviewer sign-off recorded in the PR description.
 
-- [ ] T045 [S2] **005 / 006 UI gate — S2 approval criteria check.**
+- [X] T045 [S2] **005 / 006 UI gate — S2 approval criteria check.**
   Confirm:
   - Every primitive 005 / 006 will consume (`Button`, `Card`, `Input`,
     `Dialog`, `StatusBanner`, `Badge`, `Table`, plus state primitives)
@@ -555,7 +555,7 @@ changes; runs the touch-target invariant test on `Button` and confirms
   Record the four confirmations in the S2 PR description with diff
   excerpts.
 
-- [ ] T046 [S2] **Open S2 PR titled `feat(007 S2): shared primitives
+- [X] T046 [S2] **Open S2 PR titled `feat(007 S2): shared primitives
   polish`.** Body cites the S1 PR, lists every restyled primitive,
   attaches the S2 contact sheet, records the 005 / 006 UI gate S2
   approval criteria check (T045). PR body discipline: no `#86` /

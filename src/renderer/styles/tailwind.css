@@ -60,7 +60,7 @@
   --color-border-soft: #e7ecf2;
   --color-border-strong: #9ca3af;
   --color-focus-ring: var(--color-primary);
-  --color-overlay-scrim: rgba(0, 0, 0, 0.5);
+  --color-overlay-scrim: rgba(8, 14, 24, 0.55);
 
   /* ── Spacing scale — 4 px base ──────────────────────────────────────── */
   --space-0: 0px;
@@ -1099,5 +1099,479 @@ body {
     font-weight: var(--font-weight-semibold);
     color: var(--color-text);
     margin-block-end: var(--space-1);
+  }
+
+  /* ── Button spinner (T030) ───────────────────────────────────────────── */
+
+  .btn__spinner {
+    display: inline-block;
+    inline-size: 16px;
+    block-size: 16px;
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: var(--radius-pill);
+    animation: spin var(--duration-3, 220ms) linear infinite;
+    flex-shrink: 0;
+  }
+
+  /* ── Card (T031) ─────────────────────────────────────────────────────── */
+
+  .card {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-6);
+  }
+
+  .card--muted {
+    background-color: var(--color-surface-muted);
+    box-shadow: none;
+  }
+
+  .card--elevated {
+    box-shadow: var(--shadow-pane);
+  }
+
+  /* ── Input field wrapper (T032) ──────────────────────────────────────── */
+
+  .input-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .input-field__description {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+  }
+
+  .input-field__error {
+    font-size: var(--font-size-xs);
+    color: var(--color-danger);
+  }
+
+  .input-field input[aria-invalid='true'] {
+    border-color: var(--color-danger);
+  }
+
+  .input-field input[aria-invalid='true']:focus-visible {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 20%, transparent);
+  }
+
+  /* ── Dialog (T033) ───────────────────────────────────────────────────── */
+
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--color-overlay-scrim);
+  }
+
+  .dialog-panel {
+    position: fixed;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    transform: translate(-50%, -50%);
+    inline-size: 480px;
+    max-inline-size: calc(100vw - var(--space-6));
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-overlay);
+    padding-block-start: 28px;
+    padding-inline: 28px;
+    padding-block-end: 24px;
+    outline: none;
+  }
+
+  .dialog-panel h2 {
+    font-size: 1.125rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+    margin: 0 0 var(--space-3);
+  }
+
+  .dialog-panel p {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0 0 var(--space-5);
+    line-height: var(--line-height-relaxed);
+  }
+
+  .dialog-panel__body {
+    margin-block-end: var(--space-5);
+  }
+
+  .dialog-panel__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
+
+  /* ── Status Banner (T034) ────────────────────────────────────────────── */
+
+  .status-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    block-size: 48px;
+    padding-inline: var(--space-5);
+    font-size: 0.8125rem;
+    font-weight: var(--font-weight-semibold);
+    border-block-end: 1px solid transparent;
+    flex-shrink: 0;
+  }
+
+  .status-banner[data-state='degraded'] {
+    background-color: var(--color-warning-soft);
+    border-block-end-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+    color: var(--color-warning);
+  }
+
+  .status-banner[data-state='offline'] {
+    background-color: var(--color-danger-soft);
+    border-block-end-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
+    color: var(--color-danger);
+  }
+
+  .status-banner[data-state='syncing'] {
+    background-color: var(--color-info-soft);
+    border-block-end-color: color-mix(in srgb, var(--color-info) 25%, transparent);
+    color: var(--color-info);
+  }
+
+  .status-banner[data-state='syncing']::before {
+    content: '';
+    display: inline-block;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-info);
+    flex-shrink: 0;
+    animation: pulse-dot 1.6s ease-in-out infinite;
+  }
+
+  /* ── Badge (T035) ────────────────────────────────────────────────────── */
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    block-size: 26px;
+    padding-inline: var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .badge::before {
+    content: '';
+    display: inline-block;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: var(--radius-pill);
+    flex-shrink: 0;
+    background-color: currentColor;
+  }
+
+  .badge--info {
+    background-color: var(--color-info-soft);
+    color: var(--color-info);
+  }
+
+  .badge--success {
+    background-color: var(--color-success-soft);
+    color: var(--color-success);
+  }
+
+  .badge--warning {
+    background-color: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  .badge--danger {
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  .badge--neutral {
+    background-color: var(--color-surface-elevated);
+    color: var(--color-text-muted);
+  }
+
+  /* ── Toast (T036) ────────────────────────────────────────────────────── */
+
+  .toast {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-inset), var(--shadow-card);
+    border: 1px solid transparent;
+    min-inline-size: 280px;
+    max-inline-size: 440px;
+    position: relative;
+    transition: opacity var(--duration-3, 220ms) var(--ease-out, ease-out);
+  }
+
+  .toast[data-intent='info'] {
+    background-color: var(--color-info-soft);
+    border-color: color-mix(in srgb, var(--color-info) 25%, transparent);
+    color: var(--color-info);
+  }
+
+  .toast[data-intent='success'] {
+    background-color: var(--color-success-soft);
+    border-color: color-mix(in srgb, var(--color-success) 25%, transparent);
+    color: var(--color-success);
+  }
+
+  .toast[data-intent='warning'] {
+    background-color: var(--color-warning-soft);
+    border-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+    color: var(--color-warning);
+  }
+
+  .toast[data-intent='danger'] {
+    background-color: var(--color-danger-soft);
+    border-color: color-mix(in srgb, var(--color-danger) 25%, transparent);
+    color: var(--color-danger);
+  }
+
+  .toast__title {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    color: var(--color-text);
+  }
+
+  .toast__detail {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .toast__dismiss {
+    position: absolute;
+    inset-block-start: var(--space-3);
+    inset-inline-end: var(--space-3);
+    flex-shrink: 0;
+  }
+
+  /* ── Table (T037) ────────────────────────────────────────────────────── */
+
+  .data-table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+  }
+
+  .data-table thead th {
+    padding-block: var(--space-3);
+    padding-inline: var(--space-4);
+    text-align: start;
+    font-size: 0.6875rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    border-block-end: 1px solid var(--color-border-soft);
+    background-color: var(--color-surface-elevated);
+  }
+
+  .data-table tbody td {
+    padding-block: var(--space-3);
+    padding-inline: var(--space-4);
+    color: var(--color-text);
+    border-block-end: 1px solid var(--color-border-soft);
+  }
+
+  .data-table tbody tr:last-child td {
+    border-block-end: none;
+  }
+
+  .data-table tbody tr:hover td {
+    background-color: var(--color-surface-elevated);
+  }
+
+  /* ── Loading State (T038) ────────────────────────────────────────────── */
+
+  .loading-state--skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-5);
+  }
+
+  .loading-state__skeleton-row {
+    block-size: 8px;
+    border-radius: var(--radius-pill);
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-sunken) 0%,
+      var(--color-surface-elevated) 50%,
+      var(--color-surface-sunken) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+
+  .loading-state--center-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-4);
+    padding: var(--space-7);
+    text-align: center;
+  }
+
+  .loading-state__dot {
+    inline-size: 16px;
+    block-size: 16px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-info);
+    animation: pulse-dot 1.6s ease-in-out infinite;
+  }
+
+  .loading-state__title {
+    font-size: 1.375rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .loading-state__helper {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .loading-state__steps {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    text-align: start;
+    margin: 0;
+    padding-inline-start: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /* ── Empty State (T039) ──────────────────────────────────────────────── */
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-7);
+    text-align: center;
+  }
+
+  .empty-state__heading {
+    font-size: 1.375rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .empty-state__description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    line-height: var(--line-height-relaxed);
+    max-inline-size: 40ch;
+    margin: 0;
+  }
+
+  /* ── Error State (T040) ──────────────────────────────────────────────── */
+
+  .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding: var(--space-7);
+    text-align: center;
+  }
+
+  .error-state__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 32px;
+    block-size: 32px;
+    border-radius: var(--radius-pill);
+    background-color: var(--color-danger-soft);
+    color: var(--color-danger);
+    flex-shrink: 0;
+  }
+
+  .error-state__heading {
+    font-size: 1.375rem;
+    font-weight: var(--font-weight-bold);
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .error-state__description {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    line-height: var(--line-height-relaxed);
+    max-inline-size: 40ch;
+    margin: 0;
+  }
+}
+
+/* ─── Reduced motion (T041) ─────────────────────────────────────────────── */
+/* Per spec NFR-007 — animations degrade to immediate state swap under         */
+/* prefers-reduced-motion: reduce.                                             */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Skeleton shimmer: stop animation, show static surface */
+  .loading-state__skeleton-row {
+    animation: none;
+    background: var(--color-surface-sunken);
+    background-image: none;
+  }
+
+  /* Center-stage pulsing dot */
+  .loading-state__dot {
+    animation: none;
+  }
+
+  /* StatusBanner syncing pulse dot */
+  .status-banner[data-state='syncing']::before,
+  .connection-indicator--neutral::before,
+  .connection-indicator[data-connection-state='syncing']::before {
+    animation: none;
+  }
+
+  /* Toast fade transition */
+  .toast {
+    transition: none;
+  }
+
+  /* Dialog fade-in */
+  .dialog-panel,
+  .dialog-overlay {
+    transition: none;
+    animation: none;
+  }
+
+  /* Spinner */
+  .btn__spinner {
+    animation: none;
+    border-color: currentColor;
+    border-inline-end-color: transparent;
   }
 }
