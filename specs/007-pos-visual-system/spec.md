@@ -1,11 +1,12 @@
 # Feature Specification: POS Visual System Recovery
 
 **Feature ID:** 007-pos-visual-system
-**Feature Branch:** `docs/007-pos-visual-system-specify`
-**Status:** Draft (specify phase only — clarify / plan / tasks / analyze NOT yet run)
+**Feature Branch:** `docs/007-pos-visual-system-clarify`
+**Status:** Draft (clarified 2026-05-10 — plan / tasks / analyze NOT yet run)
 **Created:** 2026-05-10
-**Last Updated:** 2026-05-10
+**Last Updated:** 2026-05-10 (clarifications applied — see Clarifications session 2026-05-10)
 **Owner:** POS-Pulse desktop team
+**Specify PR:** [#107 — docs(007): specify POS visual system recovery](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/107) (merged)
 **Input:** Product-owner directive — "POS Pulse UI feels primitive and does not match
 the intended Claude Design visual direction. Before sales / cart / payments are built on
 top, the visual system must be recovered to a professional, terminal-first standard."
@@ -37,6 +38,66 @@ feature that follows MUST run an early visual-direction pass between
 `/speckit-plan` and the first implementation slice. 007 *is* that visual-direction
 pass for the entire POS terminal — the one that 005 (sales / cart) and 006
 (payments / tender) inherit before their UI slices may be implemented.
+
+## Clarifications
+
+The three NEEDS CLARIFICATION markers raised by the specify phase (PR #107)
+are resolved here. Resolved items are now load-bearing requirements (see
+updated FRs / Assumptions / Out-of-Scope / Dependencies) and the markers
+have been removed from §"Open Questions" below.
+
+### Session 2026-05-10
+
+- **Q: Canonical visual reference set for the 007 recovery (was Q1).**
+  → **A:** Canonical references are, in this priority order:
+  1. **Claude Design** design-system / deck / prototype output, once
+     exported by or linked to by the product owner. Until exported or
+     linked, no Claude Design artifact is canonical.
+  2. **Figma Make** prototype output, if and only if approved by the
+     product owner. Unapproved Figma Make exploration is reference-only
+     and never canonical.
+  3. **Existing repo references remain binding constraints** (i.e. they
+     bind even when (1) or (2) is named):
+     - `specs/004-operator-session/visual-direction/README.md`
+     - `specs/004-operator-session/planning/ui-pinpad-takeover-visual-direction.md`
+     - `specs/003-pos-ui-shell/contracts/`
+
+  External design references are **visual references only, not
+  production source code** — direct copy-paste of HTML / JSX from any
+  external reference into production code is forbidden (FR-034 /
+  FR-035). The three repo references in (3) override (1) and (2)
+  whenever they disagree (Constitution Principle IX).
+
+- **Q: 005 / 006 blocking scope (was Q2).**
+  → **A:** 007 blocks **the UI implementation slices** of
+  `005-sales-cart` and `006-payments-tender`, **not** their non-UI
+  backend / domain planning or specification.
+
+  - Sales / cart / payment UI MUST NOT be built on the current primitive
+    foundation. UI implementation for 005 / 006 waits until at least
+    **007 Slices S1, S2, and S3** are approved.
+  - Planning, specification, contract design, data-model work, money-
+    math wiring, audit-attribution wiring, and any other non-UI work
+    for 005 / 006 MAY continue in parallel with the visual recovery.
+  - The 007 slice numbering used here (S1, S2, S3) refers to the
+    visual-recovery slice plan that `/speckit-plan` will produce; it is
+    forward-looking and NOT determined by this specify-phase document.
+    The plan phase MUST name S1 / S2 / S3 explicitly so this gate is
+    auditable.
+
+- **Q: Theme count for acceptance (was Q3).**
+  → **A:** **One polished light theme only for now.** Dark mode is
+  **out of scope for 007** unless explicitly approved later by the
+  product owner. Typography uses **Inter as the primary font, with
+  system-UI as the fallback when Inter is unavailable**; **no
+  missing proprietary brand fonts** — the recovery MUST NOT
+  introduce a font dependency whose absence on a paired Windows
+  10 / 11 terminal causes a fallback visual regression.
+
+  This decision narrows §"Out of Scope" §"Multi-theme runtime
+  switching" from "pending Q3" to a hard exclusion until a future
+  feature explicitly re-opens it, and adds Assumption A10 for the font
+  policy.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -200,8 +261,8 @@ assertion (terminal-A label, prior-session timestamp, other operator's name
 or role, "View details" affordance) holds in the rendered DOM under
 `[data-testid="takeover-prompt"]`; no new design tokens were introduced; no
 new connection state was introduced; the `comfortable` density, the
-44 × 44 px touch floor, and the single-theme rule (subject to Q3 below) all
-hold.
+44 × 44 px touch floor, and the **single light theme rule** (per
+Clarifications session 2026-05-10 / FR-052) all hold.
 
 **Acceptance Scenarios**:
 
@@ -268,9 +329,12 @@ hold.
 - **Right-to-left locale (future-aware)**: layout uses logical CSS
   properties (`inline-start` / `inline-end`) only, so a future RTL flip
   is non-breaking. Localisation strings themselves are out of scope.
-- **Dark-mode preference of the OS**: this feature's commitment to one
-  vs. two themes is the open clarification Q3 below. Until Q3 resolves,
-  the existing single light theme is preserved.
+- **Dark-mode preference of the OS**: this feature commits to **one
+  polished light theme only** (Clarifications session 2026-05-10 /
+  FR-052). The recovered surfaces MUST NOT respond to a dark-mode OS
+  preference — the application renders the same light theme regardless
+  of the user's `prefers-color-scheme` setting. Dark-mode delivery is
+  deferred to a later, explicitly-approved feature.
 - **Cashier-forbidden information in screenshots**: any screenshot
   attached to a 007 implementing PR for a manager-or-admin surface MUST
   NOT leak cashier-forbidden information when reviewed by a cashier;
@@ -556,6 +620,42 @@ Each requirement is testable, unambiguous, and uses MUST / SHOULD / MAY.
   scopes one. The default posture is **renderer-only visual
   recovery**.
 
+#### FR-Canonical references and theme policy *(added by
+Clarifications session 2026-05-10)*
+
+- **FR-051 (canonical reference set)**: The canonical visual
+  reference set for the 007 recovery is the priority-ordered list
+  resolved in §"Clarifications session 2026-05-10":
+  1. Claude Design design-system / deck / prototype output, **once
+     exported by or linked to by the product owner**. Until then,
+     no Claude Design artifact is canonical.
+  2. Figma Make prototype output, **only when approved by the
+     product owner**. Unapproved Figma Make exploration is
+     reference-only.
+  3. The three repo references — `specs/004-operator-session/visual-direction/README.md`,
+     `specs/004-operator-session/planning/ui-pinpad-takeover-visual-direction.md`,
+     and `specs/003-pos-ui-shell/contracts/` — remain **binding
+     constraints** that override (1) and (2) whenever they
+     disagree (Constitution Principle IX). External references
+     are visual references only, never production source code.
+- **FR-052 (single polished light theme + Inter / system-UI font
+  policy)**: The 007 recovery delivers **exactly one polished
+  light theme**. The recovered surfaces MUST render the same
+  light theme regardless of the user's OS-level
+  `prefers-color-scheme` setting. Typography MUST use **Inter
+  as the primary font family**, with **system-UI as the fallback
+  when Inter is unavailable** on the target Windows 10 / 11
+  terminal. The mechanism by which Inter reaches the terminal
+  (bundled webfont, ship-with-installer, OS pre-install, or any
+  other path) is a delivery decision for `/speckit-plan` and is
+  not pinned by this spec; the *behavioural* commitment is that
+  the recovered visual outcome MUST hold whether Inter is
+  available or the system-UI fallback is in effect — neither
+  state may produce a fallback visual regression. No proprietary
+  brand font is permitted. Dark-mode delivery is out of scope
+  for 007 (see Out of Scope §"Multi-theme runtime switching")
+  until a future feature explicitly re-opens it.
+
 ### Non-Functional Requirements
 
 - **NFR-001 (security boundary preservation)**: This feature MUST
@@ -578,8 +678,8 @@ Each requirement is testable, unambiguous, and uses MUST / SHOULD / MAY.
 - **NFR-004 (deterministic visual outcome)**: Given a recovered
   token set and a recovered primitive, the rendered visual
   outcome MUST be deterministic and not influenced by client-side
-  state (theme — subject to Q3, viewport, feature flag, dev
-  toggle) beyond the documented variants.
+  state (single-light-theme rule per FR-052, viewport, feature
+  flag, dev toggle) beyond the documented variants.
 - **NFR-005 (touch-target floor)**: The 44 × 44 CSS-pixel touch-
   target floor inherited from `003` NFR-5 / Constitution Hardware
   Matrix MUST hold on every interactive element across every
@@ -628,10 +728,14 @@ Each requirement is testable, unambiguous, and uses MUST / SHOULD / MAY.
   tests for any new variant introduced.
 - **NFR-014 (deferral discipline)**: This feature is the visual
   layer for 005-sales-cart and 006-payments-tender to inherit
-  before their UI implementation slices begin. Until the
-  recovery's P1 + P2 land, **the UI implementation of 005 and
-  006** is held — see Q2 below for whether the entire 005 / 006
-  features are blocked or only their UI surfaces.
+  before their UI implementation slices begin. Per Clarifications
+  session 2026-05-10, **the UI implementation slices of 005 and
+  006 are held until at least 007 Slices S1, S2, and S3 are
+  approved**. Non-UI work for 005 / 006 (planning, specification,
+  data model, contracts, money-math wiring, audit-attribution
+  wiring) MAY proceed in parallel. The 007 slice numbering is
+  forward-looking and `/speckit-plan` MUST name S1 / S2 / S3
+  explicitly so this gate is auditable.
 
 ### Key Entities *(behavioural; not implementation)*
 
@@ -769,8 +873,17 @@ implementation slices. They are deferred to later features.
 - Localisation (string catalogue, RTL build) — layout direction-
   safety is preserved (NFR-010), but no RTL build is delivered
   here.
-- Multi-theme runtime switching — pending Q3 below; the default
-  posture is single-theme until Q3 resolves.
+- Multi-theme runtime switching — **explicitly excluded** by
+  Clarifications session 2026-05-10 / FR-052. 007 delivers a
+  single polished light theme; the recovered surfaces MUST NOT
+  respond to OS-level `prefers-color-scheme` preferences, and
+  no light / dark theme toggle, no system-theme follower, and
+  no per-tenant theme is exposed in the running app. Dark-mode
+  delivery is deferred to a later, explicitly-approved feature.
+- Proprietary brand fonts whose absence on the target Windows
+  hardware would cause a fallback visual regression — forbidden
+  by FR-052. Inter (where installable) and system-UI fallback
+  are the only typography families permitted by 007.
 
 ## Assumptions
 
@@ -788,20 +901,24 @@ implementation slices. They are deferred to later features.
   cart placeholder, receipt / checkout placeholder (with `005`
   reserved slots intact), inventory placeholder, settings / help
   placeholder. 007 does not introduce new routes.
-- **A3 (no in-repo "Claude Design" mocks)**: a search of the
-  repository working tree found zero files matching
-  `*claude-design*`, `*claudedesign*`, `*figma-mock*`, or
-  `*prototype*` outside the gitignored `_reference/` and
-  outside the planning artifacts in `specs/003-pos-ui-shell/`
-  and `specs/004-operator-session/visual-direction/`. The
-  binding visual references are therefore: (a) the `004` Slice
-  0 contact sheet (`specs/004-operator-session/visual-direction/README.md`),
-  (b) the `004` PinPad / TakeoverPrompt planning document
-  (`specs/004-operator-session/planning/ui-pinpad-takeover-visual-direction.md`),
-  (c) the `003` design-token / shared-component / shell-region
-  contracts under `specs/003-pos-ui-shell/contracts/`, and
-  (d) any external reference (Figma file, Claude Design mock)
-  the team supplies during clarification — see Q1 below.
+- **A3 (canonical reference set — resolved 2026-05-10)**: A
+  search of the repository working tree at specify-phase time
+  found zero files matching `*claude-design*`, `*claudedesign*`,
+  `*figma-mock*`, or `*prototype*` outside the gitignored
+  `_reference/` and outside the planning artifacts in
+  `specs/003-pos-ui-shell/` and
+  `specs/004-operator-session/visual-direction/`. The Clarifications
+  session of 2026-05-10 then resolved the canonical reference
+  set as the priority-ordered list captured in FR-051:
+  (1) Claude Design output once exported / linked by the product
+  owner; (2) Figma Make output when product-owner-approved; and
+  (3) the three repo references —
+  `specs/004-operator-session/visual-direction/README.md`,
+  `specs/004-operator-session/planning/ui-pinpad-takeover-visual-direction.md`,
+  and `specs/003-pos-ui-shell/contracts/` — which remain binding
+  constraints overriding (1) and (2) on disagreement. External
+  references are visual references only; FR-034 / FR-035 forbid
+  copy-paste of mock HTML / JSX into production code.
 - **A4 (highest-priority screens are the operator surfaces and
   shell chrome)**: in the absence of explicit product
   prioritisation, this spec assumes the operator-session
@@ -851,6 +968,19 @@ implementation slices. They are deferred to later features.
   IX (reference, not inheritance — load-bearing here), and
   the Hardware Matrix (touchscreen 44 × 44 px floor). 007 does
   NOT alter these.
+- **A10 (font policy — resolved 2026-05-10)**: Typography uses
+  Inter as the primary font family, with system-UI as the
+  fallback when Inter is unavailable on the target Windows 10 /
+  11 terminal. No proprietary brand font is introduced. The
+  font-family token in the recovered token table MUST resolve
+  to a chain whose first entry is Inter and whose final
+  fallback is `system-ui` / `sans-serif`. The Inter delivery
+  mechanism (bundled webfont, ship-with-installer, OS
+  pre-install, or other) is a `/speckit-plan` decision; the
+  spec only fixes the behavioural commitment that the recovered
+  visual outcome MUST hold under either Inter or the system-UI
+  fallback. Confirmed by Clarifications session 2026-05-10;
+  codified in FR-052.
 
 ## Dependencies
 
@@ -878,76 +1008,79 @@ implementation slices. They are deferred to later features.
   Constitution Principle IX explicitly forbids inheritance
   from this directory. 007 MUST NOT copy-paste from it
   (FR-048).
-- **External design references (deferred)** — Figma files,
-  Figma Make prototypes, "Claude Design" mocks. These are
-  references only (FR-034) and require translation into
-  repo-native artifacts (FR-035). The canonical reference
-  set is itself an open clarification (Q1 below).
+- **External design references (priority-ordered, per
+  Clarifications session 2026-05-10 / FR-051)** — (1) Claude
+  Design output once exported / linked by the product owner;
+  (2) Figma Make output when approved by the product owner;
+  (3) the three repo references —
+  `specs/004-operator-session/visual-direction/README.md`,
+  `specs/004-operator-session/planning/ui-pinpad-takeover-visual-direction.md`,
+  `specs/003-pos-ui-shell/contracts/` — which remain binding
+  constraints overriding (1) and (2) on disagreement
+  (Constitution Principle IX). External references are visual
+  references only; FR-034 / FR-035 forbid copy-paste of mock
+  HTML / JSX into production code.
 - **Forward dependency: 005-sales-cart** (already specified
-  per `specs/005-sales-cart/`) — its UI implementation
-  slices inherit the recovered visual system from 007. The
-  scope of that dependency (entire 005 blocked, or only
-  005's UI surfaces blocked) is an open clarification (Q2
-  below).
+  per `specs/005-sales-cart/`) — **its UI implementation
+  slices wait until at least 007 Slices S1, S2, and S3 are
+  approved** (Clarifications session 2026-05-10). Non-UI work
+  for 005 (cart data model, line-item / sale entity contracts,
+  backend / IPC integration, money-math wiring) MAY proceed in
+  parallel.
 - **Forward dependency: 006-payments-tender** (already
-  specified per `specs/006-payments-tender/`) — its UI
-  implementation slices inherit the recovered visual system
-  from 007. Same Q2 dependency scope applies.
+  specified per `specs/006-payments-tender/`) — **its UI
+  implementation slices wait until at least 007 Slices S1, S2,
+  and S3 are approved** (Clarifications session 2026-05-10).
+  Non-UI work for 006 (payment / tender data model, `Money`
+  type wiring, audit-attribution wiring, card-terminal contract
+  if any) MAY proceed in parallel.
 
 ## Open Questions / NEEDS CLARIFICATION
 
-The visual-recovery brief raised six open product questions. Per the
-Spec Kit cap of 3 NEEDS CLARIFICATION markers, this spec keeps the 3
-markers with the highest scope-impact below; the other 3 are resolved
-with documented assumptions (A4, A5, A6 above) and may be revisited
-during `/speckit-clarify` if the team disagrees.
+All three NEEDS CLARIFICATION markers raised by the specify phase were
+resolved on 2026-05-10 (see §"Clarifications session 2026-05-10"). They
+are recorded here as resolved decisions for traceability.
 
-1. **[NEEDS CLARIFICATION: canonical visual reference]** — Which set of
-   external design references is **canonical** for the 007 recovery?
-   The candidates are (a) a specific Figma file the team will name,
-   (b) a "Claude Design" file the team will name, (c) the embedded
-   `004` Slice 0 contact sheet plus the `003` contracts as the only
-   binding references (no external file), (d) some combination of the
-   above. The spec assumes (c) as the default until (a) / (b) /
-   (d) is named, but the answer materially changes scope: a named
-   external file authorises additional surfaces and tokens beyond
-   what `003` / `004` already locked.
+1. ✅ **Resolved 2026-05-10** — Canonical visual reference set: Claude
+   Design output once exported / linked by the product owner (priority
+   1); Figma Make output when product-owner-approved (priority 2); the
+   three repo references at `specs/004-operator-session/visual-direction/README.md`,
+   `specs/004-operator-session/planning/ui-pinpad-takeover-visual-direction.md`,
+   and `specs/003-pos-ui-shell/contracts/` are binding constraints that
+   override (1) and (2) on disagreement. External references are visual
+   references only — never production source. Codified in FR-051; see
+   Clarifications session 2026-05-10 and Dependencies §"External design
+   references".
 
-2. **[NEEDS CLARIFICATION: 005 / 006 blocking scope]** — Does 007
-   block the entire `005-sales-cart` and `006-payments-tender`
-   features, or only their UI implementation slices? Both specs
-   already exist with full spec / plan / tasks artifacts under
-   `specs/005-sales-cart/` and `specs/006-payments-tender/`
-   (committed 2026-05-09). The non-UI portions of those features —
-   for 005: the cart data model, the line-item / sale entity
-   contracts, any backend / IPC integration the plan introduces,
-   the money-math module changes; for 006: the payment / tender
-   data model, the `Money` type wiring, the card-terminal contract
-   (if any), the audit-attribution wiring — could in principle
-   proceed in parallel with the visual recovery, since none of
-   those depend on the recovered visual language. Default posture
-   in this spec: 007 blocks **only** the UI implementation slices
-   of 005 and 006 — non-UI work proceeds in parallel — but the
-   team may instead require a hard hold on all 005 / 006
-   implementation until 007 P1 + P2 land.
+2. ✅ **Resolved 2026-05-10** — 005 / 006 blocking scope: 007 blocks
+   **the UI implementation slices** of `005-sales-cart` and
+   `006-payments-tender`. UI implementation waits until at least
+   **007 Slices S1, S2, and S3** are approved. Non-UI planning,
+   specification, contract design, data-model work, money-math
+   wiring, and audit-attribution wiring for 005 / 006 MAY continue in
+   parallel. See Clarifications session 2026-05-10, Dependencies
+   §"Forward dependency: 005-sales-cart" and §"Forward dependency:
+   006-payments-tender", and NFR-014.
 
-3. **[NEEDS CLARIFICATION: theme count for acceptance]** — Does
-   007 need to deliver one polished theme (the existing single
-   light theme) or two (light + dark)? Dark mode is referenced
-   nowhere in `003` / `004` and the `003` token surface has no
-   `prefers-color-scheme` switch. Default posture in this spec:
-   single polished light theme for MVP — no dark mode in 007 —
-   with dark mode deferred to a later dedicated feature. The
-   answer materially changes the contact-sheet surface (every
-   state in two themes ≈ 2 × screenshots per surface) and the
-   token table shape.
+3. ✅ **Resolved 2026-05-10** — Theme count and font policy: one
+   polished light theme only for now; dark mode is out of scope for
+   007 unless explicitly approved later. Typography uses Inter as
+   the primary font family, with system-UI as the fallback when
+   Inter is unavailable on the target Windows 10 / 11 terminal; no
+   proprietary brand fonts. Codified in FR-052 and Assumption A10;
+   see Clarifications session 2026-05-10, Out-of-Scope §"Multi-theme
+   runtime switching", and Edge Case §"Dark-mode preference of the
+   OS".
 
 (The original brief also listed three further questions —
 "highest-priority screens", "mandatory acceptance widths", and
 "existing 003 colours acceptable or replaced" — resolved as
-assumptions A4, A5, A6 respectively. They are not consuming
-NEEDS CLARIFICATION slots and may be revisited during
+assumptions A4, A5, A6 respectively. They did not consume NEEDS
+CLARIFICATION slots and may be revisited during a future
 `/speckit-clarify` without amending this spec.)
+
+**All three NEEDS CLARIFICATION markers are now resolved.** This spec
+is ready for `/speckit-plan`.
 
 ## Constitutional Alignment
 
@@ -983,8 +1116,10 @@ Check.
 
 ---
 
-**End of specification.** Next phase: `/speckit-clarify` to resolve
-the three open questions above, then `/speckit-plan`. The plan phase
-MUST schedule an early-visual-direction milestone per `004` FR-033;
-because 007 *is* a visual-direction feature, that milestone IS the
-plan-phase contact sheet itself.
+**End of specification.** Clarify phase complete (session 2026-05-10).
+Next phase: `/speckit-plan`. The plan phase MUST schedule an
+early-visual-direction milestone per `004` FR-033; because 007 *is* a
+visual-direction feature, that milestone IS the plan-phase contact
+sheet itself. The plan MUST also name Slices S1, S2, and S3 explicitly
+so the 005 / 006 UI-implementation gate from Clarifications session
+2026-05-10 / NFR-014 / Dependencies is auditable.
