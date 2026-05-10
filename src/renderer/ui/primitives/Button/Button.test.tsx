@@ -114,6 +114,43 @@ describe('Button (T016 + T029)', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
+  it('disabled prop sets native disabled attribute', () => {
+    render(
+      <Button intent="primary" disabled>
+        Disabled
+      </Button>,
+    );
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  it('loading prop sets native disabled attribute', () => {
+    render(
+      <Button intent="primary" loading>
+        Loading
+      </Button>,
+    );
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  it('loading prop sets aria-disabled="true"', () => {
+    render(
+      <Button intent="primary" loading>
+        Loading
+      </Button>,
+    );
+    expect(screen.getByRole('button')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('loading button still shows spinner', () => {
+    render(
+      <Button intent="primary" loading>
+        Saving
+      </Button>,
+    );
+    expect(screen.getByRole('button')).toBeDisabled();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
   it('does not fire onClick when disabled', async () => {
     const handler = vi.fn();
     const user = userEvent.setup();
@@ -122,7 +159,19 @@ describe('Button (T016 + T029)', () => {
         Disabled
       </Button>,
     );
-    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('button', { hidden: true }));
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('does not fire onClick when loading', async () => {
+    const handler = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Button intent="primary" loading onClick={handler}>
+        Loading
+      </Button>,
+    );
+    await user.click(screen.getByRole('button', { hidden: true }));
     expect(handler).not.toHaveBeenCalled();
   });
 

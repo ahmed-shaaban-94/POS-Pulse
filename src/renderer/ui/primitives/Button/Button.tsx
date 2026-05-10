@@ -38,14 +38,16 @@ export function Button({
   onClick,
   ...aria
 }: ButtonProps): JSX.Element {
+  const isDisabled = disabled || loading;
   return (
     <button
       type={type}
       className={`btn btn--${intent} btn--${size}`}
+      disabled={isDisabled}
       aria-busy={loading ? 'true' : undefined}
-      aria-disabled={disabled ? 'true' : undefined}
-      tabIndex={disabled ? -1 : undefined}
-      onClick={disabled || loading ? undefined : onClick}
+      aria-disabled={isDisabled ? 'true' : undefined}
+      tabIndex={isDisabled ? -1 : undefined}
+      onClick={isDisabled ? undefined : onClick}
       data-touch-target="44"
       {...aria}
     >
