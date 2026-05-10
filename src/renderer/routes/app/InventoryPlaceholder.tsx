@@ -10,6 +10,7 @@
  */
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
+import { Workspace } from '../../shell/regions/Workspace';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -43,9 +44,10 @@ export function InventoryPlaceholder(): JSX.Element {
   }
 
   return (
-    <section className="placeholder-pane">
-      <h1>Inventory</h1>
-      <p>Navigation only — inventory management is not available at this terminal.</p>
-    </section>
+    <Workspace title="Inventory">
+      <section className="placeholder-pane">
+        <p>Navigation only — inventory management is not available at this terminal.</p>
+      </section>
+    </Workspace>
   );
 }

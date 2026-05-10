@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import { ReservedTenderRow } from './ReservedTenderRow';
 import { ReservedTotalsRow } from './ReservedTotalsRow';
+import { Workspace } from '../../../shell/regions/Workspace';
 
 /**
  * T052 — CheckoutPlaceholder
@@ -29,26 +30,28 @@ import { ReservedTotalsRow } from './ReservedTotalsRow';
  */
 export function CheckoutPlaceholder(): JSX.Element {
   return (
-    <section className="checkout-placeholder" aria-labelledby="checkout-heading">
-      <h1 id="checkout-heading">Checkout</h1>
-      <p>Payment tender slots are reserved for feature 005-checkout-payments.</p>
+    <Workspace title="Checkout">
+      <section className="checkout-placeholder" aria-labelledby="checkout-heading">
+        <h1 id="checkout-heading">Checkout</h1>
+        <p>Payment tender slots are reserved for feature 005-checkout-payments.</p>
 
-      {/* Six payment-tender rows */}
-      <ReservedTenderRow slotId="tender.cash" label="Cash" />
-      <ReservedTenderRow slotId="tender.card" label="Card" />
-      <ReservedTenderRow slotId="tender.bank-transfer" label="Bank Transfer" />
-      <ReservedTenderRow slotId="tender.voucher" label="Gift Voucher" />
-      <ReservedTenderRow slotId="tender.insurance" label="Insurance" />
-      <ReservedTenderRow slotId="tender.split" label="Split Tender" />
+        {/* Six payment-tender rows */}
+        <ReservedTenderRow slotId="tender.cash" label="Cash" />
+        <ReservedTenderRow slotId="tender.card" label="Card" />
+        <ReservedTenderRow slotId="tender.bank-transfer" label="Bank Transfer" />
+        <ReservedTenderRow slotId="tender.voucher" label="Gift Voucher" />
+        <ReservedTenderRow slotId="tender.insurance" label="Insurance" />
+        <ReservedTenderRow slotId="tender.split" label="Split Tender" />
 
-      {/* Four totals / amount fields */}
-      <ReservedTotalsRow slotId="totals.amount-due" label="Amount Due" />
-      <ReservedTotalsRow slotId="totals.amount-paid" label="Amount Paid" />
-      <ReservedTotalsRow slotId="totals.remaining" label="Remaining Balance" />
-      <ReservedTotalsRow slotId="totals.change-due" label="Change Due" />
+        {/* Four totals / amount fields */}
+        <ReservedTotalsRow slotId="totals.amount-due" label="Amount Due" />
+        <ReservedTotalsRow slotId="totals.amount-paid" label="Amount Paid" />
+        <ReservedTotalsRow slotId="totals.remaining" label="Remaining Balance" />
+        <ReservedTotalsRow slotId="totals.change-due" label="Change Due" />
 
-      {/* Receipt breakdown — last slot, keeps receipt prefix (Plan §"Note B") */}
-      <ReservedTotalsRow slotId="receipt.breakdown" label="Receipt Breakdown" />
-    </section>
+        {/* Receipt breakdown — last slot, keeps receipt prefix (Plan §"Note B") */}
+        <ReservedTotalsRow slotId="receipt.breakdown" label="Receipt Breakdown" />
+      </section>
+    </Workspace>
   );
 }

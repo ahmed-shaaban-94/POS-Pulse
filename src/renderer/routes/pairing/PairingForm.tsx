@@ -162,6 +162,7 @@ export function PairingForm(props: PairingFormProps): JSX.Element {
         <label htmlFor="pairing-code">Pairing code</label>
         <input
           id="pairing-code"
+          className="pairing-form__code-input"
           ref={inputRef}
           type="text"
           autoComplete="off"
