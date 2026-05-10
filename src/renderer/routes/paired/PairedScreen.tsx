@@ -97,11 +97,6 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
           <div className="paired-screen__badge">PAIRED</div>
           <h1>Ready</h1>
           <p className="paired-screen__body">This terminal is linked to {status.branch_id}.</p>
-          {/* Hidden detail block keeps T032 textContent assertions passing
-              without cluttering the visual hierarchy. */}
-          <span className="paired-screen__detail" aria-hidden="true" hidden>
-            {status.tenant_id} {status.terminal_id} {status.terminal_label}
-          </span>
           {/* T054 — O2 resolution: Continue navigates to /app/dashboard.
               Boot router gate is NOT modified. No IPC / bridge call. */}
           <div className="paired-screen__actions">
