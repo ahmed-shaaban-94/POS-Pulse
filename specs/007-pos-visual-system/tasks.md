@@ -273,7 +273,7 @@ covers every existing route at both viewport bands.
   measured noise. Document the measurement evidence in the S0 PR
   description.
 
-- [ ] T015 [S0] **Open S0 PR titled `docs(007 S0): visual reference
+- [X] T015 [S0] **Open S0 PR titled `docs(007 S0): visual reference
   adjudication review + baseline capture`.** Body cites the merged
   contracts (PR #109), lists per-surface baseline locations
   (out-of-tree paths), confirms forbidden-content audits passed,
