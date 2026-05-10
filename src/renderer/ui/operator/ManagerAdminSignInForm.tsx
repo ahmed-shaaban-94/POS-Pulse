@@ -35,9 +35,11 @@ import { SIGN_IN_REFUSAL_COPY, EMPTY_INPUT_MESSAGE } from './messages.js';
 
 export interface ManagerAdminSignInFormProps {
   operator: OperatorBridgeAPI;
+  onBack?: () => void;
 }
 
 export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.Element {
+  const { onBack } = props;
   const identifierId = useId();
   const passwordId = useId();
   const identifierRef = useRef<HTMLInputElement | null>(null);
@@ -117,6 +119,16 @@ export function ManagerAdminSignInForm(props: ManagerAdminSignInFormProps): JSX.
       data-testid="manager-admin-sign-in-form"
       noValidate
     >
+      {onBack !== undefined && (
+        <button
+          type="button"
+          className="sign-in-form__back"
+          data-testid="sign-in-back"
+          onClick={onBack}
+        >
+          ← Back to cashier roster
+        </button>
+      )}
       <div className="sign-in-form__field">
         <label htmlFor={identifierId}>Email or username</label>
         <input

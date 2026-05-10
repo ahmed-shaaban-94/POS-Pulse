@@ -894,7 +894,7 @@ confirms the forbidden-string set is absent from the modal subtree;
 confirms cashier role's render tree contains zero items from the 004
 FR-015 catalogue.
 
-- [ ] T071 [S5] **Add PIN dot-only guard test under
+- [X] T071 [S5] **Add PIN dot-only guard test under
   `src/renderer/ui/operator/__tests__/PinPad.dot-only-guard.test.tsx`
   (TEST-FIRST).** Asserts the PIN dot row markup carries: zero `value`
   attribute, zero `data-value` attribute, zero `title` attribute
@@ -902,7 +902,7 @@ FR-015 catalogue.
   `error`) and `aria-label="N of 6 entered"` (or `"4 of 6 entered"`
   etc.). Per CD `04-security-and-visibility.md` §A and 004 PR-1.
 
-- [ ] T072 [S5] **Add TakeoverPrompt forbidden-string guard test under
+- [X] T072 [S5] **Add TakeoverPrompt forbidden-string guard test under
   `src/renderer/ui/operator/__tests__/TakeoverPrompt.forbidden-strings.test.tsx`
   (TEST-FIRST).** Asserts the modal subtree under
   `[data-testid="takeover-prompt"]` contains zero occurrences of:
@@ -918,7 +918,7 @@ FR-015 catalogue.
   button label equals `"Continue here"` and the ghost equals
   `"Cancel"`. Per spec FR-026 / `004` FR-013.
 
-- [ ] T073 [S5] **Restyle
+- [X] T073 [S5] **Restyle
   `src/renderer/ui/operator/RosterList.tsx`** per CD §"Roster ·
   `RosterList`": 3-column grid at ≥ 1280 px / 2-column at 1024–1279
   px; tile 84 px tall; avatar circle 44 px with
@@ -928,7 +928,7 @@ FR-015 catalogue.
   "No cashiers configured for this branch." via `EmptyState`. No
   illustration. Public prop signature unchanged.
 
-- [ ] T074 [P] [S5] **Restyle
+- [X] T074 [P] [S5] **Restyle
   `src/renderer/ui/operator/PinPad.tsx`** per CD §"PIN keypad ·
   `PinPad`": 3 × 4 grid of 64 × 64 keys, gap 12; inset background
   `--color-surface-sunken` (S1), container radius `--radius-card`,
@@ -942,7 +942,7 @@ FR-015 catalogue.
   parity: 0–9 type; backspace deletes; enter submits. Public prop
   signature unchanged.
 
-- [ ] T075 [P] [S5] **Restyle
+- [X] T075 [P] [S5] **Restyle
   `src/renderer/ui/operator/TakeoverPrompt.tsx`** per CD
   `04-security-and-visibility.md` §C and `02-components.md`
   §"Dialogs / modals": composes the recovered `Dialog` (S2);
@@ -952,7 +952,7 @@ FR-015 catalogue.
   name, prior operator, role, timestamp, "view details" affordance.
   Public prop signature unchanged.
 
-- [ ] T076 [P] [S5] **Restyle
+- [X] T076 [P] [S5] **Restyle
   `src/renderer/ui/operator/OperatorBadge.tsx`** per CD §"Operator
   badge · `OperatorBadge`": 32 px avatar with `--color-primary-soft`
   + 2-letter mono initials in `--color-primary` 600. Role pill
@@ -963,7 +963,7 @@ FR-015 catalogue.
   **No email, no phone, no Clerk user id** rendered in the DOM.
   Public prop signature unchanged.
 
-- [ ] T077 [P] [S5] **Restyle
+- [X] T077 [P] [S5] **Restyle
   `src/renderer/ui/operator/ManagerAdminSignInForm.tsx`** per CD §06:
   email field + password field (both via S2 `Input`) + primary
   `Sign in` button + ghost `← Back to cashier roster` link. Refusal
@@ -971,12 +971,12 @@ FR-015 catalogue.
   validation; the bridge call returns refusals as closed-set
   categories. Public prop signature unchanged.
 
-- [ ] T078 [S5] **Confirm `messages.ts` is unchanged.** Run
+- [X] T078 [S5] **Confirm `messages.ts` is unchanged.** Run
   `git diff origin/main...HEAD -- src/renderer/ui/operator/messages.ts`
   and confirm zero changes. The closed-set refusal copy from 004 is
   preserved verbatim.
 
-- [ ] T079 [S5] **Cashier-Forbidden Information walling test** under
+- [X] T079 [S5] **Cashier-Forbidden Information walling test** under
   `src/renderer/__tests__/cashier-walling.test.tsx`. Assert: the
   cashier role's `<NavRail>` children prop yields manager-only rows
   as `null` (NOT as a disabled / locked entry). Assert: cashier-
@@ -986,18 +986,18 @@ FR-015 catalogue.
   review data, audit log surfaces, admin surfaces, other operators'
   shift data).
 
-- [ ] T080 [S5] **axe baseline smoke** on every restyled operator
+- [X] T080 [S5] **axe baseline smoke** on every restyled operator
   surface in default + interactive variants. Zero `serious` /
   `critical`.
 
-- [ ] T081 [S5] **Run validation locally** — full project
+- [X] T081 [S5] **Run validation locally** — full project
   implementation validation set. `npm run typecheck`, `npm run lint`,
   `npm test`, `npm test -- --coverage`, `npm run codegen:verify`. The
   ≥ 90 % gate on `src/renderer/ui/` (incl. `operator/`) holds;
   `codegen:verify` confirms no incidental `src/shared/api-types.ts`
   drift (S5 is renderer-only — IPC and bridge surfaces are unchanged).
 
-- [ ] T082 [S5] **Capture S5 contact sheet** — Cashier roster (default
+- [X] T082 [S5] **Capture S5 contact sheet** — Cashier roster (default
   + roster-picked + empty), Manager / admin sign-in (default +
   entering + submitting + variant A / B / C refusal), PIN entry
   (default + pin-entering + error + submitting), TakeoverPrompt
@@ -1009,7 +1009,7 @@ FR-015 catalogue.
   initial). The TakeoverPrompt screenshot's DOM contains zero
   forbidden strings (T072 set).
 
-- [ ] T083 [S5] **Open S5 PR titled `feat(007 S5): operator sign-in,
+- [X] T083 [S5] **Open S5 PR titled `feat(007 S5): operator sign-in,
   roster, PinPad, TakeoverPrompt, OperatorBadge`.** Body cites S3 PR
   (gate-tickable evidence already merged), lists every restyled
   operator surface, attaches the S5 contact sheet, confirms PIN

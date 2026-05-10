@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 
 import { roleDisplayName, type Role } from '../../../shared/operator/role.js';
+import { EmptyState } from '../states/EmptyState.js';
 
 /**
  * 004-operator-session T030 / T075 — RosterList.
@@ -45,13 +46,15 @@ export function RosterList(props: RosterListProps): JSX.Element {
         data-state="inert"
         className="roster-list roster-list--inert"
       >
-        <p className="roster-list__empty">
-          Cashier sign-in is not yet available on this terminal. Sign in as a manager or admin to
-          continue.
-        </p>
+        <EmptyState
+          heading="No cashiers available"
+          description="Cashier sign-in is not yet available on this terminal. Sign in as a manager or admin to continue."
+        />
       </section>
     );
   }
+
+  const interactive = onSelect !== undefined;
 
   return (
     <section
@@ -60,24 +63,32 @@ export function RosterList(props: RosterListProps): JSX.Element {
       data-state="active"
       className="roster-list"
     >
-      <ul className="roster-list__items" role="listbox" aria-label="Select cashier">
+      <ul
+        className="roster-list__items"
+        role={interactive ? undefined : 'listbox'}
+        aria-label={interactive ? undefined : 'Select cashier'}
+      >
         {cashiers.map((c) => (
           <li
             key={c.id}
             className={`roster-list__item${c.id === selectedId ? ' roster-list__item--selected' : ''}`}
             data-cashier-id={c.id}
-            role="option"
-            aria-selected={c.id === selectedId}
+            role={interactive ? undefined : 'option'}
+            aria-selected={interactive ? undefined : c.id === selectedId}
           >
-            {onSelect !== undefined ? (
+            {interactive ? (
               <button
                 type="button"
                 className="roster-list__item-btn"
                 data-testid={`roster-item-${c.id}`}
+                aria-pressed={c.id === selectedId}
                 onClick={() => {
                   onSelect(c);
                 }}
               >
+                <span className="roster-list__avatar" aria-hidden="true">
+                  {c.display_name.slice(0, 2).toUpperCase()}
+                </span>
                 <span className="roster-list__name">{c.display_name}</span>
                 <span className="roster-list__role" data-role={c.role}>
                   {roleDisplayName(c.role)}
@@ -85,6 +96,9 @@ export function RosterList(props: RosterListProps): JSX.Element {
               </button>
             ) : (
               <>
+                <span className="roster-list__avatar" aria-hidden="true">
+                  {c.display_name.slice(0, 2).toUpperCase()}
+                </span>
                 <span className="roster-list__name">{c.display_name}</span>
                 <span className="roster-list__role" data-role={c.role}>
                   {roleDisplayName(c.role)}

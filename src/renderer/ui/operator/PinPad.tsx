@@ -94,10 +94,10 @@ export function PinPad(props: PinPadProps): JSX.Element {
   return (
     <div className="pin-pad" data-testid="pin-pad" data-disabled={disabled || undefined}>
       <div
+        role="group"
         className="pin-pad__dots"
         data-testid="pin-pad-dots"
-        aria-live="off"
-        aria-label={`PIN: ${String(value.length)} digit${value.length === 1 ? '' : 's'} entered`}
+        aria-label={`${String(value.length)} of ${String(PIN_MAX_LENGTH)} entered`}
       >
         {dots}
       </div>

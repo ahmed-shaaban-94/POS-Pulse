@@ -98,16 +98,14 @@ describe('RosterList — without onSelect', () => {
 });
 
 describe('RosterList — selectedId', () => {
-  it('selected cashier has aria-selected=true', () => {
+  it('selected cashier button has aria-pressed=true', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c1" />);
-    const item = screen.getByTestId('roster-item-c1').closest('[role="option"]');
-    expect(item).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('roster-item-c1')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('non-selected cashier has aria-selected=false', () => {
+  it('non-selected cashier button has aria-pressed=false', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c1" />);
-    const item = screen.getByTestId('roster-item-c2').closest('[role="option"]');
-    expect(item).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByTestId('roster-item-c2')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('selected cashier li gets the --selected CSS class', () => {
