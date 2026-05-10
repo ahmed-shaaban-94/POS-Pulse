@@ -1,5 +1,4 @@
 import type { JSX } from 'react';
-import { Badge } from '../../ui/primitives/Badge/Badge';
 
 interface IdentityStripProps {
   tenantId: string;
@@ -18,11 +17,15 @@ export function IdentityStrip({
 
   return (
     <div className="identity-strip">
-      <span style={{ fontWeight: 'var(--font-weight-regular)' }}>{tenant}</span>
-      <span aria-hidden="true"> · </span>
-      <span style={{ fontWeight: 'var(--font-weight-medium)' }}>{branch}</span>
-      <span aria-hidden="true"> · </span>
-      <Badge intent="neutral">{label}</Badge>
+      <span className="identity-strip__tenant">{tenant}</span>
+      <span aria-hidden="true" className="identity-strip__sep">
+        ·
+      </span>
+      <span className="identity-strip__branch">{branch}</span>
+      <span aria-hidden="true" className="identity-strip__sep">
+        ·
+      </span>
+      <span className="identity-strip__terminal">{label}</span>
     </div>
   );
 }
