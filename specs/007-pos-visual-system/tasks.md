@@ -555,7 +555,7 @@ changes; runs the touch-target invariant test on `Button` and confirms
   Record the four confirmations in the S2 PR description with diff
   excerpts.
 
-- [ ] T046 [S2] **Open S2 PR titled `feat(007 S2): shared primitives
+- [X] T046 [S2] **Open S2 PR titled `feat(007 S2): shared primitives
   polish`.** Body cites the S1 PR, lists every restyled primitive,
   attaches the S2 contact sheet, records the 005 / 006 UI gate S2
   approval criteria check (T045). PR body discipline: no `#86` /
