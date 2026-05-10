@@ -15,6 +15,17 @@ interface ButtonProps extends AriaAttributes {
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
+function Spinner(): JSX.Element {
+  return (
+    <span
+      role="status"
+      aria-label="Loading"
+      className="btn__spinner"
+      aria-hidden="false"
+    />
+  );
+}
+
 export function Button({
   intent,
   size = 'md',
@@ -34,14 +45,14 @@ export function Button({
       aria-busy={loading ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
       tabIndex={disabled ? -1 : undefined}
-      onClick={disabled ? undefined : onClick}
+      onClick={disabled || loading ? undefined : onClick}
       data-touch-target="44"
-      style={{ minHeight: '44px', minWidth: '44px' }}
       {...aria}
     >
-      {iconStart}
+      {loading && <Spinner />}
+      {!loading && iconStart}
       {children}
-      {iconEnd}
+      {!loading && iconEnd}
     </button>
   );
 }

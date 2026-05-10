@@ -8,12 +8,17 @@ interface StatusBannerProps {
 
 export function StatusBanner({ state, message }: StatusBannerProps): JSX.Element {
   if (state === 'online') {
-    return <aside role="status" aria-live="polite" aria-hidden="true" />;
+    return <div aria-live="polite" aria-hidden="true" aria-label="Connection status" />;
   }
 
   return (
-    <aside role="status" aria-live="polite" data-state={state}>
+    <div
+      role="status"
+      aria-live="polite"
+      className="status-banner"
+      data-state={state}
+    >
       {message}
-    </aside>
+    </div>
   );
 }

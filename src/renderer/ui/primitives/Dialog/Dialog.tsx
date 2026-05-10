@@ -51,12 +51,11 @@ export function Dialog({
 
   if (!open) return null;
 
+  const primaryIntent = variant === 'destructive' ? 'destructive' : 'primary';
+
   return (
     <>
-      <div
-        style={{ position: 'fixed', inset: 0, background: 'var(--color-overlay-scrim)' }}
-        aria-hidden="true"
-      />
+      <div className="dialog-overlay" aria-hidden="true" />
       <div
         ref={dialogRef}
         role="dialog"
@@ -65,28 +64,23 @@ export function Dialog({
         aria-describedby={description ? `${titleId}-desc` : undefined}
         tabIndex={-1}
         data-variant={variant}
-        style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          boxShadow: 'var(--shadow-overlay)',
-          background: 'var(--color-surface-elevated)',
-          padding: 'var(--space-5)',
-          borderRadius: 'var(--radius-lg)',
-        }}
+        className="dialog-panel"
       >
         <h2 id={titleId}>{title}</h2>
         {description && <p id={`${titleId}-desc`}>{description}</p>}
-        <div>{children}</div>
-        <div>
+        <div className="dialog-panel__body">{children}</div>
+        <div className="dialog-panel__actions">
           {secondaryAction && (
-            <button type="button" onClick={secondaryAction.onClick}>
+            <button type="button" className="btn btn--ghost btn--md" onClick={secondaryAction.onClick}>
               {secondaryAction.label}
             </button>
           )}
           {primaryAction && (
-            <button type="button" onClick={primaryAction.onClick}>
+            <button
+              type="button"
+              className={`btn btn--${primaryIntent} btn--md`}
+              onClick={primaryAction.onClick}
+            >
               {primaryAction.label}
             </button>
           )}

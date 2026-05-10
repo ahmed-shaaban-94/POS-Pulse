@@ -22,7 +22,7 @@ export function Table<Row extends Record<string, unknown>>({
   errorMessage = 'Failed to load',
 }: TableProps<Row>): JSX.Element {
   return (
-    <table>
+    <table className="data-table">
       <thead>
         <tr>
           {columns.map((col) => (

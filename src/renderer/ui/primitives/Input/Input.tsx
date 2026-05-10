@@ -31,7 +31,7 @@ export function Input({
   const inputType = variant === 'password' ? 'password' : variant === 'numeric' ? 'number' : 'text';
 
   return (
-    <div>
+    <div className="input-field">
       <label htmlFor={id}>{label}</label>
       <input
         id={id}
@@ -43,9 +43,13 @@ export function Input({
         defaultValue={defaultValue}
         onChange={onChange}
       />
-      {description && <span id={descId}>{description}</span>}
+      {description && (
+        <span id={descId} className="input-field__description">
+          {description}
+        </span>
+      )}
       {errorMessage && (
-        <span id={errId} role="alert">
+        <span id={errId} role="alert" className="input-field__error">
           {errorMessage}
         </span>
       )}
