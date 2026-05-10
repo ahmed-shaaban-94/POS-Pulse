@@ -43,11 +43,17 @@ below. The unblock decision is recorded by the reviewer in the relevant
 - **Test-first per Constitution Principle VI.** Within each slice, the
   test task MUST be written and seen to fail before its implementation
   task. The order below reflects this.
-- **Task ID gaps T080+ are intentionally reserved** for `/speckit-analyze`
-  findings, follow-up planning revisions, and post-PR backports.
-  Numbering is preserved across analyses so existing references in PR
-  descriptions remain stable. Suffix infill (`T010a` / `T010b`) is the
-  convention 002 / 003 / 004 use for analyse-driven additions.
+- **Analyze-driven additions use suffix infill** (`T070a`, `T019a`,
+  `T010b`, etc.), per the 002 / 003 / 004 house convention. Suffix
+  infill places each follow-up adjacent to the slice it belongs to,
+  keeps the original `T001` … `T088` numbering stable so existing PR
+  descriptions remain valid, and avoids renumbering across analyses.
+  **Task IDs `T089` and beyond are reserved for any follow-up analyze
+  task that does not naturally suffix onto an existing slice task.**
+  *(Earlier drafts of this conventions block claimed `T080+` was the
+  reserved range — that was incorrect because T080 … T088 are already
+  used by S5 / S6 implementation tasks. Corrected by `/speckit-analyze`
+  finding C1 on 2026-05-10.)*
 - **Stop after PR per slice.** Each slice closes with an "Open PR + stop"
   task. Do NOT proceed to the next slice until the prior slice's PR is
   merged with reviewer sign-off recorded.
@@ -698,16 +704,24 @@ PII / email / Clerk user id reachable via the rendered DOM).
 
 ---
 
-## Phase 7 — S4: Pairing and terminal-state surfaces
+## Phase 7 — S4: Pairing and terminal-state surfaces (+ placeholder route layout-primitive consumption)
 
 **Slice goal:** Restyle `/pairing` and `/paired` to the recovered visual
 language without changing pairing flow / copy / security (spec FR-022 /
 FR-023). The "Continue to dashboard →" affordance from 003 O2 fallback
-is preserved.
+is preserved. **Additionally** (per `/speckit-analyze` finding C2,
+2026-05-10), wire each existing `app/*Placeholder.tsx` route to consume
+the S3 `<Workspace>` route layout primitive so spec FR-002 / FR-013
+(every existing route uses the route layout primitive) are explicitly
+covered. Placeholder restyle is **layout-primitive consumption only** —
+no business logic, no KPIs, no analytics, no copy change.
 
-**Slice diff scope:** restyle in place under `src/renderer/routes/pairing/`
-and `src/renderer/routes/paired/`. Pairing flow, pairing copy, and
-pairing security boundaries are **NOT touched**.
+**Slice diff scope:** restyle in place under `src/renderer/routes/pairing/`,
+`src/renderer/routes/paired/`, and `src/renderer/routes/app/`
+(the six existing `*Placeholder.tsx` files only — see T070a). Pairing
+flow, pairing copy, pairing security boundaries, placeholder reserved-
+slot copy (`tender.*` / `totals.*` notes), and cashier-visibility
+restrictions are **NOT touched**.
 
 **Slice independent test:** A reviewer signs out, opens an unpaired
 terminal, walks the pairing flow, and confirms (a) the visual matches
@@ -765,13 +779,90 @@ affordance. May run after S3 in parallel with S5.
   1024 × 768. Save to `pos-007-after-s4/` (out-of-tree). Reviewer
   sign-off recorded.
 
+- [ ] T070a [S4] **(analyze finding C2, 2026-05-10)** **Wrap each
+  existing `app/*Placeholder.tsx` route in the S3 `<Workspace>`
+  layout primitive** so spec FR-002 (every existing route uses the
+  recovered visual language) and FR-013 (every existing route page
+  consumes the route layout primitive) are explicitly covered, not
+  only inherited via the token cascade. Files in scope (six
+  placeholders only):
+  - `src/renderer/routes/app/DashboardPlaceholder.tsx`
+  - `src/renderer/routes/app/SalesPlaceholder.tsx`
+  - `src/renderer/routes/app/CartPlaceholder.tsx`
+  - `src/renderer/routes/app/checkout/` (the receipt / checkout
+    placeholder — preserve every reserved-slot id and the
+    "Reserved for 005-checkout-payments" body copy verbatim)
+  - `src/renderer/routes/app/InventoryPlaceholder.tsx`
+  - `src/renderer/routes/app/SettingsHelpPlaceholder.tsx`
+
+  **Strict scope:**
+  - **Layout-primitive consumption only.** Each placeholder's
+    existing top-level container is replaced with `<Workspace
+    title={…} banner={…}>{existingChildren}</Workspace>` (per T055
+    public prop interface). No new sub-components, no new state,
+    no new props on the placeholder itself.
+  - **No business logic added.** No sales / cart / payments / money
+    math / receipt / inventory mutation. No `Money` type
+    introduced. The 005 / 006 reserved slots from 003 (`tender.*`,
+    `totals.*`, eleven reserved checkout slot ids) remain
+    layout-only with their existing reserved-slot copy preserved
+    byte-for-byte.
+  - **No reports / KPIs / dashboards / analytics surfaces.** The
+    Dashboard placeholder remains a placeholder (spec FR-045);
+    Claude Design's §10b manager-shell-with-KPI-tiles sketch is
+    visual direction for a future feature, not a 007 deliverable.
+  - **No backend / API / IPC / preload / main-process / migrations
+    / OpenAPI / codegen / CI changes.** Renderer-only restyle.
+    The 003 static no-touch source-scope guard MUST hold.
+  - **Cashier-visibility restrictions preserved.** No item from
+    the 004 FR-015 catalogue (shift totals, drawer cash, KPIs,
+    audit log, manager-review data, etc.) becomes reachable from
+    a cashier render tree as a result of this task.
+  - **Public prop signatures unchanged.** Each placeholder's
+    exported component keeps its existing prop signature; the
+    only diff is the rendered tree shape (now wrapped in
+    `<Workspace>`).
+
+  **Test strategy:**
+  - Existing placeholder tests under
+    `src/renderer/routes/app/__tests__/` (and
+    `src/renderer/routes/app/checkout/__tests__/`) MUST stay
+    green; the reserved-slot no-op guard from 004 (T051 /
+    `reserved-slot-noop.test.tsx`) MUST stay green; the
+    cashier-walling test from T079 confirms zero forbidden
+    information leaks into a cashier render of any placeholder.
+  - Add a per-placeholder smoke test asserting the rendered tree
+    contains exactly one `<Workspace>` ancestor when the
+    placeholder is rendered inside `AppShell`.
+
+  **Screenshot / contact-sheet evidence:**
+  - Re-capture each placeholder route at 1280 × 800 + 1024 × 768
+    against the S0 placeholder baseline at
+    `pos-007-baseline/placeholders/` (captured in T010).
+  - Save the post-recovery captures to
+    `pos-007-after-s4/placeholders/` (out-of-tree, NOT committed).
+  - Pixel-diff threshold: layout-stable ≤ 0.5 % (per
+    screenshot-acceptance contract). Any drift in the reserved-
+    slot regions of the receipt / checkout placeholder is
+    grounds to refuse the slice.
+  - Forbidden-content audit: zero items from the 004 FR-015
+    catalogue, zero PII, zero credential fragment, zero emoji.
+    Reviewer sign-off recorded in the S4 PR description.
+
+  **Validation:** part of T068 — full project implementation
+  validation set is sufficient; no new validation step.
+
 - [ ] T070 [S4] **Open S4 PR titled `feat(007 S4): pairing and
   terminal-state surfaces`.** Body cites S3 PR (already-merged at this
   point, 005 / 006 UI gate already unblocked), lists the restyled
-  routes, attaches the S4 contact sheet, confirms pairing-bypass
+  routes (pairing + paired **+ the six placeholder routes wrapped in
+  `<Workspace>` per T070a**), attaches the S4 contact sheet (now
+  including the placeholder re-captures), confirms pairing-bypass
   contract holds, confirms zero touch on `src/main/pairing/**` /
-  `src/preload/**` / `src/shared/bridge-api.ts`. PR body discipline:
-  no `#86` / `#87`, no `Closes` / `Resolves`, no `Fixes #NNN`. **Stop
+  `src/preload/**` / `src/shared/bridge-api.ts`, confirms reserved-
+  slot ids and reserved-slot copy preserved verbatim, confirms the
+  cashier-walling test continues to pass. PR body discipline: no
+  `#86` / `#87`, no `Closes` / `Resolves`, no `Fixes #NNN`. **Stop
   after PR.** S5 may run in parallel with S4 (independent surfaces).
 
 ---
@@ -1073,10 +1164,12 @@ after PR" boundary keeps reviewer load tight.
 
 ---
 
-*This task list is the source for `/speckit-implement` per slice. Tasks
-T080+ are reserved for `/speckit-analyze` findings and post-PR
-backports. The 005 / 006 UI gate at T060 is load-bearing: any change
-to S1 / S2 / S3 's definition-of-done or approval criteria requires
-re-running `/speckit-tasks` and re-walking the gate audit. No tasks in
-this file are in_progress; every task is unchecked. Implementation
-begins with S0 (T001) when authorised by the user.*
+*This task list is the source for `/speckit-implement` per slice.
+Analyze-driven additions follow the 003 / 004 house convention:
+suffix infill (`T070a`, `T019a`, etc.) places each follow-up adjacent
+to its slice; `T089` and beyond are reserved for follow-ups that do
+not naturally suffix. The 005 / 006 UI gate at T060 is load-bearing:
+any change to S1 / S2 / S3 's definition-of-done or approval criteria
+requires re-running `/speckit-tasks` and re-walking the gate audit.
+No tasks in this file are in_progress; every task is unchecked.
+Implementation begins with S0 (T001) when authorised by the user.*
