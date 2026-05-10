@@ -26,9 +26,7 @@ afterEach(() => {
 describe('PinPad dot-only guard — PR-1 security invariant', () => {
   it('dot elements have no "value" attribute', () => {
     renderPinPad('1234');
-    const dots = Array.from(
-      screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'),
-    );
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
     expect(dots.length).toBeGreaterThan(0);
     for (const dot of dots) {
       expect(dot).not.toHaveAttribute('value');
@@ -37,9 +35,7 @@ describe('PinPad dot-only guard — PR-1 security invariant', () => {
 
   it('dot elements have no "data-value" attribute', () => {
     renderPinPad('1234');
-    const dots = Array.from(
-      screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'),
-    );
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
     for (const dot of dots) {
       expect(dot).not.toHaveAttribute('data-value');
     }
@@ -47,9 +43,7 @@ describe('PinPad dot-only guard — PR-1 security invariant', () => {
 
   it('dot elements have no "title" attribute', () => {
     renderPinPad('1234');
-    const dots = Array.from(
-      screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'),
-    );
+    const dots = Array.from(screen.getByTestId('pin-pad-dots').querySelectorAll('.pin-pad__dot'));
     for (const dot of dots) {
       expect(dot).not.toHaveAttribute('title');
     }
@@ -69,25 +63,30 @@ describe('PinPad dot-only guard — PR-1 security invariant', () => {
   it('dot-region aria-label is "N of 6 entered" format (zero-length)', () => {
     renderPinPad('');
     const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl).toHaveAttribute('aria-label', `0 of ${PIN_MAX_LENGTH} entered`);
+    expect(dotsEl).toHaveAttribute('aria-label', `0 of ${String(PIN_MAX_LENGTH)} entered`);
   });
 
   it('dot-region aria-label is "N of 6 entered" format (partial)', () => {
     renderPinPad('1234');
     const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl).toHaveAttribute('aria-label', `4 of ${PIN_MAX_LENGTH} entered`);
+    expect(dotsEl).toHaveAttribute('aria-label', `4 of ${String(PIN_MAX_LENGTH)} entered`);
   });
 
   it('dot-region aria-label is "N of 6 entered" format (max-length)', () => {
     renderPinPad('123456');
     const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl).toHaveAttribute('aria-label', `${PIN_MAX_LENGTH} of ${PIN_MAX_LENGTH} entered`);
+    expect(dotsEl).toHaveAttribute(
+      'aria-label',
+      `${String(PIN_MAX_LENGTH)} of ${String(PIN_MAX_LENGTH)} entered`,
+    );
   });
 
   it('dot-region inner text contains no digit characters', () => {
     renderPinPad('9876');
     const dotsEl = screen.getByTestId('pin-pad-dots');
-    expect(dotsEl.textContent ?? '').not.toMatch(/[0-9]/);
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    const dotsText = dotsEl.textContent ?? '';
+    expect(dotsText).not.toMatch(/[0-9]/);
   });
 
   it('dot-region innerHTML does not contain the PIN value', () => {

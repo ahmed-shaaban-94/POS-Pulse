@@ -22,8 +22,12 @@ export interface OperatorBadgeProps {
 }
 
 export function OperatorBadge(props: OperatorBadgeProps): JSX.Element {
+  const initials = props.display_name.slice(0, 2).toUpperCase();
   return (
     <div data-testid="operator-badge" className="operator-badge">
+      <span className="operator-badge__avatar" aria-hidden="true">
+        {initials}
+      </span>
       <span className="operator-badge__name">{props.display_name}</span>
       <span className="operator-badge__role" data-role={props.role}>
         {roleDisplayName(props.role)}
