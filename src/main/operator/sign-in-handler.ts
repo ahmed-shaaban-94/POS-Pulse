@@ -323,12 +323,22 @@ export class CashierSignInHandler {
     if (result.kind === 'no_match') {
       // Persist only the safe lockout-state columns (PR-1: no PIN in DB write)
       this.persistLockoutState(scope, result.newFailedCount, result.newLockoutUntil);
+      if (result.newLockoutUntil !== null) {
+        // T081: lockout was triggered by this failed attempt.
+        this.logInfo('operator.cashier_sign_in.lockout_triggered');
+      }
       this.logRefusal('invalid_input', 'wrong_pin');
       return REFUSE_INVALID;
     }
 
     // result.kind === 'match' — reset failure counter in DB
+    const hadActiveLockout =
+      pinRow.lockout_until !== null && new Date(pinRow.lockout_until) <= new Date();
     this.persistLockoutState(scope, 0, null);
+    if (hadActiveLockout) {
+      // T081: expired lockout was released on successful sign-in.
+      this.logInfo('operator.cashier_sign_in.lockout_released');
+    }
 
     // 6. Check for an existing active session for this cashier (T069b)
     const activeCheck = await this.deps.checkActiveSession.checkActiveSession(
@@ -415,5 +425,10 @@ export class CashierSignInHandler {
       { event: 'operator.cashier_sign_in.outcome', kind },
       'cashier sign-in outcome',
     );
+  }
+
+  /** T081 — named log site for lockout state transitions (no credential data — PR-1). */
+  private logInfo(event: string): void {
+    this.deps.logger?.info({ event }, event.replace(/\./g, ' '));
   }
 }

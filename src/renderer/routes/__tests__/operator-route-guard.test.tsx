@@ -10,12 +10,16 @@ import {
 } from '../../stores/operator-session-store.js';
 
 /**
- * 004-operator-session T010 — secondary UX defence (NFR-009 / AD-1).
+ * 004-operator-session T010 + T082 — secondary UX defence (NFR-009 / AD-1).
  *
- * The guard redirects on `signedOut`, redirects on role-mismatch, and
- * allows on role-match. The PRIMARY trust gate is `requireRole` in
- * main-process bridge handlers — the test exists to verify the
- * RENDERER never paints content for an operator that lacks the role.
+ * T010: The guard redirects on `signedOut`, redirects on role-mismatch, and
+ *   allows on role-match. The PRIMARY trust gate is `requireRole` in
+ *   main-process bridge handlers — the test exists to verify the
+ *   RENDERER never paints content for an operator that lacks the role.
+ *
+ * T082: Extends coverage to all §Section 3 routes in role-visibility-matrix.md
+ *   that are ⛔ for cashier — confirming a cashier deep-link to any of them
+ *   redirects to /sign-in without rendering the manager surface.
  */
 
 const SAMPLE: OperatorSessionView = {
@@ -105,4 +109,76 @@ describe('OperatorRouteGuard (T010 — AD-1 secondary)', () => {
     render(<RouterProvider router={router} />);
     expect(screen.getByTestId('any-content')).toBeInTheDocument();
   });
+});
+
+/**
+ * T082 — Section 3 ⛔ routes enforced for cashier role.
+ *
+ * role-visibility-matrix.md §Section 3 routes that carry ⛔ for cashier:
+ *   /app/manager/stuck-shifts — stuck-shift list
+ *   /app/manager/cashiers    — cashier management surface (T078)
+ *
+ * Each test deep-links as cashier and asserts redirect to /sign-in.
+ * manager and admin are asserted to reach the surface.
+ */
+describe('OperatorRouteGuard — T082 §Section 3 route enforcement', () => {
+  const SECTION_3_ROUTES: Array<{ path: string; testId: string }> = [
+    { path: '/app/manager/stuck-shifts', testId: 'stuck-shifts-content' },
+    { path: '/app/manager/cashiers', testId: 'cashier-mgmt-content' },
+  ];
+
+  for (const { path, testId } of SECTION_3_ROUTES) {
+    describe(path, () => {
+      function renderSection3(initialEntry: string) {
+        const router = createMemoryRouter(
+          [
+            {
+              path,
+              element: (
+                <OperatorRouteGuard allow={['manager', 'admin']}>
+                  <div data-testid={testId}>manager surface</div>
+                </OperatorRouteGuard>
+              ),
+            },
+            {
+              path: '/sign-in',
+              element: <div data-testid="route-sign-in">sign-in</div>,
+            },
+          ],
+          { initialEntries: [initialEntry] },
+        );
+        return render(<RouterProvider router={router} />);
+      }
+
+      it('cashier deep-link redirects to /sign-in', () => {
+        useOperatorSessionStore.getState().beginSignIn();
+        useOperatorSessionStore.getState().resolveSignedIn({ ...SAMPLE, role: 'cashier' });
+        renderSection3(path);
+        expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+        expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
+      });
+
+      it('signedOut deep-link redirects to /sign-in', () => {
+        renderSection3(path);
+        expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+        expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
+      });
+
+      it('manager deep-link renders content', () => {
+        useOperatorSessionStore.getState().beginSignIn();
+        useOperatorSessionStore.getState().resolveSignedIn({ ...SAMPLE, role: 'manager' });
+        renderSection3(path);
+        expect(screen.getByTestId(testId)).toBeInTheDocument();
+        expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      });
+
+      it('admin deep-link renders content', () => {
+        useOperatorSessionStore.getState().beginSignIn();
+        useOperatorSessionStore.getState().resolveSignedIn({ ...SAMPLE, role: 'admin' });
+        renderSection3(path);
+        expect(screen.getByTestId(testId)).toBeInTheDocument();
+        expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      });
+    });
+  }
 });
