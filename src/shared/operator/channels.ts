@@ -20,6 +20,10 @@ export const OPERATOR_IPC_CHANNELS = {
   TAKEOVER_CONFIRM: 'operator:takeover-confirm',
   /** T071 — cancel a pending takeover; pure local discard. */
   TAKEOVER_CANCEL: 'operator:takeover-cancel',
+  /** T072 — manager/admin PIN reset for a cashier on this terminal. */
+  RESET_CASHIER_PIN: 'operator:reset-cashier-pin',
+  /** T073 — manager/admin unlock of a locked-out cashier on this terminal. */
+  UNLOCK_CASHIER: 'operator:unlock-cashier',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

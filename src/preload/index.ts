@@ -11,9 +11,13 @@ import type {
   OperatorSessionBridgeView,
   PairingBridgeAPI,
   PreloadBridgeAPI,
+  ResetCashierPinRequest,
+  ResetCashierPinResponse,
   SignInRequest,
   SignInResponse,
   SignOutResponse,
+  UnlockCashierRequest,
+  UnlockCashierResponse,
 } from '../shared/bridge-api';
 import type { OperatorRefusal } from '../shared/audit/event-shape';
 import type { LogRecord } from '../shared/log-record';
@@ -90,6 +94,14 @@ const operator: OperatorBridgeAPI = {
       OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL,
       req,
     ) as Promise<CancelTakeoverResponse>,
+  resetCashierPin: (req: ResetCashierPinRequest) =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.RESET_CASHIER_PIN, req) as Promise<
+      ResetCashierPinResponse | import('../shared/audit/event-shape').OperatorRefusal
+    >,
+  unlockCashier: (req: UnlockCashierRequest) =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER, req) as Promise<
+      UnlockCashierResponse | import('../shared/audit/event-shape').OperatorRefusal
+    >,
 };
 
 const api: PreloadBridgeAPI = {

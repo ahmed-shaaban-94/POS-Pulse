@@ -57,6 +57,12 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
     cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+    resetCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    unlockCashier: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
   };
   return { bridge, signInMock };
 }
@@ -225,6 +231,12 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+      resetCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      unlockCashier: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -271,6 +283,12 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+      resetCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      unlockCashier: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -310,6 +328,12 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+      resetCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      unlockCashier: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');

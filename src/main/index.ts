@@ -34,6 +34,7 @@ import { InactivityMonitor } from './operator/inactivity-monitor.js';
 import { LifecycleCascade } from './operator/lifecycle-cascade.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
+import { PinManagementHandler } from './operator/pin-management.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
 
@@ -391,6 +392,15 @@ app
       logger: mainLogger,
     });
 
+    const operatorPinManagementHandler = new PinManagementHandler({
+      db: dbHandle,
+      safeStorage,
+      sessionManager: operatorSessionManager,
+      pairingStore,
+      auditEmitter,
+      logger: mainLogger,
+    });
+
     registerOperatorHandlers(ipcMain, {
       signInHandler: operatorSignInHandler,
       cashierSignInHandler: operatorCashierSignInHandler,
@@ -401,6 +411,7 @@ app
       auditEmitter,
       pairingStore,
       takeoverHandler: operatorTakeoverHandler,
+      pinManagementHandler: operatorPinManagementHandler,
     });
 
     createWindow();

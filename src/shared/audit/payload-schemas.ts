@@ -96,6 +96,7 @@ export interface CashierPinResetPayload {
   /** Terminal id on which the PIN record lives (PR-4 per-terminal scope). */
   terminal_id: string;
   // PIN value MUST NEVER appear here (PR-1 / FR-027).
+  [key: string]: unknown;
 }
 
 // ─── cashier.pin.unlock (§A1-gated; handler lands in S4) ──────────────────
@@ -106,6 +107,7 @@ export interface CashierPinUnlockPayload {
   /** Terminal id on which the lockout state lives (PR-4 per-terminal scope). */
   terminal_id: string;
   // PIN value MUST NEVER appear here (PR-1 / FR-027).
+  [key: string]: unknown;
 }
 
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────

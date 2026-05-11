@@ -91,6 +91,7 @@ export const REFUSAL_CATEGORIES = [
   'rate_limited',
   'role_mismatch',
   'not_signed_in',
+  'state_invalid',
 ] as const;
 export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
 
