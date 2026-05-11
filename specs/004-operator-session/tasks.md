@@ -11,7 +11,7 @@ description: "Task list for feature 004-operator-session — slice-organised, ga
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md) ✅ approved-with-revisions (2026-05-05)
 **Constitution version pinned:** v1.5.0
 **Created:** 2026-05-05
-**Last updated:** 2026-05-11 — S4 implementation through T082 complete; issue 101 resolved via Option A waiver (see `docs/issue-101-waiver.md`); T056 terminal-A sub-assertion waived; S4 final checkpoint unblocked. PR #120 (feat/004-s4-pin-management-reset-unlock) completed T061/T062/T072/T073. PR #121 (test/004-s4-cashier-takeover-ui-coverage) completed T057–T060. PR #122 (feat/004-s4-cashier-management-visibility-redaction) completed T078–T082. Issue 85 closed (cashier-path AD-2 local-only — permanent architectural invariant; see `coordination.md` §"Issue 85 decision"). Issue 86 remains open (owner-discretion closure; PinPad/TakeoverPrompt implementation and coverage landed via PRs #103 and #121). Issue 87 is the current closeout coordination PR. Issue 101 resolved — Option A waiver chosen; Endpoint 6 caller-naive semantics confirmed; T056 waived in full — `tests/integration/renderer/takeover.test.tsx` was never created; terminal-A renderer assertions require push/probe mechanism out of scope; backend-side session invalidation is a backend guarantee (see `docs/issue-101-waiver.md`). S4 final checkpoint UNBLOCKED. S5 may proceed (pending §A2 Wave 4 only). 005 remains blocked behind §A0. S3 complete; all Phase 5 tasks (T039–T051d) marked ✅. S3 merged via PRs #49–#56 (HEAD `ba32133`).
+**Last updated:** 2026-05-11 — S4 fully complete (PR #124 merged; T056 waived in full via issue 101 Option A waiver; S4 final checkpoint UNBLOCKED). **§A2 Wave 4 cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and OpenAPI `action_category` enum (pos-audit-events.openapi.yaml). S5 fully unblocked from gate perspective; issue 88 is next S5 candidate; no S5 implementation started. PR #120 (T061/T062/T072/T073). PR #121 (T057–T060). PR #122 (T078–T082). Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open (Option A waiver recorded; see `docs/issue-101-waiver.md`). 005 remains blocked behind §A0. S3 complete; all Phase 5 tasks (T039–T051d) marked ✅. S3 merged via PRs #49–#56 (HEAD `ba32133`).
 
 ---
 
@@ -38,12 +38,12 @@ Every implementation task that touches code is preceded by a TDD test task per C
 |:--|:--:|:--|:--|
 | Slice 0 review | ✅ Approved-with-revisions (2026-05-05) | Ahmed | (3 notes incorporated below as task requirements) |
 | §A1 — local-unlock-factor approval | ✅ **Cleared** — PR #39, SHA `7ae337b`, Constitution v1.5.1, 2026-05-05 | Ahmed | Path 1 — constitutional clarification clause added to Principle VIII. |
-| §A2 — backend / OpenAPI | ✅ Wave 1 + Wave 2 + Wave 3 cleared (Wave 4 downstream) | Ahmed | Wave 1: sign-in + sign-out (Data-Pulse-2 PRs #52/#54). Wave 2: audit-events (Data-Pulse-2 PR #62, SHA `4f77da6`). Wave 3: roster + takeover/confirm + active-session (Data-Pulse-2 PR #70). Wave 4 blocks S5. |
+| §A2 — backend / OpenAPI | ✅ Wave 1 + Wave 2 + Wave 3 + **Wave 4 cleared** | Ahmed | Wave 1: sign-in + sign-out (Data-Pulse-2 PRs #52/#54). Wave 2: audit-events (Data-Pulse-2 PR #62, SHA `4f77da6`). Wave 3: roster + takeover/confirm + active-session (Data-Pulse-2 PR #70). **Wave 4: `shift.forced_close` recognised — verified 2026-05-11, Data-Pulse-2 SHA `7b95fdb` (dto.ts + OpenAPI enum). S5 now unblocked.** |
 | §A3 — migrations | ✅ **Fully cleared** — `audit_events` PR #49 SHA `e50f5b8`; `operator_sessions` + `cashier_pin_records` PR #60. | Ahmed | All three S4 tables live. S4 may proceed from §A3 perspective. |
 | §A4 — Argon2id binding | ✅ **Cleared** — argon2 0.44.0 installed (POS-Pulse PR #59). | Ahmed | T063 complete. S4 PIN implementation may proceed. |
 | §A5 — production readiness | ⏳ Held | TBD at rollout PR open time | Blocks production rollout only, not slice merges |
 
-**Net effect on this tasks.md**: Phase 1 (Setup), Phase 2 (Foundational), Phase 3 (S1), Phase 4 (S2), and Phase 5 (S3) are **complete** (all tasks ✅). **All S4 gates cleared (2026-05-08):** §A1 ✅, §A2 Wave 3 ✅, §A3 ✅ (all migrations live), §A4 ✅ (argon2 0.44.0). S4 implementation through T082 complete (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#120/#121/#122); T056 waived in full via issue 101 Option A (2026-05-11); S4 final checkpoint UNBLOCKED. S5 gates on §A2 Wave 4 only. S6 gates on prior slices merged.
+**Net effect on this tasks.md**: Phase 1 (Setup), Phase 2 (Foundational), Phase 3 (S1), Phase 4 (S2), and Phase 5 (S3) are **complete** (all tasks ✅). **All S4 gates cleared (2026-05-08):** §A1 ✅, §A2 Wave 3 ✅, §A3 ✅ (all migrations live), §A4 ✅ (argon2 0.44.0). S4 implementation through T082 complete (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#120/#121/#122); T056 waived in full via issue 101 Option A (2026-05-11, PR #124); S4 final checkpoint UNBLOCKED. **§A2 Wave 4 cleared (2026-05-11):** `shift.forced_close` confirmed in Data-Pulse-2 main (SHA `7b95fdb`). **S5 fully unblocked from gate perspective; issue 88 is next candidate; no S5 tasks started.** S6 gates on prior slices merged. 005 remains blocked behind §A0.
 
 ---
 
@@ -356,9 +356,9 @@ S0 (Visual Direction) ✅
   │                       │
   │                       └──► Phase 5 (S3): Audit scaffolding (T039–T051d) ✅ (PRs #49–#56, HEAD ba32133)
   │                               │
-  │                               └──► Phase 6 (S4): Cashier sign-in (T052–T082) ──── ✅ COMPLETE (T052–T082; T056 waived via issue 101 Option A 2026-05-11; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#120/#121/#122; #85 closed; #86 open owner discretion; issue 101 resolved)
+  │                               └──► Phase 6 (S4): Cashier sign-in (T052–T082) ──── ✅ COMPLETE (T052–T082; T056 waived via issue 101 Option A 2026-05-11, PR #124; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#120/#121/#122; #85 closed; #86 open owner discretion; issue 101 open/waived)
   │                                       │
-  │                                       └──► Phase 7 (S5): Forced close (T083–T093) ──── BLOCKED on §A2 Wave 4 only (S4 checkpoint now clear)
+  │                                       └──► Phase 7 (S5): Forced close (T083–T093) ──── ALL GATES CLEAR (S4 ✅ + §A2 Wave 4 ✅ 2026-05-11); NOT STARTED; issue 88 is next candidate
   │                                               │
   │                                               └──► Phase 8 (S6): Final polish (T094–T099) ──── BLOCKED on prior slices merged
   │                                                       │

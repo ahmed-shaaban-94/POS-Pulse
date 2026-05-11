@@ -1,7 +1,7 @@
 # Roadmap & Ops Status — POS-Pulse 004-operator-session
 
-**Snapshot date:** 2026-05-09 (initial); reconciled 2026-05-11 post-PRs #120/#121/#122 — S4 implementation through T082 complete; T056 remains blocked/deferred by issue 101; issue 85 closed; issues 86/87/101 open; 005 blocked behind §A0
-**Author:** Read-only ops review agent (initial); updated by docs(004) PR on 2026-05-09; reconciled by docs/004-s4-closeout-coordination PR on 2026-05-11
+**Snapshot date:** 2026-05-09 (initial); reconciled 2026-05-11 post-PRs #120/#121/#122/#124 — S4 fully complete; T056 waived in full via issue 101 Option A (PR #124); §A2 Wave 4 verified and cleared (Data-Pulse-2 SHA `7b95fdb`); S5 fully unblocked from gate perspective; issue 88 is next S5 candidate; 005 blocked behind §A0
+**Author:** Read-only ops review agent (initial); updated by docs(004) PR on 2026-05-09; reconciled by docs/004-s4-closeout-coordination PR on 2026-05-11; §A2 Wave 4 clearance recorded by docs/004-s5-wave4-gate-clearance PR on 2026-05-11
 **Scope:** Read-only audit of GitHub roadmap, PR/issue state, and gate alignment for `specs/004-operator-session`. **No issue edits performed in the original snapshot.** §9 and issue table updated to reflect PR #100 merge and issue hygiene (issues #85 and #101 reopened).
 
 > Advisory only. Every recommendation in §8 ("Recommended issue-body updates") is **awaiting maintainer approval before any edit**.
@@ -105,14 +105,14 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 | §A2 Wave 1 (sign-in/sign-out) | ✅ Cleared — Data-Pulse-2 PRs #52/#54 | Backend repo; out-of-scope to verify here. | ✅ |
 | §A2 Wave 2 (audit-events) | ✅ Cleared — Data-Pulse-2 PR #62 | Backend repo. | ✅ |
 | §A2 Wave 3 (roster + takeover/confirm + active-session) | ✅ Cleared — Data-Pulse-2 PR #70 | Backend repo. | ✅ |
-| §A2 Wave 4 (`shift.forced_close`) | ⏳ Held | Backend repo — not delivered yet. | ✅ |
+| §A2 Wave 4 (`shift.forced_close`) | ✅ **Cleared** — verified 2026-05-11, Data-Pulse-2 main SHA `7b95fdb`: `shift.forced_close` in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and OpenAPI `action_category` enum (pos-audit-events.openapi.yaml). Payload shape confirmed. | Data-Pulse-2 main (read-only verification). No DP2 changes. | ✅ |
 | §A3 — migrations | ✅ Cleared — POS-Pulse PRs #49 (`audit_events`) + #60 (`operator_sessions` + `cashier_pin_records`) | PR #60 MERGED 2026-05-07T14:07:39Z. ✅ confirmed. | ✅ |
 | §A4 — Argon2id binding | ✅ Cleared — POS-Pulse PR #59 (`argon2 0.44.0`) | PR #59 MERGED 2026-05-07T14:09:08Z. ✅ confirmed. | ✅ |
 | §A5 — production readiness | ⏳ Later rollout gate | Activates at production rollout PR. | ✅ |
 
 **No mismatches detected.** Coordination.md and `gh` data are consistent. The §A1 and §A2 Wave 1/2 PR pointers reference older / cross-repo PRs that fell outside this session's `gh pr list --limit 30` window — they are taken from coordination.md as the durable record.
 
-> ℹ **Updated (2026-05-11):** S4 implementation through T082 is now complete. PRs #120 (T061/T062/T072/T073), #121 (T057–T060), and #122 (T078–T082) have all merged. T056 remains blocked/deferred by issue 101 (terminal-A session-invalidation gap — UX gap, not a security gap). Issue 85 closed. Issues 86, 87, and 101 remain open. Coordination.md and tasks.md have been reconciled by the docs/004-s4-closeout-coordination PR (issue 87). 005 remains blocked behind §A0. Final S4 checkpoint / S5 unblock held pending issue 101 resolution or explicit owner waiver.
+> ℹ **Updated (2026-05-11, final):** S4 is now fully complete. PRs #120 (T061/T062/T072/T073), #121 (T057–T060), and #122 (T078–T082) have all merged. PR #124 (issue 101 Option A waiver; T056 waived in full) merged. Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open. **§A2 Wave 4 cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in dto.ts and OpenAPI. S5 is fully unblocked from gate perspective. Issue 88 is the next S5 implementation candidate. No S5 implementation started. 005 remains blocked behind §A0.
 
 ---
 
@@ -131,7 +131,7 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 
 | # | Title | State | Labels | Assignee | Milestone | Depends on (gates) | Blocking / unblocking notes |
 |:-:|:--|:--|:--|:--|:--|:--|:--|
-| **#88** | 004 S5 — blind shift close and visibility boundaries | **OPEN, blocked** | type:feature, **status:blocked**, feature:004-operator-session | — | — | S4 completion + §A2 Wave 4 (`shift.forced_close` recognition in Data-Pulse-2) | Cannot start until #87 lands and Data-Pulse-2 ships Wave 4. |
+| **#88** | 004 S5 — blind shift close and visibility boundaries | **OPEN, blocked** | type:feature, **status:blocked**, feature:004-operator-session | — | — | S4 completion ✅ (PR #124) + §A2 Wave 4 ✅ (Data-Pulse-2 SHA `7b95fdb`) | **All gates cleared 2026-05-11.** Next implementation candidate. No S5 implementation started. |
 
 ### S6+ deferred / future POS flows umbrella
 
@@ -306,23 +306,37 @@ All S4 implementation tasks through T082 have been completed:
 - **T082** ✅ — route-guard updated for §Section 3 routes — PR #122.
 - **T057–T062** ✅ — takeover-cancel integration, FR-013 disclosure guard, cashier sign-in AppRouter, PinPad privacy, PIN reset/unlock integration tests — PRs #121/#120.
 
-**Remaining:** T056 — blocked/deferred by issue 101 (terminal-A session-invalidation gap — UX gap, not security gap). T056 must not be marked complete or implemented until issue 101 is resolved or explicitly waived by owner decision.
+**T056:** Waived in full via issue 101 Option A (PR #124, 2026-05-11). `tests/integration/renderer/takeover.test.tsx` was never created. All T056 assertions require push/probe mechanism out of scope. See `docs/issue-101-waiver.md`.
 
 ### 7f. Issue #87 — S4 closeout & coordination update — **IN PROGRESS (docs/004-s4-closeout-coordination, 2026-05-11)**
 
 **Scope:** docs only. Updates `tasks.md` (T078–T082 marked complete; T056 preserved as blocked/deferred by issue 101; S4 checkpoint and dependency diagram reconciled), `coordination.md` (S4 implementation closeout status section added; explicit non-actions updated; Last updated bumped), and this file (S4 task status reconciled in §3, §7e, §7f). No source code, tests, migrations, package.json, CI, or Data-Pulse-2 changes. No S5 work. No 005/006 work.
 **Note:** issue 87 remains open — this PR is its resolution; it should not be closed until the PR merges per owner workflow.
 
-### 7g. §A2 Wave 4 backend coordination
+### 7g. §A2 Wave 4 backend coordination — **COMPLETE (2026-05-11)**
 
-**Prerequisite:** 7f merged.
-**Scope:** in this repo, only the codegen pull side: `npm run codegen:api` after Data-Pulse-2 ships Wave 4 (recognition of `shift.forced_close` audit category). **Cannot modify Data-Pulse-2 from this repo.** Separately, the Data-Pulse-2 owner ships the backend feature.
-**Output:** updated `src/shared/api-types.ts`; `npm run codegen:verify` clean.
+**Status:** ✅ **Wave 4 cleared.** Data-Pulse-2 main (SHA `7b95fdb`) already
+recognises `shift.forced_close` in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and
+the OpenAPI `action_category` enum (pos-audit-events.openapi.yaml). Payload
+shape `{ shift_id, shift_owner_id, forced_close_actor_id, forced_close_reason,
+annotation? }` is documented in the OpenAPI spec.
+
+**Note on codegen:** The POS-Pulse `src/shared/api-types.ts` file is generated
+from the backend OpenAPI snapshot. A `npm run codegen:api` + `codegen:verify`
+pass should be run as part of S5 implementation (or as a standalone PR before
+T083 starts) to pull the latest OpenAPI changes. This is NOT done in this
+docs-only gate-clearance PR. No source code changed here.
 
 ### 7h. Issue #88 — S5 forced-close surface
 
-**Prerequisite:** 7f + 7g.
-**Scope:** S5 implementation per `tasks.md` Phase 7 (T083–T089 in the visible portion of tasks.md); blind-close discipline (no drawer count display, no expected total, no variance surfaced to cashier); `operator.forceCloseShift` handler with manager/admin role gate and same-branch verification (P17); `shift.forced_close` audit event with both identities and structured reason picker.
+**Prerequisite:** 7f ✅ (merged) + 7g ✅ (Wave 4 cleared 2026-05-11). **All
+prerequisites met. S5 may begin.**
+**Scope:** S5 implementation per `tasks.md` Phase 7 (T083–T093); blind-close
+discipline (no drawer count display, no expected total, no variance surfaced
+to cashier); `operator.forceCloseShift` handler with manager/admin role gate
+and same-branch verification (P17); `shift.forced_close` audit event with both
+identities and structured reason picker.
+**Status:** Not started. Issue 88 is the next implementation candidate.
 **Closes:** #88.
 
 ### 7i. S6 polish + §A5 production-readiness rollout
