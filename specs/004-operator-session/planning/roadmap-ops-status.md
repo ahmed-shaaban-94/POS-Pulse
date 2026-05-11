@@ -1,7 +1,7 @@
 # Roadmap & Ops Status — POS-Pulse 004-operator-session
 
-**Snapshot date:** 2026-05-09 (updated post-PR #100)
-**Author:** Read-only ops review agent (initial); updated by docs(004) PR on 2026-05-09
+**Snapshot date:** 2026-05-09 (initial); reconciled 2026-05-11 post-PRs #120/#121/#122 — S4 implementation through T082 complete; T056 remains blocked/deferred by issue 101; issue 85 closed; issues 86/87/101 open; 005 blocked behind §A0
+**Author:** Read-only ops review agent (initial); updated by docs(004) PR on 2026-05-09; reconciled by docs/004-s4-closeout-coordination PR on 2026-05-11
 **Scope:** Read-only audit of GitHub roadmap, PR/issue state, and gate alignment for `specs/004-operator-session`. **No issue edits performed in the original snapshot.** §9 and issue table updated to reflect PR #100 merge and issue hygiene (issues #85 and #101 reopened).
 
 > Advisory only. Every recommendation in §8 ("Recommended issue-body updates") is **awaiting maintainer approval before any edit**.
@@ -112,7 +112,7 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 
 **No mismatches detected.** Coordination.md and `gh` data are consistent. The §A1 and §A2 Wave 1/2 PR pointers reference older / cross-repo PRs that fell outside this session's `gh pr list --limit 30` window — they are taken from coordination.md as the durable record.
 
-> ℹ Coordination.md still shows the bullet (lines 270–272) "S4 (cashier PIN sign-in) — implementation begun (2026-05-08). Remaining S4 tasks (T052–T082) in progress." This is accurate but slightly stale: as of the 2026-05-09 snapshot, T052–T055, T063–T068, T069, T069a, T069b, T070a, T070b are all merged via PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94. Issue #87 (S4 closeout) will refresh this list.
+> ℹ **Updated (2026-05-11):** S4 implementation through T082 is now complete. PRs #120 (T061/T062/T072/T073), #121 (T057–T060), and #122 (T078–T082) have all merged. T056 remains blocked/deferred by issue 101 (terminal-A session-invalidation gap — UX gap, not a security gap). Issue 85 closed. Issues 86, 87, and 101 remain open. Coordination.md and tasks.md have been reconciled by the docs/004-s4-closeout-coordination PR (issue 87). 005 remains blocked behind §A0. Final S4 checkpoint / S5 unblock held pending issue 101 resolution or explicit owner waiver.
 
 ---
 
@@ -293,26 +293,25 @@ T077 (renderer takeover wiring: `signingIn` → `takeover_required` →
 **Closes:** #86 (with explicit acknowledgment that T056 terminal-A assertion
 is deferred to #101 resolution).
 
-### 7e. Remaining S4 tasks
+### 7e. Remaining S4 tasks — **COMPLETE (2026-05-11)**
 
-These can land in one PR or split:
+All S4 implementation tasks through T082 have been completed:
 
-- **T072** — `operator.resetCashierPin` (manager/admin only, manager-attributed audit event, PR-1 redaction).
-- **T073** — `operator.unlockCashier` (manager/admin only, audit event).
-- **T078** — manager-only cashier-management surface at `/app/manager/cashiers` (list cashiers + Reset PIN + Unlock actions; `<OperatorRouteGuard role="manager">`).
-- **T079** — documentation update: add "stuck-shift count badge" row to `role-visibility-matrix.md` §Section 3 (cashier=⛔, manager=👀, admin=👀; not visible at 1024–1279 px).
-- **T080** — navigation count badge for stuck-shift list (visibility per T079).
-- **T081** — `pino` log sites + PR-1 redaction for PIN failure outcome category, lockout-triggered/released, PIN reset, PIN unlock; verify cross-process redaction smoke (T053).
-- **T082** — update `src/renderer/routes/operator-route-guard.tsx` to enforce all role-visibility-matrix.md §Section 3 routes.
-- **T056–T062** — confirm test coverage actually merged (most likely lives in the prior PRs; sweep during issue #87 closeout).
+- **T072** ✅ — `operator.resetCashierPin` — PR #120.
+- **T073** ✅ — `operator.unlockCashier` — PR #120.
+- **T078** ✅ — manager-only cashier-management surface — PR #122.
+- **T079** ✅ — stuck-shift badge row added to `role-visibility-matrix.md` — PR #122.
+- **T080** ✅ — navigation count badge (placeholder data source) — PR #122.
+- **T081** ✅ — `pino` log sites + PR-1 redaction for PIN operations — PR #122.
+- **T082** ✅ — route-guard updated for §Section 3 routes — PR #122.
+- **T057–T062** ✅ — takeover-cancel integration, FR-013 disclosure guard, cashier sign-in AppRouter, PinPad privacy, PIN reset/unlock integration tests — PRs #121/#120.
 
-> **Cyclic-dependency flag:** T079/T080 reference a "stuck-shift count badge" that semantically belongs to S5 (forced-close / stuck-shift inventory). The S4 task list owns the *visibility row* + *badge component* but the *data feed* (number of stuck shifts) only exists once S5 lands. Implementation has two options: (a) ship T080 with a placeholder data source returning `0` and let S5 wire the live count, or (b) defer T080 to S5 entirely. Owner decision required.
+**Remaining:** T056 — blocked/deferred by issue 101 (terminal-A session-invalidation gap — UX gap, not security gap). T056 must not be marked complete or implemented until issue 101 is resolved or explicitly waived by owner decision.
 
-### 7f. Issue #87 — S4 closeout & coordination update
+### 7f. Issue #87 — S4 closeout & coordination update — **IN PROGRESS (docs/004-s4-closeout-coordination, 2026-05-11)**
 
-**Prerequisite:** all 7a–7e PRs merged.
-**Scope:** docs only. Update `tasks.md` (mark T070/T071/T072/T073/T074/T075/T076/T077/T078/T079/T080/T081/T082 as ☑); update `coordination.md` "Last updated" line; record S4 validation status (`npm run typecheck`/`npm run lint`/`npm test --coverage`/`npm run codegen:verify` all clean); confirm no scope creep into sales/cart/payments/reports; document remaining S5 blockers (S4 done + §A2 Wave 4).
-**Closes:** #87.
+**Scope:** docs only. Updates `tasks.md` (T078–T082 marked complete; T056 preserved as blocked/deferred by issue 101; S4 checkpoint and dependency diagram reconciled), `coordination.md` (S4 implementation closeout status section added; explicit non-actions updated; Last updated bumped), and this file (S4 task status reconciled in §3, §7e, §7f). No source code, tests, migrations, package.json, CI, or Data-Pulse-2 changes. No S5 work. No 005/006 work.
+**Note:** issue 87 remains open — this PR is its resolution; it should not be closed until the PR merges per owner workflow.
 
 ### 7g. §A2 Wave 4 backend coordination
 
