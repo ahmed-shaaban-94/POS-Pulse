@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-11 (PR #120 merged — T061/T062/T072/T073 PIN management reset/unlock; PR #121 merged — T057–T060 cashier sign-in and takeover UI coverage; PR #122 merged — T078–T082 cashier management, role visibility, stuck-shift badge placeholder, route guard, log redaction; issue 85 closed — cashier-path AD-2 local-only permanent architectural invariant; issue 86 remains open per owner discretion — PinPad/TakeoverPrompt implementation and coverage landed via PRs #103 and #121; **issue 101 resolved — Option A waiver chosen 2026-05-11; Endpoint 6 caller-naive semantics confirmed; T056 terminal-A sub-assertion waived; S4 final checkpoint UNBLOCKED; see `docs/issue-101-waiver.md`**; issue 87 is the current closeout coordination PR)
+**Last updated:** 2026-05-11 (PR #124 merged — issue 101 Option A waiver, T056 waived in full, S4 final checkpoint UNBLOCKED; **§A2 Wave 4 verified and cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and OpenAPI `action_category` enum (pos-audit-events.openapi.yaml); S5 is now fully unblocked from gate perspective; issue 88 is the next S5 implementation candidate)
 
 ---
 
@@ -44,9 +44,12 @@ invoked", and it is updated in place as coordination items resolve.
   see §"Issue 101 decision" and `docs/issue-101-waiver.md`. S4 final checkpoint UNBLOCKED.** Issue 85 closed
   (cashier-path AD-2 local-only — permanent architectural invariant; see §"Issue
   85 decision"). Issue 86 remains open per owner discretion — PinPad/TakeoverPrompt
-  implementation and coverage have landed via PRs #103 and #121. Issue 87 is the
-  current closeout coordination PR. **S5 may now proceed (pending §A2 Wave 4
-  only).** 005 remains blocked behind §A0.
+  implementation and coverage have landed via PRs #103 and #121. **§A2 Wave 4
+  cleared 2026-05-11** — Data-Pulse-2 main (SHA `7b95fdb`) confirms
+  `shift.forced_close` recognised in both `POS_AUDIT_ACTION_CATEGORIES` (dto.ts)
+  and the OpenAPI `action_category` enum; see §"§A2 Wave 4 clearance" below.
+  **S5 is now fully unblocked from gate perspective. Issue 88 is the next S5
+  implementation candidate. No S5 implementation started.** 005 remains blocked behind §A0.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -56,12 +59,12 @@ invoked", and it is updated in place as coordination items resolve.
   resolved on 2026-05-05.
 - **`/speckit-tasks`:** ✅ **Invoked and complete.** `tasks.md` generated
   2026-05-05; addendum applied same day.
-- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — implementation
-  through T082 complete (T056 deferred/blocked by issue 101).** PRs #59/#60/
-  #61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122. Issue 85
-  closed. Issue 86 open (owner discretion). Issue 101 open (terminal-A
-  session-invalidation gap). Issue 87 is this closeout PR. S5–S6 ⏳ blocked on
-  S4 final checkpoint (pending issue 101 resolution or owner waiver) + §A2 Wave 4.
+- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 ✅ fully complete
+  (2026-05-11 — T056 waived in full via issue 101 Option A; PR #124 merged).**
+  PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122.
+  Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open. Issue 87
+  closed (S4 closeout PR). **S5 — all gates cleared (S4 ✅ + §A2 Wave 4 ✅);
+  not started; issue 88 is the next candidate.** S6 ⏳ blocked on prior slices.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 This file tracks coordination state only.
@@ -251,6 +254,7 @@ invoked. They are independent and may be worked in parallel.
 | §A2 — backend / OpenAPI (Wave 1) | ✅ **Wave 1 cleared** — `POST /api/pos/v1/operators/sign-in` (Data-Pulse-2 PR #52, SHA `a765862`) + `POST /api/pos/v1/operators/sign-out` (Data-Pulse-2 PR #54, SHA `14a4787`) both merged to Data-Pulse-2 main 2026-05-06. **POS-Pulse S1 unblocked; S1 not yet started.** Waves 2–4 remain downstream. | **Ahmed (POS-Pulse) / Ahmed (SmartDataPulse backend)** | Owner-implemented. B-1 (PR #43) + B-2 complete. Wave 1 delivered with Clerk JWKS verification (Q1 = Yes, Q2 = path (b)); password never sent to Data-Pulse-2; cashier PIN stays local-only (AD-2 / §A1). |
 | §A2 — backend / OpenAPI (Wave 2) | ✅ **Wave 2 cleared** — `POST /api/pos/v1/audit-events` merged via Data-Pulse-2 PR #62, SHA `4f77da6`, 2026-05-07. **S3 §A2 dependency cleared.** | **Ahmed** | Wave 2 delivered; S3 now holds on §A3 only. |
 | §A2 — backend / OpenAPI (Wave 3) | ✅ **Wave 3 cleared** — `GET /api/pos/v1/operators/roster`, `POST /api/pos/v1/operators/takeover/confirm`, `GET /api/pos/v1/operators/active-session` merged via Data-Pulse-2 PR #70, 2026-05-08. **S4 §A2 dependency cleared.** | **Ahmed** | Wave 3 delivered; S4 now holds on §A3 + §A4 (both also cleared). |
+| §A2 — backend / OpenAPI (Wave 4) | ✅ **Wave 4 cleared** — `shift.forced_close` recognised in Data-Pulse-2 main (SHA `7b95fdb`): present in `POS_AUDIT_ACTION_CATEGORIES` (apps/api/src/pos-audit-events/dto.ts) and in the OpenAPI `action_category` enum (packages/contracts/openapi/pos-audit-events.openapi.yaml). Payload shape `{ shift_id, shift_owner_id, forced_close_actor_id, forced_close_reason, annotation? }` documented in OpenAPI. **S5 §A2 dependency cleared.** | **Ahmed** | Verified 2026-05-11 against Data-Pulse-2 SHA `7b95fdb`. No Data-Pulse-2 changes made by this PR. |
 | §A3 — migrations | ✅ **Fully cleared** — `audit_events` PR #49 SHA `e50f5b8`; `operator_sessions` + `cashier_pin_records` PR #60. | **Ahmed** | All three S4 tables live. S4 may proceed from §A3 perspective. |
 | §A4 — Argon2id binding | ✅ **Cleared** — argon2 0.44.0 installed (POS-Pulse PR #59), 2026-05-08. T063 complete. | **Ahmed** | S4 PIN implementation may proceed. |
 | §A5 — production readiness | ⏳ Held | _Assigned at rollout PR open time_ | Blocks production rollout only. |
@@ -267,7 +271,7 @@ invoked. They are independent and may be worked in parallel.
 | §A1 ✅ (any of Paths 1/2/3) | S3, S4, S5, S6 unblocked (subject to §A2/§A3/§A4 per slice) |
 | §A2 (S3 endpoint lands) | S3 implementation may proceed |
 | §A2 (S4 endpoints land) + §A3 + §A4 | S4 implementation may proceed |
-| §A2 (S5 endpoint lands) | S5 implementation may proceed |
+| §A2 Wave 4 ✅ (S5 endpoint — `shift.forced_close` recognised) | S5 implementation may proceed — **gate cleared 2026-05-11** |
 | §A5 ✅ + all slices merged | Production rollout may proceed |
 
 **Bottom line:** `/speckit-tasks` is now invocable — Slice 0 review is
@@ -293,7 +297,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- ❌ S5 (forced-close recovery) — **not started.** Blocked on §A2 Wave 4 only (S4 final checkpoint now clear — issue 101 waiver merged).
+- ❌ S5 (forced-close recovery) — **not started.** All gates cleared (S4 ✅ + §A2 Wave 4 ✅ 2026-05-11). Issue 88 is the next candidate implementation issue. **No S5 implementation started in this PR.**
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
 - ❌ No 005 / 006 started. 005 remains blocked behind §A0.
 - ❌ No S5 DB migrations authored.
@@ -302,7 +306,7 @@ This file tracks coordination state. The following work has **not yet started**:
 - ❌ No Data-Pulse-2 changes from this repo.
 - §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅, **S4 (cashier sign-in, takeover, PIN management) ✅** (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged; issue 101 resolved via Option A waiver 2026-05-11; T056 terminal-A sub-assertion waived; S4 final checkpoint clear).
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅, **S4 (cashier sign-in, takeover, PIN management) ✅** (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged; issue 101 resolved via Option A waiver 2026-05-11; T056 waived in full; S4 final checkpoint clear; PR #124 merged). **§A2 Wave 4 ✅** (2026-05-11; Data-Pulse-2 main SHA `7b95fdb`; `shift.forced_close` confirmed in dto.ts and OpenAPI; no Data-Pulse-2 changes made).
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 
@@ -433,6 +437,46 @@ JSDoc (comment-only; no behaviour change) and in this file.
 
 ---
 
+## §A2 Wave 4 clearance — `shift.forced_close` recognised in Data-Pulse-2 (2026-05-11)
+
+**Date:** 2026-05-11
+**Decision:** §A2 Wave 4 is cleared. Data-Pulse-2 main already recognises
+`shift.forced_close` in the POS audit-events endpoint contract and runtime DTO.
+S5 is now fully unblocked from the gate perspective. No S5 implementation was
+started in this PR.
+
+**Verification SHA:** Data-Pulse-2 main `7b95fdb`
+(`chore(api): pin jest coverageThreshold to achieved baseline`)
+
+**Files verified (read-only; no edits made):**
+
+| File | Evidence |
+|:--|:--|
+| `apps/api/src/pos-audit-events/dto.ts` | `POS_AUDIT_ACTION_CATEGORIES` array includes `"shift.forced_close"` as a `const satisfies readonly string[]` member. |
+| `packages/contracts/openapi/pos-audit-events.openapi.yaml` | `action_category` enum under `AuditEventItem` includes `shift.forced_close`. Payload shape documented: `{ shift_id, shift_owner_id, forced_close_actor_id, forced_close_reason, annotation? }`. |
+
+**Evidence summary:**
+- `shift.forced_close` is in `POS_AUDIT_ACTION_CATEGORIES` in `dto.ts` (line 20).
+- `shift.forced_close` is in the OpenAPI `action_category` enum (yaml lines 223–226).
+- OpenAPI payload description includes the four S5-specific attribution fields:
+  `shift_owner_id`, `forced_close_actor_id`, `forced_close_reason`, optional `annotation`.
+- The OpenAPI spec note confirms: "`shift.forced_close` and `shift.close` MUST be
+  persisted distinctly — the backend MUST NOT collapse them" (FR-026).
+
+**Scope:**
+- Clears §A2 Wave 4 for S5.
+- Does NOT start S5 implementation.
+- Does NOT introduce any source code, test, migration, package, or CI changes in
+  POS-Pulse.
+- No Data-Pulse-2 changes were made by this PR. Data-Pulse-2 was accessed
+  read-only for verification only.
+- Issue 88 (004 S5 — blind shift close and visibility boundaries) remains OPEN
+  and is the next S5 implementation candidate after this PR merges.
+- 005 remains blocked behind §A0 (requires 004 S4 closeout ✅ AND 004 S5
+  visibility-boundaries PR — S5 not yet started).
+
+---
+
 ## Status update protocol
 
 When any item changes state, update this file in place:
@@ -457,21 +501,21 @@ agents and humans should read this file (and `plan.md`) first to know
 ---
 
 **End of coordination file.** §A1 ✅ (PR #39, SHA `7ae337b`, Constitution
-v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
-PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
-operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
-POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 fully complete
-(2026-05-11).** PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105
-merged 2026-05-09. PR #120 (PIN management reset/unlock — T061/T062/T072/T073)
-merged 2026-05-11. PR #121 (cashier sign-in and takeover UI coverage —
-T057–T060) merged 2026-05-11. PR #122 (cashier management, role visibility,
-stuck-shift badge placeholder, route guard, log redaction — T078–T082) merged
-2026-05-11. **Issue 85 closed** (cashier-path AD-2 local-only — permanent
-architectural invariant; see §"Issue 85 decision"). Issue 86 open per owner
-discretion (PinPad/TakeoverPrompt implementation and coverage landed via PRs
-#103 and #121). **Issue 101 resolved** (Option A waiver 2026-05-11 — Endpoint 6
-caller-naive; T056 terminal-A sub-assertion waived; S4 checkpoint clear; see
-§"Issue 101 decision" and `docs/issue-101-waiver.md`). Issue 87 is the current
-closeout coordination PR. **S4 final checkpoint UNBLOCKED. S5 may proceed
-(pending §A2 Wave 4 only).** 005 remains blocked behind §A0. S3 complete
+v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ + **Wave 4 ✅**
+(Data-Pulse-2 PRs #52/#54/#62/#70; Wave 4 verified 2026-05-11 SHA `7b95fdb`
+— `shift.forced_close` in dto.ts + OpenAPI). §A3 ✅ fully cleared
+(audit_events PR #49 SHA `e50f5b8`; operator_sessions + cashier_pin_records
+PR #60). §A4 ✅ (argon2 0.44.0, POS-Pulse PR #59). **All S4 gates cleared
+2026-05-08. S4 fully complete (2026-05-11, PR #124).** PRs
+#59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105 merged 2026-05-09.
+PR #120 (T061/T062/T072/T073) merged 2026-05-11. PR #121 (T057–T060) merged
+2026-05-11. PR #122 (T078–T082) merged 2026-05-11. PR #124 (issue 101 waiver;
+T056 waived in full) merged 2026-05-11. **Issue 85 closed** (cashier-path AD-2
+local-only; see §"Issue 85 decision"). Issue 86 open per owner discretion.
+**Issue 101 open** (terminal-A gap — Option A waiver recorded; see §"Issue 101
+decision" and `docs/issue-101-waiver.md`). **§A2 Wave 4 cleared** (2026-05-11;
+`shift.forced_close` confirmed in Data-Pulse-2 main SHA `7b95fdb`; see §"§A2
+Wave 4 clearance"). **S4 final checkpoint UNBLOCKED. S5 fully unblocked from
+gate perspective (S4 ✅ + §A2 Wave 4 ✅). Issue 88 is next S5 candidate. No S5
+implementation started.** 005 remains blocked behind §A0. S3 complete
 (2026-05-07). §A5 is a later-rollout gate. S5–S6 not yet started.
