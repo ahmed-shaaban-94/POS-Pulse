@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-11 (Spec Kit S5 planning readout for issue 88 recorded in [`./planning/s5-speckit-readout.md`](./planning/s5-speckit-readout.md); Phase 7 gate-tag qualifiers reconciled in `tasks.md` for T083–T093; **no S5 implementation started**; PR #124 merged — issue 101 Option A waiver, T056 waived in full, S4 final checkpoint UNBLOCKED; **§A2 Wave 4 verified and cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and OpenAPI `action_category` enum (pos-audit-events.openapi.yaml); S5 is now fully unblocked from gate perspective; issue 88 is the next S5 implementation candidate)
+**Last updated:** 2026-05-11 (S5 stuck-shift discovery verification recorded in [`./planning/s5-stuck-shift-discovery-verification.md`](./planning/s5-stuck-shift-discovery-verification.md); Option C selected — Wave 4.1 backend endpoint `GET /api/pos/v1/shifts/stuck?branch_id=` required before T089; T089/T090 carry discovery-blocked qualifier; **§A2 Wave 4 cleared but S5 is contract-blocked pending Wave 4.1**; issue 88 remains OPEN; no S5 implementation started; _prior: Spec Kit S5 planning readout for issue 88 recorded in [`./planning/s5-speckit-readout.md`](./planning/s5-speckit-readout.md); PR #124 merged — issue 101 Option A waiver, T056 waived in full, S4 final checkpoint UNBLOCKED; §A2 Wave 4 verified and cleared — Data-Pulse-2 main SHA `7b95fdb`_)
 
 ---
 
@@ -48,8 +48,11 @@ invoked", and it is updated in place as coordination items resolve.
   cleared 2026-05-11** — Data-Pulse-2 main (SHA `7b95fdb`) confirms
   `shift.forced_close` recognised in both `POS_AUDIT_ACTION_CATEGORIES` (dto.ts)
   and the OpenAPI `action_category` enum; see §"§A2 Wave 4 clearance" below.
-  **S5 is now fully unblocked from gate perspective. Issue 88 is the next S5
-  implementation candidate. No S5 implementation started.** 005 remains blocked behind §A0.
+  **S5 gates cleared (S4 ✅ + §A2 Wave 4 ✅ 2026-05-11) but S5 is
+  contract-blocked pending Wave 4.1 backend endpoint (`GET /api/pos/v1/shifts/stuck?branch_id=`)
+  and POS-Pulse shifts migration — see [`./planning/s5-stuck-shift-discovery-verification.md`](./planning/s5-stuck-shift-discovery-verification.md)
+  (Option C, 2026-05-11). T089/T090 carry `[BLOCKED: stuck-shift-discovery]` qualifier.
+  Issue 88 is the next S5 implementation candidate. No S5 implementation started.** 005 remains blocked behind §A0.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -63,7 +66,9 @@ invoked", and it is updated in place as coordination items resolve.
   (2026-05-11 — T056 waived in full via issue 101 Option A; PR #124 merged).**
   PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122.
   Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open. Issue 87
-  closed (S4 closeout PR). **S5 — all gates cleared (S4 ✅ + §A2 Wave 4 ✅);
+  closed (S4 closeout PR). **S5 — gates cleared (S4 ✅ + §A2 Wave 4 ✅);
+  contract-blocked on Wave 4.1 backend endpoint + POS-Pulse shifts migration
+  (Option C, see [`./planning/s5-stuck-shift-discovery-verification.md`](./planning/s5-stuck-shift-discovery-verification.md));
   not started; issue 88 is the next candidate.** S6 ⏳ blocked on prior slices.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
@@ -297,7 +302,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- ❌ S5 (forced-close recovery) — **not started.** All gates cleared (S4 ✅ + §A2 Wave 4 ✅ 2026-05-11). Issue 88 is the next candidate implementation issue. **No S5 implementation started in this PR.**
+- ❌ S5 (forced-close recovery) — **not started.** Gates cleared (S4 ✅ + §A2 Wave 4 ✅ 2026-05-11). **Contract-blocked on Wave 4.1 backend endpoint (`GET /api/pos/v1/shifts/stuck?branch_id=`) + POS-Pulse shifts migration — Option C recorded in [`./planning/s5-stuck-shift-discovery-verification.md`](./planning/s5-stuck-shift-discovery-verification.md) (2026-05-11); T089/T090 carry `[BLOCKED: stuck-shift-discovery]` qualifier.** Issue 88 is the next candidate implementation issue. **No S5 implementation started in this PR.**
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
 - ❌ No 005 / 006 started. 005 remains blocked behind §A0.
 - ❌ No S5 DB migrations authored.
@@ -515,6 +520,83 @@ Codegen and full test suites were NOT run (no source / contracts / package edits
 
 ---
 
+## S5 stuck-shift discovery verification (2026-05-11)
+
+**Date:** 2026-05-11
+**Branch:** docs/004-s5-stuck-shift-discovery-verification
+**Scope:** Docs-only verification of the load-bearing open question flagged in
+`planning/s5-speckit-readout.md` §3.1 — stuck-shift discovery mechanism across
+terminals. No S5 implementation started; no source / tests / migrations /
+package / codegen / OpenAPI / CI / Data-Pulse-2 changes.
+
+**Artifact produced:** [`./planning/s5-stuck-shift-discovery-verification.md`](./planning/s5-stuck-shift-discovery-verification.md)
+
+**Decision: Option C** — A new Wave 4.1 backend endpoint
+`GET /api/pos/v1/shifts/stuck?branch_id=` is required before T089 can begin.
+
+**Evidence summary:**
+
+- Options A and B eliminated:
+  - POS-Pulse migrations 0001–0006 contain no `shifts` table. No cross-terminal
+    shift sync mechanism exists. Option B (existing sync is sufficient) is
+    conclusively eliminated.
+  - Data-Pulse-2 has no `pos-shifts` module, no `shifts.ts` schema, no
+    `pos-shifts.openapi.yaml`, and no `GET /api/pos/v1/shifts/*` endpoint as of
+    SHA `7b95fdb`. Option A (endpoint already exists) is eliminated.
+- Option D (client-side audit_events reconstruction) is not viable — audit_events
+  do not record shift-open events; the reconstruction would be brittle and
+  incomplete.
+- Option C is the remaining path: Wave 4.1 backend endpoint + POS-Pulse shifts
+  migration must both land before T089 begins.
+
+**Secondary gap flagged:** No `shifts` table in POS-Pulse migrations (0001–0006).
+T089 must write `lifecycle_state = 'closed_forced'` and `declared_count = null`
+to a local shifts row — the target table does not exist. A
+`migrations/0007_shifts.sql` is required in PR-S5-pre (the implementation
+pre-flight PR). This migration is NOT authored in this docs-only verification PR.
+
+**Impact on T089/T090:**
+T089 (`operator.forceCloseShift`) is blocked on both:
+1. Wave 4.1 backend endpoint (`GET /api/pos/v1/shifts/stuck?branch_id=`) — not
+   yet implemented in Data-Pulse-2.
+2. POS-Pulse `shifts` migration — not yet in 0001–0006.
+
+T090 (`ForcedCloseSurface.tsx`) depends on T089 for the stuck-shift data feed.
+Both T089 and T090 carry `[BLOCKED: stuck-shift-discovery]` in `tasks.md`.
+
+T083–T088, T091–T093 are **not** blocked by this discovery gap.
+
+**Issue 88 status:** OPEN. This verification PR does not close or start issue 88.
+Issue 88 remains the next S5 implementation candidate after the Wave 4.1
+backend endpoint lands and the shifts migration is authored.
+
+**005 status:** Unchanged. 005 remains blocked behind §A0.
+
+**Validation performed by this PR:**
+
+- `git diff --check` (whitespace / conflict-marker scan).
+- `npx prettier --check` on changed docs files.
+- `npm run typecheck` (both tsconfigs).
+- `git status --short` (no stray staging).
+
+Codegen and full test suites were NOT run (no source / contracts / package edits).
+
+**Files changed by this PR:**
+
+- `specs/004-operator-session/planning/s5-stuck-shift-discovery-verification.md` (NEW)
+- `specs/004-operator-session/tasks.md` (T089/T090 discovery-blocked qualifier + Last-updated bump)
+- `specs/004-operator-session/coordination.md` (this section + Last-updated bump)
+- `specs/004-operator-session/planning/roadmap-ops-status.md` (stale S5 readiness wording)
+
+**Files explicitly NOT touched by this PR:** AGENTS.md, CLAUDE.md,
+[`./a1-amendment/`](./a1-amendment/), any source / tests / migrations /
+package / codegen / OpenAPI / CI file, any Data-Pulse-2 file,
+[`./spec.md`](./spec.md), [`./plan.md`](./plan.md), [`./research.md`](./research.md),
+[`./data-model.md`](./data-model.md), [`./quickstart.md`](./quickstart.md),
+and every file under [`./contracts/`](./contracts/).
+
+---
+
 ## Status update protocol
 
 When any item changes state, update this file in place:
@@ -553,7 +635,9 @@ local-only; see §"Issue 85 decision"). Issue 86 open per owner discretion.
 **Issue 101 open** (terminal-A gap — Option A waiver recorded; see §"Issue 101
 decision" and `docs/issue-101-waiver.md`). **§A2 Wave 4 cleared** (2026-05-11;
 `shift.forced_close` confirmed in Data-Pulse-2 main SHA `7b95fdb`; see §"§A2
-Wave 4 clearance"). **S4 final checkpoint UNBLOCKED. S5 fully unblocked from
-gate perspective (S4 ✅ + §A2 Wave 4 ✅). Issue 88 is next S5 candidate. No S5
-implementation started.** 005 remains blocked behind §A0. S3 complete
+Wave 4 clearance"). **S4 final checkpoint UNBLOCKED. S5 gates cleared (S4 ✅ + §A2 Wave 4 ✅)
+but contract-blocked on Wave 4.1 backend endpoint + POS-Pulse shifts migration
+(Option C — see `./planning/s5-stuck-shift-discovery-verification.md`, 2026-05-11;
+T089/T090 carry `[BLOCKED: stuck-shift-discovery]`). Issue 88 is next S5 candidate.
+No S5 implementation started.** 005 remains blocked behind §A0. S3 complete
 (2026-05-07). §A5 is a later-rollout gate. S5–S6 not yet started.
