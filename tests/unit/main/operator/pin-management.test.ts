@@ -83,7 +83,9 @@ function makeAuditEmitter(): { emitter: AuditEmitter; emit: ReturnType<typeof vi
 }
 
 /** Build a fake DatabaseHandle that returns a preset row for SELECT and records UPDATE calls. */
-function makeDb(existingRow: { failed_attempt_count: number; lockout_until: string | null } | undefined): {
+function makeDb(
+  existingRow: { failed_attempt_count: number; lockout_until: string | null } | undefined,
+): {
   db: DatabaseHandle;
   runCalls: { sql: string; args: unknown[] }[];
   getCalls: { sql: string; args: unknown[] }[];

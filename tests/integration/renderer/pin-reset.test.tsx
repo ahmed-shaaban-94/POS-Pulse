@@ -23,9 +23,7 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { registerOperatorHandlers } from '../../../src/main/ipc/operator.js';
 import { PinManagementHandler } from '../../../src/main/operator/pin-management.js';
 import { OPERATOR_IPC_CHANNELS } from '../../../src/shared/operator/channels.js';
-import type {
-  ResetCashierPinResponse,
-} from '../../../src/shared/bridge-api.js';
+import type { ResetCashierPinResponse } from '../../../src/shared/bridge-api.js';
 import type { OperatorRefusal, AuditEvent } from '../../../src/shared/audit/event-shape.js';
 import type { SessionManager } from '../../../src/main/operator/session-manager.js';
 import type { OperatorSessionRecord } from '../../../src/main/operator/session-manager.js';
@@ -33,7 +31,10 @@ import type { PairingStore } from '../../../src/main/pairing/store.js';
 import type { AuditEmitter } from '../../../src/main/audit/audit-emitter.js';
 import type { DatabaseHandle } from '../../../src/main/db/client.js';
 import type { SafeStorageLike } from '../../../src/main/secrets/safe-storage.js';
-import type { SignInHandler, CashierSignInHandler } from '../../../src/main/operator/sign-in-handler.js';
+import type {
+  SignInHandler,
+  CashierSignInHandler,
+} from '../../../src/main/operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../../src/main/operator/sign-out-handler.js';
 import type { RosterHandler } from '../../../src/main/operator/roster-handler.js';
 import type { InactivityMonitor } from '../../../src/main/operator/inactivity-monitor.js';
@@ -84,8 +85,7 @@ function makeDb(has_row: boolean): DatabaseHandle {
     prepare: vi.fn((sql: string) => {
       if (sql.trimStart().toUpperCase().startsWith('SELECT')) {
         return {
-          get: () =>
-            has_row ? { failed_attempt_count: 0, lockout_until: null } : undefined,
+          get: () => (has_row ? { failed_attempt_count: 0, lockout_until: null } : undefined),
         };
       }
       return { run: vi.fn() };
@@ -105,7 +105,10 @@ function makeStorage(): SafeStorageLike {
   };
 }
 
-function makeIpcMain(): { ipcMain: IpcMain; handlers: Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown> } {
+function makeIpcMain(): {
+  ipcMain: IpcMain;
+  handlers: Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>;
+} {
   const handlers = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
   const ipcMain = {
     handle: vi.fn((ch: string, fn: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
@@ -139,7 +142,10 @@ function buildEnv(opts: { hasRow?: boolean; session?: OperatorSessionRecord | nu
     cashierSignInHandler: { signIn: vi.fn() } as unknown as CashierSignInHandler,
     signOutHandler: { signOut: vi.fn() } as unknown as SignOutHandler,
     rosterHandler: { listRoster: vi.fn() } as unknown as RosterHandler,
-    sessionManager: { getCurrent: vi.fn(() => session), getCurrentBridgeView: vi.fn(() => null) } as unknown as SessionManager,
+    sessionManager: {
+      getCurrent: vi.fn(() => session),
+      getCurrentBridgeView: vi.fn(() => null),
+    } as unknown as SessionManager,
     inactivityMonitor: { reportActivity: vi.fn() } as unknown as InactivityMonitor,
     auditEmitter,
     pairingStore: makePairedStore(),
@@ -167,7 +173,9 @@ describe('T061 — operator:reset-cashier-pin IPC (manager PIN reset integration
     const pinManagementHandler = new PinManagementHandler({
       db: makeDb(true),
       safeStorage: makeStorage(),
-      sessionManager: { getCurrent: vi.fn(() => makeManagerSession()) } as unknown as SessionManager,
+      sessionManager: {
+        getCurrent: vi.fn(() => makeManagerSession()),
+      } as unknown as SessionManager,
       pairingStore: makePairedStore(),
       auditEmitter: { emit: vi.fn() } as unknown as AuditEmitter,
     });
@@ -176,11 +184,17 @@ describe('T061 — operator:reset-cashier-pin IPC (manager PIN reset integration
       cashierSignInHandler: { signIn: vi.fn() } as unknown as CashierSignInHandler,
       signOutHandler: { signOut: vi.fn() } as unknown as SignOutHandler,
       rosterHandler: { listRoster: vi.fn() } as unknown as RosterHandler,
-      sessionManager: { getCurrent: vi.fn(() => makeManagerSession()), getCurrentBridgeView: vi.fn(() => null) } as unknown as SessionManager,
+      sessionManager: {
+        getCurrent: vi.fn(() => makeManagerSession()),
+        getCurrentBridgeView: vi.fn(() => null),
+      } as unknown as SessionManager,
       inactivityMonitor: { reportActivity: vi.fn() } as unknown as InactivityMonitor,
       auditEmitter: { emit: vi.fn() } as unknown as AuditEmitter,
       pairingStore: makePairedStore(),
-      takeoverHandler: { confirmTakeover: vi.fn(), cancelTakeover: vi.fn() } as unknown as TakeoverHandler,
+      takeoverHandler: {
+        confirmTakeover: vi.fn(),
+        cancelTakeover: vi.fn(),
+      } as unknown as TakeoverHandler,
       pinManagementHandler,
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.RESET_CASHIER_PIN)).toBe(true);

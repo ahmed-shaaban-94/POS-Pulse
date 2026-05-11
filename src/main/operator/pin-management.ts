@@ -45,7 +45,10 @@ import type { AuditEmitter } from '../audit/audit-emitter.js';
 import { requireRole } from './role-enforcement.js';
 import { hashPin } from './pin-credential.js';
 import { sealPinMaterial } from './pin-seal.js';
-import type { CashierPinResetPayload, CashierPinUnlockPayload } from '../../shared/audit/payload-schemas.js';
+import type {
+  CashierPinResetPayload,
+  CashierPinUnlockPayload,
+} from '../../shared/audit/payload-schemas.js';
 
 // ─── PIN validation ────────────────────────────────────────────────────────
 
@@ -204,9 +207,7 @@ export class PinManagementHandler {
    * If the cashier is not locked out, still emits the event and returns
    * `state_invalid` (renderer interprets as "already unlocked, no-op").
    */
-  async unlockCashier(
-    req: UnlockCashierRequest,
-  ): Promise<UnlockCashierResponse | OperatorRefusal> {
+  async unlockCashier(req: UnlockCashierRequest): Promise<UnlockCashierResponse | OperatorRefusal> {
     const session = this.deps.sessionManager.getCurrent();
 
     try {
@@ -294,11 +295,7 @@ export class PinManagementHandler {
     return { kind: 'unlocked', audit_event_id: req.event_id };
   }
 
-  private log(
-    level: 'info' | 'warn',
-    event: string,
-    category: string | undefined,
-  ): void {
+  private log(level: 'info' | 'warn', event: string, category: string | undefined): void {
     if (category !== undefined) {
       this.deps.logger?.[level]({ event, category }, event.replace('.', ' '));
     } else {

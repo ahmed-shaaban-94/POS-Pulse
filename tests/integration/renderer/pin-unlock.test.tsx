@@ -34,7 +34,10 @@ import type { PairingStore } from '../../../src/main/pairing/store.js';
 import type { AuditEmitter } from '../../../src/main/audit/audit-emitter.js';
 import type { DatabaseHandle } from '../../../src/main/db/client.js';
 import type { SafeStorageLike } from '../../../src/main/secrets/safe-storage.js';
-import type { SignInHandler, CashierSignInHandler } from '../../../src/main/operator/sign-in-handler.js';
+import type {
+  SignInHandler,
+  CashierSignInHandler,
+} from '../../../src/main/operator/sign-in-handler.js';
 import type { SignOutHandler } from '../../../src/main/operator/sign-out-handler.js';
 import type { RosterHandler } from '../../../src/main/operator/roster-handler.js';
 import type { InactivityMonitor } from '../../../src/main/operator/inactivity-monitor.js';
@@ -108,7 +111,10 @@ function makeStorage(): SafeStorageLike {
   };
 }
 
-function makeIpcMain(): { ipcMain: IpcMain; handlers: Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown> } {
+function makeIpcMain(): {
+  ipcMain: IpcMain;
+  handlers: Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>;
+} {
   const handlers = new Map<string, (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown>();
   const ipcMain = {
     handle: vi.fn((ch: string, fn: (e: IpcMainInvokeEvent, ...a: unknown[]) => unknown) => {
@@ -120,10 +126,12 @@ function makeIpcMain(): { ipcMain: IpcMain; handlers: Map<string, (e: IpcMainInv
 
 const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
-function buildEnv(opts: {
-  lockout_until?: string | null;
-  session?: OperatorSessionRecord | null;
-} = {}): {
+function buildEnv(
+  opts: {
+    lockout_until?: string | null;
+    session?: OperatorSessionRecord | null;
+  } = {},
+): {
   invoke: (channel: string, req: unknown) => Promise<unknown>;
   emit: ReturnType<typeof vi.fn>;
 } {
@@ -146,11 +154,17 @@ function buildEnv(opts: {
     cashierSignInHandler: { signIn: vi.fn() } as unknown as CashierSignInHandler,
     signOutHandler: { signOut: vi.fn() } as unknown as SignOutHandler,
     rosterHandler: { listRoster: vi.fn() } as unknown as RosterHandler,
-    sessionManager: { getCurrent: vi.fn(() => session), getCurrentBridgeView: vi.fn(() => null) } as unknown as SessionManager,
+    sessionManager: {
+      getCurrent: vi.fn(() => session),
+      getCurrentBridgeView: vi.fn(() => null),
+    } as unknown as SessionManager,
     inactivityMonitor: { reportActivity: vi.fn() } as unknown as InactivityMonitor,
     auditEmitter,
     pairingStore: makePairedStore(),
-    takeoverHandler: { confirmTakeover: vi.fn(), cancelTakeover: vi.fn() } as unknown as TakeoverHandler,
+    takeoverHandler: {
+      confirmTakeover: vi.fn(),
+      cancelTakeover: vi.fn(),
+    } as unknown as TakeoverHandler,
     pinManagementHandler,
   });
 
@@ -171,7 +185,9 @@ describe('T062 — operator:unlock-cashier IPC (manager unlock integration)', ()
     const pinManagementHandler = new PinManagementHandler({
       db: makeDb(null),
       safeStorage: makeStorage(),
-      sessionManager: { getCurrent: vi.fn(() => makeManagerSession()) } as unknown as SessionManager,
+      sessionManager: {
+        getCurrent: vi.fn(() => makeManagerSession()),
+      } as unknown as SessionManager,
       pairingStore: makePairedStore(),
       auditEmitter: { emit: vi.fn() } as unknown as AuditEmitter,
     });
@@ -180,11 +196,17 @@ describe('T062 — operator:unlock-cashier IPC (manager unlock integration)', ()
       cashierSignInHandler: { signIn: vi.fn() } as unknown as CashierSignInHandler,
       signOutHandler: { signOut: vi.fn() } as unknown as SignOutHandler,
       rosterHandler: { listRoster: vi.fn() } as unknown as RosterHandler,
-      sessionManager: { getCurrent: vi.fn(() => makeManagerSession()), getCurrentBridgeView: vi.fn(() => null) } as unknown as SessionManager,
+      sessionManager: {
+        getCurrent: vi.fn(() => makeManagerSession()),
+        getCurrentBridgeView: vi.fn(() => null),
+      } as unknown as SessionManager,
       inactivityMonitor: { reportActivity: vi.fn() } as unknown as InactivityMonitor,
       auditEmitter: { emit: vi.fn() } as unknown as AuditEmitter,
       pairingStore: makePairedStore(),
-      takeoverHandler: { confirmTakeover: vi.fn(), cancelTakeover: vi.fn() } as unknown as TakeoverHandler,
+      takeoverHandler: {
+        confirmTakeover: vi.fn(),
+        cancelTakeover: vi.fn(),
+      } as unknown as TakeoverHandler,
       pinManagementHandler,
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER)).toBe(true);
@@ -228,7 +250,11 @@ describe('T062 — operator:unlock-cashier IPC (manager unlock integration)', ()
         if (sql.trimStart().toUpperCase().startsWith('SELECT')) {
           return { get: () => ({ failed_attempt_count: 5, lockout_until: future }) };
         }
-        return { run: (...args: unknown[]) => { runCalls.push(args); } };
+        return {
+          run: (...args: unknown[]) => {
+            runCalls.push(args);
+          },
+        };
       }),
       pragma: vi.fn(),
       exec: vi.fn(),
@@ -239,14 +265,16 @@ describe('T062 — operator:unlock-cashier IPC (manager unlock integration)', ()
     const handler = new PinManagementHandler({
       db,
       safeStorage: makeStorage(),
-      sessionManager: { getCurrent: vi.fn(() => makeManagerSession()) } as unknown as SessionManager,
+      sessionManager: {
+        getCurrent: vi.fn(() => makeManagerSession()),
+      } as unknown as SessionManager,
       pairingStore: makePairedStore(),
       auditEmitter: { emit } as unknown as AuditEmitter,
     });
     await handler.unlockCashier({ event_id: randomUUID(), target_cashier_id: CASHIER_ID });
     // UPDATE must have been called with 0 for failed_attempt_count and NULL for lockout_until
     expect(runCalls.length).toBe(1);
-    expect(runCalls[0]).toContain(0);   // failed_attempt_count = 0
+    expect(runCalls[0]).toContain(0); // failed_attempt_count = 0
     expect(runCalls[0]).toContain(null); // lockout_until = NULL
   });
 
