@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-10 (PR #103 merged — T074–T077 PinPad + TakeoverPrompt UI activation; PR #105 merged — dev bootstrap stabilisation CSP + preload Vite bundle; #86 open per owner discretion; #85 open cashier-path AD-2; #101 open terminal-A session-invalidation gap; #87 open S4 closeout)
+**Last updated:** 2026-05-11 (PR #120 merged — T061/T062/T072/T073 PIN management reset/unlock; PR #121 merged — T057–T060 cashier sign-in and takeover UI coverage; PR #122 merged — T078–T082 cashier management, role visibility, stuck-shift badge placeholder, route guard, log redaction; issue 85 closed — cashier-path AD-2 local-only permanent architectural invariant; issue 86 remains open per owner discretion — PinPad/TakeoverPrompt implementation and coverage landed via PRs #103 and #121; issue 101 remains open — terminal-A session-invalidation gap, UX gap not security gap; issue 87 is the current closeout coordination PR)
 
 ---
 
@@ -25,24 +25,27 @@ invoked", and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **S4 in progress.** Slice 0 ✅ (approved-with-revisions
-  2026-05-05). §A1 ✅ (PR #39, SHA `7ae337b`, Constitution v1.5.1,
-  2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (roster +
-  takeover/confirm + active-session, Data-Pulse-2 PR #70, 2026-05-08).
-  §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
+- **Phase:** **S4 implementation through T082 complete.** Slice 0 ✅
+  (approved-with-revisions 2026-05-05). §A1 ✅ (PR #39, SHA `7ae337b`,
+  Constitution v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅
+  (roster + takeover/confirm + active-session, Data-Pulse-2 PR #70,
+  2026-05-08). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
   operator_sessions + cashier_pin_records PR #60, 2026-05-08). §A4 ✅
   (argon2 0.44.0, POS-Pulse PR #59, 2026-05-08). S1 ✅ (PR #46). S2 ✅
-  (PR #47). S3 ✅ (PRs #49–#56, HEAD `ba32133`). **S4 implementation
-  in progress.** T052–T077 ✅: T074–T077 (PinPad + TakeoverPrompt UI)
-  merged PR #103 (SHA `e9904e6`, 2026-05-09); T070 + T071
-  (manager/admin takeover confirm/cancel) merged PR #100 (SHA
-  `deb689a`, 2026-05-09). Dev bootstrap stabilised by PR #105 (CSP +
-  preload Vite bundle, 2026-05-09). Open S4 follow-ups: #85
-  (cashier-path Endpoint 4 / AD-2 constraint), #86 (open per owner
-  discretion — #103 implemented T074–T077; closure at owner's choice),
-  #87 (S4 closeout — this PR). #101 (terminal-A session-invalidation
-  gap) open as a post-S4 or S5 follow-up. Remaining S4 tasks: T072,
-  T073, T078–T082.
+  (PR #47). S3 ✅ (PRs #49–#56, HEAD `ba32133`). **S4 implementation through
+  T082 complete:** T052–T082 merged via PRs #59/#60/#61/#63/#64/#90/#91/#92/
+  #93/#94/#99/#100/#103/#105/#120/#121/#122. PR #120 (PIN management reset/unlock
+  — T061/T062/T072/T073). PR #121 (cashier sign-in and takeover UI coverage —
+  T057–T060). PR #122 (cashier management, role visibility, stuck-shift badge
+  placeholder, route guard, log redaction — T078–T082). **T056 remains
+  blocked/deferred by issue 101 (terminal-A session-invalidation gap — UX gap,
+  not a security gap per issue text).** Issue 85 closed (cashier-path AD-2
+  local-only — permanent architectural invariant; see §"Issue 85 decision").
+  Issue 86 remains open per owner discretion — PinPad/TakeoverPrompt
+  implementation and coverage have landed via PRs #103 and #121. Issue 87 is the
+  current closeout coordination PR. **Final S4 checkpoint / S5 unblock remains
+  held until issue 101 is resolved or explicitly waived by owner decision.** 005
+  remains blocked behind §A0.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -52,13 +55,12 @@ invoked", and it is updated in place as coordination items resolve.
   resolved on 2026-05-05.
 - **`/speckit-tasks`:** ✅ **Invoked and complete.** `tasks.md` generated
   2026-05-05; addendum applied same day.
-- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — in
-  progress.** T052–T077 ✅ (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
-  #94/#99/#100/#103). Remaining S4 tasks: T072, T073, T078–T082
-  (cashier-management, PIN reset/unlock, stuck-shift badge,
-  route-guard, redaction log sites). #85 open (cashier-path AD-2),
-  #86 open (owner discretion), #101 open (terminal-A gap). #87 open
-  (S4 closeout). S5–S6 ⏳ blocked on S4 complete + §A2 Wave 4.
+- **Implementation slices S1–S6:** S1 ✅, S2 ✅, S3 ✅. **S4 — implementation
+  through T082 complete (T056 deferred/blocked by issue 101).** PRs #59/#60/
+  #61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122. Issue 85
+  closed. Issue 86 open (owner discretion). Issue 101 open (terminal-A
+  session-invalidation gap). Issue 87 is this closeout PR. S5–S6 ⏳ blocked on
+  S4 final checkpoint (pending issue 101 resolution or owner waiver) + §A2 Wave 4.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 This file tracks coordination state only.
@@ -277,19 +279,29 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 ---
 
+## S4 implementation closeout status (2026-05-11)
+
+- PR #120 (feat/004-s4-pin-management-reset-unlock): PIN management reset/unlock — T061/T062 (integration tests), T072 (`operator.resetCashierPin`), T073 (`operator.unlockCashier`).
+- PR #121 (test/004-s4-cashier-takeover-ui-coverage): cashier sign-in and takeover UI coverage — T057 (takeover-cancel integration), T058 (FR-013 route-level disclosure guard), T059 (cashier sign-in AppRouter integration), T060 (PinPad aria-disabled + privacy extension).
+- PR #122 (feat/004-s4-cashier-management-visibility-redaction): cashier management surface, role visibility, stuck-shift badge placeholder, route guard, log redaction — T078 (cashier-management surface `/app/manager/cashiers`), T079 (role-visibility-matrix.md stuck-shift badge row), T080 (navigation count badge), T081 (pino log sites with PR-1 redaction), T082 (route-guard update for §Section 3 routes).
+- Remaining: issue 101 / T056 only.
+
+---
+
 ## Explicit non-actions
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- S4 — **in progress.** Merged: T052–T077 (PRs #59, #60, #61, #63, #64, #90, #91, #92, #93, #94, #99, #100, #103). PR #105 (dev bootstrap stabilisation) merged separately. Remaining S4 tasks: T072, T073, T078–T082 (cashier-management surface, PIN reset/unlock, stuck-shift badge, route-guard, redaction log sites).
-- ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 complete + §A2 Wave 4.
+- ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 final checkpoint (pending issue 101 resolution or explicit owner waiver) + §A2 Wave 4.
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
-- §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
+- ❌ No 005 / 006 started. 005 remains blocked behind §A0.
 - ❌ No S5 DB migrations authored.
 - ❌ No sales / cart / payments / tender / receipts / inventory /
   reports / KPIs / analytics work.
+- ❌ No Data-Pulse-2 changes from this repo.
+- §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. S4 in progress (all gates cleared 2026-05-08; T052–T077 merged via PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103; dev bootstrap stabilised PR #105; 2026-05-09).
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. S4 implementation through T082 complete (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged). T056 remains blocked/deferred by issue 101 (UX gap, not security gap). Final S4 checkpoint / S5 unblock held pending issue 101 resolution or owner waiver.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 
@@ -422,13 +434,18 @@ agents and humans should read this file (and `plan.md`) first to know
 v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
 PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
 operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
-POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 in progress
-(2026-05-11).** T052–T077 ✅ (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
-#94/#99/#100/#103). PR #103 merged T074–T077 PinPad + TakeoverPrompt UI
-(2026-05-09). PR #105 stabilised dev bootstrap (CSP + preload Vite bundle,
-2026-05-09). **#85 decision recorded 2026-05-11** (cashier-path AD-2
+POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 implementation
+through T082 complete (2026-05-11).** PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
+#94/#99/#100/#103/#105 merged 2026-05-09. PR #120 (PIN management reset/unlock —
+T061/T062/T072/T073) merged 2026-05-11. PR #121 (cashier sign-in and takeover UI
+coverage — T057–T060) merged 2026-05-11. PR #122 (cashier management, role
+visibility, stuck-shift badge placeholder, route guard, log redaction —
+T078–T082) merged 2026-05-11. **Issue 85 closed** (cashier-path AD-2
 local-only — permanent architectural invariant; see §"Issue 85 decision").
-#86 open per owner discretion (#103 implemented T074–T077). #101 open
-(terminal-A session-invalidation gap). #87 open (S4 closeout). Remaining
-S4 tasks: T072, T073, T078–T082. S3 complete (2026-05-07). §A5 is a
+Issue 86 open per owner discretion (PinPad/TakeoverPrompt implementation
+and coverage landed via PRs #103 and #121). Issue 101 open (terminal-A
+session-invalidation gap — UX gap, not a security gap). Issue 87 is the
+current closeout coordination PR. T056 remains blocked/deferred by issue 101.
+Final S4 checkpoint / S5 unblock held pending issue 101 resolution or owner
+waiver. 005 remains blocked behind §A0. S3 complete (2026-05-07). §A5 is a
 later-rollout gate. S5–S6 not yet started.
