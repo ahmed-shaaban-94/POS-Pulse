@@ -95,13 +95,17 @@ export interface TakeoverHandlerDeps {
  * T071: `cancelTakeover` — pure local discard. No backend call, no audit
  * event, no session change. Returns `{ kind: 'cancelled' }` idempotently.
  *
- * Cashier path — Endpoint 4 is skipped (AD-2):
+ * Cashier path — Endpoint 4 is skipped (AD-2, permanent decision):
  *   Cashier sessions are local-only. Cashier operators have no Clerk JWT to
  *   present to Endpoint 4's `Authorization: Bearer` header, so calling
- *   `backend.confirmTakeover` would always produce `refused`. The cashier
- *   takeover therefore creates the new session locally without a backend
- *   round-trip, mirroring the cashier sign-in path. Tracked in issue #85
- *   (cashier-path Endpoint 4 constraint).
+ *   `backend.confirmTakeover` for the cashier path is permanently excluded
+ *   under AD-2. The cashier takeover creates the new session locally without
+ *   a backend round-trip, mirroring the cashier sign-in path. This is an
+ *   architectural invariant, not a deferred gap: a future backend contract
+ *   providing a non-Clerk-JWT cashier-safe confirmation path would require
+ *   an approved AD amendment before this handler may call any backend
+ *   endpoint for the cashier path. Decision recorded in
+ *   `specs/004-operator-session/coordination.md` (2026-05-11, issue 85).
  *
  * Terminal-A passive polling (T069c):
  *   Terminal A discovers the takeover at its next `getCurrentSession` poll,

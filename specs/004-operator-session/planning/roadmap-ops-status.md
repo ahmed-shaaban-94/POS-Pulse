@@ -123,7 +123,7 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 | # | Title | State | Labels | Assignee | Milestone | Depends on (gates) | Blocking / unblocking notes |
 |:-:|:--|:--|:--|:--|:--|:--|:--|
 | **#84** | 004 S4 — cashier sign-in handler | **CLOSED** (2026-05-08) | type:feature, status:ready, feature:004-operator-session | — | — | §A1 ✅, §A2 Wave 3 ✅, §A3 ✅, §A4 ✅ | PR #94 covered T069 cashier sign-in handler (main-process only). Depends on T069a + T069b (PR #64). |
-| **#85** | 004 S4 — takeover confirm handler | **OPEN (reopened 2026-05-09)** | type:feature, status:ready | — | — | §A1 ✅, §A2 Wave 3 ✅ | T070 + T071 manager/admin path merged via PR #100 (SHA `deb689a`). **Remains open for cashier-path Endpoint 4 / AD-2 constraint.** Cashier sessions are local-only; no Clerk JWT; `BackendClient.confirmTakeover` cannot be called for cashier path without violating AD-2. See `src/main/operator/takeover-handler.ts` class-level JSDoc and `coordination.md` §"Takeover follow-up classification before UI". |
+| **#85** | 004 S4 — takeover confirm handler | **CLOSED (2026-05-11, AD-2 decision)** | type:feature, status:ready | — | — | §A1 ✅, §A2 Wave 3 ✅ | T070 + T071 manager/admin path merged via PR #100 (SHA `deb689a`). Cashier-path AD-2 decision recorded 2026-05-11: cashier takeover confirm is permanently local-only; `BackendClient.confirmTakeover` excluded for cashier path under AD-2. See `coordination.md` §"Issue 85 decision". |
 | **#86** | 004 S4 — PinPad and TakeoverPrompt UI activation | **OPEN, ready** | type:feature, status:ready | — | — | §A1 ✅, §A2 Wave 3 ✅; depends on #85 main-process surface AND a `CashierSignInRequest` bridge-type addition | Implements T074 (PinPad), T075 (cashier-path activation on `sign-in.tsx`), T076 (TakeoverPrompt), T077 (renderer takeover wiring). **Hard prerequisite: #85 must merge first.** **Soft prerequisite: bridge type export (see §7c below).** |
 | **#87** | 004 S4 — closeout and coordination update | **OPEN, ready** | type:docs, status:ready | — | — | All S4 implementation PRs merged | Updates `tasks.md` + `coordination.md`; records validation status; documents remaining S5 blockers. **Hard prerequisite: all earlier S4 PRs merged.** |
 
@@ -228,19 +228,21 @@ Each step is marked with its prerequisite. Execute top-down. Steps 7c and 7b may
 
 ### 7b. Issue #85 — takeover confirm + cancel handlers (T070 + T071)
 
-**Status (2026-05-09):** T070 + T071 manager/admin path **MERGED** via PR #100
-(SHA `deb689a`). Issue #85 is **OPEN** (reopened 2026-05-09) because the
-cashier-path Endpoint 4 / AD-2 constraint remains unresolved. The cashier
-confirm path skips `BackendClient.confirmTakeover` (no Clerk JWT available
-per AD-2); this is documented in `takeover-handler.ts` class-level JSDoc.
+**Status (2026-05-11):** T070 + T071 manager/admin path **MERGED** via PR #100
+(SHA `deb689a`). Issue #85 **CLOSED** — cashier-path AD-2 decision recorded
+2026-05-11 (docs-only PR off `docs/004-issue-85-cashier-takeover-ad2-decision`).
 
-The remaining work for #85 is the cashier-path resolution: either (a)
+**Decision:** Cashier takeover confirm is permanently local-only under AD-2.
+`BackendClient.confirmTakeover` is never called for the cashier path. This is
+an architectural invariant. Full decision record in
+`specs/004-operator-session/coordination.md` §"Issue 85 decision".
+
+~~The remaining work for #85 is the cashier-path resolution: either (a)
 document that cashier takeover-confirm is fully local (AD-2 confirmed,
 no backend call ever), closing #85 with a docs-only PR, or (b) resolve
 the Endpoint 4 JWT requirement discrepancy (see `planning/takeover-confirm-plan.md`
-§5 and §11 Risk #3).
+§5 and §11 Risk #3).~~
 
-**Does NOT close:** #85 until the cashier-path decision is recorded.
 **Prerequisite for original scope (now complete):** 7a (T069c — passive
 polling decision recorded in `takeover-handler.ts` class-level JSDoc).
 
