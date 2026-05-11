@@ -303,7 +303,7 @@ handlers. Two follow-up issues were intentionally left open:
 
 | Issue | Title | Why open |
 |:--:|:--|:--|
-| #85 | 004 S4 — takeover confirm handler | Cashier-path Endpoint 4 / AD-2 constraint: cashier sessions are local-only and carry no Clerk JWT; `BackendClient.confirmTakeover` cannot be called for the cashier path without violating AD-2. The cashier confirm path remains documented as a gap in `src/main/operator/takeover-handler.ts` (class-level JSDoc). |
+| #85 | 004 S4 — takeover confirm handler | **Decision recorded (2026-05-11):** Cashier takeover confirm is permanently local-only under AD-2. No Clerk JWT is minted for cashier operators; `BackendClient.confirmTakeover` is permanently excluded for the cashier path. A future backend cashier-safe confirmation path would require an approved AD amendment. See §"Issue 85 decision" below. |
 | #101 | T069c: terminal-A passive polling gap | Terminal A does **not** currently discover a remote takeover through `GET_CURRENT_SESSION` — that handler returns local `SessionManager` state only and never probes the backend. Terminal A learns its session was superseded only after a backend-authenticated call fails with an auth error, on app restart, or after #101 implements a backend probe, push, or invalidation mechanism. There is no active push from terminal B's confirm handler. Each Electron process has independent in-memory `SessionManager` state. The gap is architectural and was deferred at spec time. |
 
 ### Decision: how #101 affects issue #86
@@ -356,6 +356,43 @@ The choice among A/B/C is deferred to the issue #101 resolution PR.
 No #86 PR may assert terminal-A behaviour until the choice is made
 and the implementation (if any) lands.
 
+### Issue 85 decision — cashier takeover confirm is local-only under AD-2 (2026-05-11)
+
+**Date:** 2026-05-11
+**Decision:** Cashier takeover confirm must remain permanently local-only
+under AD-2.
+
+**Rationale:**
+- Cashier operators authenticate via local PIN only (§A1 / Constitution
+  v1.5.1). No Clerk JWT is ever minted for a cashier session.
+- `POST /api/pos/v1/operators/takeover/confirm` (Endpoint 4) requires an
+  `Authorization: Bearer <JWT>` header. Calling this endpoint for a
+  cashier-path takeover is architecturally impossible under the current
+  contract and would violate AD-2.
+- `confirmCashierTakeover` in `src/main/operator/takeover-handler.ts` is
+  already implemented as purely local: it calls `sessionManager.create()`
+  directly with `backend_session_id: ''` and emits no backend round-trip.
+  This implementation is correct and complete.
+
+**This is an architectural invariant, not a deferred gap.** A future
+backend contract providing a non-Clerk-JWT cashier-safe confirmation path
+would require an approved AD amendment before `TakeoverHandler` may call
+any backend endpoint for the cashier path.
+
+**Scope of this decision:**
+- Closes issue 85.
+- Does NOT close issue 86 (PinPad + TakeoverPrompt UI activation — still
+  gated on S4 remaining tasks and #87 closeout prerequisites).
+- Does NOT close issue 87 (S4 closeout — all other S4 tasks T072, T073,
+  T078–T082 remain outstanding).
+- Does NOT affect issue 101 (terminal-A session-invalidation gap — wholly
+  separate architectural concern).
+- Does NOT unblock 005 §A0 (blocked on 004 S4 closeout PR #87 AND 004 S5
+  visibility-boundaries PR; neither is satisfied by this decision alone).
+
+**Implementation:** Decision recorded in `takeover-handler.ts` class-level
+JSDoc (comment-only; no behaviour change) and in this file.
+
 ---
 
 ## Status update protocol
@@ -386,11 +423,12 @@ v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
 PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
 operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
 POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 in progress
-(2026-05-10).** T052–T077 ✅ (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
+(2026-05-11).** T052–T077 ✅ (PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
 #94/#99/#100/#103). PR #103 merged T074–T077 PinPad + TakeoverPrompt UI
 (2026-05-09). PR #105 stabilised dev bootstrap (CSP + preload Vite bundle,
-2026-05-09). #85 open (cashier-path AD-2 gap — see §"Takeover follow-up
-classification before UI"). #86 open per owner discretion (#103 implemented
-T074–T077). #101 open (terminal-A session-invalidation gap). #87 open
-(S4 closeout). Remaining S4 tasks: T072, T073, T078–T082. S3 complete
-(2026-05-07). §A5 is a later-rollout gate. S5–S6 not yet started.
+2026-05-09). **#85 decision recorded 2026-05-11** (cashier-path AD-2
+local-only — permanent architectural invariant; see §"Issue 85 decision").
+#86 open per owner discretion (#103 implemented T074–T077). #101 open
+(terminal-A session-invalidation gap). #87 open (S4 closeout). Remaining
+S4 tasks: T072, T073, T078–T082. S3 complete (2026-05-07). §A5 is a
+later-rollout gate. S5–S6 not yet started.
