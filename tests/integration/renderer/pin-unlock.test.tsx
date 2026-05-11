@@ -80,13 +80,13 @@ function makePairedStore(): PairingStore {
   };
 }
 
-function makeDb(lockout_until: string | null | 'absent' = null): DatabaseHandle {
+function makeDb(lockout_until: string | null, no_row = false): DatabaseHandle {
   return {
     prepare: vi.fn((sql: string) => {
       if (sql.trimStart().toUpperCase().startsWith('SELECT')) {
         return {
           get: () =>
-            lockout_until === 'absent'
+            no_row
               ? undefined
               : { failed_attempt_count: lockout_until !== null ? 5 : 0, lockout_until },
         };
@@ -97,7 +97,7 @@ function makeDb(lockout_until: string | null | 'absent' = null): DatabaseHandle 
     exec: vi.fn(),
     transaction: vi.fn(),
     close: vi.fn(),
-  } as unknown as DatabaseHandle;
+  };
 }
 
 function makeStorage(): SafeStorageLike {
@@ -121,7 +121,7 @@ function makeIpcMain(): { ipcMain: IpcMain; handlers: Map<string, (e: IpcMainInv
 const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
 function buildEnv(opts: {
-  lockout_until?: string | null | 'absent';
+  lockout_until?: string | null;
   session?: OperatorSessionRecord | null;
 } = {}): {
   invoke: (channel: string, req: unknown) => Promise<unknown>;
@@ -234,7 +234,7 @@ describe('T062 — operator:unlock-cashier IPC (manager unlock integration)', ()
       exec: vi.fn(),
       transaction: vi.fn(),
       close: vi.fn(),
-    } as unknown as DatabaseHandle;
+    };
     const emit = vi.fn();
     const handler = new PinManagementHandler({
       db,

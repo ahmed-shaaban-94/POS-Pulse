@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
 import { PinManagementHandler } from '../../../../src/main/operator/pin-management.js';
@@ -111,7 +111,7 @@ function makeDb(existingRow: { failed_attempt_count: number; lockout_until: stri
     exec: vi.fn(),
     transaction: vi.fn(),
     close: vi.fn(),
-  } as unknown as DatabaseHandle;
+  };
 
   return { db, runCalls, getCalls };
 }

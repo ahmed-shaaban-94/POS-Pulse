@@ -94,7 +94,7 @@ function makeDb(has_row: boolean): DatabaseHandle {
     exec: vi.fn(),
     transaction: vi.fn(),
     close: vi.fn(),
-  } as unknown as DatabaseHandle;
+  };
 }
 
 function makeStorage(): SafeStorageLike {

@@ -40,7 +40,7 @@ import { OperatorRefusalError } from '../../shared/audit/event-shape.js';
 import type { DatabaseHandle } from '../db/client.js';
 import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import type { PairingStore } from '../pairing/store.js';
-import type { SessionManager } from './session-manager.js';
+import type { SessionManager, OperatorSessionRecord } from './session-manager.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import { requireRole } from './role-enforcement.js';
 import { hashPin } from './pin-credential.js';
@@ -109,6 +109,8 @@ export class PinManagementHandler {
       this.log('info', 'reset_cashier_pin.refused', 'invalid_input');
       return REFUSE_INVALID;
     }
+    // requireRole throws on null session — safe to narrow here.
+    const activeSession = session as OperatorSessionRecord;
 
     // Input validation — generic refusal; never echo the rejected value
     if (
@@ -164,7 +166,7 @@ export class PinManagementHandler {
     ).run(
       sealed.pin_hash,
       sealed.pin_salt,
-      session!.operator_id,
+      activeSession.operator_id,
       tenant_id,
       branch_id,
       terminal_id,
@@ -182,8 +184,8 @@ export class PinManagementHandler {
       tenant_id,
       branch_id,
       originating_terminal_id: terminal_id,
-      acting_operator_id: session!.operator_id,
-      session_id: session!.id,
+      acting_operator_id: activeSession.operator_id,
+      session_id: activeSession.id,
       shift_id: null,
       action_category: 'cashier.pin.reset',
       created_at: new Date().toISOString(),
@@ -217,6 +219,8 @@ export class PinManagementHandler {
       this.log('info', 'unlock_cashier.refused', 'invalid_input');
       return REFUSE_INVALID;
     }
+    // requireRole throws on null session — safe to narrow here.
+    const activeSession = session as OperatorSessionRecord;
 
     if (
       typeof req.event_id !== 'string' ||
@@ -272,8 +276,8 @@ export class PinManagementHandler {
       tenant_id,
       branch_id,
       originating_terminal_id: terminal_id,
-      acting_operator_id: session!.operator_id,
-      session_id: session!.id,
+      acting_operator_id: activeSession.operator_id,
+      session_id: activeSession.id,
       shift_id: null,
       action_category: 'cashier.pin.unlock',
       created_at: new Date().toISOString(),
