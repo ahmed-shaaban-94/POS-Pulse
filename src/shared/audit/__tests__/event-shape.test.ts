@@ -63,6 +63,7 @@ describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () =
       'rate_limited',
       'role_mismatch',
       'not_signed_in',
+      'state_invalid',
     ]);
   });
 

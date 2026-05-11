@@ -98,6 +98,12 @@ function operatorBridge(opts: {
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
     cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
+    resetCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    unlockCashier: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
   };
 }
 

@@ -20,6 +20,7 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
   rate_limited: 'Too many attempts. Please wait and try again.',
   role_mismatch: 'You do not have access to this surface.',
   not_signed_in: 'Please sign in to continue.',
+  state_invalid: 'Action cannot be completed in the current state.',
 });
 
 export const EMPTY_INPUT_MESSAGE = 'Enter your credentials to sign in.';

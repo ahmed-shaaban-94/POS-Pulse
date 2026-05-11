@@ -13,8 +13,12 @@ import type {
   ListBranchRosterResponse,
   ManagerAdminSignInRequest,
   OperatorSessionBridgeView,
+  ResetCashierPinRequest,
+  ResetCashierPinResponse,
   SignInResponse,
   SignOutResponse,
+  UnlockCashierRequest,
+  UnlockCashierResponse,
 } from '../../shared/bridge-api.js';
 import { OPERATOR_IPC_CHANNELS } from '../../shared/operator/channels.js';
 import type { CashierSignInHandler, SignInHandler } from '../operator/sign-in-handler.js';
@@ -30,6 +34,7 @@ import {
 } from '../../shared/audit/event-shape.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { TakeoverHandler } from '../operator/takeover-handler.js';
+import type { PinManagementHandler } from '../operator/pin-management.js';
 
 /**
  * 004-operator-session — `operator:*` IPC handlers (S1 wave 1 + T048).
@@ -54,6 +59,8 @@ export interface OperatorHandlerDeps {
   pairingStore: PairingStore;
   /** T070 / T071 — takeover confirm and cancel handler. */
   takeoverHandler: TakeoverHandler;
+  /** T072 / T073 — PIN reset and unlock handler. */
+  pinManagementHandler: PinManagementHandler;
 }
 
 function refuseInvalid(): OperatorRefusal {
@@ -128,6 +135,41 @@ function asCancelTakeoverRequest(value: unknown): CancelTakeoverRequest | null {
   return { pending_takeover_id: v['pending_takeover_id'] };
 }
 
+function asResetCashierPinRequest(value: unknown): ResetCashierPinRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v['event_id'] !== 'string' ||
+    v['event_id'].length === 0 ||
+    typeof v['target_cashier_id'] !== 'string' ||
+    v['target_cashier_id'].length === 0 ||
+    typeof v['new_pin'] !== 'string' ||
+    v['new_pin'].length === 0
+  )
+    return null;
+  return {
+    event_id: v['event_id'],
+    target_cashier_id: v['target_cashier_id'],
+    new_pin: v['new_pin'],
+  };
+}
+
+function asUnlockCashierRequest(value: unknown): UnlockCashierRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v['event_id'] !== 'string' ||
+    v['event_id'].length === 0 ||
+    typeof v['target_cashier_id'] !== 'string' ||
+    v['target_cashier_id'].length === 0
+  )
+    return null;
+  return {
+    event_id: v['event_id'],
+    target_cashier_id: v['target_cashier_id'],
+  };
+}
+
 export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
   const {
     signInHandler,
@@ -139,6 +181,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
     auditEmitter,
     pairingStore,
     takeoverHandler,
+    pinManagementHandler,
   } = deps;
 
   ipcMain.handle(
@@ -305,6 +348,38 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       const req = asCancelTakeoverRequest(request);
       if (req === null) return { kind: 'cancelled' };
       return takeoverHandler.cancelTakeover(req);
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.RESET_CASHIER_PIN,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<ResetCashierPinResponse | OperatorRefusal> => {
+      const req = asResetCashierPinRequest(request);
+      if (req === null) return refuseInvalid();
+      try {
+        return await pinManagementHandler.resetCashierPin(req);
+      } catch {
+        return refuseInvalid();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<UnlockCashierResponse | OperatorRefusal> => {
+      const req = asUnlockCashierRequest(request);
+      if (req === null) return refuseInvalid();
+      try {
+        return await pinManagementHandler.unlockCashier(req);
+      } catch {
+        return refuseInvalid();
+      }
     },
   );
 }

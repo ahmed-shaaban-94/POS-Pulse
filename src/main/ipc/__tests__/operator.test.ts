@@ -19,6 +19,7 @@ import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
 import type { AuditEmitter } from '../../audit/audit-emitter.js';
 import type { PairingStore } from '../../pairing/store.js';
 import type { TakeoverHandler } from '../../operator/takeover-handler.js';
+import type { PinManagementHandler } from '../../operator/pin-management.js';
 
 /**
  * 004-operator-session — IPC `operator:*` handler tests.
@@ -117,6 +118,17 @@ function fakeTakeoverHandler(): TakeoverHandler {
   } as unknown as TakeoverHandler;
 }
 
+function fakePinManagementHandler(): PinManagementHandler {
+  return {
+    resetCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    unlockCashier: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as PinManagementHandler;
+}
+
 function register(opts: {
   signIn?: SignInResponse | (() => SignInResponse) | (() => never);
   signOut?: SignOutResponse;
@@ -138,6 +150,7 @@ function register(opts: {
     auditEmitter: fakeAuditEmitter(),
     pairingStore: fakePairingStore(),
     takeoverHandler: fakeTakeoverHandler(),
+    pinManagementHandler: fakePinManagementHandler(),
   });
   const get = (channel: string): IpcHandler => {
     const fn = handlers.get(channel);
@@ -180,6 +193,7 @@ describe('registerOperatorHandlers — channel registration', () => {
       auditEmitter: fakeAuditEmitter(),
       pairingStore: fakePairingStore(),
       takeoverHandler: fakeTakeoverHandler(),
+      pinManagementHandler: fakePinManagementHandler(),
     });
     const registered = handle.mock.calls.map((c) => c[0] as string);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_IN);
@@ -329,6 +343,7 @@ function registerWithTakeover(takeoverHandler: TakeoverHandler): Map<string, Ipc
     auditEmitter: fakeAuditEmitter(),
     pairingStore: fakePairingStore(),
     takeoverHandler,
+    pinManagementHandler: fakePinManagementHandler(),
   });
   return handlers;
 }
@@ -429,6 +444,7 @@ function registerWithPairingStore(
     auditEmitter: fakeAuditEmitter(),
     pairingStore,
     takeoverHandler: fakeTakeoverHandler(),
+    pinManagementHandler: fakePinManagementHandler(),
   });
   return handlers;
 }

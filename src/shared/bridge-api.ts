@@ -132,6 +132,47 @@ export interface CancelTakeoverResponse {
 }
 
 /**
+ * T072 — manager/admin PIN reset for a cashier on this terminal (§A1-gated).
+ *
+ * `new_pin` crosses the bridge ONCE on input and is consumed by the
+ * main-process handler. It MUST NOT be persisted, logged, snapshotted,
+ * or surfaced in any thrown error (PR-1). 4–6 digit constraint is
+ * validated main-side; invalid shape returns `invalid_input` refusal.
+ */
+export interface ResetCashierPinRequest {
+  /** Client-generated UUID v4 (P5 idempotency key). */
+  event_id: string;
+  /** Clerk user id of the cashier whose PIN is being reset. */
+  target_cashier_id: string;
+  /** Plaintext 4–6 digit PIN — consumed by the main-process verifier, never persisted or logged. */
+  new_pin: string;
+}
+
+export interface ResetCashierPinResponse {
+  kind: 'pin_reset';
+  /** Echoes the client-supplied event_id for idempotency confirmation. */
+  audit_event_id: string;
+}
+
+/**
+ * T073 — manager/admin unlock of a locked-out cashier on this terminal (§A1-gated).
+ *
+ * This call MUST NOT accept any PIN field — it only clears lockout state.
+ */
+export interface UnlockCashierRequest {
+  /** Client-generated UUID v4 (P5 idempotency key). */
+  event_id: string;
+  /** Clerk user id of the locked-out cashier. */
+  target_cashier_id: string;
+}
+
+export interface UnlockCashierResponse {
+  kind: 'unlocked';
+  /** Echoes the client-supplied event_id for idempotency confirmation. */
+  audit_event_id: string;
+}
+
+/**
  * Manager/admin sign-in request shape.
  */
 export interface ManagerAdminSignInRequest {
@@ -288,6 +329,34 @@ export interface OperatorBridgeAPI {
    * unknown or already expired. No audit event. No session change.
    */
   cancelTakeover(req: CancelTakeoverRequest): Promise<CancelTakeoverResponse>;
+
+  /**
+   * T072 — PR-5 manager/admin PIN reset for a cashier on this terminal.
+   *
+   * Role gate: `manager` or `admin` only — `cashier` → `role_mismatch`.
+   * `new_pin` must be 4–6 digits; invalid shape → `invalid_input`.
+   * `target_cashier_id` must have an existing pin record on this terminal;
+   * unknown cashier → `invalid_input`.
+   *
+   * Emits `cashier.pin.reset` audit event (manager attributed, cashier
+   * referenced by id only; PIN value never in payload — PR-1).
+   * Resets `failed_attempt_count` to 0 and `lockout_until` to null.
+   */
+  resetCashierPin(req: ResetCashierPinRequest): Promise<ResetCashierPinResponse | OperatorRefusal>;
+
+  /**
+   * T073 — PR-3 manager/admin unlock of a locked-out cashier on this terminal.
+   *
+   * Role gate: `manager` or `admin` only — `cashier` → `role_mismatch`.
+   * Resets `failed_attempt_count` to 0 and `lockout_until` to null.
+   *
+   * If the cashier is not currently locked out, still emits the
+   * `cashier.pin.unlock` audit event and returns `state_invalid`
+   * (the renderer interprets this as "already unlocked, no-op").
+   *
+   * This call MUST NOT accept any PIN field — it only clears lockout state.
+   */
+  unlockCashier(req: UnlockCashierRequest): Promise<UnlockCashierResponse | OperatorRefusal>;
 }
 
 export interface PreloadBridgeAPI {

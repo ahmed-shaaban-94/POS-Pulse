@@ -16,6 +16,7 @@ import type { OperatorSessionRecord } from '../../operator/session-manager.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
 import type { PairingStore } from '../../pairing/store.js';
 import type { TakeoverHandler } from '../../operator/takeover-handler.js';
+import type { PinManagementHandler } from '../../operator/pin-management.js';
 
 /**
  * T051 — `operator:_emit-audit-event-smoke` IPC handler tests.
@@ -95,6 +96,17 @@ function fakeTakeoverHandler(): TakeoverHandler {
   } as unknown as TakeoverHandler;
 }
 
+function fakePinManagementHandler(): PinManagementHandler {
+  return {
+    resetCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+    unlockCashier: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as PinManagementHandler;
+}
+
 function fakePairingStore(terminal_id = 'term-1'): PairingStore {
   return {
     getStatus: vi.fn(() =>
@@ -148,6 +160,7 @@ function setup(opts: {
     auditEmitter: emitter,
     pairingStore: fakePairingStore(opts.terminalId ?? 'term-1'),
     takeoverHandler: fakeTakeoverHandler(),
+    pinManagementHandler: fakePinManagementHandler(),
   });
   const smokeHandler = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE);
   if (!smokeHandler) throw new Error('smoke handler not registered');
@@ -174,6 +187,7 @@ describe('operator:_emit-audit-event-smoke — channel registration', () => {
       auditEmitter: new AuditEmitter(store),
       pairingStore: fakePairingStore(),
       takeoverHandler: fakeTakeoverHandler(),
+      pinManagementHandler: fakePinManagementHandler(),
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE)).toBe(true);
   });
@@ -359,6 +373,7 @@ describe('operator:_emit-audit-event-smoke — unpaired terminal', () => {
       auditEmitter: new AuditEmitter(store),
       pairingStore,
       takeoverHandler: fakeTakeoverHandler(),
+      pinManagementHandler: fakePinManagementHandler(),
     });
     const handler = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE);
     if (!handler) throw new Error('handler not registered');
