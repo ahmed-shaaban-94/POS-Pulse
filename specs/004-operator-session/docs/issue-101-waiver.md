@@ -58,9 +58,9 @@ When Endpoint 4 is called by terminal B:
 
 The "terminal A returns to `/sign-in` within 30 s" requirement is **satisfied at the backend layer**: within 30 seconds of Endpoint 4 completing, terminal A's session is fully invalidated on the backend. The POS-Pulse integration-test layer cannot assert "terminal A's in-process renderer navigates to `/sign-in`" without implementing a push or probe mechanism — which is out of scope.
 
-**T056's "terminal A returns to `/sign-in` within 30 s" assertion is waived at the POS-Pulse integration-test layer.**
+**T056 is waived in full at the POS-Pulse integration-test layer.**
 
-The waived portion of T056 is the sub-assertion: "terminal A returns to `/sign-in` within 30 s". The remaining T056 assertions (backend session marked `superseded_by_takeover`, `operator.session.takeover` audit event emitted, terminal B transitions to signed-in) are already covered by existing tests (PR #100 unit tests, PR #121 integration tests).
+`tests/integration/renderer/takeover.test.tsx` was never created. The T056 test assertions — "terminal A returns to `/sign-in` within 30 s", terminal A's session end_cause assertion, the `operator.session.takeover` audit event assertion from the renderer layer, and terminal B transitions to signed-in — all require either a push mechanism or a probe endpoint that is out of scope. Backend-side session invalidation (Endpoint 4 marking `end_cause = 'superseded_by_takeover'` immediately) is a backend guarantee, not assertable from the POS-Pulse renderer integration-test layer without the missing endpoint.
 
 ---
 
@@ -68,7 +68,7 @@ The waived portion of T056 is the sub-assertion: "terminal A returns to `/sign-i
 
 | Item | Status after this PR |
 |:--|:--|
-| T056 `[BLOCKED: §A1, §A2 (S4), #101]` | Updated: "terminal A returns within 30 s" sub-assertion waived at POS-Pulse layer; remaining T056 assertions covered by existing tests; issue 101 resolved via waiver. |
+| T056 `[BLOCKED: §A1, §A2 (S4), #101]` | Updated: T056 waived in full at POS-Pulse layer — `takeover.test.tsx` never created; all assertions require push/probe mechanism out of scope; backend-side invalidation is a backend guarantee; issue 101 resolved via waiver. |
 | Issue 101 | Resolved — Option A chosen; waiver recorded here. |
 | S4 final checkpoint | Unblocked — T056's blocking dependency on issue 101 is resolved by this waiver. |
 | S5 / 005 unblock | S5 may now proceed (pending §A2 Wave 4 only). |

@@ -39,9 +39,9 @@ invoked", and it is updated in place as coordination items resolve.
   T057–T060). PR #122 (cashier management, role visibility, stuck-shift badge
   placeholder, route guard, log redaction — T078–T082). **Issue 101 resolved —
   Option A waiver chosen 2026-05-11; Endpoint 6 caller-naive semantics confirmed;
-  T056 terminal-A "within 30 s" sub-assertion waived at POS-Pulse layer; remaining
-  T056 assertions covered by existing tests; see §"Issue 101 decision" and
-  `docs/issue-101-waiver.md`. S4 final checkpoint UNBLOCKED.** Issue 85 closed
+  T056 waived in full — `tests/integration/renderer/takeover.test.tsx` was never
+  created; terminal-A renderer assertions require push/probe mechanism out of scope;
+  see §"Issue 101 decision" and `docs/issue-101-waiver.md`. S4 final checkpoint UNBLOCKED.** Issue 85 closed
   (cashier-path AD-2 local-only — permanent architectural invariant; see §"Issue
   85 decision"). Issue 86 remains open per owner discretion — PinPad/TakeoverPrompt
   implementation and coverage have landed via PRs #103 and #121. Issue 87 is the
@@ -285,7 +285,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 - PR #120 (feat/004-s4-pin-management-reset-unlock): PIN management reset/unlock — T061/T062 (integration tests), T072 (`operator.resetCashierPin`), T073 (`operator.unlockCashier`).
 - PR #121 (test/004-s4-cashier-takeover-ui-coverage): cashier sign-in and takeover UI coverage — T057 (takeover-cancel integration), T058 (FR-013 route-level disclosure guard), T059 (cashier sign-in AppRouter integration), T060 (PinPad aria-disabled + privacy extension).
 - PR #122 (feat/004-s4-cashier-management-visibility-redaction): cashier management surface, role visibility, stuck-shift badge placeholder, route guard, log redaction — T078 (cashier-management surface `/app/manager/cashiers`), T079 (role-visibility-matrix.md stuck-shift badge row), T080 (navigation count badge), T081 (pino log sites with PR-1 redaction), T082 (route-guard update for §Section 3 routes).
-- Issue 101 resolved via Option A waiver (2026-05-11): T056 terminal-A "within 30 s" sub-assertion waived; remaining T056 assertions covered by existing tests; `docs/issue-101-waiver.md` records the full architectural decision. **S4 is now fully complete.**
+- Issue 101 resolved via Option A waiver (2026-05-11): T056 waived in full — `tests/integration/renderer/takeover.test.tsx` was never created; terminal-A renderer assertions require push/probe mechanism out of scope; `docs/issue-101-waiver.md` records the full architectural decision. **S4 is now fully complete.**
 
 ---
 
@@ -423,7 +423,7 @@ JSDoc (comment-only; no behaviour change) and in this file.
 
 **Scope of this decision:**
 - Resolves issue 101. Issue 101 is closed.
-- Waives T056's "terminal A returns within 30 s" sub-assertion at the POS-Pulse layer. Remaining T056 assertions (backend session invalidated, audit event emitted, terminal B transitions to signed-in) are covered by existing tests (PRs #100/#121).
+- Waives T056 in full at the POS-Pulse layer. `tests/integration/renderer/takeover.test.tsx` was never created. Terminal-A renderer assertions (including "terminal A returns within 30 s", session end_cause assertion, audit event assertion from renderer) require a push or probe mechanism that is out of scope. Backend-side session invalidation is a backend guarantee.
 - Unblocks S4 final checkpoint.
 - Unblocks S5 (pending §A2 Wave 4 only).
 - Does NOT affect 005 §A0 gate (blocked on PR #87 closeout AND S5 visibility-boundaries PR).
