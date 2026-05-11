@@ -16,6 +16,7 @@ import { CartPlaceholder } from './routes/app/CartPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutPlaceholder } from './routes/app/checkout/CheckoutPlaceholder';
+import { CashierManagement } from './routes/app/manager/CashierManagement';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
@@ -174,6 +175,18 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         { path: 'checkout', element: <CheckoutPlaceholder /> },
         { path: 'inventory', element: <InventoryPlaceholder /> },
         { path: 'settings', element: <SettingsHelpPlaceholder /> },
+        {
+          path: 'manager/cashiers',
+          element: (
+            <OperatorRouteGuard allow={['manager', 'admin']}>
+              {props.operator !== undefined ? (
+                <CashierManagement operator={props.operator} />
+              ) : (
+                <Navigate to="dashboard" replace />
+              )}
+            </OperatorRouteGuard>
+          ),
+        },
       ],
     },
   ];

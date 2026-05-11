@@ -85,6 +85,7 @@ deep-link, route-restoration, refresh, search, quick-actions, tab restore.
 | **Cashier management surface** | `/app/manager/cashiers` | ⛔ | 👀 | 👀 | Lists cashiers on the manager's branch with PIN-management actions (reset, unlock per PR-5). MUST NOT show audit-log details on this surface; audit log is its own future feature (FR-029). |
 | **Cashier PIN reset action** | `bridge.operator.resetCashierPin` | ⛔ | ✅ | ✅ | §A1-gated. Reachable from the cashier management surface. |
 | **Cashier PIN unlock action** | `bridge.operator.unlockCashier` | ⛔ | ✅ | ✅ | §A1-gated. PR-3 release path b. |
+| **Stuck-shift count badge** | nav-area badge widget (in NavRail / shell) | ⛔ | 👀 | 👀 | Displays the count of stuck shifts on the manager's branch. Cashier MUST NOT see this badge or its count. Badge MUST NOT render at 1024–1279 px icon-only viewport (badge text is invisible without the label context). S4 ships with a placeholder count of 0; live count wired in S5. |
 | **Audit log surface** | (future feature) | ⛔ | — | — | FR-029 — manager-or-admin readable. 004 commits to "cashier ⛔" but does NOT design the manager/admin audit log surface itself; that's a future feature. |
 
 ---

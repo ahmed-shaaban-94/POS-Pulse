@@ -42,6 +42,10 @@ const OPERATOR_OWNED_PATH_FRAGMENTS = [
   // The shell's role-indicator slot. 003 reserved this region; 004
   // populates it.
   `${sep}shell${sep}regions${sep}OperatorSlot.tsx`,
+  // T078 — 004 S4 manager-only surfaces (cashier management, PIN reset form).
+  // These are deliberately operator-identity surfaces and may carry password-type
+  // inputs for PIN entry.
+  `${sep}routes${sep}app${sep}manager${sep}`,
 ];
 
 function isOperatorOwned(filePath: string): boolean {
