@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-11 (PR #124 merged — issue 101 Option A waiver, T056 waived in full, S4 final checkpoint UNBLOCKED; **§A2 Wave 4 verified and cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and OpenAPI `action_category` enum (pos-audit-events.openapi.yaml); S5 is now fully unblocked from gate perspective; issue 88 is the next S5 implementation candidate)
+**Last updated:** 2026-05-11 (Spec Kit S5 planning readout for issue 88 recorded in [`./planning/s5-speckit-readout.md`](./planning/s5-speckit-readout.md); Phase 7 gate-tag qualifiers reconciled in `tasks.md` for T083–T093; **no S5 implementation started**; PR #124 merged — issue 101 Option A waiver, T056 waived in full, S4 final checkpoint UNBLOCKED; **§A2 Wave 4 verified and cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in `POS_AUDIT_ACTION_CATEGORIES` (dto.ts) and OpenAPI `action_category` enum (pos-audit-events.openapi.yaml); S5 is now fully unblocked from gate perspective; issue 88 is the next S5 implementation candidate)
 
 ---
 
@@ -474,6 +474,44 @@ started in this PR.
   and is the next S5 implementation candidate after this PR merges.
 - 005 remains blocked behind §A0 (requires 004 S4 closeout ✅ AND 004 S5
   visibility-boundaries PR — S5 not yet started).
+
+---
+
+## S5 Spec Kit planning readout (2026-05-11)
+
+**Date:** 2026-05-11
+**Scope:** Docs-only Spec Kit planning for issue 88 — 004 S5 blind shift close and visibility boundaries. No S5 implementation started; no source / tests / migrations / package / codegen / OpenAPI / CI / Data-Pulse-2 changes.
+
+**Artifact produced:** [`./planning/s5-speckit-readout.md`](./planning/s5-speckit-readout.md)
+
+**Outcome:**
+
+- All five Spec Kit phases (`/speckit-specify`, `/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-analyze`) were re-run against the S5 substrate. Specify / clarify / plan / analyze produced no-op outcomes — the canonical spec, plan, contracts, and visual direction already cover the slice at the level issue 88 requires.
+- `/speckit-tasks` produced a **gate-tag-only reconciliation** in [`./tasks.md`](./tasks.md) Phase 7: `[BLOCKED: §A1]` and `[BLOCKED: §A2 (S5)]` qualifiers were removed from T083–T093 and from the Phase 7 / Phase 7 implementation headers because both gates are ✅. **Every Phase 7 checkbox remains unchecked.** No task was marked complete or in progress.
+- The readout records four proposed deltas queued for the eventual S5 *implementation* PR — two role-visibility-matrix Section 3 rows (forced-close audit-event detail; cashier-returns banner), four explicit Section 4 cashier-forbidden enumerations, a `data-model.md` clarification of the `declared_count = absent` representation, and a `src/shared/audit/payload-schemas.ts` per-category schema for `shift.forced_close`. The matrix is not edited by this PR (per its own Section 8 rule: surface row changes ship with the implementing feature's PR alongside test coverage).
+- The readout flags one load-bearing implementation-time open question — **stuck-shift discovery mechanism across terminals** (readout §3.1). §A2 Wave 4 delivered `shift.forced_close` recognition in Endpoint 5 but did NOT deliver a stuck-shift query endpoint. The S5 implementation task author must resolve this before T089 starts via one of: (a) Wave 4.1 endpoint addition (`GET /api/pos/v1/shifts/stuck?branch_id=`), (b) verify existing cross-terminal `shifts` sync already covers it, or (c) compute client-side from `audit_events`. Recommendation: (a) if (b) does not already hold; (c) is the fallback.
+- The readout includes an eight-category risk register (scope / security / renderer-exposure / audit-attribution / route-guard-vs-main / redaction / stuck-shift missing-data / future validation commands), each row mapped to the FR / contract source and to the T083–T088 test that catches it.
+- The recommended S5 implementation PR sequence is documented (§5 of the readout): PR-S5-pre (resolve §3.1 if needed), PR-S5-a (renderer tests), PR-S5-b (handler + handler tests + logging), PR-S5-c (renderer surfaces + route + banner + matrix delta), PR-S5-d (SC-003 enumeration), PR-S5-close (coordination ✅ ticks). Each PR target is well within Constitution P13's small-slice envelope.
+
+**Issue 88 status:** OPEN, `status:ready`. No S5 implementation started by this PR. Issue 88 is the next S5 implementation candidate.
+
+**005 status:** Unchanged. 005 remains blocked behind §A0 (requires the 004 S5 visibility-boundaries PR to merge — that PR is *not* this planning PR). [`../../005-sales-cart/coordination.md`](../../005-sales-cart/coordination.md) is unchanged.
+
+**Validation performed by this PR:**
+
+- `git diff --check` (whitespace / conflict-marker scan).
+- `npm run typecheck` (both tsconfigs).
+- `git status --short` (no stray staging).
+
+Codegen and full test suites were NOT run (no source / contracts / package edits to justify them).
+
+**Files changed by this PR:**
+
+- `specs/004-operator-session/planning/s5-speckit-readout.md` (NEW)
+- `specs/004-operator-session/tasks.md` (gate-tag reconciliation only — see readout §1.4)
+- `specs/004-operator-session/coordination.md` (this section + Last-updated bump)
+
+**Files explicitly NOT touched by this PR:** AGENTS.md, CLAUDE.md, [`./a1-amendment/`](./a1-amendment/), any source / tests / migrations / package / codegen / OpenAPI / CI file, any Data-Pulse-2 file, [`./spec.md`](./spec.md), [`./plan.md`](./plan.md), [`./research.md`](./research.md), [`./data-model.md`](./data-model.md), [`./quickstart.md`](./quickstart.md), and every file under [`./contracts/`](./contracts/).
 
 ---
 
