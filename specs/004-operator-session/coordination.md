@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-11 (PR #120 merged — T061/T062/T072/T073 PIN management reset/unlock; PR #121 merged — T057–T060 cashier sign-in and takeover UI coverage; PR #122 merged — T078–T082 cashier management, role visibility, stuck-shift badge placeholder, route guard, log redaction; issue 85 closed — cashier-path AD-2 local-only permanent architectural invariant; issue 86 remains open per owner discretion — PinPad/TakeoverPrompt implementation and coverage landed via PRs #103 and #121; issue 101 remains open — terminal-A session-invalidation gap, UX gap not security gap; issue 87 is the current closeout coordination PR)
+**Last updated:** 2026-05-11 (PR #120 merged — T061/T062/T072/T073 PIN management reset/unlock; PR #121 merged — T057–T060 cashier sign-in and takeover UI coverage; PR #122 merged — T078–T082 cashier management, role visibility, stuck-shift badge placeholder, route guard, log redaction; issue 85 closed — cashier-path AD-2 local-only permanent architectural invariant; issue 86 remains open per owner discretion — PinPad/TakeoverPrompt implementation and coverage landed via PRs #103 and #121; **issue 101 resolved — Option A waiver chosen 2026-05-11; Endpoint 6 caller-naive semantics confirmed; T056 terminal-A sub-assertion waived; S4 final checkpoint UNBLOCKED; see `docs/issue-101-waiver.md`**; issue 87 is the current closeout coordination PR)
 
 ---
 
@@ -37,15 +37,16 @@ invoked", and it is updated in place as coordination items resolve.
   #93/#94/#99/#100/#103/#105/#120/#121/#122. PR #120 (PIN management reset/unlock
   — T061/T062/T072/T073). PR #121 (cashier sign-in and takeover UI coverage —
   T057–T060). PR #122 (cashier management, role visibility, stuck-shift badge
-  placeholder, route guard, log redaction — T078–T082). **T056 remains
-  blocked/deferred by issue 101 (terminal-A session-invalidation gap — UX gap,
-  not a security gap per issue text).** Issue 85 closed (cashier-path AD-2
-  local-only — permanent architectural invariant; see §"Issue 85 decision").
-  Issue 86 remains open per owner discretion — PinPad/TakeoverPrompt
+  placeholder, route guard, log redaction — T078–T082). **Issue 101 resolved —
+  Option A waiver chosen 2026-05-11; Endpoint 6 caller-naive semantics confirmed;
+  T056 waived in full — `tests/integration/renderer/takeover.test.tsx` was never
+  created; terminal-A renderer assertions require push/probe mechanism out of scope;
+  see §"Issue 101 decision" and `docs/issue-101-waiver.md`. S4 final checkpoint UNBLOCKED.** Issue 85 closed
+  (cashier-path AD-2 local-only — permanent architectural invariant; see §"Issue
+  85 decision"). Issue 86 remains open per owner discretion — PinPad/TakeoverPrompt
   implementation and coverage have landed via PRs #103 and #121. Issue 87 is the
-  current closeout coordination PR. **Final S4 checkpoint / S5 unblock remains
-  held until issue 101 is resolved or explicitly waived by owner decision.** 005
-  remains blocked behind §A0.
+  current closeout coordination PR. **S5 may now proceed (pending §A2 Wave 4
+  only).** 005 remains blocked behind §A0.
 - **Slice 0 visual-direction artifact:** present at
   `specs/004-operator-session/visual-direction/README.md` (1 220 lines,
   6 surfaces, cross-cutting commitments, embedded Review Record).
@@ -284,7 +285,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 - PR #120 (feat/004-s4-pin-management-reset-unlock): PIN management reset/unlock — T061/T062 (integration tests), T072 (`operator.resetCashierPin`), T073 (`operator.unlockCashier`).
 - PR #121 (test/004-s4-cashier-takeover-ui-coverage): cashier sign-in and takeover UI coverage — T057 (takeover-cancel integration), T058 (FR-013 route-level disclosure guard), T059 (cashier sign-in AppRouter integration), T060 (PinPad aria-disabled + privacy extension).
 - PR #122 (feat/004-s4-cashier-management-visibility-redaction): cashier management surface, role visibility, stuck-shift badge placeholder, route guard, log redaction — T078 (cashier-management surface `/app/manager/cashiers`), T079 (role-visibility-matrix.md stuck-shift badge row), T080 (navigation count badge), T081 (pino log sites with PR-1 redaction), T082 (route-guard update for §Section 3 routes).
-- Remaining: issue 101 / T056 only.
+- Issue 101 resolved via Option A waiver (2026-05-11): T056 waived in full — `tests/integration/renderer/takeover.test.tsx` was never created; terminal-A renderer assertions require push/probe mechanism out of scope; `docs/issue-101-waiver.md` records the full architectural decision. **S4 is now fully complete.**
 
 ---
 
@@ -292,7 +293,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- ❌ S5 (forced-close recovery) — **not started.** Blocked on S4 final checkpoint (pending issue 101 resolution or explicit owner waiver) + §A2 Wave 4.
+- ❌ S5 (forced-close recovery) — **not started.** Blocked on §A2 Wave 4 only (S4 final checkpoint now clear — issue 101 waiver merged).
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
 - ❌ No 005 / 006 started. 005 remains blocked behind §A0.
 - ❌ No S5 DB migrations authored.
@@ -301,7 +302,7 @@ This file tracks coordination state. The following work has **not yet started**:
 - ❌ No Data-Pulse-2 changes from this repo.
 - §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅. S4 implementation through T082 complete (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged). T056 remains blocked/deferred by issue 101 (UX gap, not security gap). Final S4 checkpoint / S5 unblock held pending issue 101 resolution or owner waiver.
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅, **S4 (cashier sign-in, takeover, PIN management) ✅** (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged; issue 101 resolved via Option A waiver 2026-05-11; T056 terminal-A sub-assertion waived; S4 final checkpoint clear).
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 
@@ -407,6 +408,31 @@ JSDoc (comment-only; no behaviour change) and in this file.
 
 ---
 
+## Issue 101 decision — Option A waiver: terminal-A passive polling accepted (2026-05-11)
+
+**Date:** 2026-05-11
+**Decision:** Option A — passive polling accepted. T056 "terminal A returns to `/sign-in` within 30 s" sub-assertion waived at the POS-Pulse integration-test layer.
+
+**Rationale:**
+- `GET /api/pos/v1/operators/active-session` (Endpoint 6) is **caller-naive**: it answers "does this operator have an active session somewhere in the branch?" with a binary `{kind: "none" | "active"}` response. It takes only `operator_id` — no `session_id` parameter.
+- After terminal B executes a takeover, terminal A (still signed in in-process) would ask Endpoint 6 with its own `operator_id`. Endpoint 6 returns `kind: "active"` in both states: (a) A's own session is still the active one, and (b) B just took over and B's new session is now the active one. The response cannot distinguish the two cases.
+- No existing backend contract provides a `session_id`-scoped "is this specific session still active?" query. Implementing Option B safely would require a new §A2 backend endpoint addition, Data-Pulse-2 implementation, and a new POS-Pulse backend-client method — all out of scope for the current spec cycle.
+- The 30-second SLA is satisfied at the **backend layer**: Endpoint 4 marks terminal A's `operator_sessions` row as `end_cause = 'superseded_by_takeover'` immediately. Any subsequent backend-authenticated call from terminal A using the invalidated session is refused. The gap is UX-only — the terminal A renderer does not visually return to `/sign-in`.
+
+**Full architectural record:** `docs/issue-101-waiver.md`
+
+**Scope of this decision:**
+- Resolves issue 101. Issue 101 is closed.
+- Waives T056 in full at the POS-Pulse layer. `tests/integration/renderer/takeover.test.tsx` was never created. Terminal-A renderer assertions (including "terminal A returns within 30 s", session end_cause assertion, audit event assertion from renderer) require a push or probe mechanism that is out of scope. Backend-side session invalidation is a backend guarantee.
+- Unblocks S4 final checkpoint.
+- Unblocks S5 (pending §A2 Wave 4 only).
+- Does NOT affect 005 §A0 gate (blocked on PR #87 closeout AND S5 visibility-boundaries PR).
+- Does NOT introduce any code change. This is a docs-only waiver PR.
+
+**Future path:** If Option B or C is desired, the full implementation path is recorded in `docs/issue-101-waiver.md` §"Future path to full Option B / Option C implementation".
+
+---
+
 ## Status update protocol
 
 When any item changes state, update this file in place:
@@ -434,18 +460,18 @@ agents and humans should read this file (and `plan.md`) first to know
 v1.5.1, 2026-05-05). §A2 Wave 1 ✅ + Wave 2 ✅ + Wave 3 ✅ (Data-Pulse-2
 PRs #52/#54/#62/#70). §A3 ✅ fully cleared (audit_events PR #49 SHA `e50f5b8`;
 operator_sessions + cashier_pin_records PR #60). §A4 ✅ (argon2 0.44.0,
-POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 implementation
-through T082 complete (2026-05-11).** PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/
-#94/#99/#100/#103/#105 merged 2026-05-09. PR #120 (PIN management reset/unlock —
-T061/T062/T072/T073) merged 2026-05-11. PR #121 (cashier sign-in and takeover UI
-coverage — T057–T060) merged 2026-05-11. PR #122 (cashier management, role
-visibility, stuck-shift badge placeholder, route guard, log redaction —
-T078–T082) merged 2026-05-11. **Issue 85 closed** (cashier-path AD-2
-local-only — permanent architectural invariant; see §"Issue 85 decision").
-Issue 86 open per owner discretion (PinPad/TakeoverPrompt implementation
-and coverage landed via PRs #103 and #121). Issue 101 open (terminal-A
-session-invalidation gap — UX gap, not a security gap). Issue 87 is the
-current closeout coordination PR. T056 remains blocked/deferred by issue 101.
-Final S4 checkpoint / S5 unblock held pending issue 101 resolution or owner
-waiver. 005 remains blocked behind §A0. S3 complete (2026-05-07). §A5 is a
-later-rollout gate. S5–S6 not yet started.
+POS-Pulse PR #59). **All S4 gates cleared 2026-05-08. S4 fully complete
+(2026-05-11).** PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105
+merged 2026-05-09. PR #120 (PIN management reset/unlock — T061/T062/T072/T073)
+merged 2026-05-11. PR #121 (cashier sign-in and takeover UI coverage —
+T057–T060) merged 2026-05-11. PR #122 (cashier management, role visibility,
+stuck-shift badge placeholder, route guard, log redaction — T078–T082) merged
+2026-05-11. **Issue 85 closed** (cashier-path AD-2 local-only — permanent
+architectural invariant; see §"Issue 85 decision"). Issue 86 open per owner
+discretion (PinPad/TakeoverPrompt implementation and coverage landed via PRs
+#103 and #121). **Issue 101 resolved** (Option A waiver 2026-05-11 — Endpoint 6
+caller-naive; T056 terminal-A sub-assertion waived; S4 checkpoint clear; see
+§"Issue 101 decision" and `docs/issue-101-waiver.md`). Issue 87 is the current
+closeout coordination PR. **S4 final checkpoint UNBLOCKED. S5 may proceed
+(pending §A2 Wave 4 only).** 005 remains blocked behind §A0. S3 complete
+(2026-05-07). §A5 is a later-rollout gate. S5–S6 not yet started.
