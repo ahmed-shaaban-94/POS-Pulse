@@ -20,9 +20,9 @@ import type { PairingStatus } from '../../../shared/pairing-types';
  *
  * Security policy:
  *   - The `paired` PairingStatus branch type explicitly omits
- *     `device_token`. This component only reads tenant_id / branch_id
- *     / terminal_id / terminal_label / paired_at — all configuration,
- *     no secrets.
+ *     `device_token`. This component only reads terminal_label /
+ *     paired_at — all human-facing configuration, no identifiers or
+ *     secrets are rendered in visible text or DOM attributes.
  *   - The bridge call goes through the typed preload, which
  *     in turn invokes the main-process IPC handler that already
  *     omits the token from the result envelope.
@@ -82,6 +82,7 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
   }
 
   const { status } = state;
+  // data-terminal-label is a human-friendly label, not a backend identifier — intentionally retained.
   return (
     <CenterStage>
       <main
@@ -93,7 +94,7 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
           <div className="paired-screen__check-circle" aria-hidden="true" />
           <div className="paired-screen__badge">PAIRED</div>
           <h1>Ready</h1>
-          <p className="paired-screen__body">This terminal is linked to {status.terminal_label}.</p>
+          <p className="paired-screen__body">Connected. Choose Continue to open the dashboard.</p>
           {/* T054 — O2 resolution: Continue navigates to /app/dashboard.
               Boot router gate is NOT modified. No IPC / bridge call. */}
           <div className="paired-screen__actions">
