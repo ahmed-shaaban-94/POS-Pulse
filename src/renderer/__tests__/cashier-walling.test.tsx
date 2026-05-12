@@ -118,8 +118,8 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
     const bridge = makeBridge();
     render(<SignInRoute operator={bridge} />);
     // Wait for roster to populate
-    await screen.findByTestId('roster-item-c1');
-    await user.click(screen.getByTestId('roster-item-c1'));
+    await screen.findByTestId('roster-item-0');
+    await user.click(screen.getByTestId('roster-item-0'));
     // PIN pad should be shown
     await screen.findByTestId('pin-section');
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -132,7 +132,7 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
 
   it('cashier name is shown but no email, phone, or audit info is exposed', async () => {
     render(<SignInRoute operator={makeBridge()} />);
-    await screen.findByTestId('roster-item-c1');
+    await screen.findByTestId('roster-item-0');
     // Display name is allowed
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();
     const html = document.body.innerHTML;

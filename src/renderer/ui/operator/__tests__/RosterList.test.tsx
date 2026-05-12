@@ -64,15 +64,15 @@ describe('RosterList — active state', () => {
 describe('RosterList — with onSelect', () => {
   it('renders a button for each cashier', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} />);
-    expect(screen.getByTestId('roster-item-c1')).toBeInTheDocument();
-    expect(screen.getByTestId('roster-item-c2')).toBeInTheDocument();
+    expect(screen.getByTestId('roster-item-0')).toBeInTheDocument();
+    expect(screen.getByTestId('roster-item-1')).toBeInTheDocument();
   });
 
   it('clicking a cashier button calls onSelect with that cashier', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(<RosterList cashiers={CASHIERS} onSelect={onSelect} />);
-    await user.click(screen.getByTestId('roster-item-c1'));
+    await user.click(screen.getByTestId('roster-item-0'));
     expect(onSelect).toHaveBeenCalledWith(CASHIERS[0]);
   });
 
@@ -80,7 +80,7 @@ describe('RosterList — with onSelect', () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     render(<RosterList cashiers={CASHIERS} onSelect={onSelect} />);
-    await user.click(screen.getByTestId('roster-item-c2'));
+    await user.click(screen.getByTestId('roster-item-1'));
     expect(onSelect).toHaveBeenCalledWith(CASHIERS[1]);
   });
 });
@@ -88,7 +88,7 @@ describe('RosterList — with onSelect', () => {
 describe('RosterList — without onSelect', () => {
   it('does not render buttons when onSelect is omitted', () => {
     render(<RosterList cashiers={CASHIERS} />);
-    expect(screen.queryByTestId('roster-item-c1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('roster-item-0')).not.toBeInTheDocument();
   });
 
   it('still renders cashier names as text', () => {
@@ -100,23 +100,45 @@ describe('RosterList — without onSelect', () => {
 describe('RosterList — selectedId', () => {
   it('selected cashier button has aria-pressed=true', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c1" />);
-    expect(screen.getByTestId('roster-item-c1')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('roster-item-0')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('non-selected cashier button has aria-pressed=false', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c1" />);
-    expect(screen.getByTestId('roster-item-c2')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('roster-item-1')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('selected cashier li gets the --selected CSS class', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c2" />);
-    const item = screen.getByTestId('roster-item-c2').closest('li');
+    const item = screen.getByTestId('roster-item-1').closest('li');
     expect(item).toHaveClass('roster-list__item--selected');
   });
 
   it('unselected cashier li does NOT get the --selected CSS class', () => {
     render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} selectedId="c2" />);
-    const item = screen.getByTestId('roster-item-c1').closest('li');
+    const item = screen.getByTestId('roster-item-0').closest('li');
     expect(item).not.toHaveClass('roster-list__item--selected');
+  });
+});
+
+describe('RosterList — minimum disclosure (F-1)', () => {
+  it('does not render Clerk-style cashier IDs in any DOM attribute or text', () => {
+    const clerkId = 'user_2abcDEF123xyz';
+    const cashier: RosterEntry = { id: clerkId, display_name: 'Carol Test', role: 'cashier' };
+    const { container } = render(<RosterList cashiers={[cashier]} onSelect={vi.fn()} />);
+    expect(container.outerHTML).not.toContain(clerkId);
+  });
+
+  it('uses index-based test IDs, not cashier IDs', () => {
+    const { container } = render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} />);
+    expect(container.outerHTML).not.toContain('c1');
+    expect(container.outerHTML).not.toContain('c2');
+    expect(screen.getByTestId('roster-item-0')).toBeInTheDocument();
+    expect(screen.getByTestId('roster-item-1')).toBeInTheDocument();
+  });
+
+  it('does not emit data-cashier-id on any element', () => {
+    const { container } = render(<RosterList cashiers={CASHIERS} onSelect={vi.fn()} />);
+    expect(container.outerHTML).not.toContain('data-cashier-id');
   });
 });

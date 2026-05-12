@@ -87,16 +87,13 @@ export function PairedScreen(props: PairedScreenProps): JSX.Element {
       <main
         className="paired-screen__root"
         data-testid="route-paired"
-        data-tenant-id={status.tenant_id}
-        data-branch-id={status.branch_id}
-        data-terminal-id={status.terminal_id}
         data-terminal-label={status.terminal_label}
       >
         <div className="paired-screen__card">
           <div className="paired-screen__check-circle" aria-hidden="true" />
           <div className="paired-screen__badge">PAIRED</div>
           <h1>Ready</h1>
-          <p className="paired-screen__body">This terminal is linked to {status.branch_id}.</p>
+          <p className="paired-screen__body">This terminal is linked to {status.terminal_label}.</p>
           {/* T054 — O2 resolution: Continue navigates to /app/dashboard.
               Boot router gate is NOT modified. No IPC / bridge call. */}
           <div className="paired-screen__actions">

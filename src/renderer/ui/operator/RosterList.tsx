@@ -68,11 +68,10 @@ export function RosterList(props: RosterListProps): JSX.Element {
         role={interactive ? undefined : 'listbox'}
         aria-label={interactive ? undefined : 'Select cashier'}
       >
-        {cashiers.map((c) => (
+        {cashiers.map((c, idx) => (
           <li
             key={c.id}
             className={`roster-list__item${c.id === selectedId ? ' roster-list__item--selected' : ''}`}
-            data-cashier-id={c.id}
             role={interactive ? undefined : 'option'}
             aria-selected={interactive ? undefined : c.id === selectedId}
           >
@@ -80,7 +79,7 @@ export function RosterList(props: RosterListProps): JSX.Element {
               <button
                 type="button"
                 className="roster-list__item-btn"
-                data-testid={`roster-item-${c.id}`}
+                data-testid={`roster-item-${String(idx)}`}
                 aria-pressed={c.id === selectedId}
                 onClick={() => {
                   onSelect(c);
