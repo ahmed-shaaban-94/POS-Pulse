@@ -583,3 +583,188 @@ describe('createBackendClient — active-session request shape', () => {
     expect(res.kind).toBe('refused');
   });
 });
+
+describe('createBackendClient — getStuckShifts request shape (Wave 4.1 Endpoint 7)', () => {
+  const HAPPY_STUCK_BODY = {
+    kind: 'ok',
+    shifts: [
+      {
+        shift_id: 'shift-uuid-1',
+        cashier_display_name: 'Cashier One',
+        terminal_label: 'Terminal A',
+        opened_at: '2026-05-12T08:00:00.000Z',
+        duration_minutes: 42,
+      },
+    ],
+  };
+
+  it('GETs /api/pos/v1/shifts/stuck with branch_id query param and Authorization Bearer', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_STUCK_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getStuckShifts('branch-xyz', 'eyJ.manager.jwt');
+
+    expect(captured).toHaveLength(1);
+    const call = captured[0];
+    expect(call?.url).toBe(`${BASE}/api/pos/v1/shifts/stuck?branch_id=branch-xyz`);
+    expect(call?.init.method).toBe('GET');
+    const headers = call?.init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer eyJ.manager.jwt');
+  });
+
+  it('encodes special characters in branch_id', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_STUCK_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getStuckShifts('branch/with spaces&special', 'jwt');
+    expect(captured[0]?.url).toContain(encodeURIComponent('branch/with spaces&special'));
+  });
+
+  it('NEVER includes pin / password in the request (AD-2 — cashier path must not reach this endpoint)', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify(HAPPY_STUCK_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getStuckShifts('b1', 'jwt');
+    const serialized = JSON.stringify({
+      url: captured[0]?.url,
+      headers: captured[0]?.init.headers,
+    });
+    expect(serialized).not.toContain('pin');
+    expect(serialized).not.toContain('password');
+  });
+
+  it('parses ok response and surfaces shifts array', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(HAPPY_STUCK_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getStuckShifts('b1', 'jwt');
+    expect(res.kind).toBe('ok');
+    if (res.kind === 'ok') {
+      expect(res.shifts).toHaveLength(1);
+      expect(res.shifts[0]).toEqual({
+        shift_id: 'shift-uuid-1',
+        cashier_display_name: 'Cashier One',
+        terminal_label: 'Terminal A',
+        opened_at: '2026-05-12T08:00:00.000Z',
+        duration_minutes: 42,
+      });
+    }
+  });
+
+  it('accepts an empty shifts array (no stuck shifts on branch)', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify({ kind: 'ok', shifts: [] }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getStuckShifts('b1', 'jwt');
+    expect(res).toEqual({ kind: 'ok', shifts: [] });
+  });
+
+  it('strips extra fields from each shift entry (allowlist — FR-032)', async () => {
+    const body = {
+      kind: 'ok',
+      shifts: [
+        {
+          shift_id: 'shift-1',
+          cashier_display_name: 'Cashier',
+          terminal_label: 'Term A',
+          opened_at: '2026-05-12T08:00:00.000Z',
+          duration_minutes: 10,
+          clerk_user_id: 'should-not-surface',
+          email: 'secret@example.com',
+        },
+      ],
+    };
+    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getStuckShifts('b1', 'jwt');
+    expect(res.kind).toBe('ok');
+    if (res.kind === 'ok') {
+      const shift = res.shifts[0];
+      expect(shift).toEqual({
+        shift_id: 'shift-1',
+        cashier_display_name: 'Cashier',
+        terminal_label: 'Term A',
+        opened_at: '2026-05-12T08:00:00.000Z',
+        duration_minutes: 10,
+      });
+      expect(JSON.stringify(shift)).not.toContain('clerk_user_id');
+      expect(JSON.stringify(shift)).not.toContain('email');
+    }
+  });
+
+  it('returns refused when a shift entry is missing a required field', async () => {
+    const cases = [
+      {
+        kind: 'ok',
+        shifts: [
+          { cashier_display_name: 'C', terminal_label: 'T', opened_at: 'ts', duration_minutes: 5 },
+        ],
+      },
+      {
+        kind: 'ok',
+        shifts: [{ shift_id: 's', terminal_label: 'T', opened_at: 'ts', duration_minutes: 5 }],
+      },
+      {
+        kind: 'ok',
+        shifts: [
+          { shift_id: 's', cashier_display_name: 'C', opened_at: 'ts', duration_minutes: 5 },
+        ],
+      },
+      {
+        kind: 'ok',
+        shifts: [
+          { shift_id: 's', cashier_display_name: 'C', terminal_label: 'T', duration_minutes: 5 },
+        ],
+      },
+      {
+        kind: 'ok',
+        shifts: [
+          { shift_id: 's', cashier_display_name: 'C', terminal_label: 'T', opened_at: 'ts' },
+        ],
+      },
+    ];
+    for (const body of cases) {
+      const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.getStuckShifts('b1', 'jwt');
+      expect(res.kind).toBe('refused');
+    }
+  });
+
+  it('returns refused when kind is not ok', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify({ kind: 'error', message: 'something failed' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getStuckShifts('b1', 'jwt');
+    expect(res.kind).toBe('refused');
+  });
+
+  it('collapses 4xx/5xx to refused', async () => {
+    for (const status of [400, 401, 403, 404, 500]) {
+      const { fetchImpl } = captureFetch(new Response('{}', { status }));
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.getStuckShifts('b1', 'jwt');
+      expect(res.kind).toBe('refused');
+    }
+  });
+
+  it('returns no_connection on network failure', async () => {
+    const fetchImpl = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getStuckShifts('b1', 'jwt');
+    expect(res.kind).toBe('no_connection');
+  });
+
+  it('returns refused on malformed JSON body', async () => {
+    const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.getStuckShifts('b1', 'jwt');
+    expect(res.kind).toBe('refused');
+  });
+});
