@@ -16,10 +16,10 @@ import type { PairingStatus } from '../../../../shared/pairing-types';
  * lands on a route that re-fetches its own data.
  *
  * S4 visual contract (T065): the screen shows a PAIRED pill, H1 "Ready",
- * and a body line "This terminal is linked to {branch_id}". The four data
- * attributes on the root <main> are preserved for machine-readable use
- * (router test, automation). tenant_id / terminal_id / terminal_label are
- * not required as visible text.
+ * and an identifier-free body line ("Connected. Choose Continue to open
+ * the dashboard."). The data-terminal-label attribute on the root <main>
+ * is retained as a human-friendly label; no backend IDs appear in visible
+ * text or DOM attributes.
  *
  * Security policy: the `paired` PairingStatus branch type explicitly
  * omits `device_token`. The test injects a sentinel string into the
@@ -99,7 +99,7 @@ describe('PairedScreen — happy path (T032)', () => {
     });
   });
 
-  it('renders the S4 visual contract: PAIRED pill, H1 Ready, branch body line, Continue CTA', async () => {
+  it('renders the S4 visual contract: PAIRED pill, H1 Ready, identifier-free body copy, Continue CTA', async () => {
     const { bridge } = makeBridge();
     renderInRouter(bridge);
 
@@ -111,9 +111,7 @@ describe('PairedScreen — happy path (T032)', () => {
     expect(screen.getByRole('heading', { name: /^ready$/i })).toBeInTheDocument();
     expect(screen.getByText(/PAIRED/i)).toBeInTheDocument();
     expect(
-      screen.getByText(
-        new RegExp(`This terminal is linked to ${PAIRED_STATUS.terminal_label}`, 'i'),
-      ),
+      screen.getByText(/Connected\. Choose Continue to open the dashboard\./i),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
   });
@@ -196,6 +194,17 @@ describe('PairedScreen — minimum disclosure (F-2)', () => {
     expect(html).not.toContain(PAIRED_STATUS.terminal_id);
     // branch_id value must not appear in DOM text either
     expect(root.textContent).not.toContain(PAIRED_STATUS.branch_id);
+  });
+
+  it('does not interpolate terminal_label into the body copy', async () => {
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+    await waitFor(() => {
+      expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+    });
+    const body = screen.getByTestId('route-paired').querySelector('.paired-screen__body');
+    // terminal_label is kept only as a DOM attribute, not in visible text.
+    expect(body?.textContent).not.toContain(PAIRED_STATUS.terminal_label);
   });
 });
 

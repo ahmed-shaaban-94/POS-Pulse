@@ -12,7 +12,9 @@ import { EmptyState } from '../states/EmptyState.js';
  * S1 rendered this inert. S4 (T075) activates selection:
  *   - Pass `onSelect` + `selectedId` to enable interactive mode.
  *   - Each cashier becomes a `<button type="button">` inside its `<li>`.
- *   - `data-cashier-id` and `data-role` are preserved for test targeting.
+ *   - `data-cashier-id` is intentionally NOT emitted (minimum-disclosure,
+ *     PR #129). Tests target rows by positional data-testid (roster-item-0,
+ *     roster-item-1, …). `data-role` is retained as a non-identifying label.
  */
 
 export interface RosterEntry {
