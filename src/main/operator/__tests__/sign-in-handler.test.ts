@@ -52,6 +52,7 @@ function fakeBackend(
     listRoster: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     confirmTakeover: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
     getActiveSession: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
+    getStuckShifts: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
   };
 }
 

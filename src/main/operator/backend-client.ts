@@ -1,17 +1,18 @@
 /**
- * 004-operator-session — Data-Pulse-2 client for Wave 1 + Wave 3 endpoints.
+ * 004-operator-session — Data-Pulse-2 client for Wave 1 + Wave 3 + Wave 4.1 endpoints.
  *
  * Defines the local request/response types matching the merged
- * Wave 1 and Wave 3 contracts (per owner decision: do NOT regenerate
- * `src/shared/api-types.ts` from OpenAPI in S1/S4). The shapes here
+ * Wave 1, Wave 3, and Wave 4.1 contracts (per owner decision: do NOT regenerate
+ * `src/shared/api-types.ts` from OpenAPI in S1/S4/S5). The shapes here
  * mirror `specs/004-operator-session/contracts/backend-endpoints.md`
- * Endpoints 1–4 verbatim.
+ * Endpoints 1–4 + 6 + 7 verbatim.
  *
  *   POST /api/pos/v1/operators/sign-in          (Wave 1 — Endpoint 2)
  *   POST /api/pos/v1/operators/sign-out          (Wave 1 — Endpoint 3)
  *   GET  /api/pos/v1/operators/roster            (Wave 3 — Endpoint 1)
  *   POST /api/pos/v1/operators/takeover/confirm  (Wave 3 — Endpoint 4)
  *   GET  /api/pos/v1/operators/active-session    (Wave 3 — Endpoint 6)
+ *   GET  /api/pos/v1/shifts/stuck                (Wave 4.1 — Endpoint 7)
  *
  * The Clerk JWT travels in the `Authorization: Bearer …` header; the
  * device token travels in the platform's existing terminal-token
@@ -114,6 +115,28 @@ export type BackendActiveSessionResponse =
   | { kind: 'refused' }
   | { kind: 'no_connection' };
 
+// ─── Wave 4.1 — Stuck shifts (Endpoint 7) ────────────────────────────────────
+
+/** One row in the stuck-shift list (per s5-stuck-shift-discovery-verification.md §3). */
+export interface BackendStuckShiftRow {
+  shift_id: string;
+  /** Display label only — MUST NOT be email or Clerk user id (FR-032). */
+  cashier_display_name: string;
+  terminal_label: string;
+  opened_at: string;
+  duration_minutes: number;
+}
+
+export interface BackendStuckShiftsSuccess {
+  kind: 'ok';
+  shifts: BackendStuckShiftRow[];
+}
+
+export type BackendStuckShiftsResponse =
+  | BackendStuckShiftsSuccess
+  | { kind: 'refused' }
+  | { kind: 'no_connection' };
+
 // ─── Client interface ─────────────────────────────────────────────────────────
 
 /**
@@ -133,6 +156,8 @@ export interface BackendClient {
   ): Promise<BackendTakeoverConfirmResponse>;
   /** GET /api/pos/v1/operators/active-session — no JWT (cashier path); AD-2 invariant enforced. */
   getActiveSession(operatorId: string): Promise<BackendActiveSessionResponse>;
+  /** GET /api/pos/v1/shifts/stuck — manager/admin JWT required (AD-2; cashier MUST NOT call this). */
+  getStuckShifts(branchId: string, jwt: string): Promise<BackendStuckShiftsResponse>;
 }
 
 // ─── Paths and defaults ───────────────────────────────────────────────────────
@@ -142,6 +167,7 @@ const SIGN_OUT_PATH = '/api/pos/v1/operators/sign-out';
 const ROSTER_PATH = '/api/pos/v1/operators/roster';
 const TAKEOVER_CONFIRM_PATH = '/api/pos/v1/operators/takeover/confirm';
 const ACTIVE_SESSION_PATH = '/api/pos/v1/operators/active-session';
+const STUCK_SHIFTS_PATH = '/api/pos/v1/shifts/stuck';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export interface CreateBackendClientDeps {
@@ -289,6 +315,30 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
       }
       return interpretActiveSessionResponse(parsed);
     },
+
+    async getStuckShifts(branchId: string, jwt: string): Promise<BackendStuckShiftsResponse> {
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          `${root}${STUCK_SHIFTS_PATH}?branch_id=${encodeURIComponent(branchId)}`,
+          {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${jwt}` },
+            signal: AbortSignal.timeout(timeoutMs),
+          },
+        );
+      } catch {
+        return { kind: 'no_connection' };
+      }
+      if (!response.ok) return { kind: 'refused' };
+      let parsed: unknown;
+      try {
+        parsed = (await response.json()) as unknown;
+      } catch {
+        return { kind: 'refused' };
+      }
+      return interpretStuckShiftsResponse(parsed);
+    },
   };
 }
 
@@ -363,4 +413,30 @@ function interpretActiveSessionResponse(parsed: unknown): BackendActiveSessionRe
   if (v['kind'] === 'none') return { kind: 'none' };
   if (v['kind'] === 'active') return { kind: 'active' };
   return { kind: 'refused' };
+}
+
+function interpretStuckShiftsResponse(parsed: unknown): BackendStuckShiftsResponse {
+  if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
+  const v = parsed as Record<string, unknown>;
+  if (v['kind'] !== 'ok') return { kind: 'refused' };
+  if (!Array.isArray(v['shifts'])) return { kind: 'refused' };
+  const shifts: BackendStuckShiftRow[] = [];
+  for (const entry of v['shifts']) {
+    if (typeof entry !== 'object' || entry === null) return { kind: 'refused' };
+    const e = entry as Record<string, unknown>;
+    if (typeof e['shift_id'] !== 'string') return { kind: 'refused' };
+    if (typeof e['cashier_display_name'] !== 'string') return { kind: 'refused' };
+    if (typeof e['terminal_label'] !== 'string') return { kind: 'refused' };
+    if (typeof e['opened_at'] !== 'string') return { kind: 'refused' };
+    if (typeof e['duration_minutes'] !== 'number') return { kind: 'refused' };
+    // Allowlist: only the five documented fields cross this layer (FR-032).
+    shifts.push({
+      shift_id: e['shift_id'],
+      cashier_display_name: e['cashier_display_name'],
+      terminal_label: e['terminal_label'],
+      opened_at: e['opened_at'],
+      duration_minutes: e['duration_minutes'],
+    });
+  }
+  return { kind: 'ok', shifts };
 }
