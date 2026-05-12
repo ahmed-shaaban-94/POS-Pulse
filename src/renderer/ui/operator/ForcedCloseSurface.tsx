@@ -68,9 +68,9 @@ export function ForcedCloseForm({ onSubmit }: ForcedCloseFormProps): JSX.Element
     e.preventDefault();
     /* v8 ignore next 1 */
     if (reason == null) return;
-    onSubmit(annotation
-      ? { forced_close_reason: reason, annotation }
-      : { forced_close_reason: reason });
+    onSubmit(
+      annotation ? { forced_close_reason: reason, annotation } : { forced_close_reason: reason },
+    );
   }
 
   return (
@@ -84,7 +84,9 @@ export function ForcedCloseForm({ onSubmit }: ForcedCloseFormProps): JSX.Element
               name="forced_close_reason"
               value={r}
               checked={reason === r}
-              onChange={() => { setReason(r); }}
+              onChange={() => {
+                setReason(r);
+              }}
             />
             {r}
           </label>
@@ -95,7 +97,9 @@ export function ForcedCloseForm({ onSubmit }: ForcedCloseFormProps): JSX.Element
       <textarea
         id="forced-close-annotation"
         value={annotation}
-        onChange={(e) => { setAnnotation(e.target.value); }}
+        onChange={(e) => {
+          setAnnotation(e.target.value);
+        }}
       />
 
       <button type="submit" disabled={reason == null}>

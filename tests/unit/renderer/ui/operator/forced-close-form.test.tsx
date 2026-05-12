@@ -28,7 +28,9 @@ afterEach(() => {
   cleanup();
 });
 
-function setup(onSubmit?: (payload: { forced_close_reason: ForcedCloseReason; annotation?: string }) => void) {
+function setup(
+  onSubmit?: (payload: { forced_close_reason: ForcedCloseReason; annotation?: string }) => void,
+) {
   const handler = onSubmit ?? vi.fn();
   render(<ForcedCloseForm onSubmit={handler} />);
   return { onSubmit: handler };
@@ -124,12 +126,30 @@ describe('ForcedCloseForm — submit payload correctness', () => {
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_illness'));
     await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
-    const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<string, unknown>;
+    const payload = (onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as Record<
+      string,
+      unknown
+    >;
     const forbidden = [
-      'drawer_count', 'expected_total', 'variance', 'shortage', 'overage',
-      'cash_in', 'cash_out', 'declared_count', 'balance', 'shift_total',
-      'cashier_id', 'operator_id', 'user_id', 'device_id', 'tenant_id',
-      'branch_id', 'terminal_id', 'email', 'pin',
+      'drawer_count',
+      'expected_total',
+      'variance',
+      'shortage',
+      'overage',
+      'cash_in',
+      'cash_out',
+      'declared_count',
+      'balance',
+      'shift_total',
+      'cashier_id',
+      'operator_id',
+      'user_id',
+      'device_id',
+      'tenant_id',
+      'branch_id',
+      'terminal_id',
+      'email',
+      'pin',
     ];
     for (const key of forbidden) {
       expect(Object.prototype.hasOwnProperty.call(payload, key)).toBe(false);
