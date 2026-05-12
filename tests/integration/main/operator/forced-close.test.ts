@@ -445,4 +445,30 @@ describe('T085 — forced-close handler audit event shape', () => {
     }
     db.close();
   });
+
+  it('originating_terminal_id is empty string when terminal is unpaired', async () => {
+    const db = freshDb();
+    const shiftId = seedOpenShift(db);
+    const captured: CapturedEvent[] = [];
+    const handle = bindHandle(db);
+    const deps: ForcedCloseHandlerDeps = {
+      db: handle,
+      sessionManager: { getCurrent: () => makeSession({ role: 'manager' }) },
+      pairingStore: {
+        getStatus: () => Promise.resolve({ kind: 'unpaired' as const }),
+      },
+      auditEmitter: makeAuditEmitter(captured),
+    };
+    const handler = new ForcedCloseHandler(deps);
+
+    const result = await handler.forceCloseShift({
+      shift_id: shiftId,
+      reason: 'takeover_supersession',
+      event_id: randomUUID(),
+    });
+
+    expect(result.kind).toBe('forced_closed');
+    expect(captured[0]?.event.originating_terminal_id).toBe('');
+    db.close();
+  });
 });
