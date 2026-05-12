@@ -81,7 +81,9 @@ jobs:
         run: npm run package:dir
 
       - name: Upload unpacked Windows build
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: pos-pulse-win-unpacked-${{ github.sha }}
           path: dist-electron/win-unpacked
+          retention-days: 1
