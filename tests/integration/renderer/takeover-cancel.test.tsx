@@ -80,8 +80,8 @@ async function reachTakeoverPrompt(
 ): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
   render(<SignInRoute operator={bridge} />);
-  await waitFor(() => expect(screen.getByTestId(`roster-item-${CASHIER.id}`)).toBeInTheDocument());
-  await user.click(screen.getByTestId(`roster-item-${CASHIER.id}`));
+  await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
+  await user.click(screen.getByTestId('roster-item-0'));
   for (const d of ['1', '2', '3', '4']) {
     await user.click(screen.getByTestId(`pin-pad-key-${d}`));
   }

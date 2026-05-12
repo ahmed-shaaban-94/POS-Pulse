@@ -111,7 +111,9 @@ describe('PairedScreen — happy path (T032)', () => {
     expect(screen.getByRole('heading', { name: /^ready$/i })).toBeInTheDocument();
     expect(screen.getByText(/PAIRED/i)).toBeInTheDocument();
     expect(
-      screen.getByText(new RegExp(`This terminal is linked to ${PAIRED_STATUS.branch_id}`, 'i')),
+      screen.getByText(
+        new RegExp(`This terminal is linked to ${PAIRED_STATUS.terminal_label}`, 'i'),
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
   });
@@ -124,15 +126,15 @@ describe('PairedScreen — happy path (T032)', () => {
     });
   });
 
-  it('preserves the four data attributes (tenant-id, branch-id, terminal-id, terminal-label)', async () => {
+  it('preserves data-terminal-label but does NOT expose tenant/branch/terminal IDs', async () => {
     const { bridge } = makeBridge();
     renderInRouter(bridge);
     await waitFor(() => {
       const root = screen.getByTestId('route-paired');
-      expect(root).toHaveAttribute('data-tenant-id', PAIRED_STATUS.tenant_id);
-      expect(root).toHaveAttribute('data-branch-id', PAIRED_STATUS.branch_id);
-      expect(root).toHaveAttribute('data-terminal-id', PAIRED_STATUS.terminal_id);
       expect(root).toHaveAttribute('data-terminal-label', PAIRED_STATUS.terminal_label);
+      expect(root).not.toHaveAttribute('data-tenant-id');
+      expect(root).not.toHaveAttribute('data-branch-id');
+      expect(root).not.toHaveAttribute('data-terminal-id');
     });
   });
 });
@@ -175,6 +177,25 @@ describe('PairedScreen — security (T032)', () => {
     const root = screen.getByTestId('route-paired');
     expect(root.textContent).not.toContain(sentinel);
     expect(root.outerHTML).not.toContain(sentinel);
+  });
+});
+
+describe('PairedScreen — minimum disclosure (F-2)', () => {
+  it('does not render tenant_id, branch_id, or terminal_id in DOM attributes or text', async () => {
+    const { bridge } = makeBridge();
+    renderInRouter(bridge);
+    await waitFor(() => {
+      expect(screen.getByTestId('route-paired')).toBeInTheDocument();
+    });
+    const root = screen.getByTestId('route-paired');
+    const html = root.outerHTML;
+    expect(html).not.toContain('data-tenant-id');
+    expect(html).not.toContain('data-branch-id');
+    expect(html).not.toContain('data-terminal-id');
+    expect(html).not.toContain(PAIRED_STATUS.tenant_id);
+    expect(html).not.toContain(PAIRED_STATUS.terminal_id);
+    // branch_id value must not appear in DOM text either
+    expect(root.textContent).not.toContain(PAIRED_STATUS.branch_id);
   });
 });
 
