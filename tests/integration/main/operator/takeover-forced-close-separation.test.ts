@@ -77,7 +77,7 @@ function bindHandle(db: SqlJsDatabase): DatabaseHandle {
         },
       };
     },
-  } as unknown as DatabaseHandle;
+  };
 }
 
 // ─── Session + pairing fakes ──────────────────────────────────────────────────
@@ -146,10 +146,10 @@ function makeHandler(
   const handle = bindHandle(db);
   const deps: ForcedCloseHandlerDeps = {
     db: handle,
-    sessionManager: { getCurrent: () => session } as ForcedCloseHandlerDeps['sessionManager'],
+    sessionManager: { getCurrent: () => session },
     pairingStore: {
       getStatus: () => Promise.resolve(makePairingStatus()),
-    } as ForcedCloseHandlerDeps['pairingStore'],
+    },
     auditEmitter: makeAuditEmitter(captured),
   };
   return new ForcedCloseHandler(deps);
@@ -367,7 +367,8 @@ describe('T086 — takeover ↔ forced-close audit separation invariant', () => 
       event_id: randomUUID(),
     });
 
-    const fcEvent = captured.find((c) => c.event.action_category === 'shift.forced_close')!;
+    const fcEvent = captured.find((c) => c.event.action_category === 'shift.forced_close');
+    if (!fcEvent) throw new Error('No shift.forced_close event captured');
     expect(fcEvent.event.acting_operator_id).toBe('manager-who-closes');
 
     const payload = fcEvent.event.payload as Record<string, unknown>;

@@ -78,7 +78,7 @@ function bindHandle(db: SqlJsDatabase): DatabaseHandle {
         },
       };
     },
-  } as unknown as DatabaseHandle;
+  };
 }
 
 // ─── In-process AuditEmitter stub ────────────────────────────────────────────
@@ -163,10 +163,10 @@ function makeHandler(
   const handle = bindHandle(db);
   const deps: ForcedCloseHandlerDeps = {
     db: handle,
-    sessionManager: { getCurrent: () => session } as ForcedCloseHandlerDeps['sessionManager'],
+    sessionManager: { getCurrent: () => session },
     pairingStore: {
       getStatus: () => Promise.resolve(makePairingStatus(pairingTerminalId)),
-    } as ForcedCloseHandlerDeps['pairingStore'],
+    },
     auditEmitter: makeAuditEmitter(captured),
   };
   return new ForcedCloseHandler(deps);
@@ -226,7 +226,9 @@ describe('T085 — forced-close handler audit event shape', () => {
     });
 
     expect(captured).toHaveLength(1);
-    const { event } = captured[0]!;
+    const first = captured[0];
+    if (!first) throw new Error('No captured event');
+    const { event } = first;
     expect(event.action_category).toBe('shift.forced_close');
     // FR-025 mandatory attributes
     expect(event.acting_operator_id).toBe('mgr-operator-1');
@@ -251,7 +253,9 @@ describe('T085 — forced-close handler audit event shape', () => {
       event_id: randomUUID(),
     });
 
-    const payload = captured[0]!.event.payload as Record<string, unknown>;
+    const capturedFirst = captured[0];
+    if (!capturedFirst) throw new Error('No captured event');
+    const payload = capturedFirst.event.payload as Record<string, unknown>;
     expect(payload['shift_owner_id']).toBe('cashier-owner-2');
     expect(payload['forced_close_actor_id']).toBe('mgr-actor-2');
     expect(payload['forced_close_reason']).toBe('takeover_supersession');
