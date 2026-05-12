@@ -432,9 +432,7 @@ describe('T085 — forced-close handler audit event shape', () => {
     }
 
     // Shift must remain open — closed_at NULL, lifecycle_state unchanged
-    const row = db.exec(
-      `SELECT lifecycle_state, closed_at FROM shifts WHERE id = '${shiftId}'`,
-    );
+    const row = db.exec(`SELECT lifecycle_state, closed_at FROM shifts WHERE id = '${shiftId}'`);
     const values = row[0]?.values[0];
     expect(values?.[0]).toBe('open');
     expect(values?.[1]).toBeNull();
