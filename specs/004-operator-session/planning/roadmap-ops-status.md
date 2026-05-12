@@ -1,6 +1,6 @@
 # Roadmap & Ops Status — POS-Pulse 004-operator-session
 
-**Snapshot date:** 2026-05-09 (initial); reconciled 2026-05-11 post-PRs #120/#121/#122/#124 — S4 fully complete; T056 waived in full via issue 101 Option A (PR #124); §A2 Wave 4 verified and cleared (Data-Pulse-2 SHA `7b95fdb`); S5 fully unblocked from gate perspective; issue 88 is next S5 candidate; 005 blocked behind §A0
+**Snapshot date:** 2026-05-09 (initial); reconciled 2026-05-11 post-PRs #120/#121/#122/#124 — S4 fully complete; T056 waived in full via issue 101 Option A (PR #124); §A2 Wave 4 verified and cleared (Data-Pulse-2 SHA `7b95fdb`); S5 gates cleared but contract-blocked on Wave 4.1 backend endpoint + POS-Pulse shifts migration (Option C — see `planning/s5-stuck-shift-discovery-verification.md`, 2026-05-11); T089/T090 blocked on discovery gap; issue 88 is next S5 candidate; 005 blocked behind §A0
 **Author:** Read-only ops review agent (initial); updated by docs(004) PR on 2026-05-09; reconciled by docs/004-s4-closeout-coordination PR on 2026-05-11; §A2 Wave 4 clearance recorded by docs/004-s5-wave4-gate-clearance PR on 2026-05-11
 **Scope:** Read-only audit of GitHub roadmap, PR/issue state, and gate alignment for `specs/004-operator-session`. **No issue edits performed in the original snapshot.** §9 and issue table updated to reflect PR #100 merge and issue hygiene (issues #85 and #101 reopened).
 
@@ -112,7 +112,7 @@ The 004-operator-session issues #77–#89 also live on board #5; their per-issue
 
 **No mismatches detected.** Coordination.md and `gh` data are consistent. The §A1 and §A2 Wave 1/2 PR pointers reference older / cross-repo PRs that fell outside this session's `gh pr list --limit 30` window — they are taken from coordination.md as the durable record.
 
-> ℹ **Updated (2026-05-11, final):** S4 is now fully complete. PRs #120 (T061/T062/T072/T073), #121 (T057–T060), and #122 (T078–T082) have all merged. PR #124 (issue 101 Option A waiver; T056 waived in full) merged. Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open. **§A2 Wave 4 cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in dto.ts and OpenAPI. S5 is fully unblocked from gate perspective. Issue 88 is the next S5 implementation candidate. No S5 implementation started. 005 remains blocked behind §A0.
+> ℹ **Updated (2026-05-11, final):** S4 is now fully complete. PRs #120 (T061/T062/T072/T073), #121 (T057–T060), and #122 (T078–T082) have all merged. PR #124 (issue 101 Option A waiver; T056 waived in full) merged. Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open. **§A2 Wave 4 cleared** — Data-Pulse-2 main SHA `7b95fdb` confirms `shift.forced_close` recognised in dto.ts and OpenAPI. **S5 gates cleared (S4 ✅ + §A2 Wave 4 ✅) but contract-blocked** on Wave 4.1 backend endpoint (`GET /api/pos/v1/shifts/stuck?branch_id=`) and POS-Pulse shifts migration — Option C recorded in `planning/s5-stuck-shift-discovery-verification.md` (2026-05-11); T089/T090 carry `[BLOCKED: stuck-shift-discovery]` qualifier; T083–T088/T091–T093 unblocked. Issue 88 is the next S5 implementation candidate. No S5 implementation started. 005 remains blocked behind §A0.
 
 ---
 
@@ -329,8 +329,17 @@ docs-only gate-clearance PR. No source code changed here.
 
 ### 7h. Issue #88 — S5 forced-close surface
 
-**Prerequisite:** 7f ✅ (merged) + 7g ✅ (Wave 4 cleared 2026-05-11). **All
-prerequisites met. S5 may begin.**
+**Prerequisite:** 7f ✅ (merged) + 7g ✅ (Wave 4 cleared 2026-05-11) +
+**Wave 4.1 backend endpoint** (`GET /api/pos/v1/shifts/stuck?branch_id=`) +
+**POS-Pulse shifts migration** (`migrations/0007_shifts.sql`). **Gates met;
+contract preconditions for T089/T090 still outstanding (Option C).**
+
+**Discovery verification (2026-05-11):** `planning/s5-stuck-shift-discovery-verification.md`
+records Option C as the chosen resolution. T089 is blocked on (1) Wave 4.1
+backend endpoint in Data-Pulse-2 and (2) POS-Pulse shifts migration. T090 is
+blocked via T089 dependency. T083–T088, T091–T093 are NOT blocked by the
+discovery gap and may proceed once PR-S5-a opens.
+
 **Scope:** S5 implementation per `tasks.md` Phase 7 (T083–T093); blind-close
 discipline (no drawer count display, no expected total, no variance surfaced
 to cashier); `operator.forceCloseShift` handler with manager/admin role gate
