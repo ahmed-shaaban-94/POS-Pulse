@@ -24,6 +24,8 @@ export const OPERATOR_IPC_CHANNELS = {
   RESET_CASHIER_PIN: 'operator:reset-cashier-pin',
   /** T073 — manager/admin unlock of a locked-out cashier on this terminal. */
   UNLOCK_CASHIER: 'operator:unlock-cashier',
+  /** T089 — manager/admin forced-close of a stuck cashier shift. */
+  FORCE_CLOSE_SHIFT: 'operator:force-close-shift',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

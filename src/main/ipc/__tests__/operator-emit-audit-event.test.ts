@@ -17,6 +17,7 @@ import type { RosterHandler } from '../../operator/roster-handler.js';
 import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
 import type { TakeoverHandler } from '../../operator/takeover-handler.js';
 import type { PinManagementHandler } from '../../operator/pin-management.js';
+import type { ForcedCloseHandler } from '../../operator/forced-close-handler.js';
 
 /**
  * T048 — operator:emit-audit-event IPC handler tests.
@@ -149,6 +150,14 @@ function fakePinManagementHandler(): PinManagementHandler {
   } as unknown as PinManagementHandler;
 }
 
+function fakeForcedCloseHandler(): ForcedCloseHandler {
+  return {
+    forceCloseShift: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as ForcedCloseHandler;
+}
+
 interface SetupOpts {
   sessionManager?: SessionManager;
   auditEmitter?: AuditEmitter;
@@ -172,6 +181,7 @@ function setup(opts: SetupOpts = {}) {
     pairingStore,
     takeoverHandler: fakeTakeoverHandler(),
     pinManagementHandler: fakePinManagementHandler(),
+    forcedCloseHandler: fakeForcedCloseHandler(),
   });
 
   const emitAuditEvent = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT);
@@ -205,6 +215,7 @@ describe('operator:emit-audit-event — channel registration', () => {
       pairingStore: fakePairingStore(),
       takeoverHandler: fakeTakeoverHandler(),
       pinManagementHandler: fakePinManagementHandler(),
+      forcedCloseHandler: fakeForcedCloseHandler(),
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT)).toBe(true);
   });

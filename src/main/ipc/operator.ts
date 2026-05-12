@@ -10,6 +10,8 @@ import type {
   ConfirmTakeoverResponse,
   EmitAuditEventRequest,
   EmitAuditEventResponse,
+  ForceCloseShiftRequest,
+  ForceCloseShiftResponse,
   ListBranchRosterResponse,
   ManagerAdminSignInRequest,
   OperatorSessionBridgeView,
@@ -35,6 +37,8 @@ import {
 import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { TakeoverHandler } from '../operator/takeover-handler.js';
 import type { PinManagementHandler } from '../operator/pin-management.js';
+import type { ForcedCloseHandler } from '../operator/forced-close-handler.js';
+import { FORCED_CLOSE_REASONS } from '../../shared/audit/payload-schemas.js';
 
 /**
  * 004-operator-session — `operator:*` IPC handlers (S1 wave 1 + T048).
@@ -61,6 +65,8 @@ export interface OperatorHandlerDeps {
   takeoverHandler: TakeoverHandler;
   /** T072 / T073 — PIN reset and unlock handler. */
   pinManagementHandler: PinManagementHandler;
+  /** T089 — forced-close of a stuck cashier shift. */
+  forcedCloseHandler: ForcedCloseHandler;
 }
 
 function refuseInvalid(): OperatorRefusal {
@@ -170,6 +176,27 @@ function asUnlockCashierRequest(value: unknown): UnlockCashierRequest | null {
   };
 }
 
+function asForceCloseShiftRequest(value: unknown): ForceCloseShiftRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v['event_id'] !== 'string' ||
+    v['event_id'].length === 0 ||
+    typeof v['shift_id'] !== 'string' ||
+    v['shift_id'].length === 0 ||
+    typeof v['reason'] !== 'string' ||
+    !(FORCED_CLOSE_REASONS as readonly string[]).includes(v['reason'])
+  )
+    return null;
+  const req: ForceCloseShiftRequest = {
+    event_id: v['event_id'],
+    shift_id: v['shift_id'],
+    reason: v['reason'] as ForceCloseShiftRequest['reason'],
+  };
+  if (typeof v['annotation'] === 'string') req.annotation = v['annotation'];
+  return req;
+}
+
 export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
   const {
     signInHandler,
@@ -182,6 +209,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
     pairingStore,
     takeoverHandler,
     pinManagementHandler,
+    forcedCloseHandler,
   } = deps;
 
   ipcMain.handle(
@@ -377,6 +405,22 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       if (req === null) return refuseInvalid();
       try {
         return await pinManagementHandler.unlockCashier(req);
+      } catch {
+        return refuseInvalid();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<ForceCloseShiftResponse | OperatorRefusal> => {
+      const req = asForceCloseShiftRequest(request);
+      if (req === null) return refuseInvalid();
+      try {
+        return await forcedCloseHandler.forceCloseShift(req);
       } catch {
         return refuseInvalid();
       }

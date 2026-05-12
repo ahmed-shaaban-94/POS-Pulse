@@ -35,6 +35,7 @@ import { LifecycleCascade } from './operator/lifecycle-cascade.js';
 import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
 import { PinManagementHandler } from './operator/pin-management.js';
+import { ForcedCloseHandler } from './operator/forced-close-handler.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
 
@@ -412,6 +413,12 @@ app
       pairingStore,
       takeoverHandler: operatorTakeoverHandler,
       pinManagementHandler: operatorPinManagementHandler,
+      forcedCloseHandler: new ForcedCloseHandler({
+        db: dbHandle,
+        sessionManager: operatorSessionManager,
+        pairingStore,
+        auditEmitter,
+      }),
     });
 
     createWindow();

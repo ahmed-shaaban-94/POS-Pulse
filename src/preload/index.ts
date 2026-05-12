@@ -6,6 +6,8 @@ import type {
   ConfirmTakeoverResponse,
   EmitAuditEventRequest,
   EmitAuditEventResponse,
+  ForceCloseShiftRequest,
+  ForceCloseShiftResponse,
   ListBranchRosterResponse,
   OperatorBridgeAPI,
   OperatorSessionBridgeView,
@@ -101,6 +103,10 @@ const operator: OperatorBridgeAPI = {
   unlockCashier: (req: UnlockCashierRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER, req) as Promise<
       UnlockCashierResponse | import('../shared/audit/event-shape').OperatorRefusal
+    >,
+  forceCloseShift: (req: ForceCloseShiftRequest) =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT, req) as Promise<
+      ForceCloseShiftResponse | import('../shared/audit/event-shape').OperatorRefusal
     >,
 };
 

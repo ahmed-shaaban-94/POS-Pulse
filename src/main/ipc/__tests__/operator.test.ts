@@ -20,6 +20,7 @@ import type { AuditEmitter } from '../../audit/audit-emitter.js';
 import type { PairingStore } from '../../pairing/store.js';
 import type { TakeoverHandler } from '../../operator/takeover-handler.js';
 import type { PinManagementHandler } from '../../operator/pin-management.js';
+import type { ForcedCloseHandler } from '../../operator/forced-close-handler.js';
 
 /**
  * 004-operator-session — IPC `operator:*` handler tests.
@@ -129,6 +130,14 @@ function fakePinManagementHandler(): PinManagementHandler {
   } as unknown as PinManagementHandler;
 }
 
+function fakeForcedCloseHandler(): ForcedCloseHandler {
+  return {
+    forceCloseShift: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
+  } as unknown as ForcedCloseHandler;
+}
+
 function register(opts: {
   signIn?: SignInResponse | (() => SignInResponse) | (() => never);
   signOut?: SignOutResponse;
@@ -151,6 +160,7 @@ function register(opts: {
     pairingStore: fakePairingStore(),
     takeoverHandler: fakeTakeoverHandler(),
     pinManagementHandler: fakePinManagementHandler(),
+    forcedCloseHandler: fakeForcedCloseHandler(),
   });
   const get = (channel: string): IpcHandler => {
     const fn = handlers.get(channel);
@@ -194,6 +204,7 @@ describe('registerOperatorHandlers — channel registration', () => {
       pairingStore: fakePairingStore(),
       takeoverHandler: fakeTakeoverHandler(),
       pinManagementHandler: fakePinManagementHandler(),
+      forcedCloseHandler: fakeForcedCloseHandler(),
     });
     const registered = handle.mock.calls.map((c) => c[0] as string);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_IN);
@@ -205,6 +216,7 @@ describe('registerOperatorHandlers — channel registration', () => {
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT);
     // Each channel registered exactly once.
     for (const channel of registered) {
       expect(registered.filter((c) => c === channel)).toHaveLength(1);
@@ -344,6 +356,7 @@ function registerWithTakeover(takeoverHandler: TakeoverHandler): Map<string, Ipc
     pairingStore: fakePairingStore(),
     takeoverHandler,
     pinManagementHandler: fakePinManagementHandler(),
+    forcedCloseHandler: fakeForcedCloseHandler(),
   });
   return handlers;
 }
@@ -445,6 +458,7 @@ function registerWithPairingStore(
     pairingStore,
     takeoverHandler: fakeTakeoverHandler(),
     pinManagementHandler: fakePinManagementHandler(),
+    forcedCloseHandler: fakeForcedCloseHandler(),
   });
   return handlers;
 }
