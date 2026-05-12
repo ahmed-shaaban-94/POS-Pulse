@@ -111,7 +111,9 @@ describe('PairedScreen — happy path (T032)', () => {
     expect(screen.getByRole('heading', { name: /^ready$/i })).toBeInTheDocument();
     expect(screen.getByText(/PAIRED/i)).toBeInTheDocument();
     expect(
-      screen.getByText(new RegExp(`This terminal is linked to ${PAIRED_STATUS.terminal_label}`, 'i')),
+      screen.getByText(
+        new RegExp(`This terminal is linked to ${PAIRED_STATUS.terminal_label}`, 'i'),
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
   });

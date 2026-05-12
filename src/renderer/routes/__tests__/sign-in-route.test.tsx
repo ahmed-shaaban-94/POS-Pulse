@@ -184,9 +184,7 @@ describe('SignInRoute — roster fetch', () => {
       listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
     });
     renderSignInRoute(bridge);
-    await waitFor(() =>
-      expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
   });
 
   it('shows no_connection alert when roster returns no_connection category', async () => {
@@ -234,9 +232,7 @@ describe('SignInRoute — cashier selection', () => {
       listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
     });
     renderSignInRoute(bridge);
-    await waitFor(() =>
-      expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
     await user.click(screen.getByTestId(`roster-item-0`));
     expect(screen.getByTestId('pin-section')).toBeInTheDocument();
     expect(screen.getByTestId('pin-cashier-name')).toHaveTextContent(CASHIER.display_name);
@@ -248,9 +244,7 @@ describe('SignInRoute — cashier selection', () => {
       listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
     });
     renderSignInRoute(bridge);
-    await waitFor(() =>
-      expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
     await user.click(screen.getByTestId(`roster-item-0`));
     await user.click(screen.getByTestId('cashier-pin-cancel'));
     expect(screen.queryByTestId('pin-section')).not.toBeInTheDocument();
@@ -261,9 +255,7 @@ describe('SignInRoute — cashier sign-in responses', () => {
   async function setupCashierWithPin(bridge: OperatorBridgeAPI) {
     const user = userEvent.setup();
     renderSignInRoute(bridge);
-    await waitFor(() =>
-      expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
     await user.click(screen.getByTestId(`roster-item-0`));
     // Enter 4 digits via the PinPad digit buttons.
     for (const d of ['1', '2', '3', '4']) {
@@ -333,9 +325,7 @@ describe('SignInRoute — FSM reset clears PIN (signedOut effect)', () => {
     });
     const user = userEvent.setup();
     renderSignInRoute(bridge);
-    await waitFor(() =>
-      expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
     await user.click(screen.getByTestId(`roster-item-0`));
     // Trigger a signingIn → signedOut transition via the store.
     useOperatorSessionStore.getState().beginSignIn();
