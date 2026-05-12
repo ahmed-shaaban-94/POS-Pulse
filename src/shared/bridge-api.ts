@@ -5,6 +5,7 @@ import type { AppConfig } from './app-config.js';
 import type { PairingStatus, PairingSubmitResult } from './pairing-types.js';
 import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
+import type { ForcedCloseReason } from './audit/payload-schemas.js';
 
 /**
  * T048 — `operator.emitAuditEvent` bridge surface.
@@ -169,6 +170,30 @@ export interface UnlockCashierRequest {
 export interface UnlockCashierResponse {
   kind: 'unlocked';
   /** Echoes the client-supplied event_id for idempotency confirmation. */
+  audit_event_id: string;
+}
+
+/**
+ * T089 — manager/admin forced-close of a stuck cashier shift.
+ *
+ * `event_id` is the caller-generated UUID v4 idempotency key.
+ * `declared_count` is intentionally absent — forced-close always leaves it
+ * NULL (FR-024(a) blind-close / absent state).
+ */
+export interface ForceCloseShiftRequest {
+  /** Client-generated UUID v4 (P5 idempotency key). */
+  event_id: string;
+  /** Local shift id to force-close. */
+  shift_id: string;
+  /** Structured reason; must be one of the FORCED_CLOSE_REASONS enum members. */
+  reason: ForcedCloseReason;
+  /** Optional free-text annotation for support context (PR-1: no PIN/PII). */
+  annotation?: string;
+}
+
+export interface ForceCloseShiftResponse {
+  kind: 'forced_closed';
+  /** Echoes the caller-supplied event_id for idempotency confirmation. */
   audit_event_id: string;
 }
 
@@ -357,6 +382,20 @@ export interface OperatorBridgeAPI {
    * This call MUST NOT accept any PIN field — it only clears lockout state.
    */
   unlockCashier(req: UnlockCashierRequest): Promise<UnlockCashierResponse | OperatorRefusal>;
+
+  /**
+   * T089 — manager/admin forced-close of a stuck cashier shift.
+   *
+   * Role gate: `manager` or `admin` only — `cashier` → `role_mismatch`.
+   * Branch isolation: manager can only close shifts on their own branch
+   * (P17 — mismatch returns `role_mismatch`, not `state_invalid`).
+   * declared_count is left NULL (FR-024(a) blind-close / absent state).
+   *
+   * Idempotent: calling with the same `event_id` on an already-closed
+   * shift returns `{ kind: 'forced_closed', audit_event_id }` without
+   * re-emitting the audit event.
+   */
+  forceCloseShift(req: ForceCloseShiftRequest): Promise<ForceCloseShiftResponse | OperatorRefusal>;
 }
 
 export interface PreloadBridgeAPI {

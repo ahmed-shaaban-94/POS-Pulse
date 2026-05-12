@@ -65,6 +65,9 @@ function makeBridge(overrides?: Partial<OperatorBridgeAPI>): OperatorBridgeAPI {
     unlockCashier: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
+    forceCloseShift: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
     ...overrides,
   };
 }
