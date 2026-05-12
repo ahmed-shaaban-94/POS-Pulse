@@ -66,6 +66,9 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
     forceCloseShift: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
+    listStuckShifts: vi.fn(() =>
+      Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] }),
+    ),
   };
   return { bridge, signInMock };
 }
@@ -243,6 +246,9 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       forceCloseShift: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
+      listStuckShifts: vi.fn(() =>
+        Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -298,6 +304,9 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       forceCloseShift: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
+      listStuckShifts: vi.fn(() =>
+        Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] }),
+      ),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -345,6 +354,9 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       ),
       forceCloseShift: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      listStuckShifts: vi.fn(() =>
+        Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] }),
       ),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);

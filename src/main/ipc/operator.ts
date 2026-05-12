@@ -13,6 +13,7 @@ import type {
   ForceCloseShiftRequest,
   ForceCloseShiftResponse,
   ListBranchRosterResponse,
+  ListStuckShiftsResponse,
   ManagerAdminSignInRequest,
   OperatorSessionBridgeView,
   ResetCashierPinRequest,
@@ -38,6 +39,7 @@ import type { AuditEmitter } from '../audit/audit-emitter.js';
 import type { TakeoverHandler } from '../operator/takeover-handler.js';
 import type { PinManagementHandler } from '../operator/pin-management.js';
 import type { ForcedCloseHandler } from '../operator/forced-close-handler.js';
+import type { StuckShiftsHandler } from '../operator/stuck-shifts-handler.js';
 import { FORCED_CLOSE_REASONS } from '../../shared/audit/payload-schemas.js';
 
 /**
@@ -67,6 +69,8 @@ export interface OperatorHandlerDeps {
   pinManagementHandler: PinManagementHandler;
   /** T089 — forced-close of a stuck cashier shift. */
   forcedCloseHandler: ForcedCloseHandler;
+  /** T090 — list stuck cashier shifts for manager/admin. */
+  stuckShiftsHandler: StuckShiftsHandler;
 }
 
 function refuseInvalid(): OperatorRefusal {
@@ -210,6 +214,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
     takeoverHandler,
     pinManagementHandler,
     forcedCloseHandler,
+    stuckShiftsHandler,
   } = deps;
 
   ipcMain.handle(
@@ -421,6 +426,17 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       if (req === null) return refuseInvalid();
       try {
         return await forcedCloseHandler.forceCloseShift(req);
+      } catch {
+        return refuseInvalid();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.LIST_STUCK_SHIFTS,
+    async (): Promise<ListStuckShiftsResponse> => {
+      try {
+        return await stuckShiftsHandler.listStuckShifts();
       } catch {
         return refuseInvalid();
       }

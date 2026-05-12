@@ -21,6 +21,7 @@ import type { PairingStore } from '../../pairing/store.js';
 import type { TakeoverHandler } from '../../operator/takeover-handler.js';
 import type { PinManagementHandler } from '../../operator/pin-management.js';
 import type { ForcedCloseHandler } from '../../operator/forced-close-handler.js';
+import type { StuckShiftsHandler } from '../../operator/stuck-shifts-handler.js';
 
 /**
  * 004-operator-session — IPC `operator:*` handler tests.
@@ -138,6 +139,14 @@ function fakeForcedCloseHandler(): ForcedCloseHandler {
   } as unknown as ForcedCloseHandler;
 }
 
+function fakeStuckShiftsHandler(): StuckShiftsHandler {
+  return {
+    listStuckShifts: vi.fn(() =>
+      Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] }),
+    ),
+  } as unknown as StuckShiftsHandler;
+}
+
 function register(opts: {
   signIn?: SignInResponse | (() => SignInResponse) | (() => never);
   signOut?: SignOutResponse;
@@ -161,6 +170,7 @@ function register(opts: {
     takeoverHandler: fakeTakeoverHandler(),
     pinManagementHandler: fakePinManagementHandler(),
     forcedCloseHandler: fakeForcedCloseHandler(),
+    stuckShiftsHandler: fakeStuckShiftsHandler(),
   });
   const get = (channel: string): IpcHandler => {
     const fn = handlers.get(channel);
@@ -191,7 +201,7 @@ const SAMPLE_VIEW: OperatorSessionBridgeView = {
 const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
 describe('registerOperatorHandlers — channel registration', () => {
-  it('registers all nine operator:* channels exactly once', () => {
+  it('registers all ten operator:* channels exactly once', () => {
     const { ipcMain, handle } = makeIpcMain();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
@@ -205,6 +215,7 @@ describe('registerOperatorHandlers — channel registration', () => {
       takeoverHandler: fakeTakeoverHandler(),
       pinManagementHandler: fakePinManagementHandler(),
       forcedCloseHandler: fakeForcedCloseHandler(),
+      stuckShiftsHandler: fakeStuckShiftsHandler(),
     });
     const registered = handle.mock.calls.map((c) => c[0] as string);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_IN);
@@ -217,6 +228,7 @@ describe('registerOperatorHandlers — channel registration', () => {
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL);
     expect(registered).toContain(OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT);
+    expect(registered).toContain(OPERATOR_IPC_CHANNELS.LIST_STUCK_SHIFTS);
     // Each channel registered exactly once.
     for (const channel of registered) {
       expect(registered.filter((c) => c === channel)).toHaveLength(1);
@@ -357,6 +369,7 @@ function registerWithTakeover(takeoverHandler: TakeoverHandler): Map<string, Ipc
     takeoverHandler,
     pinManagementHandler: fakePinManagementHandler(),
     forcedCloseHandler: fakeForcedCloseHandler(),
+    stuckShiftsHandler: fakeStuckShiftsHandler(),
   });
   return handlers;
 }
@@ -459,6 +472,7 @@ function registerWithPairingStore(
     takeoverHandler: fakeTakeoverHandler(),
     pinManagementHandler: fakePinManagementHandler(),
     forcedCloseHandler: fakeForcedCloseHandler(),
+    stuckShiftsHandler: fakeStuckShiftsHandler(),
   });
   return handlers;
 }

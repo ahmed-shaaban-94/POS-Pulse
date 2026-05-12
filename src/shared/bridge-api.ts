@@ -198,6 +198,26 @@ export interface ForceCloseShiftResponse {
 }
 
 /**
+ * T090 — one stuck shift summary visible to the renderer.
+ *
+ * FR-013 minimum-disclosure: only display-safe fields. No Clerk user ids,
+ * branch_id, tenant_id, device ids, or financial counts.
+ */
+export interface StuckShiftSummary {
+  shift_id: string;
+  /** Display label only — never email or Clerk user id (FR-032). */
+  cashier_display_name: string;
+  terminal_label: string;
+  /** ISO 8601 UTC timestamp. */
+  opened_at: string;
+  duration_minutes: number;
+}
+
+export type ListStuckShiftsResponse =
+  | { kind: 'stuck_shifts'; shifts: StuckShiftSummary[] }
+  | OperatorRefusal;
+
+/**
  * Manager/admin sign-in request shape.
  */
 export interface ManagerAdminSignInRequest {
@@ -396,6 +416,15 @@ export interface OperatorBridgeAPI {
    * re-emitting the audit event.
    */
   forceCloseShift(req: ForceCloseShiftRequest): Promise<ForceCloseShiftResponse | OperatorRefusal>;
+
+  /**
+   * T090 — list stuck cashier shifts on this terminal's branch.
+   *
+   * Role gate: `manager` or `admin` only — `cashier` → `role_mismatch`.
+   * Returns only display-safe fields per FR-013 / FR-032. Branch scope
+   * comes from the active operator session (trusted main-side).
+   */
+  listStuckShifts(): Promise<ListStuckShiftsResponse>;
 }
 
 export interface PreloadBridgeAPI {

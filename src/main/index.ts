@@ -36,6 +36,7 @@ import { createJwtHolder } from './operator/jwt-holder.js';
 import { ProtoSessionStore, TakeoverHandler } from './operator/takeover-handler.js';
 import { PinManagementHandler } from './operator/pin-management.js';
 import { ForcedCloseHandler } from './operator/forced-close-handler.js';
+import { StuckShiftsHandler } from './operator/stuck-shifts-handler.js';
 import { makeSecretKey } from '../shared/secret-store.js';
 import type { AppConfig } from '../shared/app-config.js';
 
@@ -418,6 +419,11 @@ app
         sessionManager: operatorSessionManager,
         pairingStore,
         auditEmitter,
+      }),
+      stuckShiftsHandler: new StuckShiftsHandler({
+        sessionManager: operatorSessionManager,
+        backendClient: operatorBackend,
+        jwtHolder: operatorJwtHolder,
       }),
     });
 
