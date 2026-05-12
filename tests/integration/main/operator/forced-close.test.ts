@@ -87,10 +87,41 @@ interface CapturedEvent {
   event: AuditEvent;
 }
 
-function makeAuditEmitter(captured: CapturedEvent[]): AuditEmitter {
+function makeAuditEmitter(captured: CapturedEvent[], db?: SqlJsDatabase): AuditEmitter {
   return {
     emit(event: AuditEvent): void {
       captured.push({ event });
+      // Write to audit_events so the idempotency SELECT in the handler can find it.
+      if (db) {
+        db.run(
+          `INSERT OR IGNORE INTO audit_events
+             (event_id, tenant_id, branch_id, originating_terminal_id,
+              acting_operator_id, session_id, shift_id, action_category,
+              created_at, approving_supervisor_id, payload)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            event.event_id,
+            event.tenant_id,
+            event.branch_id,
+            event.originating_terminal_id,
+            event.acting_operator_id,
+            event.session_id ?? null,
+            event.shift_id ?? null,
+            event.action_category,
+            event.created_at,
+            event.approving_supervisor_id ?? null,
+            JSON.stringify(event.payload),
+          ],
+        );
+      }
+    },
+  } as unknown as AuditEmitter;
+}
+
+function makeThrowingAuditEmitter(): AuditEmitter {
+  return {
+    emit(): void {
+      throw new Error('audit store unavailable');
     },
   } as unknown as AuditEmitter;
 }
@@ -167,7 +198,7 @@ function makeHandler(
     pairingStore: {
       getStatus: () => Promise.resolve(makePairingStatus(pairingTerminalId)),
     },
-    auditEmitter: makeAuditEmitter(captured),
+    auditEmitter: makeAuditEmitter(captured, db),
   };
   return new ForcedCloseHandler(deps);
 }
@@ -316,7 +347,37 @@ describe('T085 — forced-close handler audit event shape', () => {
     db.close();
   });
 
-  it('idempotency — second call on same shift (any event_id) returns state_invalid; audit emitted once', async () => {
+  it('idempotency — second call with same event_id returns forced_closed no-op; audit not re-emitted', async () => {
+    const db = freshDb();
+    const shiftId = seedOpenShift(db);
+    const captured: CapturedEvent[] = [];
+    const handler = makeHandler(db, makeSession({ role: 'manager' }), captured);
+    const eventId = randomUUID();
+
+    // First call closes the shift and writes the audit row
+    const result1 = await handler.forceCloseShift({
+      shift_id: shiftId,
+      reason: 'takeover_supersession',
+      event_id: eventId,
+    });
+    expect(result1.kind).toBe('forced_closed');
+    expect(captured.length).toBe(1);
+
+    // Retry with the SAME event_id → idempotent success, no duplicate audit
+    const result2 = await handler.forceCloseShift({
+      shift_id: shiftId,
+      reason: 'takeover_supersession',
+      event_id: eventId,
+    });
+    expect(result2.kind).toBe('forced_closed');
+    if (result2.kind === 'forced_closed') {
+      expect(result2.audit_event_id).toBe(eventId);
+    }
+    expect(captured.length).toBe(1);
+    db.close();
+  });
+
+  it('idempotency — second call with different event_id on closed shift returns state_invalid; audit emitted once', async () => {
     const db = freshDb();
     const shiftId = seedOpenShift(db);
     const captured: CapturedEvent[] = [];
@@ -331,7 +392,7 @@ describe('T085 — forced-close handler audit event shape', () => {
     expect(result1.kind).toBe('forced_closed');
     expect(captured.length).toBe(1);
 
-    // Second call — shift already closed_forced → state_invalid; no second audit emit
+    // Second call with a DIFFERENT event_id — shift already closed_forced → state_invalid
     const result2 = await handler.forceCloseShift({
       shift_id: shiftId,
       reason: 'takeover_supersession',
@@ -342,6 +403,41 @@ describe('T085 — forced-close handler audit event shape', () => {
       expect(result2.category).toBe('state_invalid');
     }
     expect(captured.length).toBe(1);
+    db.close();
+  });
+
+  it('audit emitter failure returns invalid_input; shift remains open with closed_at NULL', async () => {
+    const db = freshDb();
+    const shiftId = seedOpenShift(db);
+    const handle = bindHandle(db);
+    const deps: ForcedCloseHandlerDeps = {
+      db: handle,
+      sessionManager: { getCurrent: () => makeSession({ role: 'manager' }) },
+      pairingStore: {
+        getStatus: () => Promise.resolve(makePairingStatus()),
+      },
+      auditEmitter: makeThrowingAuditEmitter(),
+    };
+    const handler = new ForcedCloseHandler(deps);
+
+    const result = await handler.forceCloseShift({
+      shift_id: shiftId,
+      reason: 'takeover_supersession',
+      event_id: randomUUID(),
+    });
+
+    expect(isOperatorRefusal(result)).toBe(true);
+    if (isOperatorRefusal(result)) {
+      expect(result.category).toBe('invalid_input');
+    }
+
+    // Shift must remain open — closed_at NULL, lifecycle_state unchanged
+    const row = db.exec(
+      `SELECT lifecycle_state, closed_at FROM shifts WHERE id = '${shiftId}'`,
+    );
+    const values = row[0]?.values[0];
+    expect(values?.[0]).toBe('open');
+    expect(values?.[1]).toBeNull();
     db.close();
   });
 
