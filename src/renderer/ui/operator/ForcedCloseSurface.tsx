@@ -64,7 +64,7 @@ export function ForcedCloseForm({ onSubmit }: ForcedCloseFormProps): JSX.Element
   const [reason, setReason] = useState<ForcedCloseReason | null>(null);
   const [annotation, setAnnotation] = useState('');
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>): void {
+  function handleSubmit(e: React.SubmitEvent): void {
     e.preventDefault();
     /* v8 ignore next 1 */
     if (reason == null) return;
@@ -84,7 +84,7 @@ export function ForcedCloseForm({ onSubmit }: ForcedCloseFormProps): JSX.Element
               name="forced_close_reason"
               value={r}
               checked={reason === r}
-              onChange={() => setReason(r)}
+              onChange={() => { setReason(r); }}
             />
             {r}
           </label>
@@ -95,7 +95,7 @@ export function ForcedCloseForm({ onSubmit }: ForcedCloseFormProps): JSX.Element
       <textarea
         id="forced-close-annotation"
         value={annotation}
-        onChange={(e) => setAnnotation(e.target.value)}
+        onChange={(e) => { setAnnotation(e.target.value); }}
       />
 
       <button type="submit" disabled={reason == null}>
