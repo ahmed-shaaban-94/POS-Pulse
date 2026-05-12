@@ -18,6 +18,7 @@ function fakeBackend(
       calls.push({ operatorId });
       return Promise.resolve(result);
     }),
+    getStuckShifts: vi.fn(() => Promise.resolve({ kind: 'refused' as const })),
   };
 }
 

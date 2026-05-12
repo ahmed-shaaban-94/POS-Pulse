@@ -511,6 +511,70 @@ Endpoint 6 is a read-only query against the same table, scoped by
 
 ---
 
+## Endpoint 7 — `GET /api/pos/v1/shifts/stuck` (Wave 4.1)
+
+**Added:** 2026-05-12, PR-S5-pre. Decision: Option C per
+`specs/004-operator-session/planning/s5-stuck-shift-discovery-verification.md` §3.
+
+**Purpose**: Return the list of stuck shifts on a branch so the manager can
+select one for forced close (Surface 4A — T089/T090). A shift is stuck when
+`lifecycle_state = 'open'`, the opening cashier has no active backend session
+on the branch, and the shift's `opened_at` is older than the stale threshold
+(implementation default: 15 minutes).
+
+**Caller**: A paired terminal with a valid device token + manager or admin
+Clerk JWT. **Cashier role MUST NOT call this endpoint** (AD-2 — cashiers have
+no access to cross-terminal shift state).
+
+**Query parameters**:
+
+- `branch_id` (string, required) — UUID of the branch. The backend MUST
+  validate this against the device token's branch claim (P17 — branch isolation).
+
+**Authentication:** `Authorization: Bearer <clerk_jwt>` — manager or admin
+role only. The backend refuses cashier-role JWTs with a generic 4xx.
+
+**Response shape (success)**:
+
+```json
+{
+  "kind": "ok",
+  "shifts": [
+    {
+      "shift_id": "<uuid>",
+      "cashier_display_name": "<short string>",
+      "terminal_label": "<human-readable terminal identifier>",
+      "opened_at": "<ISO-8601 UTC timestamp>",
+      "duration_minutes": 42
+    }
+  ]
+}
+```
+
+An empty `shifts` array is a valid success response (no stuck shifts).
+
+The response **MUST NOT** include the cashier's email, Clerk user id, PIN
+state, or any field beyond the five above (FR-032 / PR-1).
+
+**Failure modes**:
+
+- `401 Unauthorized` — invalid or expired JWT.
+- `403 Forbidden` — cashier role; device token `branch_id` mismatch.
+- `404 Not Found` — branch not found or not paired to this device token.
+
+Client-side failure-mode collapse: every 4xx/5xx resolves to
+`{ kind: 'refused' }`; network errors resolve to `{ kind: 'no_connection' }`.
+
+**Idempotency**: Idempotent (GET). The response reflects backend state at
+call time; retrying returns fresh state.
+
+**Side effects**: NONE. Read-only.
+
+**POS-Pulse local types**: `BackendStuckShiftRow`, `BackendStuckShiftsResponse`
+in `src/main/operator/backend-client.ts`.
+
+---
+
 ## Out of scope for this contract
 
 - **Cashier sign-in endpoint.** The cashier path is purely local (AD-2).
@@ -546,10 +610,13 @@ delivery.
 
 ---
 
-**End of backend-endpoints contract.** **Six** endpoints described
+**End of backend-endpoints contract.** **Seven** endpoints described
 conceptually (Endpoint 6 added 2026-05-05 to address `/speckit-analyze`
-finding U1 — cashier-path takeover detection). Cashier PIN handling
-introduces ZERO endpoints by design — Endpoint 6 takes the cashier's
-Clerk identity, never the PIN. Each endpoint is gated on §A2; the POS
-Pulse `codegen:api` step regenerates types only after the backend
-OpenAPI spec changes.
+finding U1 — cashier-path takeover detection; Endpoint 7 added 2026-05-12
+to address the stuck-shift discovery dependency resolved by Option C, PR-S5-pre).
+Cashier PIN handling introduces ZERO endpoints by design — Endpoint 6 takes
+the cashier's Clerk identity, never the PIN. Each endpoint is gated on §A2;
+the POS Pulse `codegen:api` step regenerates types only after the backend
+OpenAPI spec changes. Note: the Wave 4.1 `pos-shifts` endpoint uses hand-typed
+shapes in `backend-client.ts` (not regenerated from `openapi-snapshot.json`,
+which covers the legacy analytics API only — see `scripts/codegen-api.ts`).
