@@ -17,6 +17,7 @@ import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutPlaceholder } from './routes/app/checkout/CheckoutPlaceholder';
 import { CashierManagement } from './routes/app/manager/CashierManagement';
+import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
 import { OperatorRouteGuard } from './routes/operator-route-guard';
 import type { OperatorBridgeAPI, PairingBridgeAPI } from '../shared/bridge-api';
@@ -181,6 +182,18 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             <OperatorRouteGuard allow={['manager', 'admin']}>
               {props.operator !== undefined ? (
                 <CashierManagement operator={props.operator} />
+              ) : (
+                <Navigate to="dashboard" replace />
+              )}
+            </OperatorRouteGuard>
+          ),
+        },
+        {
+          path: 'manager/stuck-shifts',
+          element: (
+            <OperatorRouteGuard allow={['manager', 'admin']}>
+              {props.operator !== undefined ? (
+                <StuckShiftSurface operator={props.operator} />
               ) : (
                 <Navigate to="dashboard" replace />
               )}

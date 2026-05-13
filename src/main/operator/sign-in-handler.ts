@@ -447,6 +447,9 @@ export class CashierSignInHandler {
     }
 
     this.logSuccess('signed_in');
+    if (forced_close_notice !== undefined) {
+      this.logInfo('operator.cashier_sign_in.forced_close_banner');
+    }
     return {
       kind: 'signed_in',
       session: {

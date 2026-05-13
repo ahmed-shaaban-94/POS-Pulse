@@ -7,6 +7,7 @@
  * renderer (FR-013 / FR-032).
  */
 
+import type { Logger } from 'pino';
 import type { SessionManager } from './session-manager.js';
 import type { BackendClient, BackendStuckShiftRow } from './backend-client.js';
 import type { JwtHolder } from './jwt-holder.js';
@@ -16,6 +17,8 @@ export interface StuckShiftsHandlerDeps {
   sessionManager: Pick<SessionManager, 'getCurrent'>;
   backendClient: Pick<BackendClient, 'getStuckShifts'>;
   jwtHolder: JwtHolder;
+  /** Optional logger. Tests omit it. */
+  logger?: Logger;
 }
 
 function toSummary(row: BackendStuckShiftRow): StuckShiftSummary {
@@ -52,6 +55,11 @@ export class StuckShiftsHandler {
       return { kind: 'refused', category: 'invalid_input' };
     }
 
-    return { kind: 'stuck_shifts', shifts: result.shifts.map(toSummary) };
+    const shifts = result.shifts.map(toSummary);
+    this.deps.logger?.info(
+      { event: 'operator.stuck_shifts.listed', count: shifts.length },
+      'stuck shifts listed',
+    );
+    return { kind: 'stuck_shifts', shifts };
   }
 }
