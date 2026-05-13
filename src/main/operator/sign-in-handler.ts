@@ -1,6 +1,6 @@
 import type { Logger } from 'pino';
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 import type {
   ManagerAdminSignInRequest,
@@ -8,6 +8,7 @@ import type {
   SignInSuccessResponse,
   TakeoverRequiredResponse,
 } from '../../shared/bridge-api.js';
+import { makeSecretKey, type SecretStore } from '../../shared/secret-store.js';
 import type { OperatorRefusal } from '../../shared/audit/event-shape.js';
 
 import type { ClerkExchanger } from './clerk-client.js';
@@ -246,8 +247,29 @@ export interface CashierSignInHandlerDeps {
    * `takeover_required`; consumed by TakeoverHandler.confirmTakeover.
    */
   protoStore: ProtoSessionStore;
+  /** T091 — DPAPI-backed secret store for dismiss records. Tests omit it. */
+  secretStore?: SecretStore;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
+}
+
+/**
+ * T091 — derive the forced-close-notice dismiss key.
+ *
+ * SHA-256 of `tenantId|terminalId|cashierId`, first 24 hex chars → total
+ * key length 50 chars (within the 64-char SecretKey limit). The hash is
+ * one-way: cashier identity is not reconstructable from the stored key.
+ */
+export function makeShiftDismissKey(
+  tenantId: string,
+  terminalId: string,
+  cashierId: string,
+): ReturnType<typeof makeSecretKey> {
+  const digest = createHash('sha256')
+    .update(`${tenantId}|${terminalId}|${cashierId}`)
+    .digest('hex')
+    .slice(0, 24);
+  return makeSecretKey(`pos-pulse.shift-dismissed.${digest}`);
 }
 
 export class CashierSignInHandler {
@@ -375,6 +397,50 @@ export class CashierSignInHandler {
       backend_session_id: '',
     });
 
+    // T091 — check for an undismissed forced-close shift on this cashier.
+    // Only `closed_at` crosses the bridge; no financial totals, manager
+    // reason, annotation, shift_id, or IDs (FR-013 minimum-disclosure).
+    interface ShiftRow {
+      closed_at: string;
+    }
+    type ShiftSelectStmt = { get(...p: unknown[]): ShiftRow | undefined };
+    const shiftRow = (
+      this.deps.db.prepare(
+        `SELECT closed_at FROM shifts
+         WHERE lifecycle_state = 'closed_forced'
+           AND tenant_id = ?
+           AND opening_operator_id = ?
+         ORDER BY closed_at DESC
+         LIMIT 1`,
+      ) as ShiftSelectStmt
+    ).get(scope.tenant_id, req.cashier_clerk_user_id);
+
+    let forced_close_notice: { closed_at: string } | undefined;
+    if (shiftRow !== undefined && typeof shiftRow.closed_at === 'string') {
+      if (this.deps.secretStore !== undefined) {
+        const dismissKey = makeShiftDismissKey(
+          scope.tenant_id,
+          scope.terminal_id,
+          req.cashier_clerk_user_id,
+        );
+        const dismissRaw = await this.deps.secretStore.get(dismissKey);
+        if (dismissRaw !== null) {
+          try {
+            const parsed = JSON.parse(dismissRaw) as { dismissed_closed_at?: unknown };
+            if (parsed.dismissed_closed_at !== shiftRow.closed_at) {
+              forced_close_notice = { closed_at: shiftRow.closed_at };
+            }
+          } catch {
+            forced_close_notice = { closed_at: shiftRow.closed_at };
+          }
+        } else {
+          forced_close_notice = { closed_at: shiftRow.closed_at };
+        }
+      } else {
+        forced_close_notice = { closed_at: shiftRow.closed_at };
+      }
+    }
+
     this.logSuccess('signed_in');
     return {
       kind: 'signed_in',
@@ -387,7 +453,44 @@ export class CashierSignInHandler {
         branch_id: record.branch_id,
         started_at: record.started_at,
       },
+      ...(forced_close_notice !== undefined ? { forced_close_notice } : {}),
     } satisfies SignInSuccessResponse;
+  }
+
+  /**
+   * T091 — persist a dismiss record for the most recent forced-close shift.
+   *
+   * Called from the IPC handler when the cashier clicks Dismiss on the
+   * ShiftClosedBanner. Writes `{ dismissed_closed_at }` under the hashed
+   * dismiss key so subsequent sign-ins omit the notice.
+   * No-op when secretStore is absent (test environments) or no shift exists.
+   */
+  async dismissForcedCloseNotice(
+    tenantId: string,
+    terminalId: string,
+    cashierId: string,
+  ): Promise<void> {
+    if (this.deps.secretStore === undefined) return;
+    interface ShiftRow {
+      closed_at: string;
+    }
+    type ShiftSelectStmt = { get(...p: unknown[]): ShiftRow | undefined };
+    const shiftRow = (
+      this.deps.db.prepare(
+        `SELECT closed_at FROM shifts
+         WHERE lifecycle_state = 'closed_forced'
+           AND tenant_id = ?
+           AND opening_operator_id = ?
+         ORDER BY closed_at DESC
+         LIMIT 1`,
+      ) as ShiftSelectStmt
+    ).get(tenantId, cashierId);
+    if (shiftRow === undefined || typeof shiftRow.closed_at !== 'string') return;
+    const dismissKey = makeShiftDismissKey(tenantId, terminalId, cashierId);
+    await this.deps.secretStore.set(
+      dismissKey,
+      JSON.stringify({ dismissed_closed_at: shiftRow.closed_at }),
+    );
   }
 
   /** Write failed_attempt_count and lockout_until to cashier_pin_records. */

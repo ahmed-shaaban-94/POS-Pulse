@@ -67,6 +67,7 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
     listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
+    dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
   };
   return { bridge, signInMock };
 }
@@ -245,6 +246,7 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
+      dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -301,6 +303,7 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
+      dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     };
     render(<ManagerAdminSignInForm operator={slow} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');
@@ -350,6 +353,7 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
+      dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     };
     render(<ManagerAdminSignInForm operator={bridge} />);
     await user.type(screen.getByLabelText(/email or username/i), 'i');

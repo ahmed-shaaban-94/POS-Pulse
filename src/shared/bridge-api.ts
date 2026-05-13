@@ -97,6 +97,8 @@ export interface OperatorSessionBridgeView {
 export interface SignInSuccessResponse {
   kind: 'signed_in';
   session: OperatorSessionBridgeView;
+  /** T091 — present when the cashier's most recent shift was force-closed and the notice was not yet dismissed. */
+  forced_close_notice?: { closed_at: string };
 }
 
 export interface TakeoverRequiredResponse {
@@ -425,6 +427,16 @@ export interface OperatorBridgeAPI {
    * comes from the active operator session (trusted main-side).
    */
   listStuckShifts(): Promise<ListStuckShiftsResponse>;
+
+  /**
+   * T091 — cashier dismisses the forced-close return banner.
+   *
+   * Zero renderer args. Main process reads the current session and pairing
+   * state to derive all needed IDs. Fire-and-forget; always resolves void.
+   * Takeover-confirm responses do NOT populate forced_close_notice — this
+   * call is a no-op in that path.
+   */
+  dismissShiftClosedNotice(): Promise<void>;
 }
 
 export interface PreloadBridgeAPI {

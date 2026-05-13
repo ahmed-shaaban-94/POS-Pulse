@@ -60,6 +60,7 @@ function stubBridge(status: PairingStatus): PreloadBridgeAPI {
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
+      dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     },
   };
 }

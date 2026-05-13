@@ -192,6 +192,17 @@
   }
 }
 
+@keyframes banner-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ─── Base ──────────────────────────────────────────────────────────────── */
 
 *,
@@ -1738,6 +1749,55 @@ body {
     line-height: var(--line-height-relaxed);
     max-inline-size: 40ch;
     margin: 0;
+  }
+
+  /* ── ShiftClosedBanner (T091) ──────────────────────────────────────────── */
+
+  .shift-closed-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background-color: var(--color-info-soft);
+    border: 1px solid color-mix(in srgb, var(--color-info) 35%, transparent);
+    border-radius: var(--radius-control);
+    font-size: var(--font-size-sm);
+    color: var(--color-info-emphasis);
+    flex-shrink: 0;
+    animation: banner-slide-in var(--duration-2) var(--ease-out) both;
+  }
+
+  .shift-closed-banner__message {
+    flex: 1;
+    line-height: var(--line-height-snug);
+  }
+
+  .shift-closed-banner__dismiss {
+    flex-shrink: 0;
+    padding-inline: var(--space-3);
+    padding-block: var(--space-1);
+    border: 1px solid var(--color-info);
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--color-info-emphasis);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-1) var(--ease-out),
+      color var(--duration-1) var(--ease-out);
+  }
+
+  .shift-closed-banner__dismiss:hover {
+    background-color: var(--color-info);
+    color: var(--color-info-on);
+  }
+
+  .shift-closed-banner__dismiss:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
   }
 }
 
