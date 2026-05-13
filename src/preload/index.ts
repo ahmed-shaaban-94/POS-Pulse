@@ -9,6 +9,7 @@ import type {
   ForceCloseShiftRequest,
   ForceCloseShiftResponse,
   ListBranchRosterResponse,
+  ListStuckShiftsResponse,
   OperatorBridgeAPI,
   OperatorSessionBridgeView,
   PairingBridgeAPI,
@@ -108,6 +109,8 @@ const operator: OperatorBridgeAPI = {
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT, req) as Promise<
       ForceCloseShiftResponse | import('../shared/audit/event-shape').OperatorRefusal
     >,
+  listStuckShifts: () =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.LIST_STUCK_SHIFTS) as Promise<ListStuckShiftsResponse>,
 };
 
 const api: PreloadBridgeAPI = {

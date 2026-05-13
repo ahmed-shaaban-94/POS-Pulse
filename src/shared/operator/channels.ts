@@ -26,6 +26,8 @@ export const OPERATOR_IPC_CHANNELS = {
   UNLOCK_CASHIER: 'operator:unlock-cashier',
   /** T089 — manager/admin forced-close of a stuck cashier shift. */
   FORCE_CLOSE_SHIFT: 'operator:force-close-shift',
+  /** T090 — list stuck cashier shifts on this terminal's branch. */
+  LIST_STUCK_SHIFTS: 'operator:list-stuck-shifts',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

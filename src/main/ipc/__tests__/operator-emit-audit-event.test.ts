@@ -18,6 +18,7 @@ import type { InactivityMonitor } from '../../operator/inactivity-monitor.js';
 import type { TakeoverHandler } from '../../operator/takeover-handler.js';
 import type { PinManagementHandler } from '../../operator/pin-management.js';
 import type { ForcedCloseHandler } from '../../operator/forced-close-handler.js';
+import type { StuckShiftsHandler } from '../../operator/stuck-shifts-handler.js';
 
 /**
  * T048 — operator:emit-audit-event IPC handler tests.
@@ -158,6 +159,12 @@ function fakeForcedCloseHandler(): ForcedCloseHandler {
   } as unknown as ForcedCloseHandler;
 }
 
+function fakeStuckShiftsHandler(): StuckShiftsHandler {
+  return {
+    listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
+  } as unknown as StuckShiftsHandler;
+}
+
 interface SetupOpts {
   sessionManager?: SessionManager;
   auditEmitter?: AuditEmitter;
@@ -182,6 +189,7 @@ function setup(opts: SetupOpts = {}) {
     takeoverHandler: fakeTakeoverHandler(),
     pinManagementHandler: fakePinManagementHandler(),
     forcedCloseHandler: fakeForcedCloseHandler(),
+    stuckShiftsHandler: fakeStuckShiftsHandler(),
   });
 
   const emitAuditEvent = handlers.get(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT);
@@ -216,6 +224,7 @@ describe('operator:emit-audit-event — channel registration', () => {
       takeoverHandler: fakeTakeoverHandler(),
       pinManagementHandler: fakePinManagementHandler(),
       forcedCloseHandler: fakeForcedCloseHandler(),
+      stuckShiftsHandler: fakeStuckShiftsHandler(),
     });
     expect(handlers.has(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT)).toBe(true);
   });

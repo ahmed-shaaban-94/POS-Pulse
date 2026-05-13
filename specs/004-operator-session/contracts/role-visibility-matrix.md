@@ -87,6 +87,8 @@ deep-link, route-restoration, refresh, search, quick-actions, tab restore.
 | **Cashier PIN unlock action** | `bridge.operator.unlockCashier` | ⛔ | ✅ | ✅ | §A1-gated. PR-3 release path b. |
 | **Stuck-shift count badge** | nav-area badge widget (in NavRail / shell) | ⛔ | 👀 | 👀 | Displays the count of stuck shifts on the manager's branch. Cashier MUST NOT see this badge or its count. Badge MUST NOT render at 1024–1279 px icon-only viewport (badge text is invisible without the label context). S4 ships with a placeholder count of 0; live count wired in S5. |
 | **Audit log surface** | (future feature) | ⛔ | — | — | FR-029 — manager-or-admin readable. 004 commits to "cashier ⛔" but does NOT design the manager/admin audit log surface itself; that's a future feature. |
+| **List stuck shifts bridge call** | `bridge.operator.listStuckShifts` | ⛔ | ✅ | ✅ | T090 — manager/admin only. Cashier → `role_mismatch` refusal. Returns only display-safe fields (FR-013 / FR-032): `shift_id`, `cashier_display_name`, `terminal_label`, `opened_at`, `duration_minutes`. No financial data, no Clerk user ids, no branch/tenant ids. |
+| **Forced-close audit-event detail** | within forced-close flow | ⛔ | 👀 | 👀 | T090 — manager/admin sees confirmation that the shift was force-closed (audit_event_id echoed). No financial data, no drawer count, no variance (FR-024 blind-close). |
 
 ---
 

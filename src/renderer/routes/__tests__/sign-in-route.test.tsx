@@ -107,6 +107,7 @@ function operatorBridge(opts: {
     forceCloseShift: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
+    listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
   };
 }
 
