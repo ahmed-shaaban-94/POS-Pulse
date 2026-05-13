@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md)
 **Created:** 2026-05-05
-**Last updated:** 2026-05-12 (PR-S5-pre: Wave 4.1 backend merged — Data-Pulse-2 PR #143 (Wave 4.1a, shifts schema) + PR #146 (Wave 4.1b, SHA `74ae848`, endpoint + OpenAPI); `migrations/0007_shifts.sql` added; `getStuckShifts` wired in `backend-client.ts`; Endpoint 7 added to `contracts/backend-endpoints.md`; T089/T090 contract-blocker now removed — shifts migration + backend endpoint both landed; _prior: 2026-05-11 — S5 stuck-shift discovery verification recorded; Option C selected; issue 88 OPEN; no S5 implementation started_)
+**Last updated:** 2026-05-13 (reconcile S5 in-progress status: T083/T084 ✅ PR #133; T085/T086/T089 ✅ PR #134; T090 ✅ PR #135 SHA `55a4e341ecfcc3a93110043f1df9ba99d181a1ca`; T087/T088/T091/T092/T093 open; S5 NOT complete; issue 88 OPEN; _prior: 2026-05-12 — PR-S5-pre: Wave 4.1 backend merged — Data-Pulse-2 PR #143 (Wave 4.1a, shifts schema) + PR #146 (Wave 4.1b, SHA `74ae848`, endpoint + OpenAPI); `migrations/0007_shifts.sql` added; `getStuckShifts` wired in `backend-client.ts`; Endpoint 7 added to `contracts/backend-endpoints.md`; T089/T090 contract-blocker now removed_)
 
 ---
 
@@ -66,10 +66,10 @@ invoked", and it is updated in place as coordination items resolve.
   (2026-05-11 — T056 waived in full via issue 101 Option A; PR #124 merged).**
   PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122.
   Issue 85 closed. Issue 86 open (owner discretion). Issue 101 open. Issue 87
-  closed (S4 closeout PR). **S5 — gates cleared (S4 ✅ + §A2 Wave 4 ✅);
-  contract-blocked on Wave 4.1 backend endpoint + POS-Pulse shifts migration
-  (Option C, see [`./planning/s5-stuck-shift-discovery-verification.md`](./planning/s5-stuck-shift-discovery-verification.md));
-  not started; issue 88 is the next candidate.** S6 ⏳ blocked on prior slices.
+  closed (S4 closeout PR). **S5 — IN PROGRESS (2026-05-13):** T083/T084 ✅
+  PR #133; T085/T086/T089 ✅ PR #134; T090 ✅ PR #135 (SHA `55a4e341`);
+  T087/T088/T091/T092/T093 open; S5 NOT complete; issue 88 OPEN.
+  S6 ⏳ blocked on prior slices.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 This file tracks coordination state only.
@@ -304,7 +304,7 @@ holds individual slices behind their per-endpoint dependencies. §A3 and
 
 This file tracks coordination state. The following work has **not yet started**:
 
-- ❌ S5 (forced-close recovery) — **not started (implementation).** PR-S5-pre (2026-05-12) has resolved the two contract blockers (Wave 4.1 backend endpoint + shifts migration). Issue 88 is ready for PR-S5-a → PR-S5-b. **No S5 handler/renderer/bridge code started.**
+- ✅ S5 (forced-close recovery) — **IN PROGRESS.** T083/T084 ✅ PR #133 (renderer unit tests); T085/T086/T089 ✅ PR #134 (forced-close handler + handler-side tests); T090 ✅ PR #135 (forced-close surface, SHA `55a4e341`). **T087/T088/T091/T092/T093 remain open.** S5 NOT complete. Issue 88 OPEN.
 - ❌ S6 (final polish) — **not started.** Blocked on prior slices.
 - ❌ No 005 / 006 started. 005 remains blocked behind §A0.
 - ✅ `migrations/0007_shifts.sql` authored (PR-S5-pre, 2026-05-12).
@@ -313,7 +313,7 @@ This file tracks coordination state. The following work has **not yet started**:
 - ❌ No Data-Pulse-2 changes from this repo.
 - §A4 `argon2` 0.44.0 is installed (POS-Pulse PR #59). No further `package.json` changes until subsequent S4 tasks require them.
 
-**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅, **S4 (cashier sign-in, takeover, PIN management) ✅** (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged; issue 101 resolved via Option A waiver 2026-05-11; T056 waived in full; S4 final checkpoint clear; PR #124 merged). **§A2 Wave 4 ✅** (2026-05-11; Data-Pulse-2 main SHA `7b95fdb`; `shift.forced_close` confirmed in dto.ts and OpenAPI). **PR-S5-pre ✅** (2026-05-12): Wave 4.1 backend PR #146 SHA `74ae848` merged; `migrations/0007_shifts.sql` added; `getStuckShifts` in `backend-client.ts`; Endpoint 7 in contracts. Both T089/T090 blockers resolved.
+**Completed:** S0 (visual direction) ✅, S1 (manager/admin sign-in) ✅, S2 (bridge security review) ✅, S3 (audit scaffolding) ✅, **S4 (cashier sign-in, takeover, PIN management) ✅** (2026-05-11; all gates cleared 2026-05-08; PRs #59/#60/#61/#63/#64/#90/#91/#92/#93/#94/#99/#100/#103/#105/#120/#121/#122 merged; issue 101 resolved via Option A waiver 2026-05-11; T056 waived in full; S4 final checkpoint clear; PR #124 merged). **§A2 Wave 4 ✅** (2026-05-11; Data-Pulse-2 main SHA `7b95fdb`; `shift.forced_close` confirmed in dto.ts and OpenAPI). **PR-S5-pre ✅** (2026-05-12): Wave 4.1 backend PR #146 SHA `74ae848` merged; `migrations/0007_shifts.sql` added; `getStuckShifts` in `backend-client.ts`; Endpoint 7 in contracts. Both T089/T090 blockers resolved. **S5 partial (2026-05-13):** T083/T084 ✅ PR #133; T085/T086/T089 ✅ PR #134; T090 ✅ PR #135 (SHA `55a4e341ecfcc3a93110043f1df9ba99d181a1ca`). T087/T088/T091/T092/T093 remain open. S5 NOT complete.
 
 `.specify/feature.json` remains pointed at `specs/004-operator-session`.
 
@@ -640,7 +640,7 @@ local-only; see §"Issue 85 decision"). Issue 86 open per owner discretion.
 decision" and `docs/issue-101-waiver.md`). **§A2 Wave 4 cleared** (2026-05-11;
 `shift.forced_close` confirmed in Data-Pulse-2 main SHA `7b95fdb`). **PR-S5-pre
 merged (2026-05-12):** `migrations/0007_shifts.sql` + `getStuckShifts` +
-Endpoint 7. **T089/T090 `[BLOCKED: stuck-shift-discovery]` resolved.** Issue 88
-is the next S5 implementation candidate (PR-S5-a). No S5 handler/renderer code
-started. 005 remains blocked behind §A0. S3 complete (2026-05-07). §A5 is a
-later-rollout gate. S6 not yet started.
+Endpoint 7. **T089/T090 `[BLOCKED: stuck-shift-discovery]` resolved.** **S5 IN PROGRESS (2026-05-13):** T083/T084 ✅ PR #133; T085/T086/T089 ✅ PR #134;
+T090 ✅ PR #135 (merge SHA `55a4e341ecfcc3a93110043f1df9ba99d181a1ca`). T087/T088/
+T091/T092/T093 open. S5 NOT complete. Issue 88 OPEN. 005 remains blocked behind §A0.
+S3 complete (2026-05-07). §A5 is a later-rollout gate. S6 not yet started.

@@ -364,6 +364,18 @@ small-PR sequence in §5; it is not normative and the
 implementation task author may regroup within Constitution P13's
 small-slice rule.
 
+### 4.2 Actual merge record (2026-05-13)
+
+The following S5 implementation PRs have merged as of 2026-05-13:
+
+| PR | Tasks delivered | Merge SHA | Date |
+|:--|:--|:--|:--|
+| #133 | T083, T084 | — | 2026-05-13 |
+| #134 | T085, T086, T089 | — | 2026-05-13 |
+| #135 | T090 | `55a4e341ecfcc3a93110043f1df9ba99d181a1ca` | 2026-05-13 |
+
+T087, T088, T091, T092, T093 remain open (unmerged as of 2026-05-13). S5 is **NOT complete**. Issue 88 remains OPEN.
+
 ---
 
 ## 5. Recommended S5 implementation PR sequence (Constitution P13)
