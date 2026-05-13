@@ -21,13 +21,15 @@ export interface BridgeApi {
   // ... existing 001/002/003 namespaces (pairing, etc.) ...
 
   operator: {
-    listBranchRoster: (req: ListBranchRosterRequest) => Promise<ListBranchRosterResponse>;
+    listBranchRoster: () => Promise<ListBranchRosterResponse>;
     signIn: (req: SignInRequest) => Promise<SignInResponse>;
     signOut: () => Promise<SignOutResponse>;
     getCurrentSession: () => Promise<CurrentSessionResponse>;
     confirmTakeover: (req: ConfirmTakeoverRequest) => Promise<ConfirmTakeoverResponse>;
     cancelTakeover: (req: CancelTakeoverRequest) => Promise<CancelTakeoverResponse>;
     forceCloseShift: (req: ForceCloseShiftRequest) => Promise<ForceCloseShiftResponse>;
+    listStuckShifts: () => Promise<ListStuckShiftsResponse>;
+    dismissShiftClosedNotice: () => Promise<void>;
     resetCashierPin: (req: ResetCashierPinRequest) => Promise<ResetCashierPinResponse>;  // 🔒 §A1-gated
     unlockCashier: (req: UnlockCashierRequest) => Promise<UnlockCashierResponse>;        // 🔒 §A1-gated
     emitAuditEvent: (req: EmitAuditEventRequest) => Promise<EmitAuditEventResponse>;
@@ -35,7 +37,7 @@ export interface BridgeApi {
 }
 ```
 
-All eight (or ten if §A1 approves) calls return Promises. All bridge calls
+All implemented calls return Promises. All bridge calls
 self-gate at the main-process side; the renderer is untrusted by
 construction. AD-1 is the load-bearing rule.
 
@@ -426,7 +428,75 @@ MUST match the stuck shift's `branch_id` (P17 — branch isolation).
 
 ---
 
-### 8. `operator.resetCashierPin` (🔒 §A1-gated)
+### 8. `operator.listStuckShifts`
+
+**Purpose**: Manager/admin-only stuck-shift list used before
+`operator.forceCloseShift` (FR-024 / S5).
+
+**Input**: none. The main process derives tenant and branch from the current
+operator session and paired terminal state.
+
+**Output (success)**:
+
+```ts
+interface ListStuckShiftsResponse {
+  kind: 'stuck_shifts';
+  shifts: Array<{
+    id: string;
+    opening_operator_id: string;
+    opening_operator_display_name: string;
+    opened_at: string;
+    last_activity_at: string | null;
+  }>;
+}
+```
+
+**Role gate**: `manager` or `admin`. Cashiers receive `role_mismatch`.
+
+**Failure modes**:
+
+| Cause | Refusal category |
+|:--|:--|
+| No active operator session | `not_signed_in` |
+| Cashier session calling | `role_mismatch` |
+| Backend / local validation failure | `invalid_input` |
+
+**Minimum disclosure**: Response rows MUST NOT include tenant IDs, branch IDs,
+terminal IDs, expected drawer cash, shift totals, declared counts, variances,
+shortages, overages, manager annotations, or forced-close reason fields.
+
+---
+
+### 9. `operator.dismissShiftClosedNotice`
+
+**Purpose**: Cashier dismisses the display-only banner that says their own
+previous shift on this branch and terminal was force-closed while they were
+away.
+
+**Input**: none. The renderer sends no IDs. Main derives `tenant_id`,
+`branch_id`, `terminal_id`, and `operator_id` from the active session and
+paired terminal state.
+
+**Output**:
+
+```ts
+Promise<void>
+```
+
+**Role gate**: none at the bridge boundary. It is a no-op without a current
+session, without paired terminal state, or when no matching scoped forced-close
+notice exists.
+
+**Failure modes**: None surfaced to the renderer. Main catches unexpected
+storage / lookup failures and resolves void so no raw error message crosses
+the bridge.
+
+**Scope**: The dismiss record and the matching notice lookup are scoped to
+`tenant_id + branch_id + originating_terminal_id + opening_operator_id`.
+
+---
+
+### 10. `operator.resetCashierPin` (🔒 §A1-gated)
 
 **Purpose**: PR-5 — manager- or admin-attributable PIN reset for a cashier
 on this terminal.
@@ -477,7 +547,7 @@ cross-process redaction smoke test covers this.
 
 ---
 
-### 9. `operator.unlockCashier` (🔒 §A1-gated)
+### 11. `operator.unlockCashier` (🔒 §A1-gated)
 
 **Purpose**: PR-3 release path b — manager- or admin-attributable unlock of
 a locked-out cashier on this terminal.
@@ -520,7 +590,7 @@ only unlocks.
 
 ---
 
-### 10. `operator.emitAuditEvent`
+### 12. `operator.emitAuditEvent`
 
 **Purpose**: General-purpose audit-event emission. Used by 005+ features to
 emit refunds, voids, overrides, drawer kicks, etc.

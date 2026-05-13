@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { AppRouter } from '../../router.js';
+import { DashboardRoute } from '../app/DashboardRoute.js';
 import { SignInRoute } from '../sign-in.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import type {
@@ -157,6 +159,75 @@ describe('AppRouter + /sign-in (T022)', () => {
       const state = useOperatorSessionStore.getState().state;
       expect(state.kind).toBe('signedIn');
     });
+  });
+
+  it('cashier deep-link to /app/dashboard renders a generic unavailable surface', async () => {
+    useOperatorSessionStore.getState().beginSignIn();
+    useOperatorSessionStore.getState().resolveSignedIn(CASHIER_SESSION);
+
+    render(
+      <AppRouter
+        pairing={pairedBridge()}
+        operator={operatorBridge({})}
+        initialEntry="/app/dashboard"
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
+    expect(screen.getAllByText('Section unavailable').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/welcome to pos pulse/i)).not.toBeInTheDocument();
+  });
+
+  it('DashboardRoute redirects signed-out access without rendering dashboard content', () => {
+    render(
+      <MemoryRouter>
+        <DashboardRoute />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByText(/welcome to pos pulse/i)).not.toBeInTheDocument();
+  });
+
+  it('manager and admin can access /app/dashboard', async () => {
+    for (const role of ['manager', 'admin'] as const) {
+      cleanup();
+      useOperatorSessionStore.getState().reset();
+      useOperatorSessionStore.getState().beginSignIn();
+      useOperatorSessionStore.getState().resolveSignedIn({ ...SESSION, role });
+
+      render(
+        <AppRouter
+          pairing={pairedBridge()}
+          operator={operatorBridge({})}
+          initialEntry="/app/dashboard"
+        />,
+      );
+
+      await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument());
+      expect(screen.getByText(/welcome to pos pulse/i)).toBeInTheDocument();
+    }
+  });
+
+  it('cashier sees forced-close banner on an allowed app route', async () => {
+    useOperatorSessionStore.getState().beginSignIn();
+    useOperatorSessionStore
+      .getState()
+      .resolveSignedIn(CASHIER_SESSION, { closed_at: '2026-04-01T10:00:00.000Z' });
+
+    render(
+      <AppRouter
+        pairing={pairedBridge()}
+        operator={operatorBridge({})}
+        initialEntry="/app/sales"
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('Sales')).toBeInTheDocument());
+    expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('shift-closed-banner').textContent.toLowerCase()).not.toContain(
+      'variance',
+    );
   });
 });
 

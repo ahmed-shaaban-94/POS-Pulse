@@ -256,17 +256,18 @@ export interface CashierSignInHandlerDeps {
 /**
  * T091 — derive the forced-close-notice dismiss key.
  *
- * SHA-256 of `tenantId|terminalId|cashierId`, first 24 hex chars → total
+ * SHA-256 of `tenantId|branchId|terminalId|cashierId`, first 24 hex chars → total
  * key length 50 chars (within the 64-char SecretKey limit). The hash is
  * one-way: cashier identity is not reconstructable from the stored key.
  */
 export function makeShiftDismissKey(
   tenantId: string,
+  branchId: string,
   terminalId: string,
   cashierId: string,
 ): ReturnType<typeof makeSecretKey> {
   const digest = createHash('sha256')
-    .update(`${tenantId}|${terminalId}|${cashierId}`)
+    .update(`${tenantId}|${branchId}|${terminalId}|${cashierId}`)
     .digest('hex')
     .slice(0, 24);
   return makeSecretKey(`pos-pulse.shift-dismissed.${digest}`);
@@ -410,17 +411,20 @@ export class CashierSignInHandler {
         `SELECT closed_at FROM shifts
          WHERE lifecycle_state = 'closed_forced'
            AND tenant_id = ?
+           AND branch_id = ?
+           AND originating_terminal_id = ?
            AND opening_operator_id = ?
-         ORDER BY closed_at DESC
-         LIMIT 1`,
+          ORDER BY closed_at DESC
+          LIMIT 1`,
       ) as ShiftSelectStmt
-    ).get(scope.tenant_id, req.cashier_clerk_user_id);
+    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, req.cashier_clerk_user_id);
 
     let forced_close_notice: { closed_at: string } | undefined;
     if (shiftRow !== undefined && typeof shiftRow.closed_at === 'string') {
       if (this.deps.secretStore !== undefined) {
         const dismissKey = makeShiftDismissKey(
           scope.tenant_id,
+          scope.branch_id,
           scope.terminal_id,
           req.cashier_clerk_user_id,
         );
@@ -468,6 +472,7 @@ export class CashierSignInHandler {
    */
   async dismissForcedCloseNotice(
     tenantId: string,
+    branchId: string,
     terminalId: string,
     cashierId: string,
   ): Promise<void> {
@@ -481,13 +486,15 @@ export class CashierSignInHandler {
         `SELECT closed_at FROM shifts
          WHERE lifecycle_state = 'closed_forced'
            AND tenant_id = ?
+           AND branch_id = ?
+           AND originating_terminal_id = ?
            AND opening_operator_id = ?
-         ORDER BY closed_at DESC
-         LIMIT 1`,
+          ORDER BY closed_at DESC
+          LIMIT 1`,
       ) as ShiftSelectStmt
-    ).get(tenantId, cashierId);
+    ).get(tenantId, branchId, terminalId, cashierId);
     if (shiftRow === undefined || typeof shiftRow.closed_at !== 'string') return;
-    const dismissKey = makeShiftDismissKey(tenantId, terminalId, cashierId);
+    const dismissKey = makeShiftDismissKey(tenantId, branchId, terminalId, cashierId);
     await this.deps.secretStore.set(
       dismissKey,
       JSON.stringify({ dismissed_closed_at: shiftRow.closed_at }),

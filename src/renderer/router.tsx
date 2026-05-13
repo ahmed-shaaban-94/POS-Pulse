@@ -10,7 +10,7 @@ import {
 import { PairingScreen } from './routes/pairing/PairingScreen';
 import { PairedScreen } from './routes/paired/PairedScreen';
 import { AppShell } from './shell/AppShell';
-import { DashboardPlaceholder } from './routes/app/DashboardPlaceholder';
+import { DashboardRoute } from './routes/app/DashboardRoute';
 import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
 import { CartPlaceholder } from './routes/app/CartPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
@@ -169,7 +169,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
       element: guardedShell,
       children: [
         { index: true, element: <Navigate to="dashboard" replace /> },
-        { path: 'dashboard', element: <DashboardPlaceholder /> },
+        { path: 'dashboard', element: <DashboardRoute /> },
         { path: 'sales', element: <SalesPlaceholder /> },
         { path: 'cart', element: <CartPlaceholder /> },
         { path: 'checkout', element: <CheckoutPlaceholder /> },
