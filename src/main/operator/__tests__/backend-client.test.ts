@@ -487,16 +487,18 @@ describe('createBackendClient — takeover-confirm request shape', () => {
 });
 
 describe('createBackendClient — active-session request shape', () => {
-  it('GETs /api/pos/v1/operators/active-session with operator_id query param', async () => {
+  it('GETs /api/pos/v1/operators/active-session with operator_id and branch_id query params', async () => {
     const { fetchImpl, captured } = captureFetch(
       new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.getActiveSession('clerk-user-3');
+    await client.getActiveSession('clerk-user-3', 'branch-1');
 
     expect(captured).toHaveLength(1);
     const call = captured[0];
-    expect(call?.url).toBe(`${BASE}/api/pos/v1/operators/active-session?operator_id=clerk-user-3`);
+    expect(call?.url).toBe(
+      `${BASE}/api/pos/v1/operators/active-session?operator_id=clerk-user-3&branch_id=branch-1`,
+    );
     expect(call?.init.method).toBe('GET');
   });
 
@@ -505,8 +507,17 @@ describe('createBackendClient — active-session request shape', () => {
       new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.getActiveSession('user@domain.com');
+    await client.getActiveSession('user@domain.com', 'branch-1');
     expect(captured[0]?.url).toContain(encodeURIComponent('user@domain.com'));
+  });
+
+  it('encodes special characters in branch_id', async () => {
+    const { fetchImpl, captured } = captureFetch(
+      new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    await client.getActiveSession('op1', 'branch/with spaces&special');
+    expect(captured[0]?.url).toContain(encodeURIComponent('branch/with spaces&special'));
   });
 
   it('NEVER includes an Authorization header (no JWT on active-session path — AD-2)', async () => {
@@ -514,7 +525,7 @@ describe('createBackendClient — active-session request shape', () => {
       new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.getActiveSession('op1');
+    await client.getActiveSession('op1', 'branch-1');
     const headers = captured[0]?.init.headers as Record<string, string> | undefined;
     expect(headers?.['Authorization']).toBeUndefined();
     expect(headers?.['authorization']).toBeUndefined();
@@ -525,7 +536,7 @@ describe('createBackendClient — active-session request shape', () => {
       new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    await client.getActiveSession('op1');
+    await client.getActiveSession('op1', 'branch-1');
     const serialized = JSON.stringify({
       url: captured[0]?.url,
       headers: captured[0]?.init.headers,
@@ -539,7 +550,7 @@ describe('createBackendClient — active-session request shape', () => {
       new Response(JSON.stringify({ kind: 'none' }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.getActiveSession('op1');
+    const res = await client.getActiveSession('op1', 'branch-1');
     expect(res).toEqual({ kind: 'none' });
   });
 
@@ -548,7 +559,7 @@ describe('createBackendClient — active-session request shape', () => {
       new Response(JSON.stringify({ kind: 'active' }), { status: 200 }),
     );
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.getActiveSession('op1');
+    const res = await client.getActiveSession('op1', 'branch-1');
     expect(res).toEqual({ kind: 'active' });
   });
 
@@ -556,7 +567,7 @@ describe('createBackendClient — active-session request shape', () => {
     const body = { kind: 'some_unexpected_value', extra_field: 'should not surface' };
     const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.getActiveSession('op1');
+    const res = await client.getActiveSession('op1', 'branch-1');
     expect(res.kind).toBe('refused');
   });
 
@@ -564,7 +575,7 @@ describe('createBackendClient — active-session request shape', () => {
     for (const status of [400, 401, 403, 500]) {
       const { fetchImpl } = captureFetch(new Response('{}', { status }));
       const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-      const res = await client.getActiveSession('op1');
+      const res = await client.getActiveSession('op1', 'branch-1');
       expect(res.kind).toBe('refused');
     }
   });
@@ -572,14 +583,14 @@ describe('createBackendClient — active-session request shape', () => {
   it('returns no_connection on network failure', async () => {
     const fetchImpl = vi.fn(() => Promise.reject(new Error('ETIMEDOUT')));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.getActiveSession('op1');
+    const res = await client.getActiveSession('op1', 'branch-1');
     expect(res.kind).toBe('no_connection');
   });
 
   it('returns refused on malformed JSON body', async () => {
     const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
     const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
-    const res = await client.getActiveSession('op1');
+    const res = await client.getActiveSession('op1', 'branch-1');
     expect(res.kind).toBe('refused');
   });
 });
