@@ -42,7 +42,7 @@ export type OperatorSessionState =
   | { kind: 'signedOut'; lastRefusal?: RefusalCategory }
   | { kind: 'signingIn' }
   | { kind: 'takeoverPrompt'; pending_takeover_id: string }
-  | { kind: 'signedIn'; session: OperatorSessionView }
+  | { kind: 'signedIn'; session: OperatorSessionView; forced_close_notice?: { closed_at: string } }
   | { kind: 'signingOut' };
 
 export interface OperatorSessionStore {
@@ -50,7 +50,9 @@ export interface OperatorSessionStore {
   /** Begin a sign-in attempt; FSM moves signedOut → signingIn. */
   beginSignIn(): void;
   /** Sign-in resolved with a session; FSM moves signingIn → signedIn. */
-  resolveSignedIn(session: OperatorSessionView): void;
+  resolveSignedIn(session: OperatorSessionView, notice?: { closed_at: string }): void;
+  /** T091 — cashier dismisses the forced-close return banner. */
+  dismissShiftClosedNotice(): void;
   /** Sign-in resolved with takeover-required; FSM moves signingIn → takeoverPrompt. */
   promptTakeover(pending_takeover_id: string): void;
   /**
@@ -81,11 +83,26 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
       return { state: { kind: 'signingIn' } };
     });
   },
-  resolveSignedIn: (session) => {
+  resolveSignedIn: (session, notice) => {
     set((s) => {
       if (s.state.kind !== 'signingIn' && s.state.kind !== 'takeoverPrompt') return s;
-      return { state: { kind: 'signedIn', session } };
+      return {
+        state: {
+          kind: 'signedIn',
+          session,
+          ...(notice !== undefined ? { forced_close_notice: notice } : {}),
+        },
+      };
     });
+  },
+  dismissShiftClosedNotice: () => {
+    set((s) => {
+      if (s.state.kind !== 'signedIn') return s;
+      return { state: { kind: 'signedIn', session: s.state.session } };
+    });
+    void (
+      window as { api?: { operator?: { dismissShiftClosedNotice?(): Promise<void> } } }
+    ).api?.operator?.dismissShiftClosedNotice?.();
   },
   promptTakeover: (pending_takeover_id) => {
     set((s) => {

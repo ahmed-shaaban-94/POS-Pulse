@@ -98,7 +98,9 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
       // Clear PIN immediately on resolution (PR-1 defence in depth).
       setPin('');
       if (response.kind === 'signed_in') {
-        useOperatorSessionStore.getState().resolveSignedIn(response.session);
+        useOperatorSessionStore
+          .getState()
+          .resolveSignedIn(response.session, response.forced_close_notice);
       } else if (response.kind === 'takeover_required') {
         useOperatorSessionStore.getState().promptTakeover(response.pending_takeover_id);
       } else {

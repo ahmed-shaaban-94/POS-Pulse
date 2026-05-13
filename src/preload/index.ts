@@ -111,6 +111,8 @@ const operator: OperatorBridgeAPI = {
     >,
   listStuckShifts: () =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.LIST_STUCK_SHIFTS) as Promise<ListStuckShiftsResponse>,
+  dismissShiftClosedNotice: () =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE) as Promise<void>,
 };
 
 const api: PreloadBridgeAPI = {

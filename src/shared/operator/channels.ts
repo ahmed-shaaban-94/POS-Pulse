@@ -28,6 +28,8 @@ export const OPERATOR_IPC_CHANNELS = {
   FORCE_CLOSE_SHIFT: 'operator:force-close-shift',
   /** T090 — list stuck cashier shifts on this terminal's branch. */
   LIST_STUCK_SHIFTS: 'operator:list-stuck-shifts',
+  /** T091 — cashier dismisses the forced-close return banner. Zero renderer args. */
+  DISMISS_SHIFT_CLOSED_NOTICE: 'operator:dismiss-shift-closed-notice',
 } as const;
 
 export type OperatorIpcChannel = (typeof OPERATOR_IPC_CHANNELS)[keyof typeof OPERATOR_IPC_CHANNELS];

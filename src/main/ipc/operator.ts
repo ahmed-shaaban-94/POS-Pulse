@@ -442,4 +442,16 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       }
     },
   );
+
+  ipcMain.handle(OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE, async (): Promise<void> => {
+    const session = sessionManager.getCurrent();
+    if (session === null) return;
+    const pairingStatus = await pairingStore.getStatus();
+    if (pairingStatus.kind !== 'paired') return;
+    await cashierSignInHandler.dismissForcedCloseNotice(
+      pairingStatus.tenant_id,
+      pairingStatus.terminal_id,
+      session.operator_id,
+    );
+  });
 }

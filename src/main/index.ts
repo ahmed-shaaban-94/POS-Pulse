@@ -343,6 +343,7 @@ app
       checkActiveSession: checkActiveSessionHandler,
       pairingStore,
       protoStore: operatorProtoStore,
+      secretStore,
       logger: mainLogger,
     });
     const operatorSignOutHandler = new SignOutHandler({
