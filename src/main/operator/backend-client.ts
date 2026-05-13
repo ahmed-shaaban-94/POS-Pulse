@@ -155,7 +155,7 @@ export interface BackendClient {
     jwt: string,
   ): Promise<BackendTakeoverConfirmResponse>;
   /** GET /api/pos/v1/operators/active-session — no JWT (cashier path); AD-2 invariant enforced. */
-  getActiveSession(operatorId: string): Promise<BackendActiveSessionResponse>;
+  getActiveSession(operatorId: string, branchId: string): Promise<BackendActiveSessionResponse>;
   /** GET /api/pos/v1/shifts/stuck — manager/admin JWT required (AD-2; cashier MUST NOT call this). */
   getStuckShifts(branchId: string, jwt: string): Promise<BackendStuckShiftsResponse>;
 }
@@ -296,11 +296,14 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
       return interpretTakeoverConfirmResponse(parsed);
     },
 
-    async getActiveSession(operatorId: string): Promise<BackendActiveSessionResponse> {
+    async getActiveSession(
+      operatorId: string,
+      branchId: string,
+    ): Promise<BackendActiveSessionResponse> {
       let response: Response;
       try {
         response = await fetchImpl(
-          `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}`,
+          `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}&branch_id=${encodeURIComponent(branchId)}`,
           { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
         );
       } catch {

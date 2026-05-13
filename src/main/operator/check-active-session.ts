@@ -27,10 +27,14 @@ const REFUSE_NO_CONN: OperatorRefusal = { kind: 'refused', category: 'no_connect
 export class CheckActiveSessionHandler {
   constructor(private readonly deps: CheckActiveSessionHandlerDeps) {}
 
-  async checkActiveSession(operatorId: string): Promise<CheckActiveSessionResult> {
+  async checkActiveSession(
+    operatorId: string,
+    branchId: string,
+  ): Promise<CheckActiveSessionResult> {
     if (operatorId.length === 0) return REFUSE_INVALID;
+    if (branchId.length === 0) return REFUSE_INVALID;
 
-    const result = await this.deps.backend.getActiveSession(operatorId);
+    const result = await this.deps.backend.getActiveSession(operatorId, branchId);
 
     if (result.kind === 'none') return { kind: 'none' };
     if (result.kind === 'active') return { kind: 'active' };

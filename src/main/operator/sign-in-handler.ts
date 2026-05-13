@@ -365,6 +365,7 @@ export class CashierSignInHandler {
     // 6. Check for an existing active session for this cashier (T069b)
     const activeCheck = await this.deps.checkActiveSession.checkActiveSession(
       req.cashier_clerk_user_id,
+      scope.branch_id,
     );
     if (activeCheck.kind === 'refused') {
       this.logRefusal(activeCheck.category, 'active_session_check');

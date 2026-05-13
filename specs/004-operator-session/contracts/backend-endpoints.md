@@ -444,6 +444,10 @@ MAY or MAY NOT be present:
   the device token's tenant + branch claims and refuses (generic 4xx) if
   the operator is not authorised on this branch (P17 + FR-003 minimum-
   disclosure).
+- `branch_id` (UUID string, required) — the branch the terminal is paired
+  to. The backend MUST validate this against the device token's branch
+  claim and refuse if they don't match (P17 — branch isolation; mirrors
+  the `branch_id` validation rule from Endpoint 1).
 
 **Response shape (success)**:
 
