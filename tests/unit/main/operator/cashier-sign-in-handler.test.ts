@@ -295,6 +295,22 @@ describe('CashierSignInHandler — correct PIN, no active session', () => {
     if (result.kind !== 'signed_in') return;
     expect(result.session.display_name).toBe('Jane Smith');
   });
+
+  it('passes the paired branch_id into active-session lookup', async () => {
+    const checkActiveSession = {
+      checkActiveSession: vi.fn().mockResolvedValue({ kind: 'none' }),
+    } as unknown as CheckActiveSessionHandler;
+    const handler = makeHandler({ checkActiveSession });
+
+    const result = await handler.signIn(makeRequest());
+
+    expect(result.kind).toBe('signed_in');
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(vi.mocked(checkActiveSession.checkActiveSession)).toHaveBeenCalledWith(
+      CASHIER_ID,
+      BRANCH,
+    );
+  });
 });
 
 describe('CashierSignInHandler — correct PIN, active session exists', () => {

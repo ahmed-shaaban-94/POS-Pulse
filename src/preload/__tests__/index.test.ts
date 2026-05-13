@@ -5,6 +5,7 @@ import {
   type PairingStatus,
   type PairingSubmitResult,
 } from '../../shared/pairing-types';
+import { OPERATOR_IPC_CHANNELS } from '../../shared/operator/channels';
 
 const exposeInMainWorld = vi.fn<(name: string, api: unknown) => void>();
 const ipcRendererInvoke = vi.fn<(channel: string, ...args: unknown[]) => Promise<unknown>>();
@@ -130,5 +131,49 @@ describe('preload bridge', () => {
       const result = await api.pairing.submit('CODE');
       expect(result).toEqual(expected);
     }
+  });
+
+  it('operator namespace exposes the approved S5 methods only once', async () => {
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    expect(Object.keys(api.operator).sort()).toEqual(
+      [
+        '_emitAuditEventSmoke',
+        '_reportActivity',
+        'cancelTakeover',
+        'confirmTakeover',
+        'dismissShiftClosedNotice',
+        'emitAuditEvent',
+        'forceCloseShift',
+        'getCurrentSession',
+        'listBranchRoster',
+        'listStuckShifts',
+        'resetCashierPin',
+        'signIn',
+        'signOut',
+        'unlockCashier',
+      ].sort(),
+    );
+  });
+
+  it('operator S5 methods invoke the documented IPC channels', async () => {
+    ipcRendererInvoke.mockResolvedValue({ kind: 'refused', category: 'invalid_input' });
+    await import('../index');
+
+    const call = exposeInMainWorld.mock.calls[0];
+    expect(call).toBeDefined();
+    const [, api] = call as [string, PreloadBridgeAPI];
+
+    await api.operator.listStuckShifts();
+    await api.operator.dismissShiftClosedNotice();
+
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(OPERATOR_IPC_CHANNELS.LIST_STUCK_SHIFTS);
+    expect(ipcRendererInvoke).toHaveBeenCalledWith(
+      OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE,
+    );
   });
 });

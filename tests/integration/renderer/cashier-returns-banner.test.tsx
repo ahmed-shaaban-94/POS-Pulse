@@ -1,13 +1,15 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import '@testing-library/jest-dom/vitest';
 
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 import { registerOperatorHandlers } from '../../../src/main/ipc/operator.js';
 import { OPERATOR_IPC_CHANNELS } from '../../../src/shared/operator/channels.js';
 import { ShiftClosedBanner } from '../../../src/renderer/ui/operator/ShiftClosedBanner.js';
-import { DashboardPlaceholder } from '../../../src/renderer/routes/app/DashboardPlaceholder.js';
+import { AppShell } from '../../../src/renderer/shell/AppShell.js';
+import { SalesPlaceholder } from '../../../src/renderer/routes/app/SalesPlaceholder.js';
 import { useOperatorSessionStore } from '../../../src/renderer/stores/operator-session-store.js';
 import type { OperatorSessionView } from '../../../src/renderer/stores/operator-session-store.js';
 import {
@@ -93,6 +95,14 @@ interface TestDbRow {
   lockout_until: string | null;
 }
 
+interface TestShiftRow {
+  tenant_id: string;
+  branch_id: string;
+  originating_terminal_id: string;
+  opening_operator_id: string;
+  closed_at: string;
+}
+
 let baseRow: TestDbRow;
 
 beforeAll(async () => {
@@ -112,12 +122,32 @@ beforeAll(async () => {
 
 // ── Fakes ──────────────────────────────────────────────────────────────────
 
-function makeDb(pinRow: TestDbRow, shiftRow: { closed_at: string } | undefined): DatabaseHandle {
+function makeShiftRow(overrides: Partial<TestShiftRow> = {}): TestShiftRow {
+  return {
+    tenant_id: TENANT,
+    branch_id: BRANCH,
+    originating_terminal_id: TERMINAL,
+    opening_operator_id: CASHIER_ID,
+    closed_at: CLOSED_AT,
+    ...overrides,
+  };
+}
+
+function makeDb(pinRow: TestDbRow, shiftRow: TestShiftRow | undefined): DatabaseHandle {
   return {
     pragma: () => undefined,
     prepare(sql: string) {
       if (/shifts/i.test(sql)) {
-        return { get: () => shiftRow };
+        return {
+          get: (tenantId: string, branchId: string, terminalId: string, cashierId: string) => {
+            if (shiftRow === undefined) return undefined;
+            if (shiftRow.tenant_id !== tenantId) return undefined;
+            if (shiftRow.branch_id !== branchId) return undefined;
+            if (shiftRow.originating_terminal_id !== terminalId) return undefined;
+            if (shiftRow.opening_operator_id !== cashierId) return undefined;
+            return { closed_at: shiftRow.closed_at };
+          },
+        };
       }
       if (/^\s*SELECT/i.test(sql)) {
         return { get: () => pinRow };
@@ -179,7 +209,7 @@ function makeRequest(): CashierSignInRequest {
 }
 
 function makeHandler(
-  shiftRow: { closed_at: string } | undefined,
+  shiftRow: TestShiftRow | undefined,
   store?: SecretStore,
 ): CashierSignInHandler {
   return new CashierSignInHandler({
@@ -222,6 +252,18 @@ function stubDismissBridgeCall(): ReturnType<typeof vi.fn> {
     },
   });
   return fn;
+}
+
+function renderAllowedShellRoute(): void {
+  render(
+    <MemoryRouter initialEntries={['/app/sales']}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/app/sales" element={<SalesPlaceholder />} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 // ── Test lifecycle ─────────────────────────────────────────────────────────
@@ -275,23 +317,24 @@ describe('ShiftClosedBanner — component', () => {
   });
 });
 
-// ── DashboardPlaceholder — banner integration ──────────────────────────────
+// ── AppShell — cashier-reachable banner integration ────────────────────────
 
-describe('DashboardPlaceholder — banner from store', () => {
+describe('AppShell — banner from store', () => {
   it('renders banner when signedIn state has forced_close_notice', () => {
     stubDismissBridgeCall();
     // Manually transition store to signingIn then resolveSignedIn with notice
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW, { closed_at: CLOSED_AT });
-    render(<DashboardPlaceholder />);
+    renderAllowedShellRoute();
     expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
+    expect(screen.getByText('Sales')).toBeInTheDocument();
   });
 
   it('does not render banner when signedIn state has no notice', () => {
     stubDismissBridgeCall();
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW);
-    render(<DashboardPlaceholder />);
+    renderAllowedShellRoute();
     expect(screen.queryByTestId('shift-closed-banner')).not.toBeInTheDocument();
   });
 
@@ -300,7 +343,7 @@ describe('DashboardPlaceholder — banner from store', () => {
     const user = userEvent.setup();
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW, { closed_at: CLOSED_AT });
-    render(<DashboardPlaceholder />);
+    renderAllowedShellRoute();
     expect(screen.getByTestId('shift-closed-banner')).toBeInTheDocument();
     await user.click(screen.getByTestId('shift-closed-banner-dismiss'));
     expect(screen.queryByTestId('shift-closed-banner')).not.toBeInTheDocument();
@@ -344,6 +387,28 @@ describe('OperatorSessionStore — notice lifecycle', () => {
     }
     expect(dismissFn).toHaveBeenCalledOnce();
   });
+
+  it('dismissShiftClosedNotice catches bridge rejection after clearing local notice', async () => {
+    const dismissFn = vi.fn(() => Promise.reject(new Error('SECRET-STORE-DETAIL')));
+    Object.assign(window, {
+      api: {
+        operator: {
+          dismissShiftClosedNotice: dismissFn,
+        },
+      },
+    });
+    useOperatorSessionStore.getState().beginSignIn();
+    useOperatorSessionStore.getState().resolveSignedIn(SESSION_VIEW, { closed_at: CLOSED_AT });
+    useOperatorSessionStore.getState().dismissShiftClosedNotice();
+    await Promise.resolve();
+
+    const state = useOperatorSessionStore.getState().state;
+    expect(state.kind).toBe('signedIn');
+    if (state.kind === 'signedIn') {
+      expect(state.forced_close_notice).toBeUndefined();
+    }
+    expect(dismissFn).toHaveBeenCalledOnce();
+  });
 });
 
 // ── CashierSignInHandler — forced-close notice injection ───────────────────
@@ -351,7 +416,7 @@ describe('OperatorSessionStore — notice lifecycle', () => {
 describe('CashierSignInHandler.signIn — notice injection', () => {
   it('returns forced_close_notice when forced-close shift exists and no dismiss record', async () => {
     const store = makeMemorySecretStore();
-    const handler = makeHandler({ closed_at: CLOSED_AT }, store);
+    const handler = makeHandler(makeShiftRow(), store);
     const result = await handler.signIn(makeRequest());
     expect(result.kind).toBe('signed_in');
     if (result.kind === 'signed_in') {
@@ -361,9 +426,9 @@ describe('CashierSignInHandler.signIn — notice injection', () => {
 
   it('omits forced_close_notice when dismiss record matches closed_at', async () => {
     const store = makeMemorySecretStore();
-    const dismissKey = makeShiftDismissKey(TENANT, TERMINAL, CASHIER_ID);
+    const dismissKey = makeShiftDismissKey(TENANT, BRANCH, TERMINAL, CASHIER_ID);
     await store.set(dismissKey, JSON.stringify({ dismissed_closed_at: CLOSED_AT }));
-    const handler = makeHandler({ closed_at: CLOSED_AT }, store);
+    const handler = makeHandler(makeShiftRow(), store);
     const result = await handler.signIn(makeRequest());
     expect(result.kind).toBe('signed_in');
     if (result.kind === 'signed_in') {
@@ -373,12 +438,12 @@ describe('CashierSignInHandler.signIn — notice injection', () => {
 
   it('shows notice when dismiss record exists for a different closed_at', async () => {
     const store = makeMemorySecretStore();
-    const dismissKey = makeShiftDismissKey(TENANT, TERMINAL, CASHIER_ID);
+    const dismissKey = makeShiftDismissKey(TENANT, BRANCH, TERMINAL, CASHIER_ID);
     await store.set(
       dismissKey,
       JSON.stringify({ dismissed_closed_at: '2026-01-01T00:00:00.000Z' }),
     );
-    const handler = makeHandler({ closed_at: CLOSED_AT }, store);
+    const handler = makeHandler(makeShiftRow(), store);
     const result = await handler.signIn(makeRequest());
     expect(result.kind).toBe('signed_in');
     if (result.kind === 'signed_in') {
@@ -395,6 +460,26 @@ describe('CashierSignInHandler.signIn — notice injection', () => {
       expect(result.forced_close_notice).toBeUndefined();
     }
   });
+
+  it('ignores forced-close notices from another branch', async () => {
+    const store = makeMemorySecretStore();
+    const handler = makeHandler(makeShiftRow({ branch_id: 'branch-other' }), store);
+    const result = await handler.signIn(makeRequest());
+    expect(result.kind).toBe('signed_in');
+    if (result.kind === 'signed_in') {
+      expect(result.forced_close_notice).toBeUndefined();
+    }
+  });
+
+  it('ignores forced-close notices from another terminal', async () => {
+    const store = makeMemorySecretStore();
+    const handler = makeHandler(makeShiftRow({ originating_terminal_id: 'terminal-other' }), store);
+    const result = await handler.signIn(makeRequest());
+    expect(result.kind).toBe('signed_in');
+    if (result.kind === 'signed_in') {
+      expect(result.forced_close_notice).toBeUndefined();
+    }
+  });
 });
 
 // ── CashierSignInHandler.dismissForcedCloseNotice ─────────────────────────
@@ -402,11 +487,11 @@ describe('CashierSignInHandler.signIn — notice injection', () => {
 describe('CashierSignInHandler.dismissForcedCloseNotice', () => {
   it('writes dismiss record to secretStore with correct key and closed_at', async () => {
     const store = makeMemorySecretStore();
-    const handler = makeHandler({ closed_at: CLOSED_AT }, store);
-    await handler.dismissForcedCloseNotice(TENANT, TERMINAL, CASHIER_ID);
+    const handler = makeHandler(makeShiftRow(), store);
+    await handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vi.mocked(store.set)).toHaveBeenCalledOnce();
-    const dismissKey = makeShiftDismissKey(TENANT, TERMINAL, CASHIER_ID);
+    const dismissKey = makeShiftDismissKey(TENANT, BRANCH, TERMINAL, CASHIER_ID);
     const stored = store.data.get(dismissKey);
     expect(stored).toBeDefined();
     const parsed = JSON.parse(String(stored)) as { dismissed_closed_at: string };
@@ -416,16 +501,32 @@ describe('CashierSignInHandler.dismissForcedCloseNotice', () => {
   it('is a no-op when no forced-close shift exists', async () => {
     const store = makeMemorySecretStore();
     const handler = makeHandler(undefined, store);
-    await handler.dismissForcedCloseNotice(TENANT, TERMINAL, CASHIER_ID);
+    await handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(vi.mocked(store.set)).not.toHaveBeenCalled();
   });
 
   it('is a no-op when secretStore is absent (test environments)', async () => {
-    const handler = makeHandler({ closed_at: CLOSED_AT }, undefined);
+    const handler = makeHandler(makeShiftRow(), undefined);
     await expect(
-      handler.dismissForcedCloseNotice(TENANT, TERMINAL, CASHIER_ID),
+      handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID),
     ).resolves.toBeUndefined();
+  });
+
+  it('does not dismiss a notice from another branch or terminal', async () => {
+    const store = makeMemorySecretStore();
+    const handler = makeHandler(makeShiftRow({ branch_id: 'branch-other' }), store);
+    await handler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(vi.mocked(store.set)).not.toHaveBeenCalled();
+
+    const terminalHandler = makeHandler(
+      makeShiftRow({ originating_terminal_id: 'terminal-other' }),
+      store,
+    );
+    await terminalHandler.dismissForcedCloseNotice(TENANT, BRANCH, TERMINAL, CASHIER_ID);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(vi.mocked(store.set)).not.toHaveBeenCalled();
   });
 });
 
@@ -478,7 +579,7 @@ describe('registerOperatorHandlers — DISMISS_SHIFT_CLOSED_NOTICE', () => {
       paired: true,
     });
     await invoke();
-    expect(dismissFn).toHaveBeenCalledWith(TENANT, TERMINAL, CASHIER_ID);
+    expect(dismissFn).toHaveBeenCalledWith(TENANT, BRANCH, TERMINAL, CASHIER_ID);
   });
 
   it('is a no-op when session is null', async () => {

@@ -102,7 +102,9 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
     });
     void (
       window as { api?: { operator?: { dismissShiftClosedNotice?(): Promise<void> } } }
-    ).api?.operator?.dismissShiftClosedNotice?.();
+    ).api?.operator
+      ?.dismissShiftClosedNotice?.()
+      .catch(() => undefined);
   },
   promptTakeover: (pending_takeover_id) => {
     set((s) => {

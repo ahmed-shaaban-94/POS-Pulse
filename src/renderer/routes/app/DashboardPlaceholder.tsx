@@ -9,8 +9,6 @@
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
-import { useOperatorSessionStore } from '../../stores/operator-session-store';
-import { ShiftClosedBanner } from '../../ui/operator/ShiftClosedBanner';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -22,7 +20,6 @@ function resolveDevState(): string {
 
 export function DashboardPlaceholder(): JSX.Element {
   const devState = resolveDevState();
-  const sessionState = useOperatorSessionStore((s) => s.state);
 
   if (devState === 'loading') {
     return <LoadingState message="Loading Dashboard…" />;
@@ -44,22 +41,8 @@ export function DashboardPlaceholder(): JSX.Element {
     );
   }
 
-  const notice = sessionState.kind === 'signedIn' ? sessionState.forced_close_notice : undefined;
-
   return (
-    <Workspace
-      title="Dashboard"
-      banner={
-        notice !== undefined ? (
-          <ShiftClosedBanner
-            closedAt={notice.closed_at}
-            onDismiss={() => {
-              useOperatorSessionStore.getState().dismissShiftClosedNotice();
-            }}
-          />
-        ) : undefined
-      }
-    >
+    <Workspace title="Dashboard">
       <section className="placeholder-pane">
         <p>Welcome to POS Pulse. Select an option from the navigation rail.</p>
       </section>

@@ -8,6 +8,8 @@ import { ScreenTooSmall } from '../ui/states/ScreenTooSmall';
 import { useViewportTier } from './viewport/useViewportTier';
 import { useConnectionState } from './connection/useConnectionState';
 import type { PairingStatus } from '../../shared/pairing-types';
+import { useOperatorSessionStore } from '../stores/operator-session-store';
+import { ShiftClosedBanner } from '../ui/operator/ShiftClosedBanner';
 
 interface AppShellProps {
   pairedStatus?: Extract<PairingStatus, { kind: 'paired' }>;
@@ -27,6 +29,7 @@ interface AppShellProps {
 export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   const tier = useViewportTier();
   const { state: connectionState, setState: setConnectionState } = useConnectionState();
+  const sessionState = useOperatorSessionStore((s) => s.state);
 
   // Dev-only: wire ?conn= URL param → useConnectionState.
   // The cast keeps TS happy while Vite tree-shakes the dev branch from production.
@@ -46,6 +49,7 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   const tenantId = pairedStatus?.tenant_id ?? '';
   const branchId = pairedStatus?.branch_id ?? '';
   const terminalLabel = pairedStatus?.terminal_label ?? '';
+  const notice = sessionState.kind === 'signedIn' ? sessionState.forced_close_notice : undefined;
 
   if (tier === 'too-small') {
     return (
@@ -72,6 +76,14 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
       <div className="app-shell__body">
         <NavRail />
         <main className="app-shell__content">
+          {notice !== undefined ? (
+            <ShiftClosedBanner
+              closedAt={notice.closed_at}
+              onDismiss={() => {
+                useOperatorSessionStore.getState().dismissShiftClosedNotice();
+              }}
+            />
+          ) : undefined}
           <Outlet />
         </main>
       </div>

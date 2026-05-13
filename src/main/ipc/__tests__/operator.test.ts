@@ -40,6 +40,7 @@ interface RegisteredHandlers {
   signOut: IpcHandler;
   getCurrentSession: IpcHandler;
   reportActivity: IpcHandler;
+  dismissShiftClosedNotice: IpcHandler;
 }
 
 function makeIpcMain(): {
@@ -108,6 +109,7 @@ function fakeCashierSignInHandler(): CashierSignInHandler {
     signIn: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
+    dismissForcedCloseNotice: vi.fn(() => Promise.resolve()),
   } as unknown as CashierSignInHandler;
 }
 
@@ -181,6 +183,7 @@ function register(opts: {
       signOut: get(OPERATOR_IPC_CHANNELS.SIGN_OUT),
       getCurrentSession: get(OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION),
       reportActivity: get(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY),
+      dismissShiftClosedNotice: get(OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE),
     },
     reportActivity: inactivity.reportActivity,
   };
@@ -199,7 +202,7 @@ const SAMPLE_VIEW: OperatorSessionBridgeView = {
 const FAKE_EVENT = {} as IpcMainInvokeEvent;
 
 describe('registerOperatorHandlers — channel registration', () => {
-  it('registers all ten operator:* channels exactly once', () => {
+  it('registers every approved operator:* channel exactly once', () => {
     const { ipcMain, handle } = makeIpcMain();
     registerOperatorHandlers(ipcMain, {
       signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
@@ -216,17 +219,7 @@ describe('registerOperatorHandlers — channel registration', () => {
       stuckShiftsHandler: fakeStuckShiftsHandler(),
     });
     const registered = handle.mock.calls.map((c) => c[0] as string);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_IN);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.SIGN_OUT);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.GET_CURRENT_SESSION);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.TAKEOVER_CANCEL);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT);
-    expect(registered).toContain(OPERATOR_IPC_CHANNELS.LIST_STUCK_SHIFTS);
+    expect(registered.sort()).toEqual(Object.values(OPERATOR_IPC_CHANNELS).sort());
     // Each channel registered exactly once.
     for (const channel of registered) {
       expect(registered.filter((c) => c === channel)).toHaveLength(1);
@@ -325,6 +318,86 @@ describe('operator:_report-activity', () => {
     const { handlers, reportActivity } = register({});
     await handlers.reportActivity(FAKE_EVENT);
     expect(reportActivity).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('operator:dismiss-shift-closed-notice', () => {
+  function registerDismiss(opts: {
+    session: { operator_id: string } | null;
+    paired: boolean;
+    reject?: boolean;
+  }): { dismiss: ReturnType<typeof vi.fn>; invoke: () => Promise<unknown> } {
+    const { ipcMain, handlers } = makeIpcMain();
+    const dismiss = vi.fn(() =>
+      opts.reject ? Promise.reject(new Error('SECRET-STORE-DETAIL')) : Promise.resolve(),
+    );
+    registerOperatorHandlers(ipcMain, {
+      signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+      cashierSignInHandler: {
+        signIn: vi.fn(),
+        dismissForcedCloseNotice: dismiss,
+      } as unknown as CashierSignInHandler,
+      signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
+      rosterHandler: fakeRosterHandler(),
+      sessionManager: {
+        getCurrent: vi.fn(() => opts.session),
+        getCurrentBridgeView: vi.fn(() => null),
+      } as unknown as SessionManager,
+      inactivityMonitor: fakeInactivityMonitor().monitor,
+      auditEmitter: fakeAuditEmitter(),
+      pairingStore: {
+        getStatus: vi.fn(() =>
+          Promise.resolve(
+            opts.paired
+              ? {
+                  kind: 'paired' as const,
+                  tenant_id: 'tenant-1',
+                  branch_id: 'branch-1',
+                  terminal_id: 'terminal-1',
+                  terminal_label: 'Counter 1',
+                  paired_at: 1735689600,
+                }
+              : { kind: 'unpaired' as const },
+          ),
+        ),
+        persist: vi.fn(),
+        clear: vi.fn(),
+      },
+      takeoverHandler: fakeTakeoverHandler(),
+      pinManagementHandler: fakePinManagementHandler(),
+      forcedCloseHandler: fakeForcedCloseHandler(),
+      stuckShiftsHandler: fakeStuckShiftsHandler(),
+    });
+    const handler = getHandler(handlers, OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE);
+    return { dismiss, invoke: () => Promise.resolve(handler(FAKE_EVENT)) };
+  }
+
+  it('derives tenant, branch, terminal, and cashier from main-side state', async () => {
+    const { dismiss, invoke } = registerDismiss({
+      session: { operator_id: 'cashier-1' },
+      paired: true,
+    });
+    await invoke();
+    expect(dismiss).toHaveBeenCalledWith('tenant-1', 'branch-1', 'terminal-1', 'cashier-1');
+  });
+
+  it('is a no-op without a session or paired terminal', async () => {
+    const noSession = registerDismiss({ session: null, paired: true });
+    await noSession.invoke();
+    expect(noSession.dismiss).not.toHaveBeenCalled();
+
+    const unpaired = registerDismiss({ session: { operator_id: 'cashier-1' }, paired: false });
+    await unpaired.invoke();
+    expect(unpaired.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('swallows inner failures so raw errors do not reach the renderer', async () => {
+    const { invoke } = registerDismiss({
+      session: { operator_id: 'cashier-1' },
+      paired: true,
+      reject: true,
+    });
+    await expect(invoke()).resolves.toBeUndefined();
   });
 });
 
