@@ -18,6 +18,14 @@
 #   D2 — Native rebuild for `better-sqlite3` is handled implicitly by
 #        `package.json`'s `postinstall` hook (electron-rebuild). We do
 #        NOT add an explicit `npx @electron/rebuild` step.
+#
+# Docs-only fast path (D3):
+#   On pull_request events, if every changed file matches the docs/design
+#   pattern (*.md, docs/**, specs/**, .impeccable/**), the heavy
+#   codegen/typecheck/test/build/package gates are skipped. A lightweight
+#   Prettier check runs on changed .md/.json files instead. The required
+#   `ci` job still completes successfully. Pushes to main always run the
+#   full gate stack. Non-docs PRs keep the existing full CI behaviour.
 
 name: ci
 
@@ -35,6 +43,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Detect whether this PR touches only documentation/design files.
+      # Outputs docs_only=true when every changed file matches the pattern:
+      #   *.md | docs/** | specs/** | .impeccable/**
+      # Step is skipped on push-to-main; docs_only remains unset (falsy) so
+      # all downstream conditions fall through to the full-CI path.
+      - name: Detect docs-only PR
+        id: docs-check
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          $changedFiles = git diff --name-only "origin/${{ github.base_ref }}" HEAD
+          Write-Host "Changed files:"
+          $changedFiles | ForEach-Object { Write-Host "  $_" }
+          $docsPattern = '\.(md)$|^(docs|specs|\.impeccable)/'
+          $nonDocsFiles = @($changedFiles | Where-Object { $_ -notmatch $docsPattern })
+          $docsOnly = if ($nonDocsFiles.Count -eq 0) { "true" } else { "false" }
+          Write-Host "docs_only=$docsOnly"
+          "docs_only=$docsOnly" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Setup Node 20
         uses: actions/setup-node@v4
@@ -42,18 +71,42 @@ jobs:
           node-version: 20
           cache: npm
 
-      # `postinstall` runs `electron-rebuild -f -w better-sqlite3` to
-      # match the native module's ABI to Electron's bundled Node (D2).
+      # Docs-only path: install packages without lifecycle scripts to get
+      # Prettier available without triggering the electron-rebuild postinstall.
+      - name: Install dependencies (docs-only, skip postinstall)
+        if: steps.docs-check.outputs.docs_only == 'true'
+        run: npm ci --ignore-scripts
+
+      # Full path: postinstall runs electron-rebuild -f -w better-sqlite3 (D2).
       - name: Install dependencies
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm ci
 
       - name: Verify OpenAPI codegen drift
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run codegen:verify
 
       - name: Typecheck
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run typecheck
 
+      # Docs-only: lightweight Prettier format-check on changed .md/.json files.
+      - name: Prettier check (docs-only)
+        if: steps.docs-check.outputs.docs_only == 'true'
+        shell: pwsh
+        run: |
+          $changedFiles = git diff --name-only "origin/${{ github.base_ref }}" HEAD
+          $filesToCheck = @($changedFiles | Where-Object { $_ -match '\.(md|json)$' })
+          if ($filesToCheck.Count -gt 0) {
+            Write-Host "Prettier-checking:"
+            $filesToCheck | ForEach-Object { Write-Host "  $_" }
+            npx prettier --check $filesToCheck
+          } else {
+            Write-Host "No .md/.json files to Prettier-check."
+          }
+
       - name: Lint
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run lint
 
       # postinstall (electron-rebuild -f -w better-sqlite3) rebuilds argon2
@@ -61,23 +114,28 @@ jobs:
       # plain Node 20 process that Vitest forks use. Rebuild argon2 here for
       # Node 20 so the test suite can load it without a segfault.
       - name: Rebuild argon2 for Node 20 ABI (test suite)
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm rebuild argon2
 
       - name: Test with coverage
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm test -- --coverage
 
       # Restore argon2 to Electron ABI before packaging so the installed app
       # loads the correct native binary at runtime.
       - name: Rebuild argon2 for Electron ABI (packaging)
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npx electron-rebuild -f -w argon2
 
       # `npm run package:dir` packs whatever sits under `dist/` per
       # electron-builder.yml's `files` glob; the `package:dir` script
       # does NOT chain `build`. CI must populate `dist/` first (D1).
       - name: Build (renderer + main + preload)
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run build
 
       - name: Package (Windows --dir, unsigned)
+        if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run package:dir
 
       - name: Upload unpacked Windows build
