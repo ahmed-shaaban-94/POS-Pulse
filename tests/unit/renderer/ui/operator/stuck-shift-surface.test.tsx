@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -352,6 +352,63 @@ describe('StuckShiftSurface — dialog flow', () => {
     });
     // Refetch should have been called (initial + refetch = 2)
     expect(op.listStuckShifts).toHaveBeenCalledTimes(2);
+  });
+
+  it('on generic refusal (non-state_invalid): shows submit error but does NOT refetch', async () => {
+    const op = makeOperator(
+      { kind: 'stuck_shifts', shifts: [SHIFT_0] },
+      { kind: 'refused', category: 'no_connection' },
+    );
+    render(<StuckShiftSurface operator={op} />);
+
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    await userEvent.click(screen.getByTestId('stuck-shift-card-shift-111'));
+    await userEvent.click(screen.getByRole('radio', { name: /takeover_supersession/i }));
+    await userEvent.click(screen.getByRole('button', { name: /confirm forced close/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stuck-shift-submit-error')).toBeInTheDocument();
+    });
+    // Generic refusal must NOT trigger a refetch — only state_invalid does
+    expect(op.listStuckShifts).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── Keyboard navigation ──────────────────────────────────────────────────────
+
+describe('StuckShiftSurface — keyboard navigation on cards', () => {
+  it('pressing Enter on a card opens the forced-close dialog', async () => {
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
+    render(<StuckShiftSurface operator={op} />);
+
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    fireEvent.keyDown(screen.getByTestId('stuck-shift-card-shift-111'), { key: 'Enter' });
+
+    expect(screen.getByTestId('forced-close-form')).toBeInTheDocument();
+  });
+
+  it('pressing Space on a card opens the forced-close dialog', async () => {
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
+    render(<StuckShiftSurface operator={op} />);
+
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    fireEvent.keyDown(screen.getByTestId('stuck-shift-card-shift-111'), { key: ' ' });
+
+    expect(screen.getByTestId('forced-close-form')).toBeInTheDocument();
+  });
+
+  it('pressing another key on a card does not open the dialog', async () => {
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
+    render(<StuckShiftSurface operator={op} />);
+
+    await waitFor(() => screen.getByText('Nour Al-Hassan'));
+
+    fireEvent.keyDown(screen.getByTestId('stuck-shift-card-shift-111'), { key: 'Tab' });
+
+    expect(screen.queryByTestId('forced-close-form')).toBeNull();
   });
 });
 
