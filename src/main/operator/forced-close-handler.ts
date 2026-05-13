@@ -8,6 +8,7 @@
  * declared_count is NOT written — it remains NULL (absent state, FR-024(a)).
  */
 
+import type { Logger } from 'pino';
 import type { DatabaseHandle } from '../db/client.js';
 import type { SessionManager, OperatorSessionRecord } from './session-manager.js';
 import type { PairingStore } from '../pairing/store.js';
@@ -37,6 +38,8 @@ export interface ForcedCloseHandlerDeps {
   sessionManager: Pick<SessionManager, 'getCurrent'>;
   pairingStore: Pick<PairingStore, 'getStatus'>;
   auditEmitter: AuditEmitter;
+  /** Optional logger. Tests omit it. */
+  logger?: Logger;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -55,8 +58,10 @@ export class ForcedCloseHandler {
       requireRole(['manager', 'admin'], session);
     } catch (err) {
       if (err instanceof OperatorRefusalError) {
+        this.logRefusal(err.category);
         return { kind: 'refused', category: err.category };
       }
+      this.logRefusal('invalid_input');
       return { kind: 'refused', category: 'invalid_input' };
     }
 
@@ -70,12 +75,14 @@ export class ForcedCloseHandler {
     ).get(req.shift_id);
 
     if (shiftRow === undefined) {
+      this.logRefusal('state_invalid');
       return { kind: 'refused', category: 'state_invalid' };
     }
 
     // P17 — branch isolation: mismatch returns role_mismatch, not state_invalid,
     // to avoid leaking cross-branch shift existence.
     if (shiftRow.branch_id !== actor.branch_id) {
+      this.logRefusal('role_mismatch');
       return { kind: 'refused', category: 'role_mismatch' };
     }
 
@@ -91,10 +98,12 @@ export class ForcedCloseHandler {
     ).get(req.event_id, actor.tenant_id, req.shift_id);
 
     if (existingAudit !== undefined) {
+      this.logOutcome('forced_closed_idempotent');
       return { kind: 'forced_closed', audit_event_id: req.event_id };
     }
 
     if (shiftRow.lifecycle_state !== 'open') {
+      this.logRefusal('state_invalid');
       return { kind: 'refused', category: 'state_invalid' };
     }
 
@@ -141,9 +150,25 @@ export class ForcedCloseHandler {
         ).run(closedAt, req.shift_id);
       })();
     } catch {
+      this.logRefusal('invalid_input');
       return { kind: 'refused', category: 'invalid_input' };
     }
 
+    this.logOutcome('forced_closed');
     return { kind: 'forced_closed', audit_event_id: req.event_id };
+  }
+
+  private logRefusal(category: string): void {
+    this.deps.logger?.info(
+      { event: 'operator.forced_close.refused', category },
+      'forced-close refused',
+    );
+  }
+
+  private logOutcome(kind: string): void {
+    this.deps.logger?.info(
+      { event: 'operator.forced_close.outcome', kind },
+      'forced-close outcome',
+    );
   }
 }
