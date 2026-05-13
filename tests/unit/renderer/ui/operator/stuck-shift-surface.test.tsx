@@ -27,22 +27,23 @@ import type {
  *  - FR-013 minimum-disclosure: no identity/credential fields in DOM.
  */
 
-const SAMPLE_SHIFTS = [
-  {
-    shift_id: 'shift-111',
-    cashier_display_name: 'Nour Al-Hassan',
-    terminal_label: 'Terminal 3 — Pharmacy',
-    opened_at: '2026-05-12T08:30:00.000Z',
-    duration_minutes: 47,
-  },
-  {
-    shift_id: 'shift-222',
-    cashier_display_name: 'Ali Saad',
-    terminal_label: 'Terminal 1',
-    opened_at: '2026-05-12T07:00:00.000Z',
-    duration_minutes: 90,
-  },
-];
+const SHIFT_0 = {
+  shift_id: 'shift-111',
+  cashier_display_name: 'Nour Al-Hassan',
+  terminal_label: 'Terminal 3 — Pharmacy',
+  opened_at: '2026-05-12T08:30:00.000Z',
+  duration_minutes: 47,
+};
+
+const SHIFT_1 = {
+  shift_id: 'shift-222',
+  cashier_display_name: 'Ali Saad',
+  terminal_label: 'Terminal 1',
+  opened_at: '2026-05-12T07:00:00.000Z',
+  duration_minutes: 90,
+};
+
+const SAMPLE_SHIFTS = [SHIFT_0, SHIFT_1];
 
 function makeOperator(
   listResult: ListStuckShiftsResponse,
@@ -64,7 +65,7 @@ afterEach(() => {
 // ─── Loading state ────────────────────────────────────────────────────────────
 
 describe('StuckShiftSurface — loading state', () => {
-  it('renders a loading indicator while fetching', async () => {
+  it('renders a loading indicator while fetching', () => {
     let resolve!: (r: ListStuckShiftsResponse) => void;
     const pending = new Promise<ListStuckShiftsResponse>((res) => {
       resolve = res;
@@ -258,7 +259,7 @@ describe('StuckShiftSurface — duration formatting', () => {
 
 describe('StuckShiftSurface — dialog flow', () => {
   it('clicking a card opens the forced-close dialog', async () => {
-    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SAMPLE_SHIFTS[0]!] });
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
@@ -270,7 +271,7 @@ describe('StuckShiftSurface — dialog flow', () => {
   });
 
   it('dialog cancel button closes dialog without calling forceCloseShift', async () => {
-    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SAMPLE_SHIFTS[0]!] });
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
@@ -285,7 +286,7 @@ describe('StuckShiftSurface — dialog flow', () => {
   });
 
   it('submitting form calls forceCloseShift with shift_id and reason', async () => {
-    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SAMPLE_SHIFTS[0]!] });
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));
@@ -303,11 +304,14 @@ describe('StuckShiftSurface — dialog flow', () => {
       expect(op.forceCloseShift).toHaveBeenCalledOnce();
     });
 
-    const call = vi.mocked(op.forceCloseShift).mock.calls[0]![0];
-    expect(call.shift_id).toBe('shift-111');
-    expect(call.reason).toBe('takeover_supersession');
-    expect(call.event_id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    expect(vi.mocked(op.forceCloseShift)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shift_id: 'shift-111',
+        reason: 'takeover_supersession',
+        event_id: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        ) as string,
+      }),
     );
   });
 
@@ -332,7 +336,7 @@ describe('StuckShiftSurface — dialog flow', () => {
 
   it('on state_invalid refusal: shows error message and refetches', async () => {
     const op = makeOperator(
-      { kind: 'stuck_shifts', shifts: [SAMPLE_SHIFTS[0]!] },
+      { kind: 'stuck_shifts', shifts: [SHIFT_0] },
       { kind: 'refused', category: 'state_invalid' },
     );
     render(<StuckShiftSurface operator={op} />);
@@ -412,7 +416,7 @@ describe('StuckShiftSurface — FR-013 minimum-disclosure (no identity fields)',
 
 describe('ForcedCloseForm — annotation maxLength', () => {
   it('textarea has maxLength of 500', async () => {
-    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SAMPLE_SHIFTS[0]!] });
+    const op = makeOperator({ kind: 'stuck_shifts', shifts: [SHIFT_0] });
     render(<StuckShiftSurface operator={op} />);
 
     await waitFor(() => screen.getByText('Nour Al-Hassan'));

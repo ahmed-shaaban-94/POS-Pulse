@@ -14,10 +14,10 @@ import type {
 
 function formatDuration(minutes: number): string {
   if (minutes < 1) return '< 1 min';
-  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 60) return `${String(minutes)} min`;
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return `${h} h ${m} min`;
+  return `${String(h)} h ${String(m)} min`;
 }
 
 // ─── ForcedCloseSurface (T083 — read-only summary row) ────────────────────────
@@ -85,7 +85,7 @@ export function ForcedCloseForm({
   const [reason, setReason] = useState<ForcedCloseReason | null>(null);
   const [annotation, setAnnotation] = useState('');
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>): void {
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>): void {
     e.preventDefault();
     /* v8 ignore next 1 */
     if (reason == null) return;
@@ -200,7 +200,7 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
         const remaining = prev.shifts.filter((s) => s.shift_id !== shift.shift_id);
         return remaining.length === 0 ? { kind: 'empty' } : { kind: 'list', shifts: remaining };
       });
-    } else if (res.kind === 'refused' && res.category === 'state_invalid') {
+    } else if (res.category === 'state_invalid') {
       setDialog({ kind: 'open', shift, submitting: false, submitError: true });
       void fetchShifts();
     } else {
