@@ -4,51 +4,377 @@
   "title": "Design System: POS-Pulse",
   "extensions": {
     "colorMeta": {
-      "primary":          { "role": "primary",   "displayName": "Command Navy",     "canonical": "oklch(36% 0.085 236)", "tonalRamp": ["#0a1a2d","#102440","#163054","#1f4e7a","#2e6a9f","#4d86ba","#7aadd0","#b0cfe5","#ddeaf4","#f0f6fb"] },
-      "primary-emphasis": { "role": "primary",   "displayName": "Deep Command",     "canonical": "oklch(29% 0.075 236)", "tonalRamp": ["#060f1b","#0c1f33","#122b47","#163d61","#1f5584","#306ea3","#558dbf","#8cb5d8","#c4d9ec","#e5eff8"] },
-      "primary-soft":     { "role": "primary",   "displayName": "Horizon Wash",     "canonical": "oklch(93% 0.018 236)", "tonalRamp": ["#c5d8ec","#cde0f0","#d6e7f4","#deeef7","#e6eef6","#edf4fa","#f2f7fb","#f6fafd","#fafcfe","#ffffff"] },
-      "accent":           { "role": "secondary", "displayName": "Teal Marker",      "canonical": "oklch(52% 0.085 218)", "tonalRamp": ["#0d2a36","#123a4d","#174d66","#1e6f8c","#2e7da3","#4093bb","#68aed0","#9ccae2","#cde5f1","#e7f2f9"] },
-      "rail":             { "role": "neutral",   "displayName": "Vault Dark",       "canonical": "oklch(16% 0.030 236)", "tonalRamp": ["#040a11","#070f18","#0a151f","#0e1b2a","#14253b","#1d344f","#2c4a6a","#4a6a8c","#7c9ab8","#b8cde0"] },
-      "background":       { "role": "neutral",   "displayName": "Near-White",       "canonical": "oklch(99% 0.005 236)", "tonalRamp": ["#d0d8e0","#dae0e8","#e4eaef","#edf1f6","#f3f6fa","#f7f9fb","#f9fbfc","#fbfcfd","#fdfefe","#ffffff"] },
-      "surface":          { "role": "neutral",   "displayName": "Clean White",      "canonical": "oklch(100% 0 0)",      "tonalRamp": ["#d6dde5","#dfe5ec","#e7ecf2","#eff3f7","#f4f7fa","#f8fafb","#fafbfc","#fcfcfd","#fdfefe","#ffffff"] },
-      "surface-elevated": { "role": "neutral",   "displayName": "Lifted Canvas",    "canonical": "oklch(96% 0.010 236)", "tonalRamp": ["#c8d2dc","#d3dce4","#dce5ed","#e5edf3","#edf2f8","#f1f5fa","#f5f8fb","#f8fafc","#fbfcfd","#ffffff"] },
-      "surface-sunken":   { "role": "neutral",   "displayName": "Recessed",         "canonical": "oklch(94% 0.012 236)", "tonalRamp": ["#c2ccd6","#cdd7e0","#d8e1ea","#e2eaf2","#eef2f6","#f2f5f9","#f5f8fb","#f8fafc","#fbfcfd","#ffffff"] },
-      "text":             { "role": "neutral",   "displayName": "Midnight Ink",     "canonical": "oklch(18% 0.040 236)", "tonalRamp": ["#040b14","#080f1a","#0c1521","#0f1d2e","#1a2d42","#2d4560","#4a6685","#738fad","#a8bfcf","#d0dce8"] },
-      "text-muted":       { "role": "neutral",   "displayName": "Muted Slate",      "canonical": "oklch(50% 0.040 236)", "tonalRamp": ["#1c2a36","#2a3a4a","#3a4f62","#4d6072","#5b6b7c","#758a9c","#95a8b8","#b5c5d2","#d5e0e8","#edf2f6"] },
-      "border":           { "role": "neutral",   "displayName": "Quiet Edge",       "canonical": "oklch(88% 0.015 236)", "tonalRamp": ["#9aabb9","#a8b8c6","#b8c6d2","#c8d5df","#d8dfe7","#e4e9ef","#edf1f5","#f3f5f8","#f8fafb","#ffffff"] },
-      "danger":           { "role": "danger",    "displayName": "Alert Red",        "canonical": "oklch(44% 0.140 22)",  "tonalRamp": ["#3d080d","#591015","#78181f","#96222a","#b32e36","#c84d55","#d8767d","#e8a4a8","#f4d0d2","#faeaea"] },
-      "warning":          { "role": "warning",   "displayName": "Caution Amber",    "canonical": "oklch(55% 0.140 65)",  "tonalRamp": ["#3a2200","#562f00","#724000","#925500","#b87600","#d49030","#e5ae5e","#f0ca90","#f9e4c0","#fdf3e3"] },
-      "success":          { "role": "success",   "displayName": "Confirmation Green","canonical": "oklch(50% 0.120 155)", "tonalRamp": ["#05260f","#0a3817","#0f4d21","#14632c","#1f8a5b","#2ea069","#52b986","#84d0ab","#b8e6cc","#def5e7"] },
-      "info":             { "role": "info",      "displayName": "Info Teal",        "canonical": "oklch(48% 0.090 218)", "tonalRamp": ["#071e29","#0c2e40","#124059","#175670","#1e6f8c","#2e87a8","#50a2c0","#80c0d8","#b0daec","#d8eef6"] }
+      "primary": {
+        "role": "primary",
+        "displayName": "Command Navy",
+        "canonical": "oklch(36% 0.085 236)",
+        "tonalRamp": [
+          "#0a1a2d",
+          "#102440",
+          "#163054",
+          "#1f4e7a",
+          "#2e6a9f",
+          "#4d86ba",
+          "#7aadd0",
+          "#b0cfe5",
+          "#ddeaf4",
+          "#f0f6fb"
+        ]
+      },
+      "primary-emphasis": {
+        "role": "primary",
+        "displayName": "Deep Command",
+        "canonical": "oklch(29% 0.075 236)",
+        "tonalRamp": [
+          "#060f1b",
+          "#0c1f33",
+          "#122b47",
+          "#163d61",
+          "#1f5584",
+          "#306ea3",
+          "#558dbf",
+          "#8cb5d8",
+          "#c4d9ec",
+          "#e5eff8"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "Horizon Wash",
+        "canonical": "oklch(93% 0.018 236)",
+        "tonalRamp": [
+          "#c5d8ec",
+          "#cde0f0",
+          "#d6e7f4",
+          "#deeef7",
+          "#e6eef6",
+          "#edf4fa",
+          "#f2f7fb",
+          "#f6fafd",
+          "#fafcfe",
+          "#ffffff"
+        ]
+      },
+      "accent": {
+        "role": "secondary",
+        "displayName": "Teal Marker",
+        "canonical": "oklch(52% 0.085 218)",
+        "tonalRamp": [
+          "#0d2a36",
+          "#123a4d",
+          "#174d66",
+          "#1e6f8c",
+          "#2e7da3",
+          "#4093bb",
+          "#68aed0",
+          "#9ccae2",
+          "#cde5f1",
+          "#e7f2f9"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Vault Dark",
+        "canonical": "oklch(16% 0.030 236)",
+        "tonalRamp": [
+          "#040a11",
+          "#070f18",
+          "#0a151f",
+          "#0e1b2a",
+          "#14253b",
+          "#1d344f",
+          "#2c4a6a",
+          "#4a6a8c",
+          "#7c9ab8",
+          "#b8cde0"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Near-White",
+        "canonical": "oklch(99% 0.005 236)",
+        "tonalRamp": [
+          "#d0d8e0",
+          "#dae0e8",
+          "#e4eaef",
+          "#edf1f6",
+          "#f3f6fa",
+          "#f7f9fb",
+          "#f9fbfc",
+          "#fbfcfd",
+          "#fdfefe",
+          "#ffffff"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Clean White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "#d6dde5",
+          "#dfe5ec",
+          "#e7ecf2",
+          "#eff3f7",
+          "#f4f7fa",
+          "#f8fafb",
+          "#fafbfc",
+          "#fcfcfd",
+          "#fdfefe",
+          "#ffffff"
+        ]
+      },
+      "surface-elevated": {
+        "role": "neutral",
+        "displayName": "Lifted Canvas",
+        "canonical": "oklch(96% 0.010 236)",
+        "tonalRamp": [
+          "#c8d2dc",
+          "#d3dce4",
+          "#dce5ed",
+          "#e5edf3",
+          "#edf2f8",
+          "#f1f5fa",
+          "#f5f8fb",
+          "#f8fafc",
+          "#fbfcfd",
+          "#ffffff"
+        ]
+      },
+      "surface-sunken": {
+        "role": "neutral",
+        "displayName": "Recessed",
+        "canonical": "oklch(94% 0.012 236)",
+        "tonalRamp": [
+          "#c2ccd6",
+          "#cdd7e0",
+          "#d8e1ea",
+          "#e2eaf2",
+          "#eef2f6",
+          "#f2f5f9",
+          "#f5f8fb",
+          "#f8fafc",
+          "#fbfcfd",
+          "#ffffff"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Midnight Ink",
+        "canonical": "oklch(18% 0.040 236)",
+        "tonalRamp": [
+          "#040b14",
+          "#080f1a",
+          "#0c1521",
+          "#0f1d2e",
+          "#1a2d42",
+          "#2d4560",
+          "#4a6685",
+          "#738fad",
+          "#a8bfcf",
+          "#d0dce8"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Slate",
+        "canonical": "oklch(50% 0.040 236)",
+        "tonalRamp": [
+          "#1c2a36",
+          "#2a3a4a",
+          "#3a4f62",
+          "#4d6072",
+          "#5b6b7c",
+          "#758a9c",
+          "#95a8b8",
+          "#b5c5d2",
+          "#d5e0e8",
+          "#edf2f6"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Quiet Edge",
+        "canonical": "oklch(88% 0.015 236)",
+        "tonalRamp": [
+          "#9aabb9",
+          "#a8b8c6",
+          "#b8c6d2",
+          "#c8d5df",
+          "#d8dfe7",
+          "#e4e9ef",
+          "#edf1f5",
+          "#f3f5f8",
+          "#f8fafb",
+          "#ffffff"
+        ]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Alert Red",
+        "canonical": "oklch(44% 0.140 22)",
+        "tonalRamp": [
+          "#3d080d",
+          "#591015",
+          "#78181f",
+          "#96222a",
+          "#b32e36",
+          "#c84d55",
+          "#d8767d",
+          "#e8a4a8",
+          "#f4d0d2",
+          "#faeaea"
+        ]
+      },
+      "warning": {
+        "role": "warning",
+        "displayName": "Caution Amber",
+        "canonical": "oklch(55% 0.140 65)",
+        "tonalRamp": [
+          "#3a2200",
+          "#562f00",
+          "#724000",
+          "#925500",
+          "#b87600",
+          "#d49030",
+          "#e5ae5e",
+          "#f0ca90",
+          "#f9e4c0",
+          "#fdf3e3"
+        ]
+      },
+      "success": {
+        "role": "success",
+        "displayName": "Confirmation Green",
+        "canonical": "oklch(50% 0.120 155)",
+        "tonalRamp": [
+          "#05260f",
+          "#0a3817",
+          "#0f4d21",
+          "#14632c",
+          "#1f8a5b",
+          "#2ea069",
+          "#52b986",
+          "#84d0ab",
+          "#b8e6cc",
+          "#def5e7"
+        ]
+      },
+      "info": {
+        "role": "info",
+        "displayName": "Info Teal",
+        "canonical": "oklch(48% 0.090 218)",
+        "tonalRamp": [
+          "#071e29",
+          "#0c2e40",
+          "#124059",
+          "#175670",
+          "#1e6f8c",
+          "#2e87a8",
+          "#50a2c0",
+          "#80c0d8",
+          "#b0daec",
+          "#d8eef6"
+        ]
+      }
     },
     "typographyMeta": {
-      "display":  { "displayName": "Display",   "purpose": "Screen titles and primary pane headings. At most one per screen." },
-      "headline": { "displayName": "Headline",  "purpose": "Section headers, panel titles within a screen." },
-      "title":    { "displayName": "Title",     "purpose": "Card headers, form section labels, named workspace regions." },
-      "body":     { "displayName": "Body",      "purpose": "Primary paragraph text, descriptions, help copy. Cap at 65–75ch on reading surfaces." },
-      "label":    { "displayName": "Label",     "purpose": "Badges, chip labels, table column headers, status indicators. All-caps forbidden; semibold carries the weight." },
-      "mono":     { "displayName": "Mono",      "purpose": "Terminal IDs, receipt amounts, barcode values, audit reference strings, transaction UUIDs." }
+      "display": {
+        "displayName": "Display",
+        "purpose": "Screen titles and primary pane headings. At most one per screen."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section headers, panel titles within a screen."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card headers, form section labels, named workspace regions."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Primary paragraph text, descriptions, help copy. Cap at 65–75ch on reading surfaces."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Badges, chip labels, table column headers, status indicators. All-caps forbidden; semibold carries the weight."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Terminal IDs, receipt amounts, barcode values, audit reference strings, transaction UUIDs."
+      }
     },
     "shadows": [
-      { "name": "none",    "value": "none",                                                                                                                  "purpose": "Default state for all surfaces. No resting shadow on interactive elements." },
-      { "name": "sm",      "value": "0 1px 2px rgba(0,0,0,0.05)",                                                                                           "purpose": "Hairline depth for inline chips and tight status indicators." },
-      { "name": "md",      "value": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)",                                                      "purpose": "Mid-level utility shadow; rarely used directly." },
-      { "name": "card",    "value": "0 1px 2px rgba(15,29,46,0.04), 0 8px 24px rgba(15,29,46,0.06)",                                                        "purpose": "Standard card elevation. Tinted toward Midnight Ink to stay cool rather than generic gray." },
-      { "name": "pane",    "value": "0 18px 60px rgba(15,29,46,0.10)",                                                                                       "purpose": "Modal-adjacent panels, the pairing screen pane." },
-      { "name": "overlay", "value": "0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)",                                                  "purpose": "Dialogs and drawers. Unmistakably above the page." },
-      { "name": "inset",   "value": "inset 0 1px 0 rgba(15,29,46,0.04), inset 0 0 0 1px rgba(15,29,46,0.04)",                                               "purpose": "Sunken wells — PIN keypad recess, numeric input backgrounds where tactile depth is needed." }
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "Default state for all surfaces. No resting shadow on interactive elements."
+      },
+      {
+        "name": "sm",
+        "value": "0 1px 2px rgba(0,0,0,0.05)",
+        "purpose": "Hairline depth for inline chips and tight status indicators."
+      },
+      {
+        "name": "md",
+        "value": "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1)",
+        "purpose": "Mid-level utility shadow; rarely used directly."
+      },
+      {
+        "name": "card",
+        "value": "0 1px 2px rgba(15,29,46,0.04), 0 8px 24px rgba(15,29,46,0.06)",
+        "purpose": "Standard card elevation. Tinted toward Midnight Ink to stay cool rather than generic gray."
+      },
+      {
+        "name": "pane",
+        "value": "0 18px 60px rgba(15,29,46,0.10)",
+        "purpose": "Modal-adjacent panels, the pairing screen pane."
+      },
+      {
+        "name": "overlay",
+        "value": "0 20px 25px -5px rgba(0,0,0,0.25), 0 8px 10px -6px rgba(0,0,0,0.25)",
+        "purpose": "Dialogs and drawers. Unmistakably above the page."
+      },
+      {
+        "name": "inset",
+        "value": "inset 0 1px 0 rgba(15,29,46,0.04), inset 0 0 0 1px rgba(15,29,46,0.04)",
+        "purpose": "Sunken wells — PIN keypad recess, numeric input backgrounds where tactile depth is needed."
+      }
     ],
     "motion": [
-      { "name": "duration-1",  "value": "80ms",                           "purpose": "Micro-interactions: hover bg fills, badge dot pulse onset." },
-      { "name": "duration-2",  "value": "150ms",                          "purpose": "Standard state transitions: button hover, border-color shifts, input focus." },
-      { "name": "duration-3",  "value": "220ms",                          "purpose": "Panel slides, nav rail label fade." },
-      { "name": "duration-4",  "value": "320ms",                          "purpose": "Dialog entrance, route change fade." },
-      { "name": "ease-out",    "value": "cubic-bezier(0.2, 0.7, 0.25, 1)","purpose": "Standard exit easing for state transitions. Expo-style; never bounce or elastic." },
-      { "name": "ease-in-out", "value": "cubic-bezier(0.45, 0.05, 0.25, 1)","purpose": "Bidirectional transitions — panel toggle, rail expand/collapse." }
+      {
+        "name": "duration-1",
+        "value": "80ms",
+        "purpose": "Micro-interactions: hover bg fills, badge dot pulse onset."
+      },
+      {
+        "name": "duration-2",
+        "value": "150ms",
+        "purpose": "Standard state transitions: button hover, border-color shifts, input focus."
+      },
+      { "name": "duration-3", "value": "220ms", "purpose": "Panel slides, nav rail label fade." },
+      { "name": "duration-4", "value": "320ms", "purpose": "Dialog entrance, route change fade." },
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.2, 0.7, 0.25, 1)",
+        "purpose": "Standard exit easing for state transitions. Expo-style; never bounce or elastic."
+      },
+      {
+        "name": "ease-in-out",
+        "value": "cubic-bezier(0.45, 0.05, 0.25, 1)",
+        "purpose": "Bidirectional transitions — panel toggle, rail expand/collapse."
+      }
     ],
     "breakpoints": [
-      { "name": "rail-collapse", "value": "1024px", "purpose": "Below this breakpoint the nav rail is hidden." },
-      { "name": "rail-expand",   "value": "1280px", "purpose": "At this breakpoint the rail expands from 84px icon-only to 248px with labels." }
+      {
+        "name": "rail-collapse",
+        "value": "1024px",
+        "purpose": "Below this breakpoint the nav rail is hidden."
+      },
+      {
+        "name": "rail-expand",
+        "value": "1280px",
+        "purpose": "At this breakpoint the rail expands from 84px icon-only to 248px with labels."
+      }
     ]
   },
   "components": [
@@ -129,14 +455,46 @@
       "The dark navigation rail is the one intentionally drenched surface"
     ],
     "rules": [
-      { "name": "The One-Accent Rule",            "body": "The teal accent (#2e7da3) appears only as a navigational marker (the active-state tab) and a focus-ring fallback. It is not used as a button color, badge color, or decorative fill. Its rarity is the point.",                                               "section": "colors" },
-      { "name": "The Status-Color Containment Rule", "body": "Status colors (success, warning, danger, info) appear only on their designated surfaces (badges, status banners, alert callouts). They are never used as decorative fills, hover accents, or brand colors on primary actions.",                        "section": "colors" },
-      { "name": "The No-Second-Font Rule",         "body": "Inter Tight and any secondary display typeface are rejected by spec (FR-052). Weight contrast alone carries the display hierarchy. A secondary proprietary font introduces a Windows font dependency that causes fallback regressions on paired terminals.", "section": "typography" },
-      { "name": "The Tight-Display Rule",          "body": "Display and Headline headings use letter-spacing −0.01em and −0.008em respectively — not Inter Tight as a separate face.",                                                                                                                              "section": "typography" },
-      { "name": "The Flat-By-Default Rule",        "body": "Every surface starts flat. Shadows appear only as a structural response to layering (card above workspace, dialog above everything) or to state (hover on a card signals lift). Purely decorative shadows are prohibited.",                              "section": "elevation" },
-      { "name": "The Single Primary Rule",         "body": "No screen or modal shall have more than one primary-intent button visible at once. When two confirmations are needed, sequence them.",                                                                                                                    "section": "components" },
-      { "name": "The No-Nested-Cards Rule",        "body": "Cards do not contain cards. If content inside a card needs grouping, use spacing, borders, or background color shifts — never a child card component.",                                                                                                  "section": "components" },
-      { "name": "The Persistent Banner Rule",      "body": "Status banners are never toasts. If a hardware or connectivity condition requires the operator's attention, the banner stays until the condition resolves. Ephemeral toasts are reserved for transient acknowledgement of user-initiated actions.",      "section": "components" }
+      {
+        "name": "The One-Accent Rule",
+        "body": "The teal accent (#2e7da3) appears only as a navigational marker (the active-state tab) and a focus-ring fallback. It is not used as a button color, badge color, or decorative fill. Its rarity is the point.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status-Color Containment Rule",
+        "body": "Status colors (success, warning, danger, info) appear only on their designated surfaces (badges, status banners, alert callouts). They are never used as decorative fills, hover accents, or brand colors on primary actions.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Second-Font Rule",
+        "body": "Inter Tight and any secondary display typeface are rejected by spec (FR-052). Weight contrast alone carries the display hierarchy. A secondary proprietary font introduces a Windows font dependency that causes fallback regressions on paired terminals.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tight-Display Rule",
+        "body": "Display and Headline headings use letter-spacing −0.01em and −0.008em respectively — not Inter Tight as a separate face.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Every surface starts flat. Shadows appear only as a structural response to layering (card above workspace, dialog above everything) or to state (hover on a card signals lift). Purely decorative shadows are prohibited.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Single Primary Rule",
+        "body": "No screen or modal shall have more than one primary-intent button visible at once. When two confirmations are needed, sequence them.",
+        "section": "components"
+      },
+      {
+        "name": "The No-Nested-Cards Rule",
+        "body": "Cards do not contain cards. If content inside a card needs grouping, use spacing, borders, or background color shifts — never a child card component.",
+        "section": "components"
+      },
+      {
+        "name": "The Persistent Banner Rule",
+        "body": "Status banners are never toasts. If a hardware or connectivity condition requires the operator's attention, the banner stays until the condition resolves. Ephemeral toasts are reserved for transient acknowledgement of user-initiated actions.",
+        "section": "components"
+      }
     ],
     "dos": [
       "Do use Command Navy (#1f4e7a) as the single primary action color. One primary per context.",
