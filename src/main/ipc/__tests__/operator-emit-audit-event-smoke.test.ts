@@ -119,9 +119,7 @@ function fakeForcedCloseHandler(): ForcedCloseHandler {
 
 function fakeStuckShiftsHandler(): StuckShiftsHandler {
   return {
-    listStuckShifts: vi.fn(() =>
-      Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] }),
-    ),
+    listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
   } as unknown as StuckShiftsHandler;
 }
 
