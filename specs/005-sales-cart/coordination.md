@@ -5,16 +5,18 @@
 **Spec:** [./spec.md](./spec.md) (DRAFT)
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all unchecked, all `[BLOCKED: §A0]`)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-09
+**Last updated:** 2026-05-14
 
 ---
 
-> # 🚧 DRAFT — BLOCKED
+> # ✅ §A0 CLEARED — /speckit-clarify ELIGIBLE
 >
-> Every coordination item below is conditional on **004 S4 closeout AND
-> 004 S5 visibility-boundary approval**. Do **NOT** begin any
-> implementation work. This file is a coordination scaffold, not an
-> executable plan.
+> **§A0 cleared on 2026-05-14.** Both §A0 prerequisites are met:
+> 004 S4 closeout complete (PR #124, 2026-05-11) and 004 S5
+> visibility boundaries complete (T083–T093 merged; main SHA `d247e8a`,
+> 2026-05-14). `/speckit-clarify` on 005 **may now run.**
+> Implementation work remains blocked until `/speckit-clarify` and
+> subsequent Spec Kit steps complete.
 
 ---
 
@@ -35,10 +37,12 @@ updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **Spec-draft only.** No `/speckit-clarify` yet, no
-  `/speckit-plan` executed (the `plan.md` is a draft scaffold, not an
-  approved plan), no `/speckit-tasks` invoked. Slice 0 (visual
+- **Phase:** **Spec-draft only — §A0 CLEARED 2026-05-14.** No
+  `/speckit-clarify` yet (eligible to run now that §A0 is cleared),
+  no `/speckit-plan` executed (the `plan.md` is a draft scaffold, not
+  an approved plan), no `/speckit-tasks` invoked. Slice 0 (visual
   direction) not begun.
+- **§A0 cleared on 2026-05-14; `/speckit-clarify` may now run.**
 - **Spec-phase artifacts present:**
   - `spec.md` — DRAFT, contains open `[NEEDS CLARIFICATION]` items.
   - `plan.md` — DRAFT scaffold only.
@@ -95,31 +99,41 @@ listed in dependency order; some may be worked in parallel once
 
 ### 1. 004 S4 closeout
 
-- **Status:** ⏳ **BLOCKED.**
+- **Status:** ✅ **CLEARED — 004 S4 closeout completed via PR #124 merged 2026-05-11.**
 - **Owner:** Ahmed.
-- **Required action:** Confirm the 004 S4 closeout PR (issue #87)
+- **Required action:** ~~Confirm the 004 S4 closeout PR (issue #87)
   merges with all S4 tasks (T052–T082) ticked and 004's
-  coordination file marks S4 ✅.
-- **Unblocks:** §A0 (partial — half).
+  coordination file marks S4 ✅.~~ Complete. All S4 tasks
+  T052–T082 merged; 004's coordination file marks S4 ✅;
+  PR #124 merged 2026-05-11.
+- **Unblocks:** §A0 (partial — half). ✅ This half cleared.
 
 ### 2. 004 S5 review
 
-- **Status:** ⏳ **BLOCKED.**
+- **Status:** ✅ **CLEARED — 004 S5 visibility boundaries complete; T083–T093 merged; main SHA `d247e8a` on 2026-05-14.**
 - **Owner:** Ahmed.
-- **Required action:** 004 S5 forced-close + visibility-boundary PR
+- **Required action:** ~~004 S5 forced-close + visibility-boundary PR
   (004 tasks T083–T093) merges, the role-visibility-matrix is
-  finalised, and 004's coordination file marks S5 ✅.
-- **Unblocks:** §A0 (the other half).
+  finalised, and 004's coordination file marks S5 ✅.~~ Complete.
+  All T083–T093 merged (PRs #133/#134/#135/#137/#142/#143);
+  role-visibility-matrix finalised; 004's coordination file marks
+  S5 ✅; main SHA `d247e8a`, 2026-05-14.
+- **Unblocks:** §A0 (the other half). ✅ This half cleared.
 
 ### 3. §A0 sign-off
 
-- **Status:** ⏳ **BLOCKED.**
+- **Status:** ✅ **CLEARED — both §A0 prerequisites met; `/speckit-clarify` may proceed.**
+  Cleared 2026-05-14: 004 S4 complete (PR #124, 2026-05-11) AND
+  004 S5 complete (T083–T093 merged, main SHA `d247e8a`, 2026-05-14).
+  Cart-side visibility additions in 004's role-visibility-matrix are
+  accepted; the rows that 005 will inherit and extend are finalised.
 - **Owner:** Ahmed (or constitution maintainer).
-- **Required action:** Confirm 004 S4 + S5 are approved AND that the
+- **Required action:** ~~Confirm 004 S4 + S5 are approved AND that the
   cart-side visibility additions in 004's role-visibility-matrix
-  are accepted (the rows that 005 will inherit and extend).
-- **Unblocks:** `/speckit-clarify` on 005 may run; 005 S0 (visual
-  direction) may begin.
+  are accepted.~~ Complete. Sign-off recorded in this file
+  2026-05-14.
+- **Unblocks:** ✅ `/speckit-clarify` on 005 **may now run**; 005 S0
+  (visual direction) may begin once `/speckit-clarify` completes.
 
 ### 4. §A1 backend coordination
 
@@ -215,7 +229,7 @@ listed in dependency order; some may be worked in parallel once
 
 | Gate | Status | Owner | Resolution-path note |
 |:--|:--:|:--|:--|
-| §A0 — 005-blocking gate (LOAD-BEARING) | ⏳ **BLOCKED** | **Ahmed** | Holds on 004 S4 closeout AND 004 S5 visibility boundaries. Must clear before any 005 work begins, including `/speckit-clarify`. |
+| §A0 — 005-blocking gate (LOAD-BEARING) | ✅ **CLEARED 2026-05-14** | **Ahmed** | 004 S4 closeout ✅ (PR #124, 2026-05-11) AND 004 S5 visibility boundaries ✅ (T083–T093 merged; main SHA `d247e8a`, 2026-05-14). `/speckit-clarify` is now eligible to run. |
 | §A1 — cart-related backend / OpenAPI dependencies | ⏳ deferred | **Ahmed** + future-feature owner | Item-ref resolution only; cart drafts add NO new backend endpoints. May ship with stubbed resolver if catalogue feature is later. |
 | §A2 — migrations (`carts`, `cart_lines`, `cart_action_outbox`) | ⏳ later | **Ahmed** | After `data-model.md` exists. P4 review: cart tables are intentionally mutable; rationale documented. |
 | §A3 — 004 audit-event catalogue extension | ⏳ coordinated with 004 S5 | **Ahmed** | `ActionCategory` union extended with three new cart categories. Lands cleanly with or immediately after 004 S5. |
@@ -235,10 +249,12 @@ listed in dependency order; some may be worked in parallel once
 | §A0 + §A4 | S4 (handoff envelope + freeze rule) may begin |
 | §A0 + §A1 (if needed) + S2 + S3 + S4 merged | S5 (final polish + cart pane visual) may begin; production rollout may proceed pending §A5 |
 
-**Bottom line:** §A0 is the single load-bearing gate. Until 004 S4
-closeout AND 004 S5 visibility-boundary review are both ✅ in 004's
-coordination file, **no 005 coordination action above row 3 may
-even begin**, and `/speckit-clarify` on 005 must not run.
+**Bottom line:** §A0 is the single load-bearing gate. ✅ **§A0 is
+now cleared (2026-05-14).** 004 S4 closeout ✅ (PR #124, 2026-05-11)
+and 004 S5 visibility boundaries ✅ (T083–T093 merged; main SHA
+`d247e8a`, 2026-05-14) are both confirmed in 004's coordination
+file. **`/speckit-clarify` on 005 is eligible to run next.**
+S0 (visual direction) may begin once `/speckit-clarify` completes.
 
 ---
 
@@ -336,6 +352,10 @@ This file is the durable coordination record across sessions.
 
 ---
 
-**End of coordination file. DRAFT — BLOCKED. Implementation MUST
-NOT begin until 004 S4 closeout AND 004 S5 visibility boundaries
-are reviewed and approved AND `/speckit-clarify` runs on 005.**
+**End of coordination file.** §A0 ✅ **CLEARED 2026-05-14** —
+004 S4 closeout ✅ (PR #124, 2026-05-11); 004 S5 visibility
+boundaries ✅ (T083–T093 merged; main SHA `d247e8a`, 2026-05-14).
+**`/speckit-clarify` on 005 is eligible to run next.** Implementation
+MUST NOT begin until `/speckit-clarify` resolves the open
+`[NEEDS CLARIFICATION]` items in `spec.md` and subsequent Spec Kit
+steps complete.
