@@ -28,12 +28,10 @@ import type {
  * are not logged here.
  */
 export const cart: CartBridgeAPI = {
-  create: (req: CartCreateRequest) =>
-    ipcRenderer.invoke(CART_IPC_CHANNELS.CREATE, req),
+  create: (req: CartCreateRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.CREATE, req),
 
   lines: {
-    add: (req: CartLinesAddRequest) =>
-      ipcRenderer.invoke(CART_IPC_CHANNELS.LINES_ADD, req),
+    add: (req: CartLinesAddRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.LINES_ADD, req),
     update: (req: CartLinesUpdateRequest) =>
       ipcRenderer.invoke(CART_IPC_CHANNELS.LINES_UPDATE, req),
     remove: (req: CartLinesRemoveRequest) =>
@@ -49,12 +47,9 @@ export const cart: CartBridgeAPI = {
       ipcRenderer.invoke(CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_REMOVE, req),
   },
 
-  void: (req: CartVoidRequest) =>
-    ipcRenderer.invoke(CART_IPC_CHANNELS.VOID, req),
+  void: (req: CartVoidRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.VOID, req),
 
-  handoff: (req: CartHandoffRequest) =>
-    ipcRenderer.invoke(CART_IPC_CHANNELS.HANDOFF, req),
+  handoff: (req: CartHandoffRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.HANDOFF, req),
 
-  subscribe: (req: CartSubscribeRequest) =>
-    ipcRenderer.invoke(CART_IPC_CHANNELS.SUBSCRIBE, req),
+  subscribe: (req: CartSubscribeRequest) => ipcRenderer.invoke(CART_IPC_CHANNELS.SUBSCRIBE, req),
 };

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { CartState, CART_FSM_TRANSITIONS, isValidTransition } from '../../../../src/shared/cart/cart-state.js';
+import {
+  CartState,
+  CART_FSM_TRANSITIONS,
+  isValidTransition,
+} from '../../../../src/shared/cart/cart-state.js';
 
 describe('CartState enum', () => {
   it('defines exactly 6 states', () => {

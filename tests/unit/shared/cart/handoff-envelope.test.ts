@@ -129,7 +129,9 @@ describe('freezeEnvelope', () => {
   });
 
   it('freezes each LineSnapshot object inside lines', () => {
-    const env = makeEnvelope({ lines: [makeLineSnapshot(), makeLineSnapshot({ line_id: 'line-2' })] });
+    const env = makeEnvelope({
+      lines: [makeLineSnapshot(), makeLineSnapshot({ line_id: 'line-2' })],
+    });
     const frozen = freezeEnvelope(env);
     for (const line of frozen.lines) {
       expect(Object.isFrozen(line)).toBe(true);

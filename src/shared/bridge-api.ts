@@ -524,7 +524,9 @@ export interface CartBridgeAPI {
     /** Adds a discount placeholder; may require manager attribution. */
     add(req: CartDiscountPlaceholdersAddRequest): Promise<CartDiscountPlaceholdersAddResponse>;
     /** Removes a discount placeholder; mirrors attribution rule of add. */
-    remove(req: CartDiscountPlaceholdersRemoveRequest): Promise<CartDiscountPlaceholdersRemoveResponse>;
+    remove(
+      req: CartDiscountPlaceholdersRemoveRequest,
+    ): Promise<CartDiscountPlaceholdersRemoveResponse>;
   };
   /** Voids a cart. Post-handoff void requires manager attribution. */
   void(req: CartVoidRequest): Promise<CartVoidResponse>;

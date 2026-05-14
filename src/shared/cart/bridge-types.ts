@@ -7,9 +7,7 @@ export interface CartCreateRequest {
   readonly idempotency_key: string;
 }
 
-export type CartCreateResponse =
-  | { readonly kind: 'ok'; readonly cart_id: string }
-  | CartRefusal;
+export type CartCreateResponse = { readonly kind: 'ok'; readonly cart_id: string } | CartRefusal;
 
 // ── cart.lines.add ────────────────────────────────────────────────────────────
 
@@ -21,7 +19,12 @@ export interface CartLinesAddRequest {
 }
 
 export type CartLinesAddResponse =
-  | { readonly kind: 'ok'; readonly line_id: string; readonly merged: boolean; readonly version: number }
+  | {
+      readonly kind: 'ok';
+      readonly line_id: string;
+      readonly merged: boolean;
+      readonly version: number;
+    }
   | CartRefusal;
 
 // ── cart.lines.update ─────────────────────────────────────────────────────────
@@ -49,9 +52,7 @@ export interface CartLinesRemoveRequest {
   readonly idempotency_key: string;
 }
 
-export type CartLinesRemoveResponse =
-  | { readonly kind: 'ok' }
-  | CartRefusal;
+export type CartLinesRemoveResponse = { readonly kind: 'ok' } | CartRefusal;
 
 // ── cart.lines.setNote ────────────────────────────────────────────────────────
 
@@ -78,7 +79,11 @@ export interface CartDiscountPlaceholdersAddRequest {
 }
 
 export type CartDiscountPlaceholdersAddResponse =
-  | { readonly kind: 'ok'; readonly placeholder_id: string; readonly requires_manager_attribution: boolean }
+  | {
+      readonly kind: 'ok';
+      readonly placeholder_id: string;
+      readonly requires_manager_attribution: boolean;
+    }
   | CartRefusal;
 
 // ── cart.discountPlaceholders.remove ──────────────────────────────────────────
@@ -90,9 +95,7 @@ export interface CartDiscountPlaceholdersRemoveRequest {
   readonly idempotency_key: string;
 }
 
-export type CartDiscountPlaceholdersRemoveResponse =
-  | { readonly kind: 'ok' }
-  | CartRefusal;
+export type CartDiscountPlaceholdersRemoveResponse = { readonly kind: 'ok' } | CartRefusal;
 
 // ── cart.void ─────────────────────────────────────────────────────────────────
 
@@ -102,9 +105,7 @@ export interface CartVoidRequest {
   readonly idempotency_key: string;
 }
 
-export type CartVoidResponse =
-  | { readonly kind: 'ok' }
-  | CartRefusal;
+export type CartVoidResponse = { readonly kind: 'ok' } | CartRefusal;
 
 // ── cart.handoff ──────────────────────────────────────────────────────────────
 

@@ -37,7 +37,11 @@ export interface CartStore {
   reset(): void;
 }
 
-function transition(cart: ActiveCart, to: CartState, extra?: Partial<ActiveCart>): ActiveCart | null {
+function transition(
+  cart: ActiveCart,
+  to: CartState,
+  extra?: Partial<ActiveCart>,
+): ActiveCart | null {
   if (!isValidTransition(cart.state, to)) {
     return null;
   }

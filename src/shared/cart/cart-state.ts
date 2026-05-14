@@ -20,7 +20,11 @@ export const CART_FSM_TRANSITIONS: Readonly<Record<CartState, ReadonlySet<CartSt
     CartState.cancelled,
   ]),
   [CartState.discount_pending_attribution]: new Set([CartState.editing, CartState.cancelled]),
-  [CartState.handing_off]: new Set([CartState.frozen_handed_off, CartState.editing, CartState.cancelled]),
+  [CartState.handing_off]: new Set([
+    CartState.frozen_handed_off,
+    CartState.editing,
+    CartState.cancelled,
+  ]),
   [CartState.frozen_handed_off]: new Set([CartState.cancelled]),
   [CartState.cancelled]: new Set(),
 };
