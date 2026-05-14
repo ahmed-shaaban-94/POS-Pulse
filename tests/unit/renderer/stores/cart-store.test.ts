@@ -171,3 +171,57 @@ describe('cartStore — reset', () => {
     expect(activeCart).toBeNull();
   });
 });
+
+describe('cartStore — applyLineAdded while already editing (branch coverage)', () => {
+  it('updates lastLineId when a second line is added in editing state', () => {
+    useCartStore.getState().applyCartCreated('cart-uuid-1');
+    useCartStore.getState().applyLineAdded('line-uuid-1');
+    useCartStore.getState().applyLineAdded('line-uuid-2');
+    const { activeCart } = useCartStore.getState();
+    expect(activeCart?.state).toBe(CartState.editing);
+    expect(activeCart?.lastLineId).toBe('line-uuid-2');
+  });
+});
+
+describe('cartStore — invalid transition no-ops (branch coverage for transition() null path)', () => {
+  it('applyDiscountAttributionRequired is no-op when state is not editing', () => {
+    useCartStore.getState().applyCartCreated('cart-uuid-1');
+    // empty state → discount_pending_attribution is invalid
+    useCartStore.getState().applyDiscountAttributionRequired();
+    const { activeCart } = useCartStore.getState();
+    expect(activeCart?.state).toBe(CartState.empty);
+  });
+
+  it('applyDiscountAttributionResolved is no-op when state is not discount_pending_attribution', () => {
+    useCartStore.getState().applyCartCreated('cart-uuid-1');
+    useCartStore.getState().applyLineAdded('line-uuid-1');
+    // editing → editing via resolved is invalid per FSM (no self-transition)
+    useCartStore.getState().applyDiscountAttributionResolved();
+    const { activeCart } = useCartStore.getState();
+    expect(activeCart?.state).toBe(CartState.editing);
+  });
+
+  it('applyFrozen is no-op when state is not handing_off', () => {
+    useCartStore.getState().applyCartCreated('cart-uuid-1');
+    useCartStore.getState().applyLineAdded('line-uuid-1');
+    // editing → frozen_handed_off is invalid per FSM
+    useCartStore.getState().applyFrozen();
+    const { activeCart } = useCartStore.getState();
+    expect(activeCart?.state).toBe(CartState.editing);
+  });
+
+  it('applyDiscountAttributionRequired is no-op when no activeCart', () => {
+    useCartStore.getState().applyDiscountAttributionRequired();
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+
+  it('applyDiscountAttributionResolved is no-op when no activeCart', () => {
+    useCartStore.getState().applyDiscountAttributionResolved();
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+
+  it('applyFrozen is no-op when no activeCart', () => {
+    useCartStore.getState().applyFrozen();
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+});
