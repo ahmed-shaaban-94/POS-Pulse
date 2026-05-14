@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import { cart } from './cart.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -122,6 +123,7 @@ const api: PreloadBridgeAPI = {
   appConfig: () => ipcRenderer.invoke('app:config') as Promise<AppConfig>,
   pairing,
   operator,
+  cart,
 };
 
 contextBridge.exposeInMainWorld('api', api);
