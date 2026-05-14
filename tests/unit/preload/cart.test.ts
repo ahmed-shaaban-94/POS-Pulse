@@ -61,7 +61,13 @@ describe('preload cart — channel routing', () => {
   it('lines.setNote() invokes ipcRenderer with CART_IPC_CHANNELS.LINES_SET_NOTE and the request', async () => {
     ipcRendererInvoke.mockResolvedValueOnce({ kind: 'refused', reason: 'not_implemented' });
     const cart = await importCart();
-    const req = { cart_id: 'c1', line_id: 'l1', note: 'no subs', version: 1, idempotency_key: 'k5' };
+    const req = {
+      cart_id: 'c1',
+      line_id: 'l1',
+      note: 'no subs',
+      version: 1,
+      idempotency_key: 'k5',
+    };
     await cart.lines.setNote(req);
     expect(ipcRendererInvoke).toHaveBeenCalledWith(CART_IPC_CHANNELS.LINES_SET_NOTE, req);
   });
