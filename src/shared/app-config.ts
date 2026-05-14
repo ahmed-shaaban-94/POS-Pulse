@@ -19,4 +19,20 @@ export interface AppConfig {
    * from `process.env.SENTRY_DSN` in main; never read in renderer.
    */
   sentryDsn?: string;
+  /**
+   * 005-sales-cart T001 — per-feature flag map.
+   *
+   * `cart` defaults to `false`. The renderer reads it once at boot and
+   * conditionally mounts the CartPane in 003's reserved cart slot
+   * (FR-033 / §A5). Enabling the flag is a per-tenant, per-branch
+   * production decision — flipping it in dev is the only path to
+   * exercise the cart UI surfaces until §A5 sign-off.
+   *
+   * SECURITY: feature flag values are non-sensitive boolean toggles.
+   * Sourced from `POS_PULSE_FEATURE_CART` in main; the env var name is
+   * the contract for ops scripts. Disabled-by-default is the fail-safe.
+   */
+  features?: {
+    cart?: boolean;
+  };
 }

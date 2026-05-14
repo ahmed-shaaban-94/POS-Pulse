@@ -117,6 +117,20 @@ const OPERATOR_REDACTED_KEYS = [
 ] as const;
 
 /**
+ * 005-sales-cart T029 / NFR-006 — cart payload allowlist redaction.
+ *
+ * Defence-in-depth for cart payload fields that may carry free-text PII
+ * (line `note`) or cashier-forbidden information (manager identity in
+ * `attribution_operator_id`). The cart-bridge handlers and the audit
+ * emitter are the load-bearing redaction layers; pino redaction is the
+ * safety net for any future contributor logging a cart request/response
+ * object directly.
+ *
+ * MUST NOT shrink. Adding a key here strictly tightens scrubbing.
+ */
+const CART_REDACTED_KEYS = ['note', 'attribution_operator_id'] as const;
+
+/**
  * 004-operator-session T050 — audit-event payload defence-in-depth keys.
  *
  * The `FORBIDDEN_PAYLOAD_KEYS` list (from `shared/audit/forbidden-keys.ts`)
@@ -134,6 +148,7 @@ const OPERATOR_REDACTED_KEYS = [
 const PRIOR_REDACTED_KEYS_SET = new Set<string>([
   ...PAIRING_REDACTED_KEYS,
   ...OPERATOR_REDACTED_KEYS,
+  ...CART_REDACTED_KEYS,
 ]);
 const AUDIT_REDACTED_KEYS = FORBIDDEN_PAYLOAD_KEYS.filter(
   (key) => !PRIOR_REDACTED_KEYS_SET.has(key),
@@ -142,6 +157,7 @@ const AUDIT_REDACTED_KEYS = FORBIDDEN_PAYLOAD_KEYS.filter(
 const ALL_REDACTED_KEYS = [
   ...PAIRING_REDACTED_KEYS,
   ...OPERATOR_REDACTED_KEYS,
+  ...CART_REDACTED_KEYS,
   ...AUDIT_REDACTED_KEYS,
 ] as const;
 const REDACTION_PATHS: string[] = ALL_REDACTED_KEYS.flatMap((key) => [

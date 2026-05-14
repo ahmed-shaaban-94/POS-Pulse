@@ -113,7 +113,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 owners, and record the feature-flag configuration. No code, no migrations, no packages.
 **Startable immediately** — §A0 is cleared.
 
-- [ ] T001 Confirm the `cart` feature flag exists in 001's configuration surface and is disabled by default; record the flag key in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
+- [X] T001 Confirm the `cart` feature flag exists in 001's configuration surface and is disabled by default; record the flag key in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [ ] T002 [P] Open the §A3 coordination thread: confirm 004's `ActionCategory` discriminated union (`src/shared/audit/event-shape.ts`) will be extended with the 4 canonical cart categories before S3 begins; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [ ] T003 [P] Open the §A4 coordination thread: confirm the future payments-feature owner will review `contracts/handoff-envelope.md` and sign off before S4 merges; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [x] T004 [P] Assign the S0 visual-direction reviewer; record name + expected review date in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
@@ -170,19 +170,19 @@ Per Constitution VI, tests are written first.
 
 ### Phase 4 — Tests
 
-- [ ] T020 [P] [US1] Write unit test: `cart.create` succeeds for `cashier`, `manager`, `admin`; returns `{ kind: 'refused', reason: 'no_session' }` when signed out — `tests/unit/main/cart/cart-create.test.ts`
-- [ ] T021 [P] [US1] Write unit test: `cart.lines.add` with valid session returns `{ kind: 'ok' }`; wrong-owner path returns `{ kind: 'refused', reason: 'wrong_owner' }`; tenant-mismatch returns `{ kind: 'refused', reason: 'tenant_isolation' }` — `tests/unit/main/cart/cart-lines-add.test.ts`
-- [ ] T022 [P] [US1] Write integration test: CartPane renders in 003's reserved cart slot when operator signed in; pane is absent when signed out; keyboard-focusable entry point exists — `tests/integration/renderer/ui/cart/cart-pane-mount.test.tsx`
-- [ ] T023 [P] [US1] Write integration test: sign-out while cart is open → `cartStore` transitions to `cancelled` and cart pane reflects cleared state (Q3 policy: discard immediately) — `tests/integration/renderer/stores/cart-signout-clears-store.test.ts`
-- [ ] T024 [P] [US1] Write cross-process redaction smoke (cart extension): no `cart.*` payload field matching the cart payload allowlist (PII, card data, credential fragments) appears in `pino` logs, Sentry events, or test snapshots — `tests/integration/cross-process-redaction-cart.test.ts`
+- [X] T020 [P] [US1] Write unit test: `cart.create` succeeds for `cashier`, `manager`, `admin`; returns `{ kind: 'refused', reason: 'no_session' }` when signed out — `tests/unit/main/cart/cart-create.test.ts`
+- [X] T021 [P] [US1] Write unit test: `cart.lines.add` with valid session returns `{ kind: 'ok' }`; wrong-owner path returns `{ kind: 'refused', reason: 'wrong_owner' }`; tenant-mismatch returns `{ kind: 'refused', reason: 'tenant_isolation' }` — `tests/unit/main/cart/cart-lines-add.test.ts`
+- [X] T022 [P] [US1] Write integration test: CartPane renders in 003's reserved cart slot when operator signed in; pane is absent when signed out; keyboard-focusable entry point exists — `tests/integration/renderer/ui/cart/cart-pane-mount.test.tsx`
+- [X] T023 [P] [US1] Write integration test: sign-out while cart is open → `cartStore` transitions to `cancelled` and cart pane reflects cleared state (Q3 policy: discard immediately) — `tests/integration/renderer/stores/cart-signout-clears-store.test.ts`
+- [X] T024 [P] [US1] Write cross-process redaction smoke (cart extension): no `cart.*` payload field matching the cart payload allowlist (PII, card data, credential fragments) appears in `pino` logs, Sentry events, or test snapshots — `tests/integration/cross-process-redaction-cart.test.ts`
 
 ### Phase 4 — Implementation
 
-- [ ] T025 [US1] Implement `cart.create` bridge handler: `requireOperatorSession` first; create `carts` row in-memory; return `{ kind: 'ok', cart_id }` — `src/main/cart/cart-bridge.ts`
-- [ ] T026 [US1] Implement all remaining `cart.*` handler stubs in the same file (role-gated, return `{ kind: 'refused', reason: 'not_implemented' }` for persistence paths not yet wired) — `src/main/cart/cart-bridge.ts`
-- [ ] T027 [P] [US1] Implement `CartPane` component shell (empty-state + building-state placeholders per S0 contact sheet; fills 003's reserved cart slot) — `src/renderer/ui/cart/CartPane.tsx`
-- [ ] T028 [P] [US1] Implement `EmptyCartPlaceholder` component per S0 contact sheet — `src/renderer/ui/cart/EmptyCartPlaceholder.tsx`
-- [ ] T029 [US1] Wire `cart.create` and stub handlers in preload; extend pino redaction list for cart payload allowlist refusals (do not log offending field value) — `src/preload/cart.ts`, `src/main/logger/redaction.ts`
+- [X] T025 [US1] Implement `cart.create` bridge handler: `requireOperatorSession` first; create `carts` row in-memory; return `{ kind: 'ok', cart_id }` — `src/main/cart/cart-bridge.ts`
+- [X] T026 [US1] Implement all remaining `cart.*` handler stubs in the same file (role-gated, return `{ kind: 'refused', reason: 'not_implemented' }` for persistence paths not yet wired) — `src/main/cart/cart-bridge.ts`
+- [X] T027 [P] [US1] Implement `CartPane` component shell (empty-state + building-state placeholders per S0 contact sheet; fills 003's reserved cart slot) — `src/renderer/ui/cart/CartPane.tsx`
+- [X] T028 [P] [US1] Implement `EmptyCartPlaceholder` component per S0 contact sheet — `src/renderer/ui/cart/EmptyCartPlaceholder.tsx`
+- [X] T029 [US1] Wire `cart.create` and stub handlers in preload; extend pino redaction list for cart payload allowlist refusals (do not log offending field value) — `src/preload/cart.ts`, `src/main/logger/redaction.ts`
 
 **S1 exit (quickstart §US1 step 1–2 pass):** Signed-in cashier sees CartPane in 003's shell slot; `cart.create` succeeds; sign-out clears the store; redaction smoke passes.
 
