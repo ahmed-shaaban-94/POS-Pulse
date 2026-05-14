@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-14 (Phase 1 in progress — T002, T003, T004, T005 recorded; T001 pending; S0 visual direction signed off)
+**Last updated:** 2026-05-14 (§A2 migration review CLEARED — S2 may start; §A3 and §A4 remain pending)
 
 ---
 
@@ -181,7 +181,7 @@ phase status. Updated in place as coordination items resolve.
   | T001 | ⏳ pending | Cart feature-flag key confirmation required before S1 |
   | T004 | ⏳ pending | S0 reviewer assignment required before S0 kickoff |
   | §A1 | ⏳ deferred | S1+S2 unblocked via R7 fixture stub; real catalogue is a future feature |
-  | §A2 | ⏳ pending | Blocks S2 migrations (T040–T043); pending data-model.md migration review |
+  | §A2 | ✅ CLEARED 2026-05-14 | 4-table migration review signed off; S2 (T030–T054) startable — see `security-review/s2-migration-review.md` |
   | §A3 | ⏳ pending | Blocks S3 (T055–T074); requires `ActionCategory` extension (see T002) |
   | §A4 | ⏳ pending | Blocks S4 (T076–T091); requires envelope ratification (see T003) |
   | §A5 | rollout-time | Blocks production rollout only; does not block slice merges |
@@ -294,16 +294,22 @@ listed in dependency order; some may be worked in parallel once
 
 ### 5. §A2 migrations
 
-- **Status:** ⏳ **later.** Activates after data-model.md is
-  drafted in Phase 1.
-- **Owner:** Ahmed.
-- **Required action:** Author migrations for `carts`, `cart_lines`,
-  and `cart_action_outbox`. Review against Constitution P4
-  ("append-only audit"): **no append-only constraints needed at
-  the cart layer — these tables ARE mutable.** Rationale: cart
-  lifecycle includes update, line-edit, line-removal, void, and
-  hand-off. Rationale must be documented in the migration commit
-  message and in `data-model.md`.
+- **Status:** ✅ **CLEARED — 2026-05-14.** Review record at
+  [`security-review/s2-migration-review.md`](./security-review/s2-migration-review.md).
+- **Owner:** Ahmed Shaaban.
+- **Base SHA at clearance:** `e5c2d74` (PR #151 merge — S1 shell).
+- **Scope cleared:** 4-table migration order (`carts` → `cart_action_outbox`
+  → `cart_lines` → `cart_line_discount_placeholders`); FK graph
+  (logical, not enforced by SQL — mirrors `0004_audit_events.sql`);
+  append-only trigger pair required on `cart_action_outbox` only;
+  `cart_action_outbox.line_id` nullable; no SQL `UNIQUE(cart_id, item_ref)`
+  (Q4 merge is application-layer); test plan T030–T039; implementation
+  plan T040–T054.
+- **Constitution P4 ruling:** append-only constraint applies to
+  `cart_action_outbox` only. `carts`, `cart_lines`, and
+  `cart_line_discount_placeholders` remain intentionally mutable —
+  rationale documented in the review record §5 and in data-model.md
+  lines 304–305.
 - **Unblocks:** S2 (cart-line CRUD), S3 (cart-level sensitive
   actions auditing).
 
@@ -373,7 +379,7 @@ listed in dependency order; some may be worked in parallel once
 |:--|:--:|:--|:--|
 | §A0 — 005-blocking gate (LOAD-BEARING) | ✅ **CLEARED 2026-05-14** | **Ahmed** | 004 S4 closeout ✅ (PR #124, 2026-05-11) AND 004 S5 visibility boundaries ✅ (T083–T093 merged; main SHA `d247e8a`, 2026-05-14). `/speckit-clarify` is now eligible to run. |
 | §A1 — cart-related backend / OpenAPI dependencies | ⏳ deferred | **Ahmed** + future-feature owner | Item-ref resolution only; cart drafts add NO new backend endpoints. May ship with stubbed resolver if catalogue feature is later. |
-| §A2 — migrations (`carts`, `cart_action_outbox`, `cart_lines`, `cart_line_discount_placeholders`) | ⏳ pending | **Ahmed** | 4 tables in FK order per data-model.md. P4 review: cart tables are intentionally mutable; rationale documented. |
+| §A2 — migrations (`carts`, `cart_action_outbox`, `cart_lines`, `cart_line_discount_placeholders`) | ✅ **CLEARED 2026-05-14** | **Ahmed Shaaban** | Review record at [`security-review/s2-migration-review.md`](./security-review/s2-migration-review.md). 4-table FK-safe order; append-only trigger on `cart_action_outbox` only; `line_id` nullable; no SQL UNIQUE(cart_id, item_ref). Base SHA `e5c2d74`. **S2 may start.** |
 | §A3 — 004 audit-event catalogue extension | ⏳ pending | **Ahmed** | `ActionCategory` extended with 4 canonical cart categories (see T002). 004 S5 merged; extension not yet authored. |
 | §A4 — handoff-envelope shape | ⏳ pending | **Ahmed** + future payments owner (TBD) | Contract authored 2026-05-14 (PR #147). Ratification required before S4 merges. See T003. |
 | §A5 — production-readiness rollout gate | ⏳ rollout-time | **TBD** | Production gate only. Does not block slice merges behind a feature flag. |
