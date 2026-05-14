@@ -133,20 +133,20 @@ Per Constitution VI, tests are written first.
 
 ### Phase 2 — Tests
 
-- [ ] T006 [P] [US1] Write unit test: `CartState` enum covers exactly 6 states (`empty`, `editing`, `discount_pending_attribution`, `handing_off`, `frozen_handed_off`, `cancelled`); FSM transition table rejects all illegal transitions — `tests/unit/shared/cart/cart-state.test.ts`
-- [ ] T007 [P] [US3] Write unit test: `PaymentIntentEnvelope` shape carries all v1 fields from `contracts/handoff-envelope.md`; `Object.isFrozen(envelope)` returns true after construction; integer-only `subtotal_minor` and `line_subtotal_minor` fields — `tests/unit/shared/cart/handoff-envelope.test.ts`
-- [ ] T008 [P] [US1] Write contract test: every handler in the `cart.*` bridge namespace type-checks against the canonical request/response shapes in `contracts/bridge-api.md`; no `any` — `tests/contract/cart-bridge.contract.test.ts`
-- [ ] T009 [P] [US1] Write unit test: `requireOperatorSession` called as first instruction in every `cart.*` handler stub; no-session path returns `{ kind: 'refused', reason: 'no_session' }`; wrong-role path returns `{ kind: 'refused', reason: 'role_denied' }` — `tests/unit/main/cart/cart-role-gating.test.ts`
-- [ ] T010 [P] [US1] Write unit test: `cartStore` FSM transitions — `empty→editing` on first add, `editing→handing_off` on handoff initiation, `frozen_handed_off` and `cancelled` are terminal (any mutation attempt returns generic refusal without state change) — `tests/unit/renderer/stores/cart-store.test.ts`
+- [X] T006 [P] [US1] Write unit test: `CartState` enum covers exactly 6 states (`empty`, `editing`, `discount_pending_attribution`, `handing_off`, `frozen_handed_off`, `cancelled`); FSM transition table rejects all illegal transitions — `tests/unit/shared/cart/cart-state.test.ts`
+- [X] T007 [P] [US3] Write unit test: `PaymentIntentEnvelope` shape carries all v1 fields from `contracts/handoff-envelope.md`; `Object.isFrozen(envelope)` returns true after construction; integer-only `subtotal_minor` and `line_subtotal_minor` fields — `tests/unit/shared/cart/handoff-envelope.test.ts`
+- [X] T008 [P] [US1] Write contract test: every handler in the `cart.*` bridge namespace type-checks against the canonical request/response shapes in `contracts/bridge-api.md`; no `any` — `tests/contract/cart-bridge.contract.test.ts`
+- [X] T009 [P] [US1] Write unit test: `requireOperatorSession` called as first instruction in every `cart.*` handler stub; no-session path returns `{ kind: 'refused', reason: 'no_session' }`; wrong-role path returns `{ kind: 'refused', reason: 'role_denied' }` — `tests/unit/main/cart/cart-role-gating.test.ts`
+- [X] T010 [P] [US1] Write unit test: `cartStore` FSM transitions — `empty→editing` on first add, `editing→handing_off` on handoff initiation, `frozen_handed_off` and `cancelled` are terminal (any mutation attempt returns generic refusal without state change) — `tests/unit/renderer/stores/cart-store.test.ts`
 
 ### Phase 2 — Implementation
 
-- [ ] T011 [P] [US1] Create `CartState` enum and FSM transition table — `src/shared/cart/cart-state.ts`
-- [ ] T012 [P] [US3] Create `PaymentIntentEnvelope` type (`Readonly<>` end-to-end) and `freezeEnvelope(envelope)` helper applying `Object.freeze` recursively — `src/shared/cart/handoff-envelope.ts`
-- [ ] T013 [P] [US1] Extend `src/shared/bridge-api.ts` with the typed `cart.*` namespace skeleton: all 10 handlers stubbed with canonical request/response types from `contracts/bridge-api.md`; no `any` — `src/shared/bridge-api.ts`
-- [ ] T014 [US1] Create `requireOperatorSession` cart wrapper delegating to `src/main/operator/role-enforcement.ts`; covers all 6 refusal conditions from `contracts/bridge-api.md §Bridge gating` — `src/main/cart/require-operator-session.ts`
-- [ ] T015 [US1] Create `cartStore` zustand slice: 6-state FSM, active cart ref, line list, in-flight handoff state; mirrors bridge-confirmed state only (no optimistic transitions per AD-1 / P2) — `src/renderer/stores/cart-store.ts`
-- [ ] T016 [P] [US1] Create preload cart bridge exports (stubs; each delegate immediately to the main-process handler) — `src/preload/cart.ts`
+- [X] T011 [P] [US1] Create `CartState` enum and FSM transition table — `src/shared/cart/cart-state.ts`
+- [X] T012 [P] [US3] Create `PaymentIntentEnvelope` type (`Readonly<>` end-to-end) and `freezeEnvelope(envelope)` helper applying `Object.freeze` recursively — `src/shared/cart/handoff-envelope.ts`
+- [X] T013 [P] [US1] Extend `src/shared/bridge-api.ts` with the typed `cart.*` namespace skeleton: all 10 handlers stubbed with canonical request/response types from `contracts/bridge-api.md`; no `any` — `src/shared/bridge-api.ts`
+- [X] T014 [US1] Create `requireOperatorSession` cart wrapper delegating to `src/main/operator/role-enforcement.ts`; covers all 6 refusal conditions from `contracts/bridge-api.md §Bridge gating` — `src/main/cart/require-operator-session.ts`
+- [X] T015 [US1] Create `cartStore` zustand slice: 6-state FSM, active cart ref, line list, in-flight handoff state; mirrors bridge-confirmed state only (no optimistic transitions per AD-1 / P2) — `src/renderer/stores/cart-store.ts`
+- [X] T016 [P] [US1] Create preload cart bridge exports (stubs; each delegate immediately to the main-process handler) — `src/preload/cart.ts`
 
 **Phase 2 exit:** Bridge namespace compiles end-to-end; `requireOperatorSession` wiring verified; `cartStore` FSM transitions tested; `PaymentIntentEnvelope` type frozen by construction.
 

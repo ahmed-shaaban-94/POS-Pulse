@@ -6,6 +6,28 @@ import type { PairingStatus, PairingSubmitResult } from './pairing-types.js';
 import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
+import type {
+  CartCreateRequest,
+  CartCreateResponse,
+  CartLinesAddRequest,
+  CartLinesAddResponse,
+  CartLinesUpdateRequest,
+  CartLinesUpdateResponse,
+  CartLinesRemoveRequest,
+  CartLinesRemoveResponse,
+  CartLinesSetNoteRequest,
+  CartLinesSetNoteResponse,
+  CartDiscountPlaceholdersAddRequest,
+  CartDiscountPlaceholdersAddResponse,
+  CartDiscountPlaceholdersRemoveRequest,
+  CartDiscountPlaceholdersRemoveResponse,
+  CartVoidRequest,
+  CartVoidResponse,
+  CartHandoffRequest,
+  CartHandoffResponse,
+  CartSubscribeRequest,
+  CartSubscribeResponse,
+} from './cart/bridge-types.js';
 
 /**
  * T048 — `operator.emitAuditEvent` bridge surface.
@@ -472,6 +494,46 @@ export interface PreloadBridgeAPI {
    * later.
    */
   operator: OperatorBridgeAPI;
+  /**
+   * 005-sales-cart: cart namespace. Phase 2 provides typed stubs only;
+   * all handlers return refused/not_implemented until S1 wires real
+   * main-process logic.
+   */
+  cart: CartBridgeAPI;
+}
+
+/**
+ * 005-sales-cart: typed cart.* namespace for the preload bridge.
+ * Every handler is role-gated on the main-process side (AD-1).
+ * Phase 2 stubs return refused/not_implemented.
+ */
+export interface CartBridgeAPI {
+  /** Creates a new draft cart bound to the current operator session. */
+  create(req: CartCreateRequest): Promise<CartCreateResponse>;
+  lines: {
+    /** Adds a line item; merges if same item_ref exists (Q4). */
+    add(req: CartLinesAddRequest): Promise<CartLinesAddResponse>;
+    /** Changes quantity of an existing line. */
+    update(req: CartLinesUpdateRequest): Promise<CartLinesUpdateResponse>;
+    /** Soft-removes a line. */
+    remove(req: CartLinesRemoveRequest): Promise<CartLinesRemoveResponse>;
+    /** Sets or clears the free-text note on a line. */
+    setNote(req: CartLinesSetNoteRequest): Promise<CartLinesSetNoteResponse>;
+  };
+  discountPlaceholders: {
+    /** Adds a discount placeholder; may require manager attribution. */
+    add(req: CartDiscountPlaceholdersAddRequest): Promise<CartDiscountPlaceholdersAddResponse>;
+    /** Removes a discount placeholder; mirrors attribution rule of add. */
+    remove(
+      req: CartDiscountPlaceholdersRemoveRequest,
+    ): Promise<CartDiscountPlaceholdersRemoveResponse>;
+  };
+  /** Voids a cart. Post-handoff void requires manager attribution. */
+  void(req: CartVoidRequest): Promise<CartVoidResponse>;
+  /** Freezes the cart and constructs the PaymentIntentEnvelope. */
+  handoff(req: CartHandoffRequest): Promise<CartHandoffResponse>;
+  /** Push-style cart state updates (type-only in Phase 2; S1+ runtime). */
+  subscribe(req: CartSubscribeRequest): Promise<CartSubscribeResponse>;
 }
 
 declare global {

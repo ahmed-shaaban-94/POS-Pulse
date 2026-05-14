@@ -62,6 +62,42 @@ function stubBridge(status: PairingStatus): PreloadBridgeAPI {
       listStuckShifts: vi.fn(() => Promise.resolve({ kind: 'stuck_shifts' as const, shifts: [] })),
       dismissShiftClosedNotice: vi.fn(() => Promise.resolve()),
     },
+    cart: {
+      create: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+      ),
+      lines: {
+        add: vi.fn(() =>
+          Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+        ),
+        update: vi.fn(() =>
+          Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+        ),
+        remove: vi.fn(() =>
+          Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+        ),
+        setNote: vi.fn(() =>
+          Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+        ),
+      },
+      discountPlaceholders: {
+        add: vi.fn(() =>
+          Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+        ),
+        remove: vi.fn(() =>
+          Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+        ),
+      },
+      void: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+      ),
+      handoff: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+      ),
+      subscribe: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, reason: 'not_implemented' as const }),
+      ),
+    },
   };
 }
 
