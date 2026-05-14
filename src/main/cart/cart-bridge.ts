@@ -27,38 +27,106 @@ import type {
 } from '../../shared/cart/bridge-types.js';
 import { CartState } from '../../shared/cart/cart-state.js';
 import type { CartRefusalReason } from '../../shared/cart/refusal.js';
+import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
 import { requireOperatorSession } from './require-operator-session.js';
+import type { CartStore } from './cart-store.js';
 
 /**
- * 005-sales-cart S1 — `cart.*` bridge handlers (T025 + T026).
+ * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
+ * T045–T048 added in S2).
  *
- * S1 scope: every handler is gated by `requireOperatorSession` (the
- * load-bearing trust boundary — AD-1). Only `cart.create` performs real
- * work; the remaining mutating handlers run the gate, then refuse with
- * `not_implemented` until S2 wires durable persistence + the idempotency
- * outbox under §A2.
+ * Every handler is gated by `requireOperatorSession` as its FIRST trust
+ * boundary (AD-1). All cart mutations go through this class.
  *
- * Persistence in S1 is intentionally in-memory only (a `Map<cart_id, …>`).
- * Cart drafts do NOT survive a restart at S1 (FR-028 is satisfied by S2
- * + §A2). The renderer's `cartStore` is the source-of-truth mirror for
- * the visible UI and is cleared on session end (Q3) via the renderer-side
- * sign-out hook (`src/renderer/stores/cart-signout-hook.ts`).
+ * Persistence:
+ * - When a `CartStore` is supplied via `deps.cartStore`, the handlers
+ *   write to SQLite via the four cart tables (§A2-cleared schema).
+ * - When `deps.cartStore` is omitted, the handlers fall back to an
+ *   in-memory `Map<cart_id, CartRecord>` — used by S1 unit tests for
+ *   pure role-gate coverage. Production wiring (in `src/main/index.ts`)
+ *   always supplies a `CartStore`.
  *
  * SECURITY:
- * - `requireOperatorSession` runs as the FIRST instruction of every
- *   handler; persistence paths NEVER short-circuit ahead of the gate.
- * - Refusals are generic — no factor-distinguishing variants leak to the
- *   renderer (NFR-003 / PR-2 inherited).
- * - No payload values are logged here; only event metadata.
+ * - `requireOperatorSession` runs first; persistence/business logic
+ *   never short-circuits ahead of the gate.
+ * - Refusals are generic — no factor-distinguishing detail leaks.
+ * - No payload values (note content, attribution identity, secrets)
+ *   are logged here.
+ * - Q4 merge uniqueness is application-layer only; no SQL UNIQUE.
  */
 
-interface CartRecord {
+interface InMemoryCartRecord {
   readonly cart_id: string;
   readonly operator_session_id: string;
   readonly owning_operator_id: string;
   readonly tenant_id: string;
   readonly branch_id: string;
   state: CartState;
+}
+
+/**
+ * R7 seam — resolve a catalogue item-ref into the snapshot fields
+ * cart_lines persists at add-time (FR-011 / FR-013).
+ *
+ * S2 ships a stubbed default resolver that refuses generically; tests
+ * inject a fixture resolver. A production resolver lands when the
+ * future item-catalogue feature ships (T053).
+ */
+export type ItemRefResolver = (
+  item_ref: string,
+) => Promise<
+  | { kind: 'ok'; display_name: string; unit_price_minor: number }
+  | { kind: 'refused'; reason: 'unknown_item' | 'disabled' | 'no_connection' | 'generic' }
+>;
+
+const DEFAULT_ITEM_REF_RESOLVER: ItemRefResolver = () =>
+  Promise.resolve({ kind: 'refused', reason: 'generic' });
+
+/**
+ * Forbidden-pattern check for `cart.lines.setNote` (NFR-006 / FR-021).
+ *
+ * Minimal S2 list — refuses notes that contain credential-like fragments.
+ * The full allowlist + regex catalogue lands in T054 (pino redaction
+ * extension is the load-bearing layer; this is the bridge-side gate).
+ */
+const FORBIDDEN_NOTE_PATTERNS: ReadonlyArray<RegExp> = [
+  /\b(?:pin|password|passwd|secret|token|jwt|credential|authorization)\b/i,
+  /\b\d{13,19}\b/, // bare card-number-shaped sequences
+  /-----BEGIN/i, // PEM key headers
+];
+
+function noteHasForbiddenPattern(note: string): boolean {
+  return FORBIDDEN_NOTE_PATTERNS.some((re) => re.test(note));
+}
+
+/**
+ * Strip forbidden payload-field NAMES from a payload tree before it is
+ * serialised into `cart_action_outbox.payload_json`. This is the cart-
+ * layer mirror of `src/main/audit/audit-emitter.ts`'s `findForbiddenKey`.
+ * S2 inlines a minimal version; T054 may extend it.
+ */
+const FORBIDDEN_PAYLOAD_FIELD_NAMES: ReadonlySet<string> = new Set([
+  'pin',
+  'pin_hash',
+  'password',
+  'password_hash',
+  'clerk_jwt',
+  'clerk_session_token',
+  'device_token',
+  'device_token_attestation',
+  'pairing_code',
+  'token',
+  'secret',
+  'credential',
+]);
+
+function scrubPayloadForOutbox(payload: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (FORBIDDEN_PAYLOAD_FIELD_NAMES.has(k)) continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 export interface CartBridgeHandlersDeps {
@@ -68,11 +136,22 @@ export interface CartBridgeHandlersDeps {
    * Optional shared state — when set, this instance reuses the cart
    * store of the provided instance. Used by tests that swap sessions
    * mid-test while continuing to operate on the same cart store.
-   * Not exposed to production callers (production has one singleton).
    */
   shareStateWith?: CartBridgeHandlers;
   /** Optional logger. Cart payload values are NEVER logged. */
   logger?: Logger;
+  /**
+   * Optional DB-backed cart store. When omitted, handlers fall back to
+   * the in-memory Map (S1 mode). Production always supplies one.
+   */
+  cartStore?: CartStore;
+  /**
+   * Optional R7 seam. When omitted, defaults to a refusing stub.
+   * Production wiring + tests inject a real resolver.
+   */
+  resolveItemRef?: ItemRefResolver;
+  /** Optional clock for testability. Defaults to `() => new Date()`. */
+  clock?: () => Date;
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -80,18 +159,20 @@ function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefus
 }
 
 export class CartBridgeHandlers {
-  private readonly carts: Map<string, CartRecord>;
+  /** S1 fallback — used only when deps.cartStore is omitted. */
+  private readonly inMemCarts: Map<string, InMemoryCartRecord>;
   private readonly deps: CartBridgeHandlersDeps;
+  private readonly clock: () => Date;
 
   constructor(deps: CartBridgeHandlersDeps) {
     this.deps = deps;
-    this.carts = deps.shareStateWith?.carts ?? new Map<string, CartRecord>();
+    this.inMemCarts = deps.shareStateWith?.inMemCarts ?? new Map<string, InMemoryCartRecord>();
+    this.clock = deps.clock ?? ((): Date => new Date());
   }
 
   // ── cart.create ─────────────────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async create(_req: CartCreateRequest): Promise<CartCreateResponse> {
+  async create(req: CartCreateRequest): Promise<CartCreateResponse> {
     const gate = requireOperatorSession({
       session: this.deps.getCurrentSession(),
       allowedRoles: ['cashier', 'manager', 'admin'],
@@ -99,35 +180,492 @@ export class CartBridgeHandlers {
     if (gate.kind !== 'ok') return refuse(gate.reason);
 
     const session = gate.session;
+
+    // Idempotency: replay-safe when a CartStore is wired.
+    if (this.deps.cartStore !== undefined) {
+      const existing = this.deps.cartStore.getOutboxRow(req.idempotency_key);
+      if (existing !== undefined) {
+        if (existing.action_kind !== 'cart.create') {
+          return refuse('idempotency_payload_mismatch');
+        }
+        return Promise.resolve({ kind: 'ok', cart_id: existing.cart_id });
+      }
+    }
+
     const cart_id = randomUUID();
-    this.carts.set(cart_id, {
-      cart_id,
-      operator_session_id: session.id,
-      owning_operator_id: session.operator_id,
-      tenant_id: session.tenant_id,
-      branch_id: session.branch_id,
-      state: CartState.empty,
-    });
+    const now = this.clock().toISOString();
+
+    if (this.deps.cartStore !== undefined) {
+      this.deps.cartStore.insertCartAndOutbox(
+        {
+          cart_id,
+          tenant_id: session.tenant_id,
+          branch_id: session.branch_id,
+          // Terminal id is part of the session record's branch context;
+          // the operator session does not carry a separate terminal_id
+          // column. Use branch_id as the support-bundle scope.
+          terminal_id: session.branch_id,
+          owning_operator_id: session.operator_id,
+          operator_session_id: session.id,
+          state: CartState.empty,
+          created_at: now,
+          last_action_id: req.idempotency_key,
+        },
+        {
+          action_id: req.idempotency_key,
+          cart_id,
+          line_id: null,
+          action_kind: 'cart.create',
+          acting_operator_id: session.operator_id,
+          attribution_operator_id: null,
+          operator_session_id: session.id,
+          payload_json: JSON.stringify({}),
+          applied_at: now,
+        },
+      );
+    } else {
+      this.inMemCarts.set(cart_id, {
+        cart_id,
+        operator_session_id: session.id,
+        owning_operator_id: session.operator_id,
+        tenant_id: session.tenant_id,
+        branch_id: session.branch_id,
+        state: CartState.empty,
+      });
+    }
+
     this.deps.logger?.info({ event: 'cart.create.ok', cart_id }, 'cart.create');
     return Promise.resolve({ kind: 'ok', cart_id });
   }
 
-  // ── cart.lines.* ────────────────────────────────────────────────────
+  // ── cart.lines.add ──────────────────────────────────────────────────
 
-  linesAdd(req: CartLinesAddRequest): Promise<CartLinesAddResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+  async linesAdd(req: CartLinesAddRequest): Promise<CartLinesAddResponse> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      // S1-compat path: gate then refuse not_implemented.
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    // Idempotency: replay-safe.
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.line.add' && replay.action_kind !== 'cart.line.merge') {
+        return refuse('idempotency_payload_mismatch');
+      }
+      const replayLineId = replay.line_id;
+      if (replayLineId === null) return refuse('idempotency_payload_mismatch');
+      const replayLine = store.getLine(req.cart_id, replayLineId);
+      if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
+      return {
+        kind: 'ok',
+        line_id: replayLineId,
+        merged: replay.action_kind === 'cart.line.merge',
+        version: replayLine.version,
+      };
+    }
+
+    if (!Number.isInteger(req.quantity) || req.quantity <= 0) {
+      return refuse('not_implemented'); // generic-refusal posture; bridge contract has no 'invalid_quantity' reason
+    }
+
+    // R7 seam — resolve item_ref to display_name + unit_price_minor snapshot.
+    const resolver = this.deps.resolveItemRef ?? DEFAULT_ITEM_REF_RESOLVER;
+    const resolved = await resolver(req.item_ref);
+    if (resolved.kind !== 'ok') {
+      // The bridge contract has no per-resolver reason; collapse to generic.
+      return refuse('wrong_owner');
+    }
+
+    // Q4 merge path — application-layer uniqueness on (cart_id, item_ref) among active lines.
+    const existing = store.findActiveLineByItemRef(req.cart_id, req.item_ref);
+    const now = this.clock().toISOString();
+
+    if (existing !== undefined) {
+      const newQuantity = existing.quantity + req.quantity;
+      let newSubtotal: number;
+      try {
+        newSubtotal = computeLineSubtotal(newQuantity, existing.unit_price_minor);
+      } catch (err) {
+        if (err instanceof LineSubtotalError) return refuse('not_implemented');
+        throw err;
+      }
+      store.mergeLineAndOutbox(
+        {
+          line_id: existing.line_id,
+          quantity: newQuantity,
+          line_subtotal_minor: newSubtotal,
+          last_action_id: req.idempotency_key,
+          updated_at: now,
+        },
+        {
+          action_id: req.idempotency_key,
+          cart_id: req.cart_id,
+          line_id: existing.line_id,
+          action_kind: 'cart.line.merge',
+          acting_operator_id: session.operator_id,
+          attribution_operator_id: null,
+          operator_session_id: session.id,
+          payload_json: JSON.stringify(
+            scrubPayloadForOutbox({
+              item_ref: req.item_ref,
+              quantity_added: req.quantity,
+            }),
+          ),
+          applied_at: now,
+        },
+      );
+      return {
+        kind: 'ok',
+        line_id: existing.line_id,
+        merged: true,
+        version: existing.version + 1,
+      };
+    }
+
+    // New-line path.
+    let subtotal: number;
+    try {
+      subtotal = computeLineSubtotal(req.quantity, resolved.unit_price_minor);
+    } catch (err) {
+      if (err instanceof LineSubtotalError) return refuse('not_implemented');
+      /* v8 ignore next */
+      throw err;
+    }
+    const line_id = randomUUID();
+    store.insertLineAndOutbox(
+      {
+        line_id,
+        cart_id: req.cart_id,
+        item_ref: req.item_ref,
+        display_name: resolved.display_name,
+        quantity: req.quantity,
+        unit_price_minor: resolved.unit_price_minor,
+        line_subtotal_minor: subtotal,
+        note: null,
+        last_action_id: req.idempotency_key,
+        created_at: now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id,
+        action_kind: 'cart.line.add',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(
+          scrubPayloadForOutbox({ item_ref: req.item_ref, quantity: req.quantity }),
+        ),
+        applied_at: now,
+      },
+    );
+    return { kind: 'ok', line_id, merged: false, version: 1 };
   }
 
-  linesUpdate(req: CartLinesUpdateRequest): Promise<CartLinesUpdateResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+  // ── cart.lines.update ───────────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async linesUpdate(req: CartLinesUpdateRequest): Promise<CartLinesUpdateResponse> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    // Idempotency replay (mirrors linesAdd).
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.line.update' && replay.action_kind !== 'cart.line.remove') {
+        return refuse('idempotency_payload_mismatch');
+      }
+      const replayLine = store.getLine(req.cart_id, req.line_id);
+      if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
+      if (replay.action_kind === 'cart.line.remove')
+        return { kind: 'ok', version: replayLine.version };
+      return { kind: 'ok', version: replayLine.version };
+    }
+
+    const line = store.getLine(req.cart_id, req.line_id);
+    if (line === undefined) return refuse('wrong_owner');
+    if (line.removed_at !== null) return refuse('wrong_owner');
+    if (line.version !== req.version) return refuse('stale_version');
+
+    let newQty: number;
+    if (req.op === 'increment') {
+      const delta = req.delta ?? 1;
+      if (!Number.isInteger(delta) || delta <= 0) return refuse('stale_version');
+      newQty = line.quantity + delta;
+    } else if (req.op === 'decrement') {
+      const delta = req.delta ?? 1;
+      if (!Number.isInteger(delta) || delta <= 0) return refuse('stale_version');
+      newQty = line.quantity - delta;
+      if (newQty <= 0) {
+        // set(0) / decrement-past-zero → delegate to remove (FR-016).
+        const r = this.removeLineInternal(
+          req.cart_id,
+          req.line_id,
+          req.version,
+          req.idempotency_key,
+          session,
+        );
+        if (r.kind !== 'ok') return r;
+        return { kind: 'ok', version: line.version + 1 };
+      }
+    } else {
+      const abs = req.absolute;
+      if (abs === undefined || !Number.isInteger(abs) || abs < 0) return refuse('stale_version');
+      if (abs === 0) {
+        const r = this.removeLineInternal(
+          req.cart_id,
+          req.line_id,
+          req.version,
+          req.idempotency_key,
+          session,
+        );
+        if (r.kind !== 'ok') return r;
+        return { kind: 'ok', version: line.version + 1 };
+      }
+      newQty = abs;
+    }
+
+    let newSubtotal: number;
+    try {
+      newSubtotal = computeLineSubtotal(newQty, line.unit_price_minor);
+    } catch (err) {
+      if (err instanceof LineSubtotalError) return refuse('stale_version');
+      /* v8 ignore next */
+      throw err;
+    }
+
+    const now = this.clock().toISOString();
+    store.updateLineQuantityAndOutbox(
+      {
+        line_id: req.line_id,
+        quantity: newQty,
+        line_subtotal_minor: newSubtotal,
+        last_action_id: req.idempotency_key,
+        updated_at: now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: req.line_id,
+        action_kind: 'cart.line.update',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(scrubPayloadForOutbox({ op: req.op, new_quantity: newQty })),
+        applied_at: now,
+      },
+    );
+    return { kind: 'ok', version: line.version + 1 };
   }
 
-  linesRemove(req: CartLinesRemoveRequest): Promise<CartLinesRemoveResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+  // ── cart.lines.remove ───────────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async linesRemove(req: CartLinesRemoveRequest): Promise<CartLinesRemoveResponse> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    return this.removeLineInternal(
+      req.cart_id,
+      req.line_id,
+      req.version,
+      req.idempotency_key,
+      session,
+    );
   }
 
-  linesSetNote(req: CartLinesSetNoteRequest): Promise<CartLinesSetNoteResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+  private removeLineInternal(
+    cart_id: string,
+    line_id: string,
+    version: number,
+    idempotency_key: string,
+    session: OperatorSessionRecord,
+  ): { kind: 'ok' } | { kind: 'refused'; reason: CartRefusalReason } {
+    const store = this.deps.cartStore;
+    if (store === undefined) return refuse('not_implemented');
+
+    const replay = store.getOutboxRow(idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.line.remove') {
+        return refuse('idempotency_payload_mismatch');
+      }
+      return { kind: 'ok' };
+    }
+
+    const line = store.getLine(cart_id, line_id);
+    if (line === undefined) return refuse('wrong_owner');
+    if (line.removed_at !== null) {
+      // Replay-equivalent: line already removed; idempotent no-op.
+      return { kind: 'ok' };
+    }
+    if (line.version !== version) return refuse('stale_version');
+
+    const now = this.clock().toISOString();
+    store.softRemoveLineAndOutbox(
+      {
+        line_id,
+        removed_at: now,
+        last_action_id: idempotency_key,
+      },
+      {
+        action_id: idempotency_key,
+        cart_id,
+        line_id,
+        action_kind: 'cart.line.remove',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify({}),
+        applied_at: now,
+      },
+    );
+    return { kind: 'ok' };
+  }
+
+  // ── cart.lines.setNote ──────────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async linesSetNote(req: CartLinesSetNoteRequest): Promise<CartLinesSetNoteResponse> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    // Idempotency replay.
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.line.note_set')
+        return refuse('idempotency_payload_mismatch');
+      const replayLine = store.getLine(req.cart_id, req.line_id);
+      if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
+      return { kind: 'ok', version: replayLine.version };
+    }
+
+    // Length cap (Q1: ≤200 chars). Partial overwrite is forbidden — full
+    // replacement only. Bridge enforces; column is intentionally permissive.
+    if (req.note !== null && req.note.length > 200) {
+      return refuse('note_too_long');
+    }
+
+    // Forbidden-pattern check.
+    if (req.note !== null && noteHasForbiddenPattern(req.note)) {
+      return refuse('note_forbidden_pattern');
+    }
+
+    const line = store.getLine(req.cart_id, req.line_id);
+    if (line === undefined) return refuse('wrong_owner');
+    if (line.removed_at !== null) return refuse('wrong_owner');
+    if (line.version !== req.version) return refuse('stale_version');
+
+    const now = this.clock().toISOString();
+    store.setLineNoteAndOutbox(
+      {
+        line_id: req.line_id,
+        note: req.note,
+        last_action_id: req.idempotency_key,
+        updated_at: now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: req.line_id,
+        action_kind: 'cart.line.note_set',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        // NOTE: bridge MUST NOT echo the note value into payload_json.
+        // The redaction set (T054) is the load-bearing layer; here we
+        // intentionally store only the length, never the content.
+        payload_json: JSON.stringify({ note_length: req.note?.length ?? 0 }),
+        applied_at: now,
+      },
+    );
+    return { kind: 'ok', version: line.version + 1 };
   }
 
   // ── cart.discountPlaceholders.* ─────────────────────────────────────
@@ -135,32 +673,31 @@ export class CartBridgeHandlers {
   discountPlaceholdersAdd(
     req: CartDiscountPlaceholdersAddRequest,
   ): Promise<CartDiscountPlaceholdersAddResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
   }
 
   discountPlaceholdersRemove(
     req: CartDiscountPlaceholdersRemoveRequest,
   ): Promise<CartDiscountPlaceholdersRemoveResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
   }
 
   // ── cart.void ───────────────────────────────────────────────────────
 
   void(req: CartVoidRequest): Promise<CartVoidResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
   }
 
   // ── cart.handoff ────────────────────────────────────────────────────
 
   handoff(req: CartHandoffRequest): Promise<CartHandoffResponse> {
-    return Promise.resolve(this.gateMutating(req.cart_id) ?? refuse('not_implemented'));
+    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
   }
 
   // ── cart.subscribe ──────────────────────────────────────────────────
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   subscribe(_req: CartSubscribeRequest): Promise<CartSubscribeResponse> {
-    // No mutation; only role/session gate. S1 has no runtime subscription.
     const gate = requireOperatorSession({
       session: this.deps.getCurrentSession(),
       allowedRoles: ['cashier', 'manager', 'admin'],
@@ -169,24 +706,16 @@ export class CartBridgeHandlers {
     return Promise.resolve(refuse('not_implemented'));
   }
 
-  // ── Internal: shared gate for mutating handlers ────────────────────
+  // ── Internal gates ──────────────────────────────────────────────────
 
-  /**
-   * Runs requireOperatorSession with full cart-aware checks.
-   * Returns a refusal envelope on gate failure; `null` if the caller
-   * may proceed (S1: always followed by `not_implemented`).
-   */
-  private gateMutating(cart_id: string): { kind: 'refused'; reason: CartRefusalReason } | null {
+  /** S1-compat: in-memory cart map gate (used when no DB cartStore). */
+  private gateMutatingInMem(
+    cart_id: string,
+  ): { kind: 'refused'; reason: CartRefusalReason } | null {
     const session = this.deps.getCurrentSession();
-    if (session === null) {
-      return refuse('no_session');
-    }
-    const cart = this.carts.get(cart_id);
-    // Unknown cart: refuse generically (do NOT reveal that the cart_id
-    // does not exist; the response shape is the same as wrong-owner).
-    if (cart === undefined) {
-      return refuse('wrong_owner');
-    }
+    if (session === null) return refuse('no_session');
+    const cart = this.inMemCarts.get(cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
     const gate = requireOperatorSession({
       session,
       allowedRoles: ['cashier', 'manager', 'admin'],
@@ -195,6 +724,30 @@ export class CartBridgeHandlers {
         tenant_id: cart.tenant_id,
         branch_id: cart.branch_id,
         state: cart.state,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+    return null;
+  }
+
+  /** S2 DB-aware gate for handlers that aren't yet implemented (discount/void/handoff). */
+  private gateMutatingS2(cart_id: string): { kind: 'refused'; reason: CartRefusalReason } | null {
+    if (this.deps.cartStore === undefined) {
+      return this.gateMutatingInMem(cart_id);
+    }
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+    const cart = this.deps.cartStore.getCart(cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
       },
       requireMutable: true,
     });
