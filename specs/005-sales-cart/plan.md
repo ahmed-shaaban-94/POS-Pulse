@@ -2,19 +2,13 @@
 
 **Feature ID:** 005-sales-cart
 **Spec:** [./spec.md](./spec.md)
-**Plan Version:** 0.1
+**Plan Version:** 1.0
 **Created:** 2026-05-09
+**Last Updated:** 2026-05-14 (`/speckit-plan` run; Q1–Q5 reconciled; Phase 0 + 1 artifacts authored)
 **Constitution version pinned:** v1.5.1
 **Branch:** `005-sales-cart`
 
-> 🚧 **DRAFT / BLOCKED — not approved for implementation.** Implementation slices
-> MUST NOT begin until **004 S4 closeout** AND **004 S5 visibility boundaries**
-> are reviewed and approved. `/speckit-tasks` MUST NOT be invoked from this
-> draft. The load-bearing gate is **§A0** (see Approval Gates). Every section
-> below is conditional on §A0 and on the parallel `spec.md` (drafted by a
-> sibling agent) reaching its own clarification closure. No source files,
-> migrations, OpenAPI changes, package installs, or contract artifacts are
-> authored by this plan.
+> ✅ **APPROVED for `/speckit-tasks`.** §A0 cleared 2026-05-14 (004 S4 merged PR #124 on 2026-05-11; 004 S5 visibility boundaries merged 2026-05-14, main SHA `d247e8a`). `/speckit-clarify` ran 2026-05-14 and locked Q1–Q5 (item-note ≤ 200 chars; discount-attribution threshold is percentage of `line_subtotal_minor` per-line with tenant-configurable numeric value; cart-stale-while-signed-out = discard immediately option (a); duplicate-add merges by `item_ref` as default; offline-cart discard emits separate audit event `cart.discarded_on_session_end`). R1 (line-merge) and R3 (cart-stale) are reconciled to Q4 and Q3 respectively. Phase 0 research, Phase 1 data model, contracts, and quickstart are co-resident in this PR. **`/speckit-tasks` is the next Spec Kit step.** Implementation slices S0–S5 remain held behind their per-slice gates (§A1–§A5) as enumerated under Approval Gates.
 
 ---
 
@@ -47,11 +41,14 @@ The cart layer cannot exist without 004 because:
 
 Because of these dependencies, this plan is intentionally restrained. **No
 source files are written, no migrations are authored, no OpenAPI is mutated,
-no packages are installed, no contracts/ artifacts are produced by
-`/speckit-plan` itself.** Phase 1 contract artifacts (`data-model.md`,
-`contracts/bridge-api.md`, `contracts/handoff-envelope.md`,
-`contracts/role-visibility-matrix-cart.md`, `quickstart.md`) are described
-descriptively in this plan and will be authored only after §A0 lifts.
+no packages are installed by `/speckit-plan`.** Phase 0 research and Phase 1
+contract artifacts ([`research.md`](./research.md), [`data-model.md`](./data-model.md),
+[`contracts/bridge-api.md`](./contracts/bridge-api.md),
+[`contracts/handoff-envelope.md`](./contracts/handoff-envelope.md),
+[`contracts/role-visibility-matrix-cart.md`](./contracts/role-visibility-matrix-cart.md),
+[`quickstart.md`](./quickstart.md)) are co-resident with this plan as of 2026-05-14.
+SQL migrations, source files, OpenAPI changes, and visual-direction (S0) artifacts
+remain gated on §A1–§A5 and Slice 0 review respectively.
 
 ## Technical Context
 
@@ -260,29 +257,36 @@ non-honest.
 
 **Choice.** Cart sensitive actions reuse 004's existing `audit_events`
 table and the `src/main/audit/audit-emitter.ts` emitter. **No new audit
-table is introduced by 005.** Action categories planned (Phase-0
-placeholders, finalised at `/speckit-tasks` time once §A3 clears):
+table is introduced by 005.** The canonical action categories are
+(Q5-locked 2026-05-14; final wiring deferred to S3 under §A3):
 
-- `cart.void` — cashier voids own pre-handoff cart (cashier-attributed) OR
-  manager voids post-handoff cart (manager-attributed). The same action
-  category covers both; the event payload distinguishes via the
-  `acting_operator` role.
-- `cart.discount_applied_above_threshold` — the cashier applied a
-  discount-placeholder whose magnitude (interpreted later by the payments
-  feature) exceeds the cashier-self-service threshold; manager
-  attribution is required at apply-time and is recorded as the
-  `acting_operator`. The cashier remains the cart's `owning_operator`;
-  the manager is the *attribution* of the sensitive action only.
-- `cart.line.removed_after_handoff_attempted` — a cashier attempted a
-  cart-line mutation after the cart entered `frozen_handed_off`. The
-  bridge generically refused. Recorded so support can diagnose racing
-  conditions or stale UI.
+- `cart.handoff_to_payment` — the cashier hands off a non-empty cart;
+  the bridge constructs and freezes the `PaymentIntentEnvelope`. The
+  cashier is `acting_operator`; no manager attribution required for the
+  handoff itself. (Spec FR-026, US3-AS6.)
+- `cart.cancel.post_handoff` — manager-attributed void of a cart already
+  in `frozen_handed_off`. Both cashier (requester) and manager (approver)
+  identities are recorded per 004 FR-025(f). (Spec FR-026, FR-033.)
+- `cart.discount.above_threshold` — the cashier applied a
+  discount-placeholder whose magnitude exceeds the Q2-locked tenant-
+  configured percentage-of-`line_subtotal_minor` threshold; manager
+  attribution is recorded as the `acting_operator`. The cashier remains
+  the cart's `owning_operator`; the manager is the *attribution* of the
+  sensitive action only. (Spec FR-023, FR-026.)
+- `cart.discarded_on_session_end` — emitted when Q3 policy (a) discards a
+  draft on operator-session end (sign-out, inactivity timeout per 004
+  FR-009, takeover supersession per 004 FR-013). The cashier whose session
+  ended is the `acting_operator`. Queued in the local outbox when offline
+  (Q5 LOCKED 2026-05-14 — fourth addition to 004's §A3 catalogue alongside
+  the three above). (Spec FR-007, FR-026, SC-005.)
 
-The full final list is finalised during `/speckit-tasks` and ratified by
-§A3 (the 004 audit-catalogue extension PR), which itself coordinates with
-**004 S5 close-out** (cashier-forbidden-information catalogue is finalised
-in S5; some of those rules will determine which cart surfaces require
-manager attribution).
+These four names are the canonical wording adopted from spec FR-026 + Q5.
+Earlier working titles (`cart.void`, `cart.discount_applied_above_threshold`,
+`cart.line.removed_after_handoff_attempted`) used during plan-draft are
+**superseded** by this list. The §A3 coordination still gates 004's
+authoritative action-category enum landing the four names; 005 S3 will not
+begin until that enum extension is in `main` (coordination-only — no shape
+change).
 
 **Constraints inherited from 004 AD-3.** Append-only at schema and rule
 levels. Every audit event carries a client-generated UUID v4 (P5). The
@@ -436,69 +440,87 @@ future payments feature owner).
 
 ## Phase 0 — Research
 
-**Phase 0 deliverables are NOT authored by `/speckit-plan`.** This plan
-identifies the research items that the future `research.md` will resolve once
-§A0 lifts. The list below is the agenda; each item gets chosen approach,
-alternatives, and rationale at research-authoring time.
+Phase 0 output is captured in [`research.md`](./research.md). The summary
+below restates the chosen approach for each research item; rationale and
+rejected alternatives live in `research.md`.
 
-- **R1. Line-merge-by-`item_ref` vs separate-line policy.** When a cashier
-  adds the same SKU twice (or scans the same barcode), does the cart merge
-  the new line into the existing line (incrementing `quantity`) or append a
-  new line? Affects per-item discount placeholders, per-item notes, and
-  void-by-line semantics. Default leaning: **append separate line** to
-  preserve per-line note + per-line discount independence; merge is a
-  cashier-affordance optimisation, not a behavioural rule.
+- **R1. Line-merge-by-`item_ref` vs separate-line policy — RESOLVED by Q4
+  (LOCKED 2026-05-14): merge by `item_ref` is the default.** When the cashier
+  adds the same `item_ref` to a cart that already contains a line for that
+  `item_ref`, the existing line's `quantity` is incremented by the add's
+  quantity and `version` advances. The idempotency-key on the merging action
+  pins the merge as a single replayable operation. The earlier plan-draft
+  leaning ("append separate line") is reversed by Q4. A "force separate line"
+  affordance is deferred to a future catalogue/UI feature (spec FR-014,
+  US1-AS6, §Edge Cases). Per-line notes and per-line discount placeholders
+  attach to the surviving merged line; downstream features that need true
+  per-add isolation must wait for the deferred affordance.
 
-- **R2. Optimistic-concurrency token format for `cart_lines.version`.**
-  Monotonic integer (`bigint`) vs content hash (sha256 of canonical
-  serialisation). Affects collision behaviour under concurrent edits from
-  the same cashier (e.g., two `LineItemRow` re-renders dispatching at the
-  same tick). Default leaning: monotonic integer, scoped per `(cart_id,
-  line_id)`, incremented on each successful action.
+- **R2. Optimistic-concurrency token format for `cart_lines.version` —
+  RESOLVED: monotonic integer scoped per `(cart_id, line_id)`.** Incremented
+  on each successful mutation of that line (quantity change, note edit,
+  merge increment per R1). Simpler than a content hash, deterministic to
+  reason about, and matches the optimistic-concurrency idiom most cashier-
+  facing surfaces will read (compare-and-swap by integer rather than
+  rehashing on every read).
 
-- **R3. Cart-stale policy.** What happens to an open cart draft when the
-  operator session ends (sign-out, takeover, inactivity timeout, forced
-  close)? Options: (a) cart is auto-cancelled with reason `session_ended`;
-  (b) cart is preserved and re-opens for the same operator on next sign-in;
-  (c) cart is preserved but visible only to a manager for void or
-  reassignment. Default leaning: **preserved + re-opens for the same
-  operator** while the operator's identity remains valid; visible to manager
-  for void if the operator is disabled / removed. Coordinates tightly with
-  004 S5 visibility boundaries — this is partly *why* §A0 gates 005.
+- **R3. Cart-stale policy on operator-session end — RESOLVED by Q3 (LOCKED
+  2026-05-14): option (a) discard immediately on session end.** When the
+  operator session ends (explicit sign-out, inactivity timeout per 004
+  FR-009, takeover supersession per 004 FR-013), the draft cart is
+  discarded immediately. The cart transitions to `cancelled` with
+  `cancellation_reason = 'session_ended'`. A `cart.discarded_on_session_end`
+  audit event is emitted (Q5; queued in the local outbox when offline).
+  The cart is never observable by a subsequent cashier on the same terminal.
+  The earlier plan-draft leaning ("preserved + re-opens for the same
+  operator") is reversed by Q3 (spec FR-007, §Edge Cases, A9).
 
-- **R4. Idempotency-key persistence shape.** Where does the UUID v4 live —
-  in `cart_action_outbox` rows (one row per action) with a foreign-key
-  reference from `cart_lines.last_action_id`, or duplicated into both? Default
-  leaning: outbox is the durable record; `cart_lines.last_action_id` is a
-  cached pointer into the outbox; bridge handlers read both for read-after-
-  write verification.
+- **R4. Idempotency-key persistence shape — RESOLVED: outbox owns the key,
+  cart_lines carries a cached pointer.** The UUID v4 lives in
+  `cart_action_outbox.action_id` (one row per action; append-only).
+  `cart_lines.last_action_id` is a cached pointer into the outbox so a
+  bridge handler can answer "what was the last applied action on this
+  line?" without scanning. Read-after-write verification reads both
+  (outbox for the action shape; line for the materialised state).
 
-- **R5. Handoff envelope serialisation.** In-process struct (TypeScript object,
-  passed by reference within the main process) vs serialised JSON (frozen
-  string handed across the bridge or persisted to a `cart_handoff` row).
-  Bonus: signed envelope (HMAC with a per-terminal key from `safeStorage`)
-  vs unsigned. Default leaning: **in-process struct + persisted JSON copy
-  in `carts.handoff_envelope_json`** (so support bundles include the
-  envelope); signing deferred to the payments feature unless the payments
-  feature requests it at §A4 ratification time.
+- **R5. Handoff envelope serialisation — RESOLVED: in-process struct +
+  persisted JSON copy; unsigned.** The `PaymentIntentEnvelope` is
+  constructed in-memory as a `Readonly<>` TypeScript object protected by
+  `Object.freeze`; a JSON serialisation is also persisted to
+  `carts.handoff_envelope_json` so support-bundle export sees the envelope
+  even after restart. Signing (HMAC with a per-terminal key from
+  `safeStorage`) is **deferred to §A4** — if the future payments feature
+  requests signing, 005 adds it at ratification time; until then the
+  envelope is unsigned (the cart and payments features run in the same
+  trust line within a single terminal, so cross-process tampering is not
+  the threat model 005 owns).
 
-- **R6. Discount-placeholder schema.** Cart-level slot (one optional
-  placeholder on the cart header) vs line-level slot (zero-or-more
-  placeholders per line) vs both. Default leaning: **line-level only** for
-  MVP, with `discount_placeholders` modelled as a separate table
-  (`cart_line_discount_placeholders`) referenced by `(cart_id, line_id)`;
-  cart-level discounts deferred to a future feature. Final decision
-  coordinates with the future payments feature owner at §A4.
+- **R6. Discount-placeholder schema — RESOLVED: line-level only.**
+  Consistent with Q2's per-line scope (LOCKED 2026-05-14: percentage of
+  `line_subtotal_minor`, applied per-line). `discount_placeholders` is a
+  separate table `cart_line_discount_placeholders` referenced by
+  `(cart_id, line_id)`; zero-or-more placeholders per line; cart-level
+  discounts are deferred to a future feature. The DiscountPlaceholder
+  entity stores the placeholder *kind* (opaque token whose catalogue is
+  owned by the future payments feature) and a `requires_manager_attribution`
+  flag set true when the placeholder's magnitude exceeds the Q2 threshold.
 
-(Adding R7 is permitted at research-authoring time if §A0 review surfaces
-a new question — for example, item-catalogue seam refinement under AD-5.)
+- **R7. Item-catalogue resolution seam — RESOLVED per AD-5: stub seam
+  with fixture-only resolver until a future item-catalogue feature lands.**
+  `bridge.cart.resolveItemRef(item_ref)` returns
+  `{ display_name, unit_price_minor, version }` on success or a generic
+  refusal `{ kind: 'refused', reason: 'unknown_item' | 'disabled' |
+  'no_connection' | 'generic' }`. The fixture-only resolver lives in
+  test scope; production code paths refuse generically when no real
+  catalogue is available. The seam contract is documented in
+  [`contracts/bridge-api.md`](./contracts/bridge-api.md).
 
 ## Phase 1 — Design & Contracts
 
-**Phase 1 deliverables are NOT authored by `/speckit-plan`.** This section
-outlines the contract surfaces that will be produced when 005 is unblocked.
+Phase 1 deliverables are authored in this PR (co-resident with `plan.md`).
+Pointers below; each artifact is the source of truth for its surface.
 
-- **`data-model.md`** (FUTURE) — entities `Cart`, `CartLine`,
+- **[`data-model.md`](./data-model.md)** — entities `Cart`, `CartLine`,
   `DiscountPlaceholder`, `PaymentIntentEnvelope`. Three new SQLite tables
   described conceptually:
 
@@ -507,29 +529,42 @@ outlines the contract surfaces that will be produced when 005 is unblocked.
     `state` (`empty` / `editing` / `discount_pending_attribution` /
     `handing_off` / `frozen_handed_off` / `cancelled`), `cart_subtotal_minor`,
     `created_at`, `updated_at`, `frozen_at` nullable, `cancelled_at` nullable,
-    `cancellation_reason` nullable, `handoff_envelope_json` nullable
-    (post-R5), `last_action_id` (FK → `cart_action_outbox`).
+    `cancellation_reason` nullable ∈ {`cashier_voided`, `manager_voided_post_handoff`,
+    `session_ended`}, `handoff_envelope_json` nullable (per R5),
+    `last_action_id` (FK → `cart_action_outbox`). The `session_ended`
+    reason is the Q3 (LOCKED 2026-05-14) discard path; the
+    `cart.discarded_on_session_end` audit event is emitted alongside the
+    transition.
   - `cart_lines` — per-line state: `line_id` (UUID v4), `cart_id` (FK →
     `carts`), `item_ref`, `display_name`, `quantity` (positive integer),
     `unit_price_minor` (integer), `line_subtotal_minor` (integer), `note`
-    nullable (length-capped), `version` (R2), `last_action_id` (FK →
-    `cart_action_outbox`), `removed_at` nullable (soft-remove for audit
-    continuity; `cart_lines` rows are NOT deleted on remove — they are
-    soft-marked).
+    nullable (length ≤ **200 chars**, Q1 LOCKED 2026-05-14), `version`
+    (monotonic integer per R2), `last_action_id` (FK → `cart_action_outbox`),
+    `removed_at` nullable (soft-remove for audit continuity; `cart_lines`
+    rows are NOT deleted on remove — they are soft-marked). **Per Q4
+    (LOCKED 2026-05-14):** the bridge-side `cart.lines.add` handler MUST
+    detect an existing non-removed line with the same `item_ref` on the
+    same `cart_id` and merge (increment `quantity`, advance `version`)
+    rather than insert a duplicate; uniqueness is enforced at the
+    application layer (not by a SQL constraint, so that `removed_at`
+    soft-marked lines can coexist with a later non-removed re-add).
   - `cart_action_outbox` — append-only action history: `action_id` (UUID
     v4), `cart_id` (FK → `carts`), `line_id` nullable (FK → `cart_lines`),
     `action_kind` (enum: `cart.create`, `cart.line.add`, `cart.line.update`,
-    `cart.line.remove`, `cart.line.note_set`, `cart.discount_placeholder.add`,
-    `cart.discount_placeholder.remove`, `cart.void`, `cart.handoff`,
-    additional kinds ratified at §A3), `acting_operator_id` (Clerk-backed),
-    `attribution_operator_id` nullable (Clerk-backed; for manager-attributed
-    actions like discount-above-threshold), `payload_json` (canonicalised
+    `cart.line.remove`, `cart.line.note_set`, `cart.line.merge` (Q4 path),
+    `cart.discount_placeholder.add`, `cart.discount_placeholder.remove`,
+    `cart.void`, `cart.handoff_to_payment`, `cart.cancel.post_handoff`,
+    `cart.discount.above_threshold`, `cart.discarded_on_session_end`),
+    `acting_operator_id` (Clerk-backed), `attribution_operator_id` nullable
+    (Clerk-backed; for manager-attributed actions like discount-above-
+    threshold and post-handoff cancel), `payload_json` (canonicalised
     serialisation of action input), `applied_at`, `synced_at` nullable
     (reserved for future backend sync; 005 does not run a sync). UPDATE /
     DELETE denied by trigger.
 
-- **`contracts/bridge-api.md`** (FUTURE) — the new `cart.*` namespace.
-  Conceptual handler list (working titles; final names ratified post-§A0):
+- **[`contracts/bridge-api.md`](./contracts/bridge-api.md)** — the new
+  `cart.*` namespace. Handler list (final names; bridge handler stubs
+  authored in S1):
 
   - `cart.create({ idempotency_key })` → `{ cart_id }` | refusal
   - `cart.lines.add({ cart_id, item_ref, quantity, idempotency_key })`
@@ -553,9 +588,9 @@ outlines the contract surfaces that will be produced when 005 is unblocked.
   Each handler's first executable instruction is `requireOperatorSession`
   (AD-1).
 
-- **`contracts/handoff-envelope.md`** (FUTURE) — the immutable cross-feature
-  payment-intent envelope shape (AD-2). This is the named contract surface
-  the future payments feature consumes. Includes:
+- **[`contracts/handoff-envelope.md`](./contracts/handoff-envelope.md)** —
+  the immutable cross-feature payment-intent envelope shape (AD-2). This is
+  the named contract surface the future payments feature consumes. Includes:
 
   - Field-by-field shape (verbatim list from AD-2).
   - Immutability guarantees (TypeScript `Readonly` + `Object.freeze` at
@@ -565,8 +600,10 @@ outlines the contract surfaces that will be produced when 005 is unblocked.
   - Versioning: the envelope carries an `envelope_version` field (`'v1'`)
     so future revisions remain backward-compatible.
 
-- **`contracts/role-visibility-matrix-cart.md`** (FUTURE) — proposed
-  additions to 004's role-visibility matrix for cart surfaces:
+- **[`contracts/role-visibility-matrix-cart.md`](./contracts/role-visibility-matrix-cart.md)** —
+  proposed additions to 004's role-visibility matrix for cart surfaces
+  (this file is a **proposal-only** companion to 004's canonical matrix
+  per NFR-009 / SC-008):
   - cart pane: visible to cashier, manager, admin
   - cart-mutating actions (add, update, remove, set-note, add-discount-
     below-threshold): cashier, manager, admin
@@ -585,8 +622,8 @@ outlines the contract surfaces that will be produced when 005 is unblocked.
   cashier-forbidden-information catalogue finalised in S5; conflicts require
   re-clarification (§A0 path 2 below).
 
-- **`quickstart.md`** (FUTURE) — reviewer's walkthrough for testing each
-  user story independently after each slice.
+- **[`quickstart.md`](./quickstart.md)** — reviewer's walkthrough for
+  testing each user story independently after each slice.
 
 ## Phase 2 — Visual Direction (Slice 0)
 
@@ -843,7 +880,8 @@ Test shapes per slice:
   length-cap + redaction; discount-placeholder token redaction; cart
   payloads NOT visible in Sentry events.
 - **Integration (renderer)**: cart pane + `cartStore` covers session-
-  ends-clears-cart-store (per R3), bridge-confirmation-required-before-
+  ends-clears-cart-store (per Q3 / R3: discard immediately + emit
+  `cart.discarded_on_session_end`), bridge-confirmation-required-before-
   optimistic-commit, role-mismatch refusals reflected in UI, cart restart-
   survival.
 - **Contract tests**: per-bridge-call contract tests against the typed
@@ -915,7 +953,7 @@ Required before production rollout (gates §A5).
 
 | Failure mode | User-visible | Recovery |
 |:--|:--|:--|
-| Operator session ends with open cart | per R3: cart preserved + re-opens for same operator on next sign-in; visible to manager for void if operator disabled | re-sign-in OR manager void |
+| Operator session ends with open cart | per Q3 (LOCKED option (a)): cart discarded immediately; `cart.discarded_on_session_end` audit event emitted (queued offline if needed); cashier rebuilds the cart on next sign-in | no manager involvement required; rebuild on re-sign-in |
 | Bridge refuses cart-mutating action (no active session) | generic refusal toast | sign in |
 | Bridge refuses cart-mutating action (wrong role) | generic refusal toast | switch operator |
 | Cart in `frozen_handed_off` and cashier attempts mutation | generic refusal + `cart.line.removed_after_handoff_attempted` audit event emitted | the post-handoff state is final from cart's perspective; manager void if needed |
@@ -942,20 +980,20 @@ Required before production rollout (gates §A5).
 
 ```text
 specs/005-sales-cart/
-├── spec.md                                  # Parallel agent's deliverable
-├── plan.md                                  # This file
-├── research.md                              # FUTURE — Phase 0 output (not in this PR)
-├── data-model.md                            # FUTURE — Phase 1 output
-├── quickstart.md                            # FUTURE — Phase 1 output
-├── contracts/                               # FUTURE
+├── spec.md                                  # §A0-cleared; Q1–Q5 locked 2026-05-14
+├── plan.md                                  # This file (v1.0; co-resident with Phase 0/1 artifacts)
+├── research.md                              # Phase 0 output — R1–R7 resolved
+├── data-model.md                            # Phase 1 output — entities + three SQLite tables (conceptual)
+├── quickstart.md                            # Phase 1 output — reviewer's walkthrough
+├── contracts/
 │   ├── bridge-api.md                        # cart.* preload bridge contract
 │   ├── handoff-envelope.md                  # immutable cross-feature envelope shape
-│   └── role-visibility-matrix-cart.md       # additions to 004's matrix
-├── tasks.md                                 # Parallel agent's deliverable
-├── coordination.md                          # Parallel agent's deliverable
-├── checklists/                              # FUTURE
-├── visual-direction/                        # Slice S0 contact-sheet review (created in S0, post-§A0)
-└── security-review/                         # Slice S2 P8 review notes (created in S2, post-§A0)
+│   └── role-visibility-matrix-cart.md       # proposals against 004's matrix (NOT canonical)
+├── tasks.md                                 # DRAFT — regenerated by `/speckit-tasks` (next step)
+├── coordination.md                          # §A0 CLEARED 2026-05-14
+├── checklists/                              # FUTURE — created at slice-PR time
+├── visual-direction/                        # Slice S0 contact-sheet review (created in S0)
+└── security-review/                         # Slice S2 P8 review notes (created in S2)
 ```
 
 ### Source Code (repository root) — descriptive, NOT authored by this draft
@@ -1027,7 +1065,13 @@ the future payments feature). No new top-level packages.
 
 ---
 
-**End of plan. DRAFT — BLOCKED.** `/speckit-tasks` MUST NOT be invoked.
-**§A0** (004 S4 closeout AND 004 S5 visibility boundaries reviewed and
-approved) is the load-bearing gate; until it lifts, no implementation
-slice — including Slice S0 (visual direction) — may begin.
+**End of plan. ✅ APPROVED for `/speckit-tasks`.** §A0 (004 S4 closeout AND
+004 S5 visibility boundaries) cleared 2026-05-14. Q1–Q5 clarifications
+locked 2026-05-14 (Q1: 200 chars; Q2: percentage of `line_subtotal_minor`,
+per-line, tenant-configurable value; Q3: discard immediately on session
+end; Q4: merge by `item_ref` default; Q5: separate
+`cart.discarded_on_session_end` audit event). Phase 0 (`research.md`) and
+Phase 1 (`data-model.md`, `contracts/*`, `quickstart.md`) are co-resident
+with this plan. **`/speckit-tasks` is the next Spec Kit step**;
+implementation slices S0–S5 remain held behind their per-slice gates
+(§A1–§A5 and Slice 0 visual-direction review).

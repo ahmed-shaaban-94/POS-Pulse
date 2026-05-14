@@ -1,0 +1,243 @@
+# Quickstart: Sales Cart
+
+**Feature ID:** 005-sales-cart
+**Plan:** [./plan.md](./plan.md)
+**Spec:** [./spec.md](./spec.md)
+**Created:** 2026-05-14
+**Constitution version pinned:** v1.5.1
+
+This document gives a reviewer the **walkthrough** for each user story in
+the spec, so each story can be tested independently after the relevant
+slice ships. The walkthroughs do NOT run today — they describe the
+acceptance review for each slice. No code is invoked from this file.
+
+---
+
+## Prerequisites (every walkthrough)
+
+- A terminal paired to a tenant (002 — already shipped).
+- A signed-in operator session (004 — already shipped; S4 + S5 merged
+  as of 2026-05-14).
+- The cart feature flag enabled for this terminal (the flag is added in
+  001's existing configuration surface during S1 of 005; until 005 ships,
+  these walkthroughs are not yet runnable).
+- A small known SKU set available via the R7 fixture resolver (during
+  S1 + S2 testing) or via the real item-catalogue feature once it ships.
+
+---
+
+## US1 — Build a draft cart (Priority P1; testable after S2)
+
+**What the spec promises** (spec §"User Story 1"):
+A signed-in cashier can add line items, change quantities idempotently,
+have prices snapshotted at add-time, and persist the draft across app
+restart while the operator session is still held. Adding the same
+`item_ref` twice merges into a single line with summed `quantity` (Q4
+locked: merge by default).
+
+### Walkthrough
+
+1. **Sign in as a cashier** via 004's Sign-In surface.
+2. **Navigate to the cart-bearing surface** (filled by 005's cart pane
+   in 003's reserved cart slot).
+3. **Add line item A** with `item_ref = "ITEM-A"`, `quantity = 2`.
+   - **Expect:** one line appears with `display_name`, `quantity = 2`,
+     a snapshotted `unit_price_minor`, and a computed
+     `line_subtotal_minor = quantity × unit_price_minor`. The line is
+     visible only AFTER the bridge confirms persistence (no optimistic
+     render of an unconfirmed line — P2). (US1-AS1.)
+4. **Add line item A again** with `quantity = 3`.
+   - **Expect:** the existing line's `quantity` increments to 5 (merge
+     by `item_ref`); a single line remains in the cart; `version`
+     advances by one (Q4 LOCKED 2026-05-14; US1-AS6).
+5. **Increment line A** via the quantity stepper.
+   - **Expect:** `quantity` advances by 1; `version` advances by 1;
+     `line_subtotal_minor` recomputed in integer minor units.
+6. **Decrement-to-zero** line A.
+   - **Expect:** the line is removed (FR-016). Re-issue the same client
+     UUID (the renderer's idempotency key) for the same intent.
+   - **Expect:** the second issue is a no-op; the line is NOT
+     "double-removed" (US1-AS2; FR-018).
+7. **Add line item B** with `quantity = 1`, then **add line item C**
+   with `quantity = 1`.
+8. **Restart the application** while still signed in (kill via Task
+   Manager; relaunch).
+   - **Expect:** the cashier signs in (or stays signed-in if 004's
+     session-resume rules apply); the cart is restored exactly — same
+     two lines, same contents, same `version` tokens (US1-AS4; FR-028).
+9. **Sign out**, then sign back in as the **same cashier**.
+   - **Expect:** the cart is **gone** — Q3 LOCKED option (a) discards
+     the draft on session end. A `cart.discarded_on_session_end` audit
+     event was emitted at sign-out (Q5; spec FR-007, FR-026; SC-005). A
+     different cashier signing in on the same terminal also sees no
+     cart (tenant / role-isolation discipline).
+10. **Open DevTools and attempt to call** `cart.lines.add` without an
+    active session (e.g., after explicit sign-out).
+    - **Expect:** generic refusal (US1-AS5; FR-003).
+
+### Independent-test exit criteria
+
+- All seven acceptance scenarios in US1 pass.
+- No floating-point arithmetic appears in cart-pane logs or any
+  `line_subtotal_minor` audit-trail record (SC-006).
+- A replay of any successful action with the same `idempotency_key` is
+  a no-op (SC-002).
+- A stale-version update is refused with a generic outcome (SC-003).
+
+---
+
+## US2 — Cancel a cart with attribution (Priority P2; testable after S3)
+
+**What the spec promises** (spec §"User Story 2"):
+A cashier may freely cancel their own draft cart before handoff. After
+handoff, cancel becomes a manager-attributed sensitive action recorded
+in `audit_events`.
+
+### Walkthrough
+
+1. **Sign in as a cashier**; build a small draft cart (one or two
+   lines).
+2. **Invoke "Void cart"** from the cart pane.
+   - **Expect:** the cart transitions to `cancelled` with
+     `cancellation_reason = 'cashier_voided'`. No manager attribution.
+     No audit event (non-sensitive lifecycle event per FR-031). (US2-AS1.)
+3. **Build a new cart**; advance to **handoff** (US3 walkthrough below).
+   The cart is now in `frozen_handed_off`.
+4. **Attempt "Void cart"** from the cashier surface.
+   - **Expect:** generic refusal "this cart is now in payment — ask a
+     manager" (FR-032; US2-AS2).
+5. **Sign in as a manager** (separate session, or via the
+   manager-attribution prompt as designed in S0).
+6. **Approve a post-handoff void** through the manager-attribution flow.
+   - **Expect:** the cart transitions to `cancelled` with
+     `cancellation_reason = 'manager_voided_post_handoff'`. The audit
+     record carries the **cashier as requester** and the **manager as
+     approver** (US2-AS3; FR-033 / 004 FR-025(f)).
+7. **Inspect the audit record** in the support-bundle export.
+   - **Expect:** the five mandatory attribution attributes (acting
+     operator, shift, originating terminal, timestamp, action category
+     = `cart.cancel.post_handoff`) are present; partial records are
+     not persisted (US2-AS5; FR-026).
+
+### Independent-test exit criteria
+
+- All five acceptance scenarios in US2 pass.
+- A `cancelled` cart refuses every mutating bridge call generically
+  (US2-AS4; FR-006).
+- The audit event for the post-handoff void is in `audit_events` with
+  the correct `action_category` (SC-005).
+
+---
+
+## US3 — Hand off to the future payment / checkout feature (Priority P3; testable after S4)
+
+**What the spec promises** (spec §"User Story 3"):
+The cart emits a `payment-intent envelope` (immutable snapshot), then
+freezes. The future payment / checkout feature consumes the envelope.
+
+### Walkthrough
+
+1. **Sign in as a cashier**; build a non-empty draft cart.
+2. **Invoke "Hand off to payment"** from the cart pane.
+   - **Expect:** the bridge constructs a `PaymentIntentEnvelope` with
+     `envelope_version = 'v1'`, `cart_id`, `operator_session_id`,
+     `tenant_id`, `branch_id`, `terminal_id`, frozen `lines[]` snapshots
+     (each with `item_ref`, `display_name`, `quantity`,
+     `unit_price_minor`, `line_subtotal_minor`, `note`, `version`,
+     `last_action_id`), `discount_placeholders[]`, `subtotal_minor`
+     (integer minor units only), `created_at`, and `handoff_action_id`
+     (matches the audit row). The cart transitions to
+     `frozen_handed_off` (US3-AS1; FR-034).
+3. **Attempt to mutate** the cart through every cart-layer affordance
+   (add line, remove line, increment, decrement, set quantity, edit
+   note, attach discount placeholder, programmatic forced call, route
+   restoration, deep-link).
+   - **Expect:** every attempt is refused with a generic "this cart is
+     in payment" outcome; the envelope and underlying lines are
+     unchanged (US3-AS3; SC-004; FR-035).
+4. **Inspect the audit record** for the handoff.
+   - **Expect:** the record carries 004 FR-025's five mandatory
+     attribution attributes; `action_category = cart.handoff_to_payment`
+     (US3-AS6; FR-026; SC-005).
+5. **Attempt to invoke handoff on an empty cart.**
+   - **Expect:** refused; no envelope is emitted; the cart remains in
+     state `draft` / `editing` (US3-AS2; FR-037).
+6. **Build a cart, mutate one line, then attempt handoff with a stale
+   per-line version** for that line.
+   - **Expect:** handoff refused with a generic "review the cart and
+     try again" outcome; the cart remains in `editing` (US3-AS5; FR-037).
+7. **Restart the application** after a successful handoff.
+   - **Expect:** the persisted JSON copy of the envelope on
+     `carts.handoff_envelope_json` is readable; the cart is still in
+     `frozen_handed_off` (R5 persistence; envelope is rehydrated as a
+     frozen value on read).
+
+### Independent-test exit criteria
+
+- All six acceptance scenarios in US3 pass.
+- The envelope's `subtotal_minor` is an integer (no floating-point);
+  no `*.toFixed()` / `parseFloat` appears in the construction code path
+  (SC-006).
+- The envelope's TypeScript type is `Readonly<>`; `Object.freeze` is
+  applied recursively at construction (handoff-envelope.md §"Immutability
+  guarantees").
+
+---
+
+## Cross-cutting walkthroughs
+
+### Tenant isolation (SC-007)
+
+1. **Sign in as cashier-A** in tenant T1 / branch B1; build a cart;
+   record `cart_id_A`.
+2. **Sign out.** **Sign in as cashier-B** in tenant T2 / branch B2.
+3. **Attempt to call** `cart.lines.add` with `cart_id = cart_id_A`
+   (forced via DevTools).
+4. **Repeat with** route restoration, deep-link, forced `cart_id`
+   parameter in bridge calls.
+   - **Expect:** all 10+ attempted access paths are refused generically
+     (`reason: 'tenant_isolation'`); zero leakages (FR-002).
+
+### Note redaction (SC-009)
+
+1. **Build a cart with at least one line**; attempt to set notes
+   matching the project's forbidden-pattern allowlist (PII, card data,
+   credential fragments) across at least 25 distinct samples.
+   - **Expect:** 100 % refused at the cart-layer boundary with a generic
+     "note rejected" outcome; zero forbidden patterns persisted in
+     `cart_lines.note` or in any log / support-bundle / Sentry event
+     (FR-021, NFR-006).
+
+### Offline durability + audit queueing
+
+1. **Disconnect the terminal from the network** (simulate offline).
+2. **Build a cart, add notes, apply a below-threshold discount
+   placeholder, hand off.**
+   - **Expect:** the cart pane shows 003's `offline` / `degraded`
+     connection visual (P2); the cart drafts work normally (FR-030;
+     P18); the handoff audit event is **queued in the local outbox**
+     (FR-026; NFR-011 inherited from 004); the renderer does NOT claim
+     the payment surface succeeded (P2).
+3. **Reconnect; observe** the queued audit event syncs to the backend
+   (sync surface owned by the future audit-sync pipeline, NOT 005).
+
+---
+
+## What this file does NOT cover
+
+- The visual / aesthetic acceptance of the cart pane — that's Slice S0
+  (visual direction; contact-sheet review).
+- The payments feature's consumption of the envelope — that's the future
+  payment / checkout feature's quickstart, not 005's.
+- The item-catalogue feature's resolver — that's a future feature
+  (AD-5, R7).
+- Inventory mutation — out of scope (spec §"Out of Scope").
+- Shift financial calculations — out of scope.
+
+---
+
+**End of quickstart.** Once Slices S1 + S2 + S3 + S4 ship behind the
+feature flag, a reviewer signs off on the user stories by walking
+through US1, US2, US3, and the cross-cutting walkthroughs above. Each
+"Expect" line is a testable claim with a spec reference; mismatches
+block the slice's merge.
