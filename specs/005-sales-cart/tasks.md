@@ -116,7 +116,7 @@ owners, and record the feature-flag configuration. No code, no migrations, no pa
 - [ ] T001 Confirm the `cart` feature flag exists in 001's configuration surface and is disabled by default; record the flag key in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [ ] T002 [P] Open the §A3 coordination thread: confirm 004's `ActionCategory` discriminated union (`src/shared/audit/event-shape.ts`) will be extended with the 4 canonical cart categories before S3 begins; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [ ] T003 [P] Open the §A4 coordination thread: confirm the future payments-feature owner will review `contracts/handoff-envelope.md` and sign off before S4 merges; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
-- [ ] T004 [P] Assign the S0 visual-direction reviewer; record name + expected review date in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
+- [x] T004 [P] Assign the S0 visual-direction reviewer; record name + expected review date in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [ ] T005 Update `specs/005-sales-cart/coordination.md` to reflect `/speckit-tasks` completion and the current gate status table — `specs/005-sales-cart/coordination.md`
 
 **Phase 1 exit:** T001–T005 ticked. Feature flag confirmed. §A3/§A4 coordination owners identified. S0 reviewer assigned.
@@ -156,9 +156,9 @@ Per Constitution VI, tests are written first.
 
 **Purpose:** Produce and record the contact-sheet review mandated by spec A7 / FR-033 inheritance. Non-code. **Must complete before any of S1–S5 begin.** Startable immediately — §A0 cleared; reviewer assigned in T004.
 
-- [ ] T017 Produce S0 contact sheet covering all 8 surfaces from `plan.md §Phase 2 — Visual Direction`: empty cart pane, populated cart pane, line-item row, quantity stepper, void confirmation dialog, manager-attribution prompt placeholder, discount-placeholder row, handoff summary surface — `specs/005-sales-cart/visual-direction/contact-sheet.md`
-- [ ] T018 Review contact sheet against 003 design tokens (`src/renderer/ui/tokens/`), 003 navigation-rail behaviour, 003 connection-state visuals, 004's role-indicator slot, and the cashier-forbidden-information catalogue from `specs/004-operator-session/contracts/role-visibility-matrix.md` — `specs/005-sales-cart/visual-direction/review-record.md`
-- [ ] T019 Record the review outcome and the reviewer's sign-off in `specs/005-sales-cart/visual-direction/review-record.md`; cite any required changes to the contact sheet — `specs/005-sales-cart/visual-direction/review-record.md`
+- [x] T017 Produce S0 contact sheet covering all 8 surfaces from `plan.md §Phase 2 — Visual Direction`: empty cart pane, populated cart pane, line-item row, quantity stepper, void confirmation dialog, manager-attribution prompt placeholder, discount-placeholder row, handoff summary surface — `specs/005-sales-cart/visual-direction/contact-sheet.md`
+- [x] T018 Review contact sheet against 003 design tokens (`src/renderer/ui/tokens/`), 003 navigation-rail behaviour, 003 connection-state visuals, 004's role-indicator slot, and the cashier-forbidden-information catalogue from `specs/004-operator-session/contracts/role-visibility-matrix.md` — `specs/005-sales-cart/visual-direction/review-record.md`
+- [x] T019 Record the review outcome and the reviewer's sign-off in `specs/005-sales-cart/visual-direction/review-record.md`; cite any required changes to the contact sheet — `specs/005-sales-cart/visual-direction/review-record.md`
 
 **S0 exit:** Review record signed off. Every S1+ PR must cite the S0 review record in its description (FR-033 gate).
 
