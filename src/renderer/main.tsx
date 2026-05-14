@@ -6,6 +6,8 @@ import App from './App';
 import { initSentryRenderer } from './observability/sentry-renderer';
 import './styles/tailwind.css';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
+import { useFeatureFlagsStore } from './stores/feature-flags-store';
+import { installCartStoreSignOutHook } from './stores/cart-signout-hook';
 
 /**
  * T068 — initialise renderer-side Sentry BEFORE React mounts.
@@ -33,6 +35,18 @@ void initSentryRenderer({
   console: window.console,
   appVersion: '0.1.0',
 });
+
+// 005-sales-cart T001 — hydrate feature flags from main once at boot.
+// Failures are non-fatal: flags remain at fail-closed defaults.
+void bridge
+  .appConfig()
+  .then((cfg) => {
+    useFeatureFlagsStore.getState().hydrate(cfg.features ?? {});
+  })
+  .catch(() => undefined);
+
+// 005-sales-cart Q3 — discard cart draft when operator session ends.
+installCartStoreSignOutHook();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element #root not found in DOM');

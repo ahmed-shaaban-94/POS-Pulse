@@ -69,27 +69,27 @@ phase status. Updated in place as coordination items resolve.
 
 ### T001 — Cart feature flag (§A1 configuration surface)
 
-- **Status:** ⏳ **PENDING** — flag key not yet defined in source.
-- **Finding:** The plan (§"Rollback strategy") states each slice ships
-  behind a feature flag readable from the existing 001 configuration
-  surface (`src/shared/app-config.ts` → `AppConfig` interface). As of
-  2026-05-14, `AppConfig` carries only `sentryDsn`. The `cart` feature
-  flag does not yet exist in source.
-- **Expected flag key:** `cart` (per plan.md and tasks.md references
-  to "the cart flag" / "feature-flag-off state").
-- **Action required:** A follow-up task or owner confirmation is needed
-  to add `features?: { cart?: boolean }` (or equivalent) to `AppConfig`
-  (`src/shared/app-config.ts`) and wire it into
-  `src/main/ipc/app-config.ts`. The flag MUST default to `false`
-  (disabled) — enabling it is a per-tenant, per-branch production
-  decision (§A5 gate + pilot sequence). This MUST be confirmed and
-  recorded here before S1 enables any cart UI.
+- **Status:** ✅ **COMPLETE — 2026-05-14.** Flag defined in source.
+- **Source:** `src/shared/app-config.ts` — `AppConfig.features.cart?: boolean`.
+- **Main wiring:** `src/main/index.ts` `getAppConfig()` reads
+  `process.env.POS_PULSE_FEATURE_CART`. Truthy values: `'1'`, `'true'`,
+  `'yes'`, `'on'` (case-insensitive). Anything else (including unset)
+  defaults the flag to `false`. The renderer reads the flag once at
+  boot via `window.api.appConfig()` and conditionally mounts the
+  CartPane in 003's reserved cart slot.
+- **Default:** `false` (disabled). Fail-closed by construction —
+  enabling the flag requires explicit ops action (env var on the
+  terminal).
 - **Disabled-by-default rationale:** disabling the cart flag returns
   the application to the 003 + 004 post-sign-in shell with the cart
-  pane reverting to its 003-era placeholder (003 FR-11). The four cart
-  SQLite tables are harmless to keep unused when the flag is off.
-- **Record updated:** T001 ⏳ PENDING — flag key proposed as `cart`;
-  source definition and owner confirmation required before S1.
+  slot reverting to its 003-era `CartPlaceholder` (003 FR-11). The
+  four cart SQLite tables are harmless to keep unused when the flag
+  is off (the tables themselves do not land until §A2 / S2).
+- **Production rollout gate:** §A5. Flipping the flag in a tenant's
+  production environment is a §A5 sign-off; dev/CI may flip freely.
+- **Record updated:** T001 ✅ COMPLETE — flag key `features.cart`;
+  env var `POS_PULSE_FEATURE_CART`; default `false`; recorded
+  2026-05-14.
 
 ### T002 — §A3 audit-event catalogue extension coordination
 

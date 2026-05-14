@@ -8,6 +8,8 @@ import { registerLogHandler } from './ipc/log.js';
 import { registerAppConfigHandler } from './ipc/app-config.js';
 import { registerPairingHandlers } from './ipc/pairing.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
+import { registerCartHandlers } from './ipc/cart.js';
+import { CartBridgeHandlers } from './cart/cart-bridge.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -283,11 +285,20 @@ app
     // per-call, so a future restart-free DSN rotation works without
     // re-architecting the handler.
     const getAppConfig = (): AppConfig => {
+      const cfg: AppConfig = {};
       const dsn = process.env['SENTRY_DSN'];
       if (typeof dsn === 'string' && dsn.trim().length > 0) {
-        return { sentryDsn: dsn };
+        cfg.sentryDsn = dsn;
       }
-      return {};
+      // 005-sales-cart T001 — cart feature flag (default false).
+      // Truthy values: '1', 'true', 'yes', 'on' (case-insensitive).
+      // Anything else, or unset, leaves the flag disabled.
+      const cartRaw = process.env['POS_PULSE_FEATURE_CART'];
+      const cartEnabled =
+        typeof cartRaw === 'string' &&
+        ['1', 'true', 'yes', 'on'].includes(cartRaw.trim().toLowerCase());
+      cfg.features = { cart: cartEnabled };
+      return cfg;
     };
     registerAppConfigHandler(ipcMain, getAppConfig);
 
@@ -427,6 +438,15 @@ app
         jwtHolder: operatorJwtHolder,
       }),
     });
+
+    // 005-sales-cart S1 — register `cart:*` IPC. Handler stub set:
+    // cart.create is in-memory; all other handlers are role-gated and
+    // return refused/not_implemented until S2 wires persistence (§A2).
+    const cartBridgeHandlers = new CartBridgeHandlers({
+      getCurrentSession: () => operatorSessionManager.getCurrent(),
+      logger: mainLogger,
+    });
+    registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
 
     createWindow();
     mainLogger.info('app:ready');
