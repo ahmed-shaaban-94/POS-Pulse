@@ -2,19 +2,19 @@
 
 **Feature ID:** 005-sales-cart
 **Feature Branch:** `005-sales-cart`
-**Status:** **DRAFT — BLOCKED until 004 S4 closeout AND 004 S5 visibility boundaries are reviewed and approved.**
+**Status:** **DRAFT — §A0 CLEARED. `/speckit-clarify` complete (2026-05-14). Ready for `/speckit-plan`.**
 **Created:** 2026-05-09
 **Owner:** POS-Pulse desktop team
 **Input:** User description: "Define the behavioural rules for the operator-bound sales cart that follows operator/session (004), so a paired, signed-in operator can build a draft cart, mutate line items idempotently, and hand off to a future payment / checkout feature via a frozen `payment-intent envelope`. This spec MUST NOT design payments, money totals, receipts, inventory, reports, shift math, or UI; it locks behavioural rules and the handoff contract so the future payment feature has a stable upstream surface."
 
 ---
 
-> 🚧 **DRAFT / BLOCKED — not approved for implementation.**
-> This document MUST NOT be cited as normative until both of the following land:
-> 1. **004-operator-session S4 closeout** — operator session, role catalogue, and audit-event scaffold live in the codebase.
-> 2. **004-operator-session S5 visibility boundaries** — cashier vs. manager / admin Cashier-Forbidden Information catalogue rows that touch cart-related surfaces are reviewed and approved.
+> ✅ **§A0 CLEARED — `/speckit-clarify` complete 2026-05-14.**
+> Both blocking gates have landed:
+> 1. **004-operator-session S4 closeout** — merged 2026-05-11 (PR #124).
+> 2. **004-operator-session S5 visibility boundaries** — merged 2026-05-14 (T083–T093; main SHA `d247e8a`).
 >
-> Until both gates pass, no `/speckit-plan`, no `/speckit-tasks`, no implementation slice for 005 may begin. This footer is repeated at the end of the file and inside every section where misreading the doc as approved would be costly.
+> Q1–Q5 clarification session ran 2026-05-14. All five markers resolved (see §"Clarifications"). **`/speckit-plan` is the next step.**
 
 ---
 
@@ -28,21 +28,27 @@ The single contract 005 commits to between cart and the future payment / checkou
 
 This feature also inherits 003's lesson and 004's FR-033 rule: any UI-bearing portion that follows MUST schedule an *early visual direction* milestone after `/speckit-plan` and before the first implementation slice.
 
-> 🚧 **DRAFT / BLOCKED reminder:** the cart layer cannot exist without 004's `Operator` and `OperatorSession` and cannot have its visibility rows finalised without 004 S5. **Do not implement against this spec yet.**
+> ✅ **§A0 CLEARED** — 004's `Operator`, `OperatorSession`, and S5 visibility boundaries are all in place. **Do not implement until `/speckit-plan` + `/speckit-tasks` complete.**
 
 ## Clarifications
 
-This spec is seeded with three open `[NEEDS CLARIFICATION]` markers. They are tracked in §"Open Questions / NEEDS CLARIFICATION" below and are the canonical list for `/speckit-clarify` once 005 is unblocked.
+This spec was seeded with five `[NEEDS CLARIFICATION]` markers (Q1–Q5). All five are resolved in the session below. The §"Open Questions / NEEDS CLARIFICATION" section is updated to reflect the locked decisions.
 
-### Session — none yet
+### Session — 2026-05-14 (Q1–Q5)
 
-No clarification session has run for 005. The clarifications below are placeholders.
+**§A0 CLEARED**: 004 S4 closeout (PR #124, 2026-05-11) and 004 S5 visibility boundaries (T083–T093, main SHA `d247e8a`, 2026-05-14) both confirmed merged. Q1–Q5 resolved as follows:
 
-- **Q1**: Item-note maximum length. Placeholder: 200 characters. Pharmacy operations input may push this up or down (e.g., short SKU annotations vs. compounding instructions). `[NEEDS CLARIFICATION: item-note maximum length — propose 200 chars; confirm with pharmacy operations]`
-- **Q2**: Discount-attribution threshold. The rule is locked (any discount above the threshold is a sensitive action requiring manager attribution under 004's audit-event scaffold), but the *value* is not. Open whether the threshold is monetary (integer minor units), percentage of line, percentage of cart, or a tier table. `[NEEDS CLARIFICATION: discount-attribution threshold — value, units (minor units vs. percent), and whether the threshold applies per-line or per-cart]`
-- **Q3**: Cart-stale-while-signed-out policy. If the operator session ends while a draft cart is open (explicit sign-out, inactivity timeout per 004 FR-009, takeover supersession per 004 FR-013), what happens to the draft? Options: (a) discard immediately on session end, (b) hold the draft for the same operator's next sign-in within N minutes on the same terminal, (c) hand off to a manager-recovery surface. **Recommendation: (a) discard.** Rationale: drafts carry no payment-bearing state; recovery costs auditability and creates a "ghost cart" surface that a different cashier could observe — that violates 004's tenant / role-isolation discipline. `[NEEDS CLARIFICATION: cart-stale-while-signed-out policy — recommend (a) discard immediately; confirm against pharmacy operations]`
+- **Q1 — Item-note maximum length — LOCKED: 200 characters.** The existing placeholder value is adopted as the hard maximum. FR-010, FR-020, §Key Entities (CartLine, `note` field), and the §Edge Cases "note exceeds maximum" entry are all updated to reflect 200 chars as normative.
 
-A secondary, lower-priority clarification surfaced during drafting and is captured in §"Open Questions" as Q4 (line-item merge rule on duplicate add).
+- **Q2 — Discount-attribution threshold — LOCKED: percentage of line subtotal, per-line scope; numeric value deferred to tenant-policy / operations input.** Units are locked as *percentage of `line_subtotal_minor`*, applied per-line (not per-cart, not in minor units, not a tier table). The specific numeric threshold (e.g., 10 %, 15 %) is NOT locked by this spec — it is a tenant-configurable parameter owned by the future payment / checkout feature's discount-catalogue. FR-023 and §Key Entities (DiscountPlaceholder) are updated to remove the raw `[NEEDS CLARIFICATION]` tags and surface the locked units/scope while deferring the value. Note for `/speckit-plan`: `plan.md` R2 is consistent with this decision; verify the DiscountPlaceholder storage schema reflects per-line scoping.
+
+- **Q3 — Cart-stale-while-signed-out policy — LOCKED: option (a) discard immediately on session end.** Rationale confirmed: drafts carry no payment-bearing state; recovery creates a "ghost cart" visible to a subsequent cashier, violating 004's tenant / role-isolation discipline. FR-007, §Edge Cases ("Operator session ends mid-cart", "Takeover strands a cart"), and A9 references updated to remove `[NEEDS CLARIFICATION]` tags and state option (a) as normative. Note for `/speckit-plan`: `plan.md` R3 leans "preserved + re-opens for same operator" — this conflicts with the locked Q3 decision; R3 MUST be reconciled to option (a) during `/speckit-plan` before any implementation slice begins.
+
+- **Q4 — Line-item merge rule on duplicate add — LOCKED: merge by `item_ref` (option (a)) is the default; the "force separate line" affordance is deferred to a future catalogue/UI feature.** FR-014 already uses merge as default; this decision closes Q4 without schema change. The "subject to Q4" parenthetical in US1-AS6 and the Q4 edge-case note in §Edge Cases are updated to reflect the locked default. Note for `/speckit-plan`: `plan.md` R1 leans "append separate line" — this conflicts with the locked Q4 decision; R1 MUST be reconciled to merge-default during `/speckit-plan`.
+
+- **Q5 — Offline-cart audit event — LOCKED: separate event `cart.discarded_on_session_end`.** The event is a fourth addition to 004's §A3 audit catalogue, alongside the three enumerated in FR-026 (`cart.handoff_to_payment`, `cart.cancel.post_handoff`, `cart.discount.above_threshold`). FR-026 and §Key Entities (AuditEvent) updated to include this fourth category. The event fires when Q3 policy (a) discards a draft on session end; it carries the same five mandatory attribution attributes as the other sensitive-action categories.
+
+A secondary clarification (Q4) that surfaced during drafting is now closed by the session above.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -68,7 +74,7 @@ A signed-in cashier (operator session active per 004) lands on the cart-bearing 
 3. **Given** an open draft cart, **When** the operator explicitly sets quantity to a positive integer with a stale `version` token (the line was mutated since the operator last read it), **Then** the operation MUST be refused with a generic "this line was just updated — please review and try again" outcome and the line MUST NOT be silently overwritten.
 4. **Given** a draft cart with two lines, **When** the application is restarted while the operator session is still held (session token still valid, no sign-out, no takeover), **Then** on relaunch the same operator on the same terminal sees the same two lines with identical contents and identical `version` tokens.
 5. **Given** no operator is signed in, **When** any cart-mutating action is attempted (programmatic forced call, route restoration, deep-link), **Then** the cart MUST refuse the mutation with a generic outcome and MUST NOT persist any line; the cart-bearing surface itself MUST NOT be reachable per 004 FR-005.
-6. **Given** a draft cart, **When** the cashier adds the same `item_ref` twice in succession (default behaviour), **Then** the two adds merge into a single line with summed `quantity` (subject to Q4 in §"Open Questions" if the team prefers separate lines).
+6. **Given** a draft cart, **When** the cashier adds the same `item_ref` twice in succession, **Then** the two adds merge into a single line with summed `quantity` (merge-by-`item_ref` is the locked default per Q4; the "force separate line" affordance is deferred to a future catalogue/UI feature).
 7. **Given** a draft cart, **When** the cashier adds a line and the catalogue's current `unit_price_minor` for that `item_ref` differs from the price snapshotted on that line, **Then** the line retains the snapshotted price; price drift does not retroactively rewrite the line (P3 — no silent data loss).
 
 ---
@@ -114,12 +120,12 @@ When the cashier is ready to take payment, the cart emits a **`payment-intent en
 
 - **Empty-cart handoff**: refused. An envelope MUST NOT be emitted with zero lines (US3-AS2). Generic "add at least one item before payment" outcome on the cashier surface.
 - **Zero-quantity update**: a `set quantity = 0` operation is treated as a remove; the line is deleted. (Not a separate edge — same semantics as decrement-to-zero.)
-- **Duplicate add of same `item_ref`**: default behaviour merges into a single line with summed `quantity`. Whether to expose an explicit "new line for same item" flag is Q4 in §"Open Questions". Until Q4 resolves, the merge default holds.
-- **Operator session ends mid-cart (sign-out, inactivity timeout per 004 FR-009, takeover per 004 FR-013)**: the draft cart MUST NOT survive the session end on a cashier-reachable surface. Default per Q3 recommendation: discard the draft on session end. Whatever the final policy, the draft MUST NOT become observable by a different cashier on the same terminal (analogous to 004's "two cashiers on one terminal" edge case).
-- **Takeover strands a cart**: if a takeover under 004 FR-013 force-signs-out a cashier holding an open draft cart, the cart MUST follow the Q3 policy. The cart layer MUST NOT silently transfer the draft to the new operator. Any audit event for cart loss is a separate record from the `operator.session.takeover` event (mirroring 004's FR-013 / FR-024 separation pattern).
+- **Duplicate add of same `item_ref`**: merge-by-`item_ref` is the locked default (Q4 resolved 2026-05-14). The "force separate line" affordance is deferred to a future catalogue/UI feature.
+- **Operator session ends mid-cart (sign-out, inactivity timeout per 004 FR-009, takeover per 004 FR-013)**: the draft cart MUST NOT survive the session end on a cashier-reachable surface. **Q3 locked (2026-05-14): discard immediately on session end (option (a)).** The draft MUST NOT become observable by a different cashier on the same terminal. A `cart.discarded_on_session_end` audit event MUST be emitted (Q5).
+- **Takeover strands a cart**: if a takeover under 004 FR-013 force-signs-out a cashier holding an open draft cart, the draft MUST be discarded immediately per Q3 (option (a)). The cart layer MUST NOT silently transfer the draft to the new operator. Any audit event for cart loss is a separate record from the `operator.session.takeover` event (mirroring 004's FR-013 / FR-024 separation pattern).
 - **Idempotency replay**: any cart-mutating action that arrives with a previously-seen client UUID MUST be a no-op; the response MUST match the original outcome (success / refusal). Replay-then-mutate (same UUID, different payload) MUST be refused — UUID identifies the *operation*, not the *line*.
 - **Version-conflict on quantity update**: if the line's stored `version` has advanced since the cashier last read it, the update MUST be refused with a generic "this line was just updated — please review and try again" outcome. The cashier reads the line again (with the new `version`) and re-attempts.
-- **Note exceeds maximum length**: refused at the cart-layer boundary with a generic "note too long" outcome; the line's existing note (if any) MUST NOT be partially overwritten. Maximum length is Q1 (`[NEEDS CLARIFICATION]`); the placeholder is 200 characters.
+- **Note exceeds maximum length**: refused at the cart-layer boundary with a generic "note too long" outcome; the line's existing note (if any) MUST NOT be partially overwritten. Maximum length is **200 characters** (Q1 locked 2026-05-14).
 - **Note contains forbidden patterns (PII / card data)**: cart-layer redaction (P11) MUST refuse to persist any value that matches the project's existing forbidden-key / forbidden-pattern allowlist (mirrors 004 PR-1 / NFR-002). The refusal is generic — it MUST NOT echo back which pattern was matched.
 - **Discount placeholder without manager attribution above the threshold**: refused. The cart layer recognises only a discount *placeholder* (US-aware "this line/cart has a pending discount" slot); any value above the Q2 threshold requires manager attribution under 004 FR-025 / FR-026 before the placeholder may be considered "applied". The cart layer DOES NOT compute the discounted amount.
 - **Cart state transition into `handed_off_to_payment` while offline**: the handoff MAY proceed locally (cart drafts are local-first, P18 — local durability before offline promises) but the audit record for `cart.handoff_to_payment` MUST be queued in the local outbox per 004 NFR-011; the cashier surface MUST surface the existing 003 connection-state visual (`offline` / `degraded`) and MUST NOT optimistically claim the payment surface succeeded (P2 — no fake success states). Note: payment finalisation itself is NOT promised offline by 005; that's the future payment / checkout feature's call.
@@ -139,13 +145,13 @@ When the cashier is ready to take payment, the cart emits a **`payment-intent en
 - **FR-004**: The cart's lifecycle states are exactly three: `draft`, `cancelled`, `handed_off_to_payment`. No other states MAY be introduced by 005.
 - **FR-005**: The legal state transitions are: `draft → cancelled` (cashier or manager-attributed), `draft → handed_off_to_payment` (handoff success), `handed_off_to_payment → cancelled` (manager-attributed only). No other transitions MAY occur.
 - **FR-006**: `cancelled` and `handed_off_to_payment` are *terminal* with respect to cart-layer mutation. After either state is reached, no line MAY be added, removed, updated, or have its note edited via any cart-layer surface.
-- **FR-007**: A cart in state `draft` MUST persist locally across app restart while the bound operator session is still active. On session end, the draft's persistence is governed by Q3 (default recommendation: discard on session end).
+- **FR-007**: A cart in state `draft` MUST persist locally across app restart while the bound operator session is still active. On session end, the draft MUST be discarded immediately (Q3 locked 2026-05-14: option (a)) and a `cart.discarded_on_session_end` audit event MUST be queued in the local outbox (Q5).
 - **FR-008**: A cart that has emitted a `payment-intent envelope` (FR-034) MUST stay in state `handed_off_to_payment` until either the future payment / checkout feature signals a terminal payment outcome (out of scope for 005) or a manager-attributed cancel returns it to `cancelled` (FR-033).
 - **FR-009**: The cart's lifecycle state MUST be observable to the cashier on cashier-reachable surfaces *only* for their own cart. A cashier MUST NOT observe another cashier's cart state on any cashier surface (deferred to 004 S5 visibility-matrix review for the canonical row).
 
 #### FR-LineItems (line-item structure & invariants)
 
-- **FR-010**: A cart line MUST carry exactly the following behavioural fields: `id`, `cart_id`, `item_ref`, `display_name`, `quantity`, `unit_price_minor` (integer), `line_subtotal_minor` (integer), `note` (string ≤ Q1), `created_at`, `updated_at`, `version`.
+- **FR-010**: A cart line MUST carry exactly the following behavioural fields: `id`, `cart_id`, `item_ref`, `display_name`, `quantity`, `unit_price_minor` (integer), `line_subtotal_minor` (integer), `note` (string ≤ 200 chars), `created_at`, `updated_at`, `version`.
 - **FR-011**: `unit_price_minor` MUST be the snapshotted catalogue price *at add time*. Subsequent catalogue price changes MUST NOT silently rewrite the line (P3 — no silent data loss).
 - **FR-012**: `line_subtotal_minor` MUST be computed as `quantity × unit_price_minor` in integer minor units only; no floating-point arithmetic at any point. (P1 — financial correctness; constitution Hard Rules.)
 - **FR-013**: `display_name` MUST be set at add time from the catalogue resolution of `item_ref`; subsequent catalogue display-name changes MUST NOT silently rewrite the line (mirrors FR-011 rationale).
@@ -161,19 +167,19 @@ When the cashier is ready to take payment, the cart emits a **`payment-intent en
 
 #### FR-Notes (free-text per line)
 
-- **FR-020**: A cart line MAY carry a free-text `note` of length ≤ Q1 (placeholder: 200 chars; `[NEEDS CLARIFICATION]`). A note exceeding the maximum MUST be refused at the cart-layer boundary; partial overwrite MUST NOT occur.
+- **FR-020**: A cart line MAY carry a free-text `note` of length ≤ **200 characters** (Q1 locked 2026-05-14). A note exceeding the maximum MUST be refused at the cart-layer boundary; partial overwrite MUST NOT occur.
 - **FR-021**: Cart-layer note redaction MUST refuse to persist values matching the project's existing forbidden-key / forbidden-pattern allowlist (PII, card data, credential fragments — mirrors 004 PR-1 / NFR-002 and the constitution's P11). The refusal MUST be generic; it MUST NOT echo back which pattern matched.
 
 #### FR-Discount-Placeholder (discount actions are placeholders only)
 
 - **FR-022**: 005 MUST NOT design discount math. The cart layer recognises only a **DiscountPlaceholder** entity (see §"Key Entities") that signals "this line / cart has a pending discount of kind K". The cart layer MUST NOT compute, store, or expose a discounted amount; that's the future payment / checkout feature's responsibility.
-- **FR-023**: Any discount whose magnitude exceeds the Q2 threshold (`[NEEDS CLARIFICATION: discount-attribution threshold]`) MUST be a *sensitive action* requiring manager attribution under 004 FR-025 / FR-026. The discount placeholder MUST NOT be considered "applied" on the cart layer until manager attribution is recorded.
+- **FR-023**: Any discount whose magnitude exceeds the Q2 threshold MUST be a *sensitive action* requiring manager attribution under 004 FR-025 / FR-026. The discount placeholder MUST NOT be considered "applied" on the cart layer until manager attribution is recorded. **Q2 locked (2026-05-14): the threshold is a *percentage of `line_subtotal_minor`*, applied per-line. The specific numeric value is a tenant-configurable parameter owned by the future payment / checkout feature's discount-catalogue; this spec does not set that value.**
 - **FR-024**: The discount-placeholder catalogue is owned by the future payment / checkout feature; 005 commits to the *attribution rule*, not to the catalogue contents. Future kinds (line discount, cart discount, percentage, fixed amount, voucher-tied, insurance-tied, loyalty-tied) MUST be added there, not here.
 
 #### FR-Attribution (cart-mutating actions carry session id; sensitive actions emit audit-event placeholders)
 
 - **FR-025**: Every cart-mutating action MUST carry the `operator_session_id` of the active session under which it executes; the cart layer MUST refuse any action whose `operator_session_id` does not match the cart's bound session.
-- **FR-026**: The cart layer MUST emit an audit-event placeholder per 004 FR-025 / FR-026 for the following sensitive cart actions: post-handoff cancel (manager-attributed), discount placeholder above the Q2 threshold (manager-attributed), `cart.handoff_to_payment`. The five mandatory attributes (acting operator, shift, originating terminal, timestamp, action category) MUST be present; partial records MUST NOT persist (mirrors 004 NFR-008).
+- **FR-026**: The cart layer MUST emit an audit-event placeholder per 004 FR-025 / FR-026 for the following sensitive cart actions: `cart.handoff_to_payment`, `cart.cancel.post_handoff` (manager-attributed), `cart.discount.above_threshold` (manager-attributed, i.e., discount percentage exceeds the Q2 tenant-configured threshold), and `cart.discarded_on_session_end` (Q5 locked 2026-05-14 — fourth addition to 004's §A3 catalogue). The five mandatory attributes (acting operator, shift, originating terminal, timestamp, action category) MUST be present; partial records MUST NOT persist (mirrors 004 NFR-008).
 - **FR-027**: Non-sensitive cart actions (add / remove / quantity-change / note-edit on a still-`draft` cart by the binding cashier) MUST NOT emit audit-event records. The audit-event scaffold is reserved for genuinely sensitive actions; everyday cart edits are not audited per-action (P11 — supportability without log bloat).
 
 #### FR-Offline-Drafts (local-first persistence)
@@ -210,16 +216,16 @@ When the cashier is ready to take payment, the cart emits a **`payment-intent en
 ### Key Entities *(behavioural; not implementation)*
 
 - **Cart**: A draft container of line items bound to exactly one `OperatorSession`. Carries: `id`, `operator_session_id`, `tenant_id`, `branch_id`, `terminal_id`, `lifecycle_state` ∈ {`draft`, `cancelled`, `handed_off_to_payment`}, `created_at`, `updated_at`. A cart MUST NOT carry totals-bearing fields beyond the per-line `line_subtotal_minor` it derives from its lines.
-- **CartLine**: A single line item on a cart. Carries: `id`, `cart_id`, `item_ref`, `display_name`, `quantity` (positive integer), `unit_price_minor` (integer minor units, snapshotted at add time per FR-011), `line_subtotal_minor` (integer minor units, computed per FR-012), `note` (string ≤ Q1), `created_at`, `updated_at`, `version` (optimistic-concurrency token per FR-015).
+- **CartLine**: A single line item on a cart. Carries: `id`, `cart_id`, `item_ref`, `display_name`, `quantity` (positive integer), `unit_price_minor` (integer minor units, snapshotted at add time per FR-011), `line_subtotal_minor` (integer minor units, computed per FR-012), `note` (string ≤ **200 chars**, Q1 locked 2026-05-14), `created_at`, `updated_at`, `version` (optimistic-concurrency token per FR-015).
 - **DiscountPlaceholder**: A placeholder marker that signals "this line / cart has a pending discount of kind K". Carries (behaviourally, not as a designed schema): a reference to the `cart_id` (cart-level discount) or `line_id` (line-level discount), a `placeholder_kind` (catalogue owned by the future payment / checkout feature, NOT 005), and a `requires_manager_attribution` flag (true when the discount magnitude exceeds the Q2 threshold). The cart layer MUST NOT compute the discounted amount; the placeholder is *informational* until the future payment / checkout feature applies the discount math.
 - **PaymentIntentEnvelope**: The single contract 005 commits to between cart and the future payment / checkout feature. Carries: `cart_id`, `operator_session_id`, `tenant_id`, `branch_id`, `terminal_id`, an immutable list of line snapshots (each line's `item_ref`, `display_name`, `quantity`, `unit_price_minor`, `line_subtotal_minor`, `note`, `version` at handoff), `subtotal_minor` (integer minor units, = sum of line subtotals), `created_at`. **The future payment / checkout feature MAY add fields it owns (tender breakdown, totals math beyond `subtotal_minor`, change, paid timestamps, receipt-breakdown payload) but MUST NOT remove, rename, or rewrite any of the envelope fields enumerated here (FR-036).** This is the boundary contract — treat it as load-bearing.
 - **Operator** *(re-stated dependency on 004)*: The human user authorised to operate POS-Pulse. Carries: stable identity, display name, role (`cashier` | `manager` | `admin`), tenant, authorised branch set, account-enabled flag. **005 MUST NOT redefine this entity; it consumes 004's definition.**
 - **OperatorSession** *(re-stated dependency on 004)*: The bound link between an `Operator` and a paired `TerminalSession`. Carries: operator identity, role, tenant, branch, originating terminal, start timestamp, end timestamp, end-cause. **005 MUST NOT redefine this entity; it consumes 004's definition.**
-- **AuditEvent** *(re-stated dependency on 004)*: The append-only sensitive-action record. Carries the five mandatory attribution attributes (acting operator, shift, originating terminal, timestamp, action category) and optional approving supervisor. **005 MUST NOT redefine this entity; it consumes 004's definition (FR-025 / FR-028).** New action categories introduced by 005 (`cart.handoff_to_payment`, `cart.cancel.post_handoff`, `cart.discount.above_threshold`) extend 004's catalogue per 004 FR-026 ("Future features MAY extend the catalogue but MUST NOT shrink it").
+- **AuditEvent** *(re-stated dependency on 004)*: The append-only sensitive-action record. Carries the five mandatory attribution attributes (acting operator, shift, originating terminal, timestamp, action category) and optional approving supervisor. **005 MUST NOT redefine this entity; it consumes 004's definition (FR-025 / FR-028).** New action categories introduced by 005 extend 004's catalogue per 004 FR-026 ("Future features MAY extend the catalogue but MUST NOT shrink it"): `cart.handoff_to_payment`, `cart.cancel.post_handoff`, `cart.discount.above_threshold`, and `cart.discarded_on_session_end` (Q5 locked 2026-05-14 — fires when Q3 policy (a) discards a draft on session end).
 
 ## Success Criteria *(mandatory)*
 
-> 🚧 **DRAFT / BLOCKED reminder:** these criteria become testable once 004 S4 / S5 land. Until then they describe the *target* shape, not a passing test.
+> ✅ **§A0 CLEARED** — 004 S4 / S5 both merged. These criteria become testable once `/speckit-plan` + `/speckit-tasks` complete and implementation slices begin.
 
 ### Measurable Outcomes
 
@@ -227,7 +233,7 @@ When the cashier is ready to take payment, the cart emits a **`payment-intent en
 - **SC-002 (idempotency replay = 0 duplicate lines)**: Across at least 50 simulated quantity-change replays (same UUID, same payload), zero duplicate line states are produced; the cart's final state is identical to a single-execution baseline (FR-018).
 - **SC-003 (version-conflict resolution)**: Across at least 20 simulated stale-`version` quantity-change attempts, 100 % are refused with a generic "review and try again" outcome; zero are silently overwritten (FR-019).
 - **SC-004 (handoff immutability invariant)**: For each of at least 10 attempted post-handoff mutation paths (add, remove, increment, decrement, set, note-edit, attach discount placeholder, programmatic forced call, route restoration, deep-link), the mutation is refused; zero post-handoff mutations succeed (FR-035).
-- **SC-005 (audit-emission completeness for cart sensitive actions)**: For each of the three cart-introduced sensitive-action categories (`cart.handoff_to_payment`, `cart.cancel.post_handoff`, `cart.discount.above_threshold`), a tabletop review confirms every audit record carries 004 FR-025's five mandatory attribution attributes; zero categories are missing any attribute (FR-026).
+- **SC-005 (audit-emission completeness for cart sensitive actions)**: For each of the four cart-introduced sensitive-action categories (`cart.handoff_to_payment`, `cart.cancel.post_handoff`, `cart.discount.above_threshold`, `cart.discarded_on_session_end`), a tabletop review confirms every audit record carries 004 FR-025's five mandatory attribution attributes; zero categories are missing any attribute (FR-026).
 - **SC-006 (no money float)**: A code-and-spec walkthrough confirms zero floating-point money arithmetic at any cart-layer boundary; per-line subtotal arithmetic is in integer minor units only; the `payment-intent envelope`'s `subtotal_minor` is integer minor units only (NFR-002, FR-012, FR-034).
 - **SC-007 (tenant isolation walkthrough)**: A reviewer signed in as a cashier in tenant T1 / branch B1 cannot reach, mutate, or observe any cart bound to a different tenant or branch across at least 10 attempted access paths (forced session id, forced cart id, route restoration, deep-link); zero leakages (FR-002).
 - **SC-008 (role-boundary deferral to 004 S5)**: The 005 spec contributes zero canonical visibility-matrix rows; every cart-related visibility decision is filed as a proposal against `specs/004-operator-session/contracts/role-visibility-matrix.md` for 004 S5 review (NFR-009). A 004 S5 review record explicitly approves the proposed cart-related rows before any 005 implementation slice begins.
@@ -260,7 +266,7 @@ The following are explicitly out of scope for **005-sales-cart** and MUST NOT be
 
 ## Assumptions
 
-- **A1 (004 S4 + S5 are merged before 005 implementation)**: 005 is BLOCKED. Implementation of any 005 slice MUST NOT begin until 004 S4 closeout AND 004 S5 visibility boundaries are reviewed and approved. The 005 spec MAY proceed through `/speckit-clarify` once Q1 / Q2 / Q3 (and Q4 if the team prioritises it) are answered, but `/speckit-plan` and `/speckit-tasks` for 005 wait on the 004 gates. (See §"Dependencies".)
+- **A1 (004 S4 + S5 are merged before 005 implementation)**: **§A0 CLEARED (2026-05-14).** 004 S4 closeout merged 2026-05-11 (PR #124); 004 S5 visibility boundaries merged 2026-05-14 (T083–T093; main SHA `d247e8a`). `/speckit-clarify` ran 2026-05-14 (Q1–Q5 resolved). `/speckit-plan` and `/speckit-tasks` are now unblocked. Implementation of any 005 slice MUST NOT begin until `/speckit-plan` + `/speckit-tasks` complete. (See §"Dependencies".)
 - **A2 (the future payment / checkout feature owns money math)**: 005 commits only to per-line `line_subtotal_minor` (integer minor units) and the envelope's `subtotal_minor` (sum of line subtotals, integer minor units). Tax, discount math, change, balance, tender breakdown, and any totals beyond `subtotal_minor` are the future payment / checkout feature's exclusive territory.
 - **A3 (the future inventory feature owns stock validation)**: 005 MAY emit a stock-check call against a future inventory feature's surface as a *bridge*, but DOES NOT design that surface. Adding a line for an out-of-stock `item_ref` is therefore not refused at the cart layer in 005; whether a future inventory feature blocks it (and where) is the inventory feature's design call, not 005's.
 - **A4 (catalogue resolution exists but is not designed here)**: 005 assumes `item_ref` resolves to a `display_name` and a `unit_price_minor` at add time via an existing or future catalogue surface. Price drift after add is handled by the snapshot rule (FR-011); display-name drift is handled symmetrically (FR-013). Catalogue search, browse, and detail surfaces are out of scope.
@@ -268,7 +274,7 @@ The following are explicitly out of scope for **005-sales-cart** and MUST NOT be
 - **A6 (test toolchain inheritance)**: Vitest is the only test runner (constitution Tech Stack; project CLAUDE.md). 005 inherits Vitest, Testing Library, and `expectNoAxeViolations` from 001 / 003 / 004; it does NOT introduce new test infrastructure.
 - **A7 (visual direction discipline is default)**: After 003's lesson and 004 FR-033, every UI-bearing 005 slice assumes the early-visual-direction milestone as default behaviour, not a special opt-in. The first UI-bearing 005 slice MUST NOT merge before the visual-direction artifacts are reviewed against 003's POS UI Shell decisions.
 - **A8 (handoff is one-way unless manager-attributed)**: A `draft → handed_off_to_payment` transition is committed-forward by default. The only path back to `draft` is a manager-attributed cancel under FR-033, and even that does not "unfreeze" the original cart; it terminates the cart in `cancelled` state. A new draft cart is needed to retry the sale.
-- **A9 (operator-bound, not terminal-bound)**: A draft cart belongs to the binding *operator session* (per 004), not to the terminal. If the operator session ends (sign-out, inactivity, takeover) and the same operator signs back in on the same terminal within the Q3 window, whether they see their old draft is governed by Q3 — not by terminal continuity.
+- **A9 (operator-bound, not terminal-bound)**: A draft cart belongs to the binding *operator session* (per 004), not to the terminal. On session end the draft is discarded immediately (Q3 locked: option (a)); terminal continuity does not preserve a draft across operator sessions.
 
 ## Constitutional Alignment
 
@@ -293,31 +299,31 @@ Each principle below either constrains 005 directly or is preserved by 005's beh
 
 ## Dependencies
 
-> 🚧 **DRAFT / BLOCKED reminder:** the dependency on 004 S4 + S5 is *load-bearing*. 005 implementation cannot begin until both are approved.
+> ✅ **§A0 CLEARED** — 004 S4 + S5 both merged. Implementation still requires `/speckit-plan` + `/speckit-tasks` to complete before any slice begins.
 
 - **001-foundation** — money-as-integer-minor-units rule, secrets module (`safeStorage` / DPAPI), log redaction, baseline Electron security posture, local SQLite store, custom transactional migration runner.
 - **002-terminal-pairing** — terminal session, device token, paired-state precondition. The cart-bearing surface is itself a post-pairing, post-sign-in surface.
 - **003-pos-ui-shell** — design tokens (`comfortable` density), navigation rail, role-indicator slot, status-bar location, four-state connection visual, touch-target floor (44 × 44 CSS-pixel), and the **eleven reserved tender / totals / receipt-breakdown layout slots** (`tender.cash`, `tender.card`, `tender.bank-transfer`, `tender.voucher`, `tender.insurance`, `tender.split`, `totals.amount-due`, `totals.amount-paid`, `totals.remaining`, `totals.change-due`, `receipt.breakdown`). **The cart layer DOES NOT own these slots; the future payment / checkout feature does.**
-- **004-operator-session** — operator identity, operator session lifecycle, role catalogue (`cashier` / `manager` / `admin`), takeover flow, audit-event scaffold (`audit_events`, append-only, five mandatory attributes), Cashier-Forbidden Information catalogue, FR-033 visual-direction discipline. **005 MUST NOT begin implementation until 004 S4 closeout AND 004 S5 visibility boundaries are reviewed and approved.**
+- **004-operator-session** — operator identity, operator session lifecycle, role catalogue (`cashier` / `manager` / `admin`), takeover flow, audit-event scaffold (`audit_events`, append-only, five mandatory attributes), Cashier-Forbidden Information catalogue, FR-033 visual-direction discipline. **§A0 CLEARED (2026-05-14) — S4 merged 2026-05-11, S5 merged 2026-05-14. 005 implementation is now gated on `/speckit-plan` + `/speckit-tasks` completing.**
 - **Future payment / checkout feature** — owns: payment-intent finalisation, totals math beyond per-line `line_subtotal_minor` and envelope `subtotal_minor`, tender row design, change calculation, balance, receipt rendering, the eleven 003-reserved layout slots. **005 commits to the `payment-intent envelope` shape (FR-034); the future payment / checkout feature MAY extend it (FR-036) but MUST NOT remove, rename, or rewrite its existing fields.**
 - **Future inventory feature** — owns: stock validation, decrement on sale completion, FEFO logic, batch / lot logic. **005 MAY emit a stock-check bridge call but DOES NOT design that surface (Assumption A3).**
 
 ## Open Questions / NEEDS CLARIFICATION
 
-These are the genuinely unresolved decisions for `/speckit-clarify` once 005 is unblocked. The spec is complete with reasonable defaults documented in Assumptions and Clarifications above; these markers exist only where multiple defensible answers materially change the spec.
+All five questions resolved in the 2026-05-14 clarification session (see §"Clarifications"). Entries below are preserved for traceability and show the locked decision.
 
-1. **Q1 — Item-note maximum length** *(unresolved)*. Placeholder: 200 characters. Pharmacy operations input may push this up (e.g., compounding instructions) or down (e.g., short SKU annotations). `[NEEDS CLARIFICATION: item-note maximum length — propose 200 chars; confirm with pharmacy operations]`
+1. **Q1 — Item-note maximum length** — **LOCKED: 200 characters** (2026-05-14). The existing placeholder is adopted as the hard maximum. Reflected in FR-010, FR-020, §Key Entities (CartLine), and §Edge Cases.
 
-2. **Q2 — Discount-attribution threshold** *(unresolved)*. The rule is locked: any discount above the threshold is a sensitive action requiring manager attribution under 004 FR-025 / FR-026. Open: the *value*, the *units* (integer minor units vs. percentage of line vs. percentage of cart vs. tier table), and whether the threshold applies *per line* or *per cart* or *both*. `[NEEDS CLARIFICATION: discount-attribution threshold — value, units (minor units vs. percent), and whether the threshold applies per-line or per-cart]`
+2. **Q2 — Discount-attribution threshold** — **LOCKED: percentage of `line_subtotal_minor`, per-line scope** (2026-05-14). Units and scope are normative; the specific numeric value is a tenant-configurable parameter owned by the future payment / checkout feature's discount-catalogue. Reflected in FR-023 and §Key Entities (DiscountPlaceholder). Note for `/speckit-plan`: confirm DiscountPlaceholder storage schema reflects per-line scoping.
 
-3. **Q3 — Cart-stale-while-signed-out policy** *(unresolved)*. If the operator session ends with an open draft cart (sign-out, inactivity timeout per 004 FR-009, takeover supersession per 004 FR-013), what happens to the draft? Options: (a) discard immediately on session end, (b) hold the draft for the same operator's next sign-in within N minutes on the same terminal, (c) hand off to a manager-recovery surface. **Recommendation: (a) discard.** Rationale: drafts carry no payment-bearing state; recovery costs auditability and creates a "ghost cart" surface that a different cashier could observe. `[NEEDS CLARIFICATION: cart-stale-while-signed-out policy — recommend (a) discard immediately; confirm against pharmacy operations]`
+3. **Q3 — Cart-stale-while-signed-out policy** — **LOCKED: option (a) discard immediately on session end** (2026-05-14). Reflected in FR-007, §Edge Cases, A9. Note for `/speckit-plan`: `plan.md` R3 ("preserved + re-opens for same operator") conflicts with this decision and MUST be reconciled to option (a).
 
-4. **Q4 — Line-item merge rule on duplicate add** *(secondary, unresolved)*. Default: merge by `item_ref` (FR-014). Whether to expose an explicit "force separate line" affordance is open. Options: (a) always merge (current default), (b) always separate-line, (c) cashier chooses per add via an explicit toggle, (d) catalogue-driven (some items merge, others separate — e.g., serialized goods always separate). `[NEEDS CLARIFICATION: line-item merge rule — default merge by item_ref; whether to expose a "force separate line" affordance and on what basis]`
+4. **Q4 — Line-item merge rule on duplicate add** — **LOCKED: merge by `item_ref` (option (a)) is the default; "force separate line" deferred to a future catalogue/UI feature** (2026-05-14). Reflected in FR-014, US1-AS6, §Edge Cases. Note for `/speckit-plan`: `plan.md` R1 ("append separate line") conflicts with this decision and MUST be reconciled to merge-default.
 
-5. **Q5 — Offline-cart behaviour while no operator is signed in** *(secondary, unresolved)*. By FR-003, no cart MAY mutate while no operator is signed in. But: if a cart was in `draft` for cashier X, and cashier X's session ended (per Q3), and the network is offline so audit events for cart loss can't sync, does the local outbox need a *separate* cart-loss audit event, or is it folded into 004's `operator.session.*` events? Recommend: separate event (`cart.discarded_on_session_end`) per Q3 (a). `[NEEDS CLARIFICATION: cart-loss audit event — separate from operator.session.* events or folded; recommend separate]`
+5. **Q5 — Offline-cart audit event** — **LOCKED: separate event `cart.discarded_on_session_end`** (2026-05-14). Fourth addition to 004's §A3 audit catalogue alongside the three in FR-026. Fires when Q3 policy (a) discards a draft on session end; queued in the local outbox when offline. Reflected in FR-026, FR-007, §Key Entities (AuditEvent), and SC-005.
 
 ---
 
-> 🚧 **DRAFT / BLOCKED footer.**
+> ✅ **§A0 CLEARED — `/speckit-clarify` complete 2026-05-14.**
 >
-> **End of specification.** This spec is **DRAFT — BLOCKED** until 004 S4 closeout and 004 S5 visibility boundaries are reviewed and approved. `/speckit-clarify` is the next step once 005 is unblocked.
+> **End of specification.** This spec is **DRAFT — §A0 CLEARED**. Q1–Q5 resolved. **`/speckit-plan` is the next step.**
