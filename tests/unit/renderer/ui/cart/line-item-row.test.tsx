@@ -124,7 +124,9 @@ describe('T049 — LineItemRow interactions', () => {
   it('calls onNoteOpen when note chip is clicked (note non-null)', async () => {
     const user = userEvent.setup();
     const onNoteOpen = vi.fn();
-    render(<LineItemRow {...BASE_PROPS} note="Crush tablet" hasNote={true} onNoteOpen={onNoteOpen} />);
+    render(
+      <LineItemRow {...BASE_PROPS} note="Crush tablet" hasNote={true} onNoteOpen={onNoteOpen} />,
+    );
     await user.click(screen.getByTestId('line-note-chip'));
     expect(onNoteOpen).toHaveBeenCalledOnce();
   });
