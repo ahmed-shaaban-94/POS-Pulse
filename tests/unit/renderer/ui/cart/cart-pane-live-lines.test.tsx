@@ -24,6 +24,7 @@ import { cleanup, render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
+import type { CartBridgeAPI } from '../../../../../src/shared/bridge-api.js';
 import { CartPane } from '../../../../../src/renderer/ui/cart/CartPane.js';
 import { useCartStore } from '../../../../../src/renderer/stores/cart-store.js';
 import { useOperatorSessionStore } from '../../../../../src/renderer/stores/operator-session-store.js';
@@ -382,11 +383,13 @@ const INITIAL_LINE = {
   version: 1,
 };
 
-function makeTestBridge(overrides: Partial<{
-  remove: ReturnType<typeof vi.fn>;
-  update: ReturnType<typeof vi.fn>;
-  setNote: ReturnType<typeof vi.fn>;
-}> = {}) {
+type BridgeLineOverrides = {
+  remove?: CartBridgeAPI['lines']['remove'];
+  update?: CartBridgeAPI['lines']['update'];
+  setNote?: CartBridgeAPI['lines']['setNote'];
+};
+
+function makeTestBridge(overrides: BridgeLineOverrides = {}): CartBridgeAPI {
   return {
     lines: {
       remove: overrides.remove ?? vi.fn().mockResolvedValue({ kind: 'ok' }),
@@ -395,15 +398,14 @@ function makeTestBridge(overrides: Partial<{
       add: vi.fn(),
     },
     create: vi.fn(),
-    resolveItemRef: vi.fn(),
     subscribe: vi.fn(),
     void: vi.fn(),
     discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
     handoff: vi.fn(),
-  } as unknown as Parameters<typeof CartPane>[0]['_testBridge'];
+  };
 }
 
-function renderWithLine(bridgeOverrides?: Parameters<typeof makeTestBridge>[0]) {
+function renderWithLine(bridgeOverrides?: BridgeLineOverrides): { bridge: CartBridgeAPI } {
   setSignedIn();
   useCartStore.getState().applyCartCreated('cart-1');
   useCartStore.getState().applyLineAdded('line-1');
