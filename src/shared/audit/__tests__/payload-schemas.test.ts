@@ -3,6 +3,10 @@ import { describe, it, expect } from 'vitest';
 import {
   FORCED_CLOSE_REASONS,
   type AuditPayloadMap,
+  type CartCancelPostHandoffPayload,
+  type CartDiscardedOnSessionEndPayload,
+  type CartDiscountAboveThresholdPayload,
+  type CartHandoffToPaymentPayload,
   type CashierPinResetPayload,
   type CashierPinUnlockPayload,
   type ForcedCloseReason,
@@ -35,6 +39,11 @@ describe('audit/payload-schemas (T049)', () => {
       'operator.session.takeover',
       'cashier.pin.reset',
       'cashier.pin.unlock',
+      // 005-sales-cart §A3
+      'cart.handoff_to_payment',
+      'cart.cancel.post_handoff',
+      'cart.discount.above_threshold',
+      'cart.discarded_on_session_end',
     ];
     for (const key of mapKeys) {
       expect(AUDIT_ACTION_CATEGORIES).toContain(key);
@@ -129,5 +138,55 @@ describe('audit/payload-schemas (T049)', () => {
       const typed: ForcedCloseReason = reason;
       expect(typeof typed).toBe('string');
     }
+  });
+
+  // ─── 005-sales-cart §A3 payload shape tests (FR-026 / Q5) ───────────────
+
+  it('CartHandoffToPaymentPayload type accepts a well-formed record', () => {
+    const payload: CartHandoffToPaymentPayload = {
+      cart_id: 'cart-uuid-001',
+      handoff_action_id: 'ha-uuid-001',
+      line_count: 3,
+      subtotal_minor: 4500,
+    };
+    expect(Number.isSafeInteger(payload.subtotal_minor)).toBe(true);
+    expect(payload.cart_id).toBe('cart-uuid-001');
+    expect(Object.keys(payload)).not.toContain('pin');
+    expect(Object.keys(payload)).not.toContain('pin_hash');
+    expect(Object.keys(payload)).not.toContain('password');
+  });
+
+  it('CartCancelPostHandoffPayload type accepts a well-formed record', () => {
+    const payload: CartCancelPostHandoffPayload = {
+      cart_id: 'cart-uuid-002',
+      handoff_action_id: 'ha-uuid-002',
+    };
+    expect(payload.handoff_action_id).toBe('ha-uuid-002');
+    expect(Object.keys(payload)).not.toContain('pin');
+    expect(Object.keys(payload)).not.toContain('pin_hash');
+    expect(Object.keys(payload)).not.toContain('password');
+  });
+
+  it('CartDiscountAboveThresholdPayload type accepts a well-formed record', () => {
+    const payload: CartDiscountAboveThresholdPayload = {
+      cart_id: 'cart-uuid-003',
+      cart_line_id: 'line-uuid-003',
+    };
+    expect(payload.cart_line_id).toBe('line-uuid-003');
+    expect(Object.keys(payload)).not.toContain('pin');
+    expect(Object.keys(payload)).not.toContain('pin_hash');
+    expect(Object.keys(payload)).not.toContain('password');
+  });
+
+  it('CartDiscardedOnSessionEndPayload type accepts a well-formed record', () => {
+    const payload: CartDiscardedOnSessionEndPayload = {
+      cart_id: 'cart-uuid-004',
+      operator_session_id: 'sess-uuid-004',
+      discard_cause: 'signed_out',
+    };
+    expect(payload.discard_cause).toBe('signed_out');
+    expect(Object.keys(payload)).not.toContain('pin');
+    expect(Object.keys(payload)).not.toContain('pin_hash');
+    expect(Object.keys(payload)).not.toContain('password');
   });
 });

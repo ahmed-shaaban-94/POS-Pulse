@@ -15,6 +15,7 @@
  * ship here as types only; their handlers land in S4.
  */
 
+import type { SessionEndCause } from '../operator/session-end-cause.js';
 import type { ActionCategory } from './event-shape.js';
 
 // ─── shift.open ────────────────────────────────────────────────────────────
@@ -110,6 +111,70 @@ export interface CashierPinUnlockPayload {
   [key: string]: unknown;
 }
 
+// ─── 005-sales-cart §A3 categories (type-only; emitters land in S3) ──────
+
+/**
+ * `cart.handoff_to_payment` — emitted when a draft cart hands off to the
+ * future payment / checkout feature (spec FR-026, AC #6). Manager
+ * attribution is NOT required for the handoff itself; the cashier
+ * attribution lives on the AuditEvent envelope. Subtotal is in integer
+ * minor units (NFR-002); the emitter MUST enforce `Number.isSafeInteger`.
+ */
+export interface CartHandoffToPaymentPayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** UUID v4 of the cart_action_outbox row whose action_kind = cart.handoff_to_payment. */
+  handoff_action_id: string;
+  /** Non-negative count of non-removed cart lines at handoff. */
+  line_count: number;
+  /** Integer minor units; MUST satisfy Number.isSafeInteger at emit time. */
+  subtotal_minor: number;
+}
+
+/**
+ * `cart.cancel.post_handoff` — manager-attributed cancellation of a cart
+ * that has already entered `handed_off_to_payment` (spec FR-033). The
+ * cashier is the requester (envelope `acting_operator_id`); the manager
+ * is the approver (envelope `approving_supervisor_id`).
+ */
+export interface CartCancelPostHandoffPayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** UUID of the prior `cart.handoff_to_payment` outbox row this cancel reverses. */
+  handoff_action_id: string;
+}
+
+/**
+ * `cart.discount.above_threshold` — manager-attributed discount placeholder
+ * whose magnitude exceeds the Q2 tenant-configured threshold (spec FR-023).
+ * The cart layer records only the placeholder; the discounted amount is
+ * computed by the future payment / checkout feature. The cashier is the
+ * requester; the manager is the approver (envelope `approving_supervisor_id`).
+ */
+export interface CartDiscountAboveThresholdPayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** FK into cart_lines table — the line bearing the discount placeholder. */
+  cart_line_id: string;
+}
+
+/**
+ * `cart.discarded_on_session_end` — fires when Q3 policy (a) discards a
+ * draft cart on session end (spec Q5 LOCKED 2026-05-14). Non-attributed
+ * lifecycle event; the cashier whose session is ending is the
+ * `acting_operator_id` on the envelope. `discard_cause` reuses the
+ * canonical operator-session end-cause union so the discard reason and
+ * the session end cause stay in lockstep.
+ */
+export interface CartDiscardedOnSessionEndPayload {
+  /** FK into carts table. */
+  cart_id: string;
+  /** Session id whose end triggered the discard. */
+  operator_session_id: string;
+  /** Reuses the canonical operator-session end-cause union. */
+  discard_cause: SessionEndCause;
+}
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -128,6 +193,11 @@ export type AuditPayloadMap = {
   'operator.session.takeover': OperatorSessionTakeoverPayload;
   'cashier.pin.reset': CashierPinResetPayload;
   'cashier.pin.unlock': CashierPinUnlockPayload;
+  // 005-sales-cart §A3 (FR-026 / Q5)
+  'cart.handoff_to_payment': CartHandoffToPaymentPayload;
+  'cart.cancel.post_handoff': CartCancelPostHandoffPayload;
+  'cart.discount.above_threshold': CartDiscountAboveThresholdPayload;
+  'cart.discarded_on_session_end': CartDiscardedOnSessionEndPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.
