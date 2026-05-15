@@ -162,6 +162,7 @@ export function CartPane({
   }
 
   async function handleRemoveLine(lineId: string, version: number): Promise<void> {
+    /* v8 ignore next — defensive guard: buttons only render when activeCart exists */
     if (activeCart === null) return;
     const res = await getBridge().lines.remove({
       cart_id: activeCart.cart_id,
@@ -175,6 +176,7 @@ export function CartPane({
   }
 
   async function handleIncrementLine(lineId: string, version: number): Promise<void> {
+    /* v8 ignore next — defensive guard: buttons only render when activeCart exists */
     if (activeCart === null) return;
     const res = await getBridge().lines.update({
       cart_id: activeCart.cart_id,
@@ -200,6 +202,7 @@ export function CartPane({
   }
 
   async function handleDecrementLine(lineId: string, version: number): Promise<void> {
+    /* v8 ignore next — defensive guard: buttons only render when activeCart exists */
     if (activeCart === null) return;
     const res = await getBridge().lines.update({
       cart_id: activeCart.cart_id,
@@ -236,6 +239,7 @@ export function CartPane({
     version: number,
     note: string | null,
   ): Promise<void> {
+    /* v8 ignore next — defensive guard: popover only renders when activeCart exists */
     if (activeCart === null) return;
     setNoteError(null);
     const res = await getBridge().lines.setNote({

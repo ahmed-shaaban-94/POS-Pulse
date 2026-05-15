@@ -524,3 +524,98 @@ describe('T052 — CartPane bridge: note popover', () => {
     expect(screen.getByTestId('line-note-popover')).toBeInTheDocument();
   });
 });
+
+describe('T052 — CartPane bridge: multi-line non-target branches', () => {
+  const SECOND_LINE = {
+    lineId: 'line-2',
+    displayName: 'Ibuprofen 200mg',
+    quantity: 1,
+    unitPriceMinor: 200,
+    lineSubtotalMinor: 200,
+    note: null as string | null,
+    version: 1,
+  };
+
+  function renderWithTwoLines(): CartBridgeAPI {
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1');
+    useCartStore.getState().applyLineAdded('line-1');
+    const bridge = makeTestBridge();
+    render(<CartPane _testInitialLines={[INITIAL_LINE, SECOND_LINE]} _testBridge={bridge} />);
+    return bridge;
+  }
+
+  it('increment on line-1 leaves line-2 unchanged (covers non-target map arm)', async () => {
+    const user = userEvent.setup();
+    renderWithTwoLines();
+    const rows = screen.getAllByTestId('line-item-row');
+    const increments = screen.getAllByTestId('qty-increment');
+    await user.click(increments[0]);
+    const qtyDisplays = screen.getAllByTestId('qty-display');
+    expect(qtyDisplays[0]).toHaveTextContent('3');
+    expect(qtyDisplays[1]).toHaveTextContent('1');
+    expect(rows).toHaveLength(2);
+  });
+
+  it('decrement on line-1 leaves line-2 unchanged (covers non-target map arm)', async () => {
+    const user = userEvent.setup();
+    renderWithTwoLines();
+    const decrements = screen.getAllByTestId('qty-decrement');
+    await user.click(decrements[0]);
+    const qtyDisplays = screen.getAllByTestId('qty-display');
+    expect(qtyDisplays[0]).toHaveTextContent('1');
+    expect(qtyDisplays[1]).toHaveTextContent('1');
+  });
+
+  it('save note on line-1 leaves line-2 unchanged (covers non-target setNote map arm)', async () => {
+    const user = userEvent.setup();
+    renderWithTwoLines();
+    const addNoteButtons = screen.getAllByTestId('line-note-add-btn');
+    await user.click(addNoteButtons[0]);
+    await user.type(screen.getByRole('textbox'), 'note for line-1');
+    await user.click(screen.getByTestId('note-save-btn'));
+    expect(screen.getByTestId('line-note-chip')).toHaveTextContent('note for line-1');
+    expect(screen.getAllByTestId('line-note-add-btn')).toHaveLength(1);
+  });
+
+  it('onLineAdded merged=true on line-1 leaves line-2 unchanged (covers non-target add map arm)', () => {
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1');
+    useCartStore.getState().applyLineAdded('line-1');
+
+    let addLine!: (res: {
+      line_id: string;
+      display_name: string;
+      unit_price_minor: number;
+      line_subtotal_minor: number;
+      quantity: number;
+      version: number;
+      merged: boolean;
+    }) => void;
+
+    render(
+      <CartPane
+        _testInitialLines={[INITIAL_LINE, SECOND_LINE]}
+        onLineAdded={(fn) => {
+          addLine = fn;
+        }}
+      />,
+    );
+
+    act(() => {
+      addLine({
+        line_id: 'line-1',
+        display_name: 'Paracetamol 500mg',
+        unit_price_minor: 150,
+        line_subtotal_minor: 450,
+        quantity: 3,
+        version: 2,
+        merged: true,
+      });
+    });
+
+    const qtyDisplays = screen.getAllByTestId('qty-display');
+    expect(qtyDisplays[0]).toHaveTextContent('3');
+    expect(qtyDisplays[1]).toHaveTextContent('1');
+  });
+});
