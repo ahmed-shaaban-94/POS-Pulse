@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-14 (§A2 migration review CLEARED — S2 may start; §A3 and §A4 remain pending)
+**Last updated:** 2026-05-15 (§A3 audit-category extension CLEARED — S3 may start; §A4 remains pending)
 
 ---
 
@@ -93,7 +93,13 @@ phase status. Updated in place as coordination items resolve.
 
 ### T002 — §A3 audit-event catalogue extension coordination
 
-- **Status:** ⏳ **COORDINATION REQUIRED before S3 begins.**
+- **Status:** ✅ **CLEARED 2026-05-15** — extension implemented on
+  `feat/005-a3-audit-categories`; `AUDIT_ACTION_CATEGORIES` now contains
+  the 4 canonical cart categories and `AuditPayloadMap` carries typed
+  payload shapes for each. Compile-time map/category sync assertions
+  (`payload-schemas.ts:_AssertMapCoversCategory` /
+  `_AssertCategoryCoversMap`) enforce on-going parity. **Handler-level
+  emission is S3 territory and is NOT included in this gate clearance.**
 - **Finding:** `src/shared/audit/event-shape.ts` (004 T013) defines
   `AUDIT_ACTION_CATEGORIES` as a `const` array + `ActionCategory` type.
   Current members (6): `shift.open`, `shift.close`, `shift.forced_close`,
@@ -182,7 +188,7 @@ phase status. Updated in place as coordination items resolve.
   | T004 | ⏳ pending | S0 reviewer assignment required before S0 kickoff |
   | §A1 | ⏳ deferred | S1+S2 unblocked via R7 fixture stub; real catalogue is a future feature |
   | §A2 | ✅ CLEARED 2026-05-14 | 4-table migration review signed off; S2 (T030–T054) startable — see `security-review/s2-migration-review.md` |
-  | §A3 | ⏳ pending | Blocks S3 (T055–T074); requires `ActionCategory` extension (see T002) |
+  | §A3 | ✅ CLEARED 2026-05-15 | `ActionCategory` + `AuditPayloadMap` extended with 4 cart categories (see T002); S3 (T055–T074) unblocked |
   | §A4 | ⏳ pending | Blocks S4 (T076–T091); requires envelope ratification (see T003) |
   | §A5 | rollout-time | Blocks production rollout only; does not block slice merges |
 

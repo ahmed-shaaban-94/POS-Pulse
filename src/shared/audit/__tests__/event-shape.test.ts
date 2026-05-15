@@ -53,6 +53,30 @@ describe('audit/event-shape (T007 — FR-025)', () => {
     expect(AUDIT_ACTION_CATEGORIES).toContain('cashier.pin.reset');
     expect(AUDIT_ACTION_CATEGORIES).toContain('cashier.pin.unlock');
   });
+
+  it('action-category catalogue includes the 4 cart §A3 categories (FR-026 / Q5)', () => {
+    expect(AUDIT_ACTION_CATEGORIES).toContain('cart.handoff_to_payment');
+    expect(AUDIT_ACTION_CATEGORIES).toContain('cart.cancel.post_handoff');
+    expect(AUDIT_ACTION_CATEGORIES).toContain('cart.discount.above_threshold');
+    expect(AUDIT_ACTION_CATEGORIES).toContain('cart.discarded_on_session_end');
+  });
+
+  it('AuditEvent type accepts a cart category record (compile-time gate)', () => {
+    const record: AuditEvent = {
+      event_id: '00000000-0000-4000-8000-000000000005',
+      tenant_id: 't1',
+      branch_id: 'b1',
+      originating_terminal_id: 'term-A',
+      acting_operator_id: 'clerk-cashier-9',
+      session_id: 'sess-9',
+      shift_id: 'shift-9',
+      action_category: 'cart.handoff_to_payment',
+      created_at: '2026-05-15T00:00:00.000Z',
+      approving_supervisor_id: null,
+      payload: { cart_id: 'cart-9', handoff_action_id: 'ha-9', line_count: 1, subtotal_minor: 100 },
+    };
+    expect(record.action_category).toBe('cart.handoff_to_payment');
+  });
 });
 
 describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () => {

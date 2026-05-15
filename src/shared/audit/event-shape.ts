@@ -25,6 +25,11 @@ export const AUDIT_ACTION_CATEGORIES = [
   'operator.session.takeover',
   'cashier.pin.reset',
   'cashier.pin.unlock',
+  // 005-sales-cart §A3 (FR-026 / Q5) — type-only extension; emitter wiring lands in S3.
+  'cart.handoff_to_payment',
+  'cart.cancel.post_handoff',
+  'cart.discount.above_threshold',
+  'cart.discarded_on_session_end',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 
