@@ -410,15 +410,9 @@ function renderWithLine(bridgeOverrides?: BridgeLineOverrides): { bridge: CartBr
   useCartStore.getState().applyCartCreated('cart-1');
   useCartStore.getState().applyLineAdded('line-1');
   const bridge = makeTestBridge(bridgeOverrides);
-  render(
-    <CartPane
-      _testInitialLines={[INITIAL_LINE]}
-      _testBridge={bridge}
-    />,
-  );
+  render(<CartPane _testInitialLines={[INITIAL_LINE]} _testBridge={bridge} />);
   return { bridge };
 }
-
 
 describe('T052 — CartPane bridge: remove line', () => {
   it('removes the line row after remove ok response', async () => {
