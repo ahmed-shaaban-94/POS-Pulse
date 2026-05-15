@@ -282,6 +282,9 @@ export class CartBridgeHandlers {
         line_id: replayLineId,
         merged: replay.action_kind === 'cart.line.merge',
         version: replayLine.version,
+        display_name: replayLine.display_name,
+        unit_price_minor: replayLine.unit_price_minor,
+        line_subtotal_minor: replayLine.line_subtotal_minor,
       };
     }
 
@@ -340,6 +343,9 @@ export class CartBridgeHandlers {
         line_id: existing.line_id,
         merged: true,
         version: existing.version + 1,
+        display_name: existing.display_name,
+        unit_price_minor: existing.unit_price_minor,
+        line_subtotal_minor: newSubtotal,
       };
     }
 
@@ -380,7 +386,15 @@ export class CartBridgeHandlers {
         applied_at: now,
       },
     );
-    return { kind: 'ok', line_id, merged: false, version: 1 };
+    return {
+      kind: 'ok',
+      line_id,
+      merged: false,
+      version: 1,
+      display_name: resolved.display_name,
+      unit_price_minor: resolved.unit_price_minor,
+      line_subtotal_minor: subtotal,
+    };
   }
 
   // ── cart.lines.update ───────────────────────────────────────────────

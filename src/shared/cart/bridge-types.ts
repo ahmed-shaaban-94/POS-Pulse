@@ -24,6 +24,12 @@ export type CartLinesAddResponse =
       readonly line_id: string;
       readonly merged: boolean;
       readonly version: number;
+      /** Resolved display name snapshot (T052 — renderer line list). */
+      readonly display_name: string;
+      /** Unit price in integer minor units (T052). */
+      readonly unit_price_minor: number;
+      /** Line subtotal in integer minor units (T052). */
+      readonly line_subtotal_minor: number;
     }
   | CartRefusal;
 
