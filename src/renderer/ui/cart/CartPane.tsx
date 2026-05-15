@@ -157,6 +157,7 @@ export function CartPane({
   const cartSubtotalMinor = lines.reduce((acc, l) => acc + l.lineSubtotalMinor, 0);
 
   function getBridge(): CartBridgeAPI {
+    /* v8 ignore next — readCartBridge() arm only reachable in Electron; tests always supply _testBridge */
     return _testBridge ?? readCartBridge();
   }
 
