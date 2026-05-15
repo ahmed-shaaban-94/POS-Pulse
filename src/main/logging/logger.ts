@@ -128,7 +128,7 @@ const OPERATOR_REDACTED_KEYS = [
  *
  * MUST NOT shrink. Adding a key here strictly tightens scrubbing.
  */
-const CART_REDACTED_KEYS = ['note', 'attribution_operator_id'] as const;
+const CART_REDACTED_KEYS = ['note', 'attribution_operator_id', 'payload_json'] as const;
 
 /**
  * 004-operator-session T050 — audit-event payload defence-in-depth keys.
