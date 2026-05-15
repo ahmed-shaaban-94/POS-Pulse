@@ -19,8 +19,9 @@
  * the rendered output without coupling to internals.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 import { CartPane } from '../../../../../src/renderer/ui/cart/CartPane.js';
@@ -52,6 +53,7 @@ afterEach(() => {
   cleanup();
   useCartStore.getState().reset();
   setSignedOut();
+  vi.clearAllMocks();
 });
 
 describe('T052 — CartPane empty cart state', () => {
@@ -365,5 +367,164 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
 
     expect(screen.getAllByTestId('line-item-row')).toHaveLength(2);
     expect(screen.getByTestId('cart-subtotal-value')).toHaveTextContent('¤3.00');
+  });
+});
+
+// ── Bridge handler tests (use _testBridge to avoid window.api) ──────────────
+
+const INITIAL_LINE = {
+  lineId: 'line-1',
+  displayName: 'Paracetamol 500mg',
+  quantity: 2,
+  unitPriceMinor: 150,
+  lineSubtotalMinor: 300,
+  note: null as string | null,
+  version: 1,
+};
+
+function makeTestBridge(overrides: Partial<{
+  remove: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
+  setNote: ReturnType<typeof vi.fn>;
+}> = {}) {
+  return {
+    lines: {
+      remove: overrides.remove ?? vi.fn().mockResolvedValue({ kind: 'ok' }),
+      update: overrides.update ?? vi.fn().mockResolvedValue({ kind: 'ok', version: 2 }),
+      setNote: overrides.setNote ?? vi.fn().mockResolvedValue({ kind: 'ok', version: 2 }),
+      add: vi.fn(),
+    },
+    create: vi.fn(),
+    resolveItemRef: vi.fn(),
+    subscribe: vi.fn(),
+    void: vi.fn(),
+    discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
+    handoff: vi.fn(),
+  } as unknown as Parameters<typeof CartPane>[0]['_testBridge'];
+}
+
+function renderWithLine(bridgeOverrides?: Parameters<typeof makeTestBridge>[0]) {
+  setSignedIn();
+  useCartStore.getState().applyCartCreated('cart-1');
+  useCartStore.getState().applyLineAdded('line-1');
+  const bridge = makeTestBridge(bridgeOverrides);
+  render(
+    <CartPane
+      _testInitialLines={[INITIAL_LINE]}
+      _testBridge={bridge}
+    />,
+  );
+  return { bridge };
+}
+
+
+describe('T052 — CartPane bridge: remove line', () => {
+  it('removes the line row after remove ok response', async () => {
+    const user = userEvent.setup();
+    renderWithLine();
+    expect(screen.getByTestId('line-item-row')).toBeInTheDocument();
+    await user.click(screen.getByTestId('line-remove-btn'));
+    expect(screen.queryByTestId('line-item-row')).not.toBeInTheDocument();
+  });
+
+  it('keeps the row when remove returns refusal', async () => {
+    const user = userEvent.setup();
+    renderWithLine({
+      remove: vi.fn().mockResolvedValue({ kind: 'refused', reason: 'version_conflict' }),
+    });
+    await user.click(screen.getByTestId('line-remove-btn'));
+    expect(screen.getByTestId('line-item-row')).toBeInTheDocument();
+  });
+});
+
+describe('T052 — CartPane bridge: increment line', () => {
+  it('increments displayed quantity after update ok response', async () => {
+    const user = userEvent.setup();
+    renderWithLine();
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('2');
+    await user.click(screen.getByTestId('qty-increment'));
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('3');
+  });
+
+  it('keeps quantity unchanged when increment returns refusal', async () => {
+    const user = userEvent.setup();
+    renderWithLine({
+      update: vi.fn().mockResolvedValue({ kind: 'refused', reason: 'version_conflict' }),
+    });
+    await user.click(screen.getByTestId('qty-increment'));
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('2');
+  });
+});
+
+describe('T052 — CartPane bridge: decrement line', () => {
+  it('decrements displayed quantity after update ok response', async () => {
+    const user = userEvent.setup();
+    renderWithLine();
+    await user.click(screen.getByTestId('qty-decrement'));
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('1');
+  });
+
+  it('removes the row when decrement ok response and qty was 1', async () => {
+    const user = userEvent.setup();
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1');
+    useCartStore.getState().applyLineAdded('line-1');
+    const bridge = makeTestBridge();
+    render(
+      <CartPane
+        _testInitialLines={[{ ...INITIAL_LINE, quantity: 1, lineSubtotalMinor: 150 }]}
+        _testBridge={bridge}
+      />,
+    );
+    await user.click(screen.getByTestId('qty-decrement'));
+    expect(screen.queryByTestId('line-item-row')).not.toBeInTheDocument();
+  });
+
+  it('keeps rows unchanged when decrement returns refusal', async () => {
+    const user = userEvent.setup();
+    renderWithLine({
+      update: vi.fn().mockResolvedValue({ kind: 'refused', reason: 'version_conflict' }),
+    });
+    await user.click(screen.getByTestId('qty-decrement'));
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('2');
+  });
+});
+
+describe('T052 — CartPane bridge: note popover', () => {
+  it('opens note popover when note affordance clicked', async () => {
+    const user = userEvent.setup();
+    renderWithLine();
+    await user.click(screen.getByTestId('line-note-add-btn'));
+    expect(screen.getByTestId('line-note-popover')).toBeInTheDocument();
+  });
+
+  it('closes popover on cancel', async () => {
+    const user = userEvent.setup();
+    renderWithLine();
+    await user.click(screen.getByTestId('line-note-add-btn'));
+    await user.click(screen.getByTestId('note-cancel-btn'));
+    expect(screen.queryByTestId('line-note-popover')).not.toBeInTheDocument();
+  });
+
+  it('saves note and closes popover on save ok', async () => {
+    const user = userEvent.setup();
+    renderWithLine();
+    await user.click(screen.getByTestId('line-note-add-btn'));
+    await user.type(screen.getByRole('textbox'), 'Crush tablet');
+    await user.click(screen.getByTestId('note-save-btn'));
+    expect(screen.queryByTestId('line-note-popover')).not.toBeInTheDocument();
+    expect(screen.getByTestId('line-note-chip')).toHaveTextContent('Crush tablet');
+  });
+
+  it('shows error and keeps popover open when setNote returns refusal', async () => {
+    const user = userEvent.setup();
+    renderWithLine({
+      setNote: vi.fn().mockResolvedValue({ kind: 'refused', reason: 'forbidden_content' }),
+    });
+    await user.click(screen.getByTestId('line-note-add-btn'));
+    await user.type(screen.getByRole('textbox'), 'bad content');
+    await user.click(screen.getByTestId('note-save-btn'));
+    expect(screen.getByTestId('note-error')).toHaveTextContent('Note rejected');
+    expect(screen.getByTestId('line-note-popover')).toBeInTheDocument();
   });
 });

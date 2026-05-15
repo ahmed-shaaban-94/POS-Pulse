@@ -96,6 +96,7 @@ function formatMinorUnits(minor: number): string {
 
 function readCartBridge(): CartBridgeAPI {
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
+  /* v8 ignore next 3 — only reachable in Electron; jsdom never sets window.api */
   if (!api) {
     throw new Error('CartPane: window.api missing — preload bridge not initialised.');
   }
@@ -209,6 +210,7 @@ export function CartPane({
     if (res.kind === 'ok') {
       setLines((prev) => {
         const line = prev.find((l) => l.lineId === lineId);
+        /* v8 ignore next — race guard: line removed before async response resolves */
         if (line === undefined) return prev;
         if (line.quantity <= 1) {
           return prev.filter((l) => l.lineId !== lineId);

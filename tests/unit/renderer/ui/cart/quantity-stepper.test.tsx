@@ -150,4 +150,67 @@ describe('T050 — QuantityStepper keyboard navigation', () => {
     await user.keyboard('{ArrowDown}');
     expect(onDecrement).toHaveBeenCalledOnce();
   });
+
+  it('ArrowDown calls onRemoveRequest when qty=1 and hasNote=false', async () => {
+    const user = userEvent.setup();
+    const onRemoveRequest = vi.fn();
+    render(
+      <QuantityStepper
+        {...BASE_PROPS}
+        quantity={1}
+        hasNote={false}
+        onRemoveRequest={onRemoveRequest}
+      />,
+    );
+    screen.getByTestId('qty-decrement').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(onRemoveRequest).toHaveBeenCalledOnce();
+  });
+
+  it('ArrowDown calls onDecrement (not onRemoveRequest) when qty=1 and hasNote=true', async () => {
+    const user = userEvent.setup();
+    const onDecrement = vi.fn();
+    const onRemoveRequest = vi.fn();
+    render(
+      <QuantityStepper
+        {...BASE_PROPS}
+        quantity={1}
+        hasNote={true}
+        onDecrement={onDecrement}
+        onRemoveRequest={onRemoveRequest}
+      />,
+    );
+    screen.getByTestId('qty-decrement').focus();
+    await user.keyboard('{ArrowDown}');
+    expect(onDecrement).toHaveBeenCalledOnce();
+    expect(onRemoveRequest).not.toHaveBeenCalled();
+  });
+
+  it('ArrowUp calls onIncrement when focused on increment button', async () => {
+    const user = userEvent.setup();
+    const onIncrement = vi.fn();
+    render(<QuantityStepper {...BASE_PROPS} onIncrement={onIncrement} />);
+    screen.getByTestId('qty-increment').focus();
+    await user.keyboard('{ArrowUp}');
+    expect(onIncrement).toHaveBeenCalledOnce();
+  });
+
+  it('non-Arrow key on decrement button does not trigger keyboard handler', async () => {
+    const user = userEvent.setup();
+    const onDecrement = vi.fn();
+    render(<QuantityStepper {...BASE_PROPS} quantity={3} onDecrement={onDecrement} />);
+    screen.getByTestId('qty-decrement').focus();
+    // Tab moves focus away — does not trigger ArrowDown branch; onDecrement not called via keyboard
+    await user.keyboard('{Tab}');
+    expect(onDecrement).not.toHaveBeenCalled();
+  });
+
+  it('non-Arrow key on increment button does not trigger keyboard handler', async () => {
+    const user = userEvent.setup();
+    const onIncrement = vi.fn();
+    render(<QuantityStepper {...BASE_PROPS} onIncrement={onIncrement} />);
+    screen.getByTestId('qty-increment').focus();
+    await user.keyboard('{Tab}');
+    expect(onIncrement).not.toHaveBeenCalled();
+  });
 });
