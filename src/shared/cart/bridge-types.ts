@@ -30,6 +30,8 @@ export type CartLinesAddResponse =
       readonly unit_price_minor: number;
       /** Line subtotal in integer minor units (T052). */
       readonly line_subtotal_minor: number;
+      /** Bridge-confirmed quantity after add/merge. */
+      readonly quantity: number;
     }
   | CartRefusal;
 

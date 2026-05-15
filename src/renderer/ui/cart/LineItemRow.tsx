@@ -93,7 +93,7 @@ export function LineItemRow({
           {formatMinorUnits(lineSubtotalMinor)}
         </span>
       </div>
-      {note !== null && (
+      {note !== null ? (
         <button
           type="button"
           className="line-item-row__note-chip"
@@ -102,6 +102,16 @@ export function LineItemRow({
           onClick={onNoteOpen}
         >
           {truncateNote(note)}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="line-item-row__note-add"
+          data-testid="line-note-add-btn"
+          aria-label="Add note"
+          onClick={onNoteOpen}
+        >
+          Add note
         </button>
       )}
     </div>

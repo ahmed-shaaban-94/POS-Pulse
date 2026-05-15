@@ -235,6 +235,7 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
       display_name: string;
       unit_price_minor: number;
       line_subtotal_minor: number;
+      quantity: number;
       version: number;
       merged: boolean;
     }) => void;
@@ -253,6 +254,7 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
         display_name: 'Paracetamol 500mg',
         unit_price_minor: 150,
         line_subtotal_minor: 150,
+        quantity: 1,
         version: 1,
         merged: false,
       });
@@ -260,9 +262,10 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
 
     expect(screen.getByTestId('line-item-row')).toBeInTheDocument();
     expect(screen.getByText('Paracetamol 500mg')).toBeInTheDocument();
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('1');
   });
 
-  it('updates existing line subtotal and version when onLineAdded called with merged=true', () => {
+  it('updates existing line subtotal, quantity, and version when onLineAdded called with merged=true', () => {
     setSignedIn();
     useCartStore.getState().applyCartCreated('cart-1');
     useCartStore.getState().applyLineAdded('line-1');
@@ -272,6 +275,7 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
       display_name: string;
       unit_price_minor: number;
       line_subtotal_minor: number;
+      quantity: number;
       version: number;
       merged: boolean;
     }) => void;
@@ -301,13 +305,16 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
         display_name: 'Paracetamol 500mg',
         unit_price_minor: 150,
         line_subtotal_minor: 300,
+        quantity: 2,
         version: 2,
         merged: true,
       });
     });
 
-    // Subtotal should reflect the merged line_subtotal_minor from the response
+    // Subtotal reflects the merged line_subtotal_minor
     expect(screen.getByTestId('cart-subtotal-value')).toHaveTextContent('¤3.00');
+    // Quantity display updates from 1 to 2
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('2');
     // Still only one row
     expect(screen.getAllByTestId('line-item-row')).toHaveLength(1);
   });
@@ -322,6 +329,7 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
       display_name: string;
       unit_price_minor: number;
       line_subtotal_minor: number;
+      quantity: number;
       version: number;
       merged: boolean;
     }) => void;
@@ -340,6 +348,7 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
         display_name: 'Item A',
         unit_price_minor: 100,
         line_subtotal_minor: 100,
+        quantity: 1,
         version: 1,
         merged: false,
       });
@@ -348,6 +357,7 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
         display_name: 'Item B',
         unit_price_minor: 200,
         line_subtotal_minor: 200,
+        quantity: 1,
         version: 1,
         merged: false,
       });

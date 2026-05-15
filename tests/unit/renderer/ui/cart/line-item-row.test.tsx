@@ -5,7 +5,7 @@
  *   1. Renders display_name, formatted unit price, formatted subtotal.
  *   2. Renders QuantityStepper wired with quantity, hasNote, callbacks.
  *   3. Renders note chip when note is non-null (truncated at 40ch).
- *   4. Omits note chip when note is null.
+ *   4. Renders "Add note" affordance when note is null (calls onNoteOpen).
  *   5. Remove button (×) has min 44×44 touch target via CSS var or explicit size.
  *   6. Remove button fires onRemove.
  *   7. data-testid="line-item-row" present.
@@ -63,9 +63,10 @@ describe('T049 — LineItemRow rendering', () => {
     expect(screen.getByTestId('qty-display')).toHaveTextContent('5');
   });
 
-  it('omits note chip when note is null', () => {
+  it('renders "Add note" affordance when note is null', () => {
     render(<LineItemRow {...BASE_PROPS} note={null} />);
     expect(screen.queryByTestId('line-note-chip')).not.toBeInTheDocument();
+    expect(screen.getByTestId('line-note-add-btn')).toBeInTheDocument();
   });
 
   it('renders note chip when note is non-null', () => {
@@ -110,6 +111,22 @@ describe('T049 — LineItemRow interactions', () => {
     render(<LineItemRow {...BASE_PROPS} />);
     const btn = screen.getByTestId('line-remove-btn');
     expect(btn).toHaveAttribute('aria-label');
+  });
+
+  it('calls onNoteOpen when "Add note" affordance is clicked (note=null)', async () => {
+    const user = userEvent.setup();
+    const onNoteOpen = vi.fn();
+    render(<LineItemRow {...BASE_PROPS} note={null} onNoteOpen={onNoteOpen} />);
+    await user.click(screen.getByTestId('line-note-add-btn'));
+    expect(onNoteOpen).toHaveBeenCalledOnce();
+  });
+
+  it('calls onNoteOpen when note chip is clicked (note non-null)', async () => {
+    const user = userEvent.setup();
+    const onNoteOpen = vi.fn();
+    render(<LineItemRow {...BASE_PROPS} note="Crush tablet" hasNote={true} onNoteOpen={onNoteOpen} />);
+    await user.click(screen.getByTestId('line-note-chip'));
+    expect(onNoteOpen).toHaveBeenCalledOnce();
   });
 });
 

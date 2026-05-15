@@ -57,6 +57,7 @@ export interface AddedLineResult {
   display_name: string;
   unit_price_minor: number;
   line_subtotal_minor: number;
+  quantity: number;
   version: number;
   merged: boolean;
 }
@@ -118,7 +119,12 @@ export function CartPane({
         return prev.map((l) =>
           l.lineId !== res.line_id
             ? l
-            : { ...l, lineSubtotalMinor: res.line_subtotal_minor, version: res.version },
+            : {
+                ...l,
+                quantity: res.quantity,
+                lineSubtotalMinor: res.line_subtotal_minor,
+                version: res.version,
+              },
         );
       }
       return [
@@ -126,7 +132,7 @@ export function CartPane({
         {
           lineId: res.line_id,
           displayName: res.display_name,
-          quantity: Math.round(res.line_subtotal_minor / res.unit_price_minor),
+          quantity: res.quantity,
           unitPriceMinor: res.unit_price_minor,
           lineSubtotalMinor: res.line_subtotal_minor,
           note: null,

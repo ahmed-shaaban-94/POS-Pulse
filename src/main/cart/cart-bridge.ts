@@ -285,6 +285,7 @@ export class CartBridgeHandlers {
         display_name: replayLine.display_name,
         unit_price_minor: replayLine.unit_price_minor,
         line_subtotal_minor: replayLine.line_subtotal_minor,
+        quantity: replayLine.quantity,
       };
     }
 
@@ -346,6 +347,7 @@ export class CartBridgeHandlers {
         display_name: existing.display_name,
         unit_price_minor: existing.unit_price_minor,
         line_subtotal_minor: newSubtotal,
+        quantity: newQuantity,
       };
     }
 
@@ -394,6 +396,7 @@ export class CartBridgeHandlers {
       display_name: resolved.display_name,
       unit_price_minor: resolved.unit_price_minor,
       line_subtotal_minor: subtotal,
+      quantity: req.quantity,
     };
   }
 
