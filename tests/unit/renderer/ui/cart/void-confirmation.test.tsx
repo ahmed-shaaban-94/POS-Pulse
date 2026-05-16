@@ -49,7 +49,7 @@ describe('VoidConfirmation — generic copy (S0 Surface 5)', () => {
 
   it('does not leak cart ID or session ID', () => {
     render(<VoidConfirmation onConfirm={vi.fn()} onCancel={vi.fn()} />);
-    const text = document.body.textContent ?? '';
+    const text = document.body.textContent;
     expect(text).not.toMatch(/cart[-_]id|session[-_]id|[0-9a-f]{8}-[0-9a-f]{4}/i);
   });
 });

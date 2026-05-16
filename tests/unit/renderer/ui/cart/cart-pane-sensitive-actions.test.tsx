@@ -148,14 +148,15 @@ describe('CartPane — VoidConfirmation modal', () => {
   });
 
   it('calls bridge.void and applyCancelled when "Void cart" is confirmed', async () => {
-    const bridge = makeBridge();
+    const voidMock = vi.fn().mockResolvedValue({ kind: 'ok' });
+    const bridge = makeBridge({ void: voidMock });
     setSignedIn({ role: 'cashier' });
     setCartEditing();
     render(<CartPane _testBridge={bridge} />);
     await userEvent.click(screen.getByTestId('cart-void-button'));
     await userEvent.click(screen.getByRole('button', { name: 'Void cart' }));
     await waitFor(() => {
-      expect(bridge.void).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-t074' }));
+      expect(voidMock).toHaveBeenCalledWith(expect.objectContaining({ cart_id: 'cart-t074' }));
     });
     expect(useCartStore.getState().activeCart?.state).toBe(CartState.cancelled);
   });
@@ -191,7 +192,7 @@ describe('CartPane — DiscountPlaceholderRow', () => {
     // Discount rows must not contain numeric percentage or currency values.
     const discountRows = document.querySelectorAll('.discount-placeholder-row');
     discountRows.forEach((row) => {
-      const rowText = row.textContent ?? '';
+      const rowText = row.textContent;
       expect(rowText).not.toMatch(/\d+%/);
       expect(rowText).not.toMatch(/[¤$]\d/);
     });
@@ -205,7 +206,7 @@ describe('CartPane — cashier-forbidden info', () => {
     setSignedIn({ role: 'cashier' });
     setCartEditing();
     render(<CartPane _testBridge={makeBridge()} />);
-    const text = document.body.textContent ?? '';
+    const text = document.body.textContent;
     expect(text).not.toMatch(/shift total|expected.*cash|shortage|overage|report|KPI/i);
     expect(text).not.toMatch(/manager.*id|operator.*id/i);
   });

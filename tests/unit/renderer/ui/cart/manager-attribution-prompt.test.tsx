@@ -54,7 +54,7 @@ describe('ManagerAttributionPrompt — generic copy (S0 Surface 6)', () => {
 
   it('does not disclose manager name or identity in copy', () => {
     render(<ManagerAttributionPrompt onApprove={vi.fn()} onCancel={vi.fn()} />);
-    const text = document.body.textContent ?? '';
+    const text = document.body.textContent;
     // Must not contain operator IDs, session IDs, or UUIDs
     expect(text).not.toMatch(/operator[-_]id|session[-_]id|[0-9a-f]{8}-[0-9a-f]{4}/i);
   });

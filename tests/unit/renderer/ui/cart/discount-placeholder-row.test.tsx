@@ -28,7 +28,7 @@ describe('DiscountPlaceholderRow — copy and content', () => {
 
   it('does not render any numeric magnitude', () => {
     render(<DiscountPlaceholderRow placeholderId="dp-1" onRemove={vi.fn()} />);
-    const text = document.body.textContent ?? '';
+    const text = document.body.textContent;
     // No numbers that look like monetary values (e.g. 10%, $5, 500, etc.)
     expect(text).not.toMatch(/\d+[%¤$]/);
     expect(text).not.toMatch(/[¤$]\d/);
