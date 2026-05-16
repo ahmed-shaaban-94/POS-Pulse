@@ -582,34 +582,32 @@ describe('linesUpdate — overflow refused via LineSubtotalError', () => {
 });
 
 describe('S2 stub handlers still gate before refusing not_implemented', () => {
-  it('discountPlaceholders.add gated by session/cart but returns not_implemented in S2', async () => {
+  it('discountPlaceholders.add succeeds for a valid cart (T068 implemented)', async () => {
     const f = await freshCartWithLine();
     const r = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,
       line_id: f.line_id,
-      placeholder_kind: 'X',
+      placeholder_kind: 'percent_5',
       idempotency_key: 'd-1',
     });
-    expect(r.kind).toBe('refused');
-    if (r.kind === 'refused') expect(r.reason).toBe('not_implemented');
+    expect(r.kind).toBe('ok');
   });
 
-  it('discountPlaceholders.remove returns not_implemented in S2', async () => {
+  it('discountPlaceholders.remove refuses when placeholder does not exist (T069 implemented)', async () => {
     const f = await freshCartWithLine();
     const r = await f.handlers.discountPlaceholdersRemove({
       cart_id: f.cart_id,
-      placeholder_id: 'p',
+      placeholder_id: 'nonexistent-ph',
       idempotency_key: 'd-2',
     });
     expect(r.kind).toBe('refused');
-    if (r.kind === 'refused') expect(r.reason).toBe('not_implemented');
+    if (r.kind === 'refused') expect(r.reason).toBe('wrong_owner');
   });
 
-  it('void returns not_implemented in S2', async () => {
+  it('void returns ok for an editing cart (T067 implemented)', async () => {
     const f = await freshCartWithLine();
     const r = await f.handlers.void({ cart_id: f.cart_id, idempotency_key: 'v-1' });
-    expect(r.kind).toBe('refused');
-    if (r.kind === 'refused') expect(r.reason).toBe('not_implemented');
+    expect(r.kind).toBe('ok');
   });
 
   it('handoff returns not_implemented in S2', async () => {

@@ -140,6 +140,34 @@ export interface SoftRemoveCartLineInput {
   last_action_id: string;
 }
 
+export interface CancelCartInput {
+  cart_id: string;
+  cancelled_at: string;
+  cancellation_reason: 'cashier_voided' | 'manager_voided_post_handoff' | 'session_ended';
+  last_action_id: string;
+  updated_at: string;
+}
+
+export interface InsertDiscountPlaceholderInput {
+  placeholder_id: string;
+  cart_id: string;
+  line_id: string;
+  placeholder_kind: string;
+  requires_manager_attribution: 0 | 1;
+  attribution_operator_id: string | null;
+  created_at: string;
+}
+
+export interface DiscountPlaceholderRow {
+  placeholder_id: string;
+  cart_id: string;
+  line_id: string;
+  placeholder_kind: string;
+  requires_manager_attribution: number;
+  attribution_operator_id: string | null;
+  created_at: string;
+}
+
 // ── CartStore ────────────────────────────────────────────────────────────
 
 export interface CartStore {
@@ -149,6 +177,33 @@ export interface CartStore {
   updateLineQuantityAndOutbox(update: UpdateCartLineQtyInput, outbox: InsertOutboxInput): void;
   setLineNoteAndOutbox(update: UpdateCartLineNoteInput, outbox: InsertOutboxInput): void;
   softRemoveLineAndOutbox(remove: SoftRemoveCartLineInput, outbox: InsertOutboxInput): void;
+  /**
+   * Atomically writes the discount placeholder row + outbox row, then calls
+   * `onInserted` (if provided) inside the same transaction — same audit-atomic
+   * pattern as `cancelCartAndOutbox`.
+   */
+  insertDiscountPlaceholderAndOutbox(
+    placeholder: InsertDiscountPlaceholderInput,
+    outbox: InsertOutboxInput,
+    onInserted?: () => void,
+  ): void;
+  /** Hard-deletes the placeholder row and writes the outbox row atomically. */
+  removeDiscountPlaceholderAndOutbox(placeholder_id: string, outbox: InsertOutboxInput): void;
+  getDiscountPlaceholder(placeholder_id: string): DiscountPlaceholderRow | undefined;
+  /**
+   * Atomically writes the outbox row, cancels the cart, and (if provided)
+   * calls `onInserted` inside the same transaction — enabling audit emission
+   * to be atomic with the state change without this store knowing about audits.
+   */
+  cancelCartAndOutbox(
+    cancel: CancelCartInput,
+    outbox: InsertOutboxInput,
+    onInserted?: () => void,
+  ): void;
+  /** Returns the action_id of the most recent `cart.handoff_to_payment` outbox row. */
+  findLatestHandoffActionId(cart_id: string): string | undefined;
+  /** Returns the active (non-terminal) draft cart owned by the given session, if any. */
+  findDraftCartBySession(operator_session_id: string): CartRow | undefined;
   getCart(cart_id: string): CartRow | undefined;
   getLine(cart_id: string, line_id: string): CartLineRow | undefined;
   findActiveLineByItemRef(cart_id: string, item_ref: string): CartLineRow | undefined;
@@ -230,6 +285,38 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
   const setCartStateStmt = db.prepare(
     `UPDATE carts SET state = ?, updated_at = ?, last_action_id = ? WHERE cart_id = ?`,
   ) as PrepareRun;
+  const cancelCartStmt = db.prepare(
+    `UPDATE carts
+        SET state = 'cancelled',
+            cancelled_at = ?,
+            cancellation_reason = ?,
+            updated_at = ?,
+            last_action_id = ?
+      WHERE cart_id = ?`,
+  ) as PrepareRun;
+  const findLatestHandoffStmt = db.prepare(
+    `SELECT action_id FROM cart_action_outbox
+      WHERE cart_id = ? AND action_kind = 'cart.handoff_to_payment'
+      ORDER BY applied_at DESC LIMIT 1`,
+  ) as PrepareGet<{ action_id: string }>;
+  const findDraftCartBySessionStmt = db.prepare(
+    `SELECT * FROM carts
+      WHERE operator_session_id = ?
+        AND state NOT IN ('cancelled', 'frozen_handed_off')
+      ORDER BY created_at DESC LIMIT 1`,
+  ) as PrepareGet<CartRow>;
+  const insertDiscountPlaceholder = db.prepare(
+    `INSERT INTO cart_line_discount_placeholders (
+       placeholder_id, cart_id, line_id, placeholder_kind,
+       requires_manager_attribution, attribution_operator_id, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ) as PrepareRun;
+  const deleteDiscountPlaceholder = db.prepare(
+    `DELETE FROM cart_line_discount_placeholders WHERE placeholder_id = ?`,
+  ) as PrepareRun;
+  const getDiscountPlaceholderStmt = db.prepare(
+    `SELECT * FROM cart_line_discount_placeholders WHERE placeholder_id = ?`,
+  ) as PrepareGet<DiscountPlaceholderRow>;
 
   function writeOutbox(row: InsertOutboxInput): void {
     insertOutbox.run(
@@ -342,6 +429,55 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
         );
         recomputeSubtotal(outbox.cart_id, remove.removed_at, remove.last_action_id);
       })();
+    },
+
+    insertDiscountPlaceholderAndOutbox(placeholder, outbox, onInserted): void {
+      db.transaction(() => {
+        writeOutbox(outbox);
+        insertDiscountPlaceholder.run(
+          placeholder.placeholder_id,
+          placeholder.cart_id,
+          placeholder.line_id,
+          placeholder.placeholder_kind,
+          placeholder.requires_manager_attribution,
+          placeholder.attribution_operator_id,
+          placeholder.created_at,
+        );
+        onInserted?.();
+      })();
+    },
+
+    removeDiscountPlaceholderAndOutbox(placeholder_id, outbox): void {
+      db.transaction(() => {
+        writeOutbox(outbox);
+        deleteDiscountPlaceholder.run(placeholder_id);
+      })();
+    },
+
+    getDiscountPlaceholder(placeholder_id): DiscountPlaceholderRow | undefined {
+      return getDiscountPlaceholderStmt.get(placeholder_id);
+    },
+
+    cancelCartAndOutbox(cancel, outbox, onInserted): void {
+      db.transaction(() => {
+        writeOutbox(outbox);
+        cancelCartStmt.run(
+          cancel.cancelled_at,
+          cancel.cancellation_reason,
+          cancel.updated_at,
+          cancel.last_action_id,
+          cancel.cart_id,
+        );
+        onInserted?.();
+      })();
+    },
+
+    findLatestHandoffActionId(cart_id): string | undefined {
+      return findLatestHandoffStmt.get(cart_id)?.action_id;
+    },
+
+    findDraftCartBySession(operator_session_id): CartRow | undefined {
+      return findDraftCartBySessionStmt.get(operator_session_id);
     },
 
     getCart(cart_id): CartRow | undefined {

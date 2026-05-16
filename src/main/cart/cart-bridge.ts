@@ -29,7 +29,8 @@ import { CartState } from '../../shared/cart/cart-state.js';
 import type { CartRefusalReason } from '../../shared/cart/refusal.js';
 import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
 import { requireOperatorSession } from './require-operator-session.js';
-import type { CartStore } from './cart-store.js';
+import type { CartStore, InsertDiscountPlaceholderInput } from './cart-store.js';
+import { AuditEmitter } from '../audit/audit-emitter.js';
 
 /**
  * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
@@ -152,6 +153,11 @@ export interface CartBridgeHandlersDeps {
   resolveItemRef?: ItemRefResolver;
   /** Optional clock for testability. Defaults to `() => new Date()`. */
   clock?: () => Date;
+  /**
+   * Optional audit emitter. Required for post-handoff cancel audit emission.
+   * When omitted, pre-handoff void still works (no audit for cashier_voided).
+   */
+  auditEmitter?: AuditEmitter;
 }
 
 function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefusalReason } {
@@ -687,22 +693,348 @@ export class CartBridgeHandlers {
 
   // ── cart.discountPlaceholders.* ─────────────────────────────────────
 
-  discountPlaceholdersAdd(
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async discountPlaceholdersAdd(
     req: CartDiscountPlaceholdersAddRequest,
   ): Promise<CartDiscountPlaceholdersAddResponse> {
-    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    // Threshold: percent_NN where NN > 10 is above-threshold.
+    const pctMatch = /^percent_(\d+)$/.exec(req.placeholder_kind);
+    const isAboveThreshold = pctMatch !== null && parseInt(pctMatch[1]!, 10) > 10;
+
+    if (isAboveThreshold) {
+      // Attribution must be present and must not be the acting cashier.
+      if (
+        !req.attribution_operator_id ||
+        req.attribution_operator_id === session.operator_id
+      ) {
+        return refuse('manager_attribution_required');
+      }
+    }
+
+    // Idempotency: the idempotency_key doubles as placeholder_id.
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.discount_placeholder.add')
+        return refuse('idempotency_payload_mismatch');
+      return {
+        kind: 'ok',
+        placeholder_id: req.idempotency_key,
+        requires_manager_attribution: isAboveThreshold,
+      };
+    }
+
+    const now = this.clock().toISOString();
+    const placeholder: InsertDiscountPlaceholderInput = {
+      placeholder_id: req.idempotency_key,
+      cart_id: req.cart_id,
+      line_id: req.line_id,
+      placeholder_kind: req.placeholder_kind,
+      requires_manager_attribution: isAboveThreshold ? 1 : 0,
+      attribution_operator_id: req.attribution_operator_id ?? null,
+      created_at: now,
+    };
+
+    if (isAboveThreshold) {
+      const event_id = randomUUID();
+      store.insertDiscountPlaceholderAndOutbox(
+        placeholder,
+        {
+          action_id: req.idempotency_key,
+          cart_id: req.cart_id,
+          line_id: req.line_id,
+          action_kind: 'cart.discount_placeholder.add',
+          acting_operator_id: session.operator_id,
+          attribution_operator_id: req.attribution_operator_id!,
+          operator_session_id: session.id,
+          payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
+          applied_at: now,
+        },
+        () => {
+          this.deps.auditEmitter?.emit({
+            event_id,
+            tenant_id: cart.tenant_id,
+            branch_id: cart.branch_id,
+            originating_terminal_id: cart.terminal_id,
+            acting_operator_id: session.operator_id,
+            session_id: session.id,
+            shift_id: null,
+            action_category: 'cart.discount.above_threshold',
+            created_at: now,
+            approving_supervisor_id: req.attribution_operator_id!,
+            payload: { cart_id: req.cart_id, cart_line_id: req.line_id },
+          });
+        },
+      );
+    } else {
+      store.insertDiscountPlaceholderAndOutbox(placeholder, {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: req.line_id,
+        action_kind: 'cart.discount_placeholder.add',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
+        applied_at: now,
+      });
+    }
+
+    return {
+      kind: 'ok',
+      placeholder_id: req.idempotency_key,
+      requires_manager_attribution: isAboveThreshold,
+    };
   }
 
-  discountPlaceholdersRemove(
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async discountPlaceholdersRemove(
     req: CartDiscountPlaceholdersRemoveRequest,
   ): Promise<CartDiscountPlaceholdersRemoveResponse> {
-    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.discount_placeholder.remove')
+        return refuse('idempotency_payload_mismatch');
+      return { kind: 'ok' };
+    }
+
+    const placeholder = store.getDiscountPlaceholder(req.placeholder_id);
+    if (placeholder === undefined) return refuse('wrong_owner');
+
+    const now = this.clock().toISOString();
+    store.removeDiscountPlaceholderAndOutbox(req.placeholder_id, {
+      action_id: req.idempotency_key,
+      cart_id: req.cart_id,
+      line_id: placeholder.line_id,
+      action_kind: 'cart.discount_placeholder.remove',
+      acting_operator_id: session.operator_id,
+      attribution_operator_id: null,
+      operator_session_id: session.id,
+      payload_json: JSON.stringify({ cart_id: req.cart_id, placeholder_id: req.placeholder_id }),
+      applied_at: now,
+    });
+
+    return { kind: 'ok' };
   }
 
   // ── cart.void ───────────────────────────────────────────────────────
 
-  void(req: CartVoidRequest): Promise<CartVoidResponse> {
-    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
+  /**
+   * T067 — Pre-handoff void (any role, no audit).
+   * Post-handoff cancel is `cancelPostHandoff` below.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async void(req: CartVoidRequest): Promise<CartVoidResponse> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    // Idempotency check before terminal state — replaying after cancel succeeds.
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.void') return refuse('idempotency_payload_mismatch');
+      return { kind: 'ok' };
+    }
+
+    // Terminal states (after idempotency so replays work on closed carts).
+    if (cart.state === CartState.frozen_handed_off) return refuse('frozen');
+    if (cart.state === CartState.cancelled) return refuse('closed');
+
+    const now = this.clock().toISOString();
+    store.cancelCartAndOutbox(
+      {
+        cart_id: req.cart_id,
+        cancelled_at: now,
+        cancellation_reason: 'cashier_voided',
+        last_action_id: req.idempotency_key,
+        updated_at: now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: null,
+        action_kind: 'cart.void',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: req.attribution_operator_id ?? null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(scrubPayloadForOutbox({ cart_id: req.cart_id })),
+        applied_at: now,
+      },
+    );
+    return { kind: 'ok' };
+  }
+
+  // ── cart.cancelPostHandoff ──────────────────────────────────────────
+
+  /**
+   * T067 — Post-handoff cancel (manager/admin or cashier+attribution).
+   * Emits a `cart.cancel.post_handoff` audit event atomically with the
+   * cancellation (FR-031/FR-033). The cart must be in `frozen_handed_off`.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async cancelPostHandoff(req: {
+    cart_id: string;
+    handoff_action_id: string;
+    attribution_operator_id?: string;
+    idempotency_key: string;
+  }): Promise<{ kind: 'ok' } | { kind: 'refused'; reason: CartRefusalReason }> {
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) return refuse('not_implemented');
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    const gate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+    });
+    if (gate.kind !== 'ok') return refuse(gate.reason);
+
+    // Cashier must supply attribution; manager/admin may act directly.
+    const isManagerOrAdmin = session.role === 'manager' || session.role === 'admin';
+    if (!isManagerOrAdmin && !req.attribution_operator_id) {
+      return refuse('manager_attribution_required');
+    }
+
+    // Idempotency check before terminal-state guard.
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.cancel.post_handoff')
+        return refuse('idempotency_payload_mismatch');
+      return { kind: 'ok' };
+    }
+
+    // Only frozen_handed_off carts may be post-handoff cancelled.
+    if (cart.state !== CartState.frozen_handed_off) return refuse('closed');
+
+    const now = this.clock().toISOString();
+    const event_id = randomUUID();
+    const approvingSupervisorId = isManagerOrAdmin
+      ? session.operator_id
+      : req.attribution_operator_id!;
+
+    store.cancelCartAndOutbox(
+      {
+        cart_id: req.cart_id,
+        cancelled_at: now,
+        cancellation_reason: 'manager_voided_post_handoff',
+        last_action_id: req.idempotency_key,
+        updated_at: now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: null,
+        action_kind: 'cart.cancel.post_handoff',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: req.attribution_operator_id ?? null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(
+          scrubPayloadForOutbox({
+            cart_id: req.cart_id,
+            handoff_action_id: req.handoff_action_id,
+          }),
+        ),
+        applied_at: now,
+      },
+      () => {
+        this.deps.auditEmitter?.emit({
+          event_id,
+          tenant_id: cart.tenant_id,
+          branch_id: cart.branch_id,
+          originating_terminal_id: cart.terminal_id,
+          acting_operator_id: cart.owning_operator_id,
+          session_id: session.id,
+          shift_id: null,
+          action_category: 'cart.cancel.post_handoff',
+          created_at: now,
+          approving_supervisor_id: approvingSupervisorId,
+          payload: {
+            cart_id: req.cart_id,
+            handoff_action_id: req.handoff_action_id,
+          },
+        });
+      },
+    );
+    return { kind: 'ok' };
   }
 
   // ── cart.handoff ────────────────────────────────────────────────────
