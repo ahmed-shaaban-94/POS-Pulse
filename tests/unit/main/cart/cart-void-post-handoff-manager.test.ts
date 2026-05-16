@@ -84,6 +84,7 @@ function makeCashierSession(overrides?: Partial<OperatorSessionRecord>): Operato
 interface Fixture {
   db: SqlJsDatabase;
   handlers: CartBridgeHandlers;
+  emitFn: ReturnType<typeof vi.fn>;
   cart_id: string;
   cashierSession: OperatorSessionRecord;
   managerSession: OperatorSessionRecord;
@@ -108,12 +109,13 @@ async function newFrozenCart(): Promise<Fixture> {
   if (createRes.kind !== 'ok') throw new Error('create failed');
 
   // Manager is the active session for cancel.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const emitFn = vi.fn();
+  const auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => managerSession,
     cartStore: store,
     clock: () => new Date('2026-05-16T10:05:00.000Z'),
-    auditEmitter: new AuditEmitter(null as any), // vi.mock makes the null store safe
+    auditEmitter,
   });
 
   // Simulate frozen_handed_off with a prior handoff_action_id in outbox.
@@ -135,6 +137,7 @@ async function newFrozenCart(): Promise<Fixture> {
   return {
     db,
     handlers,
+    emitFn,
     cart_id: createRes.cart_id,
     cashierSession,
     managerSession,
@@ -169,27 +172,39 @@ describe('cart.void on frozen cart — always refused (S2 live — GREEN)', () =
 
 // ── S3 contract: cart.cancelPostHandoff (T057 — RED until T068) ───────────
 
+type CancelPostHandoffReq = {
+  cart_id: string;
+  handoff_action_id: string;
+  attribution_operator_id?: string;
+  idempotency_key: string;
+};
+type CancelPostHandoffRes = { kind: 'ok' } | { kind: 'refused'; reason: string };
+interface WithCancelPostHandoff {
+  cancelPostHandoff(req: CancelPostHandoffReq): Promise<CancelPostHandoffRes>;
+}
+
+function hasCancelPostHandoff(h: CartBridgeHandlers): h is CartBridgeHandlers & WithCancelPostHandoff {
+  return typeof (h as unknown as WithCancelPostHandoff).cancelPostHandoff === 'function';
+}
+
+function callCancel(h: CartBridgeHandlers & WithCancelPostHandoff, req: CancelPostHandoffReq): Promise<CancelPostHandoffRes> {
+  return h.cancelPostHandoff(req);
+}
+
 describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED until T068)', () => {
   let f: Fixture;
-  let emitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
-    f = await newFrozenCart();
     vi.clearAllMocks();
-    emitSpy = vi.spyOn(AuditEmitter.prototype, 'emit');
+    f = await newFrozenCart();
   });
 
   it('returns { kind: ok } when manager provides attribution', async () => {
-    // T068 will implement CartBridgeHandlers.cancelPostHandoff (or equivalent).
-    // This call will be red until that handler exists.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = f.handlers as any;
-    if (typeof handlers.cancelPostHandoff !== 'function') {
-      // Document the expected signature so T068 knows the contract.
+    if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false); // Always fails until T068 adds the method.
       return;
     }
-    const res = await handlers.cancelPostHandoff({
+    const res = await callCancel(f.handlers, {
       cart_id: f.cart_id,
       handoff_action_id: 'handoff-action-t057',
       attribution_operator_id: f.managerSession.operator_id,
@@ -199,13 +214,11 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
   });
 
   it('transitions cart state to cancelled', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = f.handlers as any;
-    if (typeof handlers.cancelPostHandoff !== 'function') {
+    if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false);
       return;
     }
-    await handlers.cancelPostHandoff({
+    await callCancel(f.handlers, {
       cart_id: f.cart_id,
       handoff_action_id: 'handoff-action-t057',
       attribution_operator_id: f.managerSession.operator_id,
@@ -219,13 +232,11 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
   });
 
   it('writes a cart.cancel.post_handoff outbox row', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = f.handlers as any;
-    if (typeof handlers.cancelPostHandoff !== 'function') {
+    if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false);
       return;
     }
-    await handlers.cancelPostHandoff({
+    await callCancel(f.handlers, {
       cart_id: f.cart_id,
       handoff_action_id: 'handoff-action-t057',
       attribution_operator_id: f.managerSession.operator_id,
@@ -235,20 +246,18 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
   });
 
   it('emits audit event with category cart.cancel.post_handoff and FR-025 attributes', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = f.handlers as any;
-    if (typeof handlers.cancelPostHandoff !== 'function') {
+    if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false);
       return;
     }
-    await handlers.cancelPostHandoff({
+    await callCancel(f.handlers, {
       cart_id: f.cart_id,
       handoff_action_id: 'handoff-action-t057',
       attribution_operator_id: f.managerSession.operator_id,
       idempotency_key: 'cancel-posthandoff-t057-d',
     });
-    expect(emitSpy).toHaveBeenCalledOnce();
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    expect(f.emitFn).toHaveBeenCalledOnce();
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.action_category).toBe('cart.cancel.post_handoff');
     // Cashier is acting_operator (requester); manager is approving_supervisor.
     expect(emittedEvent.acting_operator_id).toBe(f.cashierSession.operator_id);
@@ -267,9 +276,7 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
   });
 
   it('refuses without manager attribution (cashier cannot cancel post-handoff)', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = f.handlers as any;
-    if (typeof handlers.cancelPostHandoff !== 'function') {
+    if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false);
       return;
     }
@@ -278,8 +285,11 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
       getCurrentSession: () => f.cashierSession,
       cartStore: bindCartStore(makeSqlJsHandle(f.db)),
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = await (cashierHandlers as any).cancelPostHandoff({
+    if (!hasCancelPostHandoff(cashierHandlers)) {
+      expect(true).toBe(false);
+      return;
+    }
+    const res = await callCancel(cashierHandlers, {
       cart_id: f.cart_id,
       handoff_action_id: 'handoff-action-t057',
       idempotency_key: 'cancel-no-attr',
@@ -289,16 +299,12 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
   });
 
   it('refuses with reason closed when cart is not in frozen_handed_off state', async () => {
-    // Fix 3 regression: cancelPostHandoff on a non-frozen cart must refuse
-    // with 'closed', not 'frozen' (frozen means "is frozen, void is blocked").
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handlers = f.handlers as any;
-    if (typeof handlers.cancelPostHandoff !== 'function') {
+    if (!hasCancelPostHandoff(f.handlers)) {
       expect(true).toBe(false);
       return;
     }
     f.db.run(`UPDATE carts SET state = 'editing' WHERE cart_id = ?`, [f.cart_id]);
-    const res = await handlers.cancelPostHandoff({
+    const res = await callCancel(f.handlers, {
       cart_id: f.cart_id,
       handoff_action_id: 'handoff-action-t057',
       idempotency_key: 'cancel-not-frozen',

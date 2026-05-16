@@ -110,16 +110,14 @@ function readCartState(db: SqlJsDatabase, cart_id: string): string | null {
 
 describe('cart session-end discard — S3 contract (RED until T070)', () => {
   let f: SessionEndFixture;
-  let emitSpy: ReturnType<typeof vi.spyOn>;
   let auditEmitter: AuditEmitter;
+  let emitFn: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    f = await newEditingCart();
     vi.clearAllMocks();
-    emitSpy = vi.spyOn(AuditEmitter.prototype, 'emit');
-    // AuditEmitter is mocked — construct for passing to the discard function.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    auditEmitter = new AuditEmitter(null as any);
+    f = await newEditingCart();
+    emitFn = vi.fn();
+    auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
   });
 
   it('discards the draft cart (state → cancelled)', async () => {
@@ -149,8 +147,8 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
       }),
     ).resolves.not.toThrow();
 
-    expect(emitSpy).toHaveBeenCalledOnce();
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    expect(emitFn).toHaveBeenCalledOnce();
+    const emittedEvent = emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.action_category).toBe('cart.discarded_on_session_end');
   });
 
@@ -166,7 +164,7 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
       }),
     ).resolves.not.toThrow();
 
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.payload['cart_id']).toBe(f.cart_id);
     expect(emittedEvent.payload['operator_session_id']).toBe(f.session.id);
     expect(emittedEvent.payload['discard_cause']).toBe('inactivity_timeout');
@@ -184,7 +182,7 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
       }),
     ).resolves.not.toThrow();
 
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.acting_operator_id).toBe(f.session.operator_id);
   });
 
@@ -200,7 +198,7 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
       }),
     ).resolves.not.toThrow();
 
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.acting_operator_id).toBeTruthy();
     expect(emittedEvent.originating_terminal_id).toBeTruthy();
     expect(emittedEvent.created_at).toBeTruthy();
@@ -238,7 +236,7 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
     // State must remain frozen — T070 must check state before discarding.
     expect(readCartState(db2, createRes2.cart_id)).toBe('frozen_handed_off');
     // No audit event for a frozen cart skip.
-    expect(emitSpy).not.toHaveBeenCalled();
+    expect(emitFn).not.toHaveBeenCalled();
   });
 
   it('handles the superseded_by_takeover discard_cause correctly', async () => {
@@ -253,7 +251,7 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
       }),
     ).resolves.not.toThrow();
 
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.payload['discard_cause']).toBe('superseded_by_takeover');
     expect(readCartState(f.db, f.cart_id)).toBe('cancelled');
   });

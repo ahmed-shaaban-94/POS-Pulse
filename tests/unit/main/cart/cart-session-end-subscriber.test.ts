@@ -46,8 +46,7 @@ interface WiringFixture {
   sessionManager: SessionManager;
   cart_id: string;
   session: OperatorSessionRecord;
-  auditEmitter: AuditEmitter;
-  emitSpy: ReturnType<typeof vi.spyOn>;
+  emitFn: ReturnType<typeof vi.fn>;
 }
 
 async function newWiredFixture(): Promise<WiringFixture> {
@@ -56,11 +55,10 @@ async function newWiredFixture(): Promise<WiringFixture> {
   const handle = makeSqlJsHandle(db);
   const cartStore = bindCartStore(handle);
   const sessionManager = new SessionManager();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const auditEmitter = new AuditEmitter(null as any);
+  const emitFn = vi.fn();
+  const auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
 
   vi.clearAllMocks();
-  const emitSpy = vi.spyOn(AuditEmitter.prototype, 'emit');
 
   registerSessionEndCartDiscardSubscriber({ sessionManager, cartStore, auditEmitter });
 
@@ -84,7 +82,7 @@ async function newWiredFixture(): Promise<WiringFixture> {
   if (createRes.kind !== 'ok') throw new Error('create failed');
   db.run(`UPDATE carts SET state = 'editing' WHERE cart_id = ?`, [createRes.cart_id]);
 
-  return { db, sessionManager, cart_id: createRes.cart_id, session, auditEmitter, emitSpy };
+  return { db, sessionManager, cart_id: createRes.cart_id, session, emitFn };
 }
 
 function readCartState(db: SqlJsDatabase, cart_id: string): string | null {
@@ -111,15 +109,15 @@ describe('session-end cart discard subscriber — wiring (T070)', () => {
   it('emits audit event with category cart.discarded_on_session_end via session end', async () => {
     f.sessionManager.end('signed_out');
     await Promise.resolve();
-    expect(f.emitSpy).toHaveBeenCalledOnce();
-    const event = f.emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    expect(f.emitFn).toHaveBeenCalledOnce();
+    const event = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(event.action_category).toBe('cart.discarded_on_session_end');
   });
 
   it('defaults discard_cause to signed_out when end() is called with no cause', async () => {
     f.sessionManager.end(); // no cause — simulates SignOutHandler / InactivityMonitor
     await Promise.resolve();
-    const event = f.emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const event = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(event.payload['discard_cause']).toBe('signed_out');
     expect(readCartState(f.db, f.cart_id)).toBe('cancelled');
   });
@@ -127,7 +125,7 @@ describe('session-end cart discard subscriber — wiring (T070)', () => {
   it('passes the correct discard_cause through to the audit event', async () => {
     f.sessionManager.end('inactivity_timeout');
     await Promise.resolve();
-    const event = f.emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const event = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(event.payload['discard_cause']).toBe('inactivity_timeout');
   });
 
@@ -136,7 +134,7 @@ describe('session-end cart discard subscriber — wiring (T070)', () => {
     f.sessionManager.end('signed_out');
     await Promise.resolve();
     expect(readCartState(f.db, f.cart_id)).toBe('frozen_handed_off');
-    expect(f.emitSpy).not.toHaveBeenCalled();
+    expect(f.emitFn).not.toHaveBeenCalled();
   });
 
   it('does nothing when no cart exists for the ending session', async () => {
@@ -145,9 +143,8 @@ describe('session-end cart discard subscriber — wiring (T070)', () => {
     for (const sql of MIGRATIONS) db2.run(sql);
     const store2 = bindCartStore(makeSqlJsHandle(db2));
     const sm2 = new SessionManager();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ae2 = new AuditEmitter(null as any);
-    const spy2 = vi.spyOn(AuditEmitter.prototype, 'emit');
+    const emitFn2 = vi.fn();
+    const ae2 = { emit: emitFn2 } as unknown as AuditEmitter;
     registerSessionEndCartDiscardSubscriber({ sessionManager: sm2, cartStore: store2, auditEmitter: ae2 });
     sm2.create({
       operator_id: 'cashier-empty',
@@ -159,6 +156,6 @@ describe('session-end cart discard subscriber — wiring (T070)', () => {
     });
     sm2.end('signed_out');
     await Promise.resolve();
-    expect(spy2).not.toHaveBeenCalled();
+    expect(emitFn2).not.toHaveBeenCalled();
   });
 });

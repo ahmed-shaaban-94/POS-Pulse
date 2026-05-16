@@ -724,7 +724,8 @@ export class CartBridgeHandlers {
 
     // Threshold: percent_NN where NN > 10 is above-threshold.
     const pctMatch = /^percent_(\d+)$/.exec(req.placeholder_kind);
-    const isAboveThreshold = pctMatch !== null && parseInt(pctMatch[1]!, 10) > 10;
+    const pctDigits = pctMatch?.[1] ?? null;
+    const isAboveThreshold = pctDigits !== null && parseInt(pctDigits, 10) > 10;
 
     if (isAboveThreshold) {
       // Attribution must be present and must not be the acting cashier.
@@ -735,6 +736,9 @@ export class CartBridgeHandlers {
         return refuse('manager_attribution_required');
       }
     }
+
+    // Narrowed after the guard above — safe to use without assertion in the isAboveThreshold branch.
+    const attributionOperatorId = req.attribution_operator_id ?? null;
 
     // Idempotency: the idempotency_key doubles as placeholder_id.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -755,11 +759,11 @@ export class CartBridgeHandlers {
       line_id: req.line_id,
       placeholder_kind: req.placeholder_kind,
       requires_manager_attribution: isAboveThreshold ? 1 : 0,
-      attribution_operator_id: req.attribution_operator_id ?? null,
+      attribution_operator_id: attributionOperatorId,
       created_at: now,
     };
 
-    if (isAboveThreshold) {
+    if (isAboveThreshold && attributionOperatorId !== null) {
       const event_id = randomUUID();
       store.insertDiscountPlaceholderAndOutbox(
         placeholder,
@@ -769,7 +773,7 @@ export class CartBridgeHandlers {
           line_id: req.line_id,
           action_kind: 'cart.discount_placeholder.add',
           acting_operator_id: session.operator_id,
-          attribution_operator_id: req.attribution_operator_id!,
+          attribution_operator_id: attributionOperatorId,
           operator_session_id: session.id,
           payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
           applied_at: now,
@@ -785,7 +789,7 @@ export class CartBridgeHandlers {
             shift_id: null,
             action_category: 'cart.discount.above_threshold',
             created_at: now,
-            approving_supervisor_id: req.attribution_operator_id!,
+            approving_supervisor_id: attributionOperatorId,
             payload: { cart_id: req.cart_id, cart_line_id: req.line_id },
           });
         },
@@ -906,8 +910,9 @@ export class CartBridgeHandlers {
     }
 
     // Terminal states (after idempotency so replays work on closed carts).
-    if (cart.state === CartState.frozen_handed_off) return refuse('frozen');
-    if (cart.state === CartState.cancelled) return refuse('closed');
+    const cartState = cart.state as CartState;
+    if (cartState === CartState.frozen_handed_off) return refuse('frozen');
+    if (cartState === CartState.cancelled) return refuse('closed');
 
     const now = this.clock().toISOString();
     store.cancelCartAndOutbox(
@@ -983,13 +988,14 @@ export class CartBridgeHandlers {
     }
 
     // Only frozen_handed_off carts may be post-handoff cancelled.
-    if (cart.state !== CartState.frozen_handed_off) return refuse('closed');
+    const cancelCartState = cart.state as CartState;
+    if (cancelCartState !== CartState.frozen_handed_off) return refuse('closed');
 
     const now = this.clock().toISOString();
     const event_id = randomUUID();
     const approvingSupervisorId = isManagerOrAdmin
       ? session.operator_id
-      : req.attribution_operator_id!;
+      : (req.attribution_operator_id ?? session.operator_id);
 
     store.cancelCartAndOutbox(
       {

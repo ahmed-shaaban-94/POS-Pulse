@@ -67,6 +67,7 @@ const fixtureResolver: ItemRefResolver = () =>
 interface Fixture {
   db: SqlJsDatabase;
   handlers: CartBridgeHandlers;
+  emitFn: ReturnType<typeof vi.fn>;
   cart_id: string;
   line_id: string;
   cashierSession: OperatorSessionRecord;
@@ -78,13 +79,14 @@ async function newCartWithLine(): Promise<Fixture> {
   for (const sql of MIGRATIONS) db.run(sql);
   const handle = makeSqlJsHandle(db);
   const store = bindCartStore(handle);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const emitFn = vi.fn();
+  const auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => cashierSession,
     cartStore: store,
     resolveItemRef: fixtureResolver,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
-    auditEmitter: new AuditEmitter(null as any), // vi.mock makes the null store safe
+    auditEmitter,
   });
 
   const createRes = await handlers.create({ idempotency_key: 'create-t061' });
@@ -98,7 +100,7 @@ async function newCartWithLine(): Promise<Fixture> {
   });
   if (addRes.kind !== 'ok') throw new Error('linesAdd failed');
 
-  return { db, handlers, cart_id: createRes.cart_id, line_id: addRes.line_id, cashierSession };
+  return { db, handlers, emitFn, cart_id: createRes.cart_id, line_id: addRes.line_id, cashierSession };
 }
 
 function readDiscountPlaceholders(db: SqlJsDatabase, cart_id: string): Record<string, unknown>[] {
@@ -114,12 +116,10 @@ function readDiscountPlaceholders(db: SqlJsDatabase, cart_id: string): Record<st
 
 describe('cart.discountPlaceholders.add — above-threshold with manager attribution (RED until T069+T070)', () => {
   let f: Fixture;
-  let emitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(async () => {
-    f = await newCartWithLine();
     vi.clearAllMocks();
-    emitSpy = vi.spyOn(AuditEmitter.prototype, 'emit');
+    f = await newCartWithLine();
   });
 
   it('returns ok with requires_manager_attribution: true', async () => {
@@ -163,8 +163,8 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       idempotency_key: 'dp-t061-c',
     });
     // RED until T070.
-    expect(emitSpy).toHaveBeenCalledOnce();
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    expect(f.emitFn).toHaveBeenCalledOnce();
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.action_category).toBe('cart.discount.above_threshold');
   });
 
@@ -177,7 +177,7 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       idempotency_key: 'dp-t061-d',
     });
     // RED until T070.
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.acting_operator_id).toBe(f.cashierSession.operator_id);
     expect(emittedEvent.approving_supervisor_id).toBe(MANAGER_ID);
   });
@@ -191,7 +191,7 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       idempotency_key: 'dp-t061-e',
     });
     // RED until T070.
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.payload['cart_id']).toBe(f.cart_id);
     expect(emittedEvent.payload['cart_line_id']).toBe(f.line_id);
   });
@@ -205,7 +205,7 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       idempotency_key: 'dp-t061-f',
     });
     // RED until T070.
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
     expect(emittedEvent.acting_operator_id).toBeTruthy();
     expect(emittedEvent.originating_terminal_id).toBeTruthy();
     expect(emittedEvent.created_at).toBeTruthy();
@@ -222,7 +222,7 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
       idempotency_key: 'dp-t061-g',
     });
     // RED until T070.
-    const emittedEvent = emitSpy.mock.calls[0]?.[0] as AuditEvent;
+    const emittedEvent = f.emitFn.mock.calls[0][0] as AuditEvent;
     const forbiddenKeys = ['pin', 'password', 'clerk_jwt', 'device_token', 'token', 'secret'];
     for (const key of forbiddenKeys) {
       expect(key in emittedEvent.payload).toBe(false);
@@ -247,7 +247,7 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
     // RED until T069 — idempotent replay should succeed and not emit twice.
     expect(res2.kind).toBe('ok');
     // Audit emitter should fire only once (not on replay).
-    expect(emitSpy).toHaveBeenCalledOnce();
+    expect(f.emitFn).toHaveBeenCalledOnce();
   });
 
   it('Fix 2 regression — rejects a remove idempotency key replayed as add', async () => {

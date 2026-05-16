@@ -43,14 +43,14 @@ export interface DiscardDraftCartForSessionEndParams {
  * The cancel + outbox write + audit emission are atomic within the
  * SQLite transaction provided by `cancelCartAndOutbox`.
  */
-export async function discardDraftCartForSessionEnd(
+export function discardDraftCartForSessionEnd(
   params: DiscardDraftCartForSessionEndParams,
 ): Promise<void> {
   const { cart_id, operator_session_id, acting_operator_id, discard_cause, cartStore, auditEmitter } =
     params;
 
   const cart = cartStore.getCart(cart_id);
-  if (cart === undefined) return;
+  if (cart === undefined) return Promise.resolve();
 
   // Only discard mutable (draft) carts — frozen and cancelled are terminal.
   const mutableStates: ReadonlySet<string> = new Set([
@@ -59,7 +59,7 @@ export async function discardDraftCartForSessionEnd(
     CartState.discount_pending_attribution,
     CartState.handing_off,
   ]);
-  if (!mutableStates.has(cart.state)) return;
+  if (!mutableStates.has(cart.state)) return Promise.resolve();
 
   const now = new Date().toISOString();
   const event_id = randomUUID();
@@ -100,6 +100,7 @@ export async function discardDraftCartForSessionEnd(
       });
     },
   );
+  return Promise.resolve();
 }
 
 export interface RegisterSessionEndCartDiscardSubscriberParams {
