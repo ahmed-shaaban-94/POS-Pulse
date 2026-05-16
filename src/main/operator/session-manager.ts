@@ -40,9 +40,15 @@ export interface CreateSessionInput {
   started_at?: string;
 }
 
+type SessionEndCallback = (
+  record: OperatorSessionRecord,
+  cause: SessionEndCause | undefined,
+) => void;
+
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;
   private lastEndCause: SessionEndCause | null = null;
+  private readonly endCallbacks: SessionEndCallback[] = [];
 
   getCurrent(): OperatorSessionRecord | null {
     return this.current;
@@ -82,6 +88,11 @@ export class SessionManager {
     return record;
   }
 
+  /** Register a callback fired after each session ends. */
+  onEnded(cb: SessionEndCallback): void {
+    this.endCallbacks.push(cb);
+  }
+
   /**
    * End the active session. The optional `cause` is stored in-memory for
    * test inspection and will be written to the `operator_sessions` SQL row
@@ -93,6 +104,15 @@ export class SessionManager {
       this.lastEndCause = cause;
     }
     this.current = null;
+    if (ending !== null) {
+      for (const cb of this.endCallbacks) {
+        try {
+          cb(ending, cause);
+        } catch {
+          // subscribers must not break end()
+        }
+      }
+    }
     return ending;
   }
 

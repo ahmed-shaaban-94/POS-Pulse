@@ -445,6 +445,7 @@ app
     const cartBridgeHandlers = new CartBridgeHandlers({
       getCurrentSession: () => operatorSessionManager.getCurrent(),
       logger: mainLogger,
+      auditEmitter,
     });
     registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
 
