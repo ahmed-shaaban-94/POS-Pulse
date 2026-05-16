@@ -7,6 +7,7 @@
  */
 
 import { useState, type JSX } from 'react';
+import { touchTarget } from '../tokens/touch.js';
 
 export interface ManagerAttributionPromptProps {
   onApprove: (managerId: string) => void;
@@ -21,7 +22,12 @@ export function ManagerAttributionPrompt({
   const [credential, setCredential] = useState('');
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="mgr-attr-title">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mgr-attr-title"
+      style={{ boxShadow: 'var(--shadow-overlay)' }}
+    >
       <h2 id="mgr-attr-title">Manager approval required</h2>
       <p>This action needs a manager.</p>
       <div>
@@ -47,7 +53,7 @@ export function ManagerAttributionPrompt({
         />
       </div>
       <div>
-        <button type="button" onClick={onCancel}>
+        <button type="button" onClick={onCancel} style={{ minHeight: touchTarget.min }}>
           Cancel
         </button>
         <button
@@ -56,6 +62,7 @@ export function ManagerAttributionPrompt({
           onClick={() => {
             onApprove(managerId);
           }}
+          style={{ minHeight: touchTarget.min }}
         >
           Approve
         </button>
