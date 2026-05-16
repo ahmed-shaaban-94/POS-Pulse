@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   ci:
-    runs-on: windows-latest
+    runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
