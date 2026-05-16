@@ -46,8 +46,14 @@ export interface DiscardDraftCartForSessionEndParams {
 export function discardDraftCartForSessionEnd(
   params: DiscardDraftCartForSessionEndParams,
 ): Promise<void> {
-  const { cart_id, operator_session_id, acting_operator_id, discard_cause, cartStore, auditEmitter } =
-    params;
+  const {
+    cart_id,
+    operator_session_id,
+    acting_operator_id,
+    discard_cause,
+    cartStore,
+    auditEmitter,
+  } = params;
 
   const cart = cartStore.getCart(cart_id);
   if (cart === undefined) return Promise.resolve();

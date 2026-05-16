@@ -145,7 +145,11 @@ describe('session-end cart discard subscriber — wiring (T070)', () => {
     const sm2 = new SessionManager();
     const emitFn2 = vi.fn();
     const ae2 = { emit: emitFn2 } as unknown as AuditEmitter;
-    registerSessionEndCartDiscardSubscriber({ sessionManager: sm2, cartStore: store2, auditEmitter: ae2 });
+    registerSessionEndCartDiscardSubscriber({
+      sessionManager: sm2,
+      cartStore: store2,
+      auditEmitter: ae2,
+    });
     sm2.create({
       operator_id: 'cashier-empty',
       display_name: 'Empty',

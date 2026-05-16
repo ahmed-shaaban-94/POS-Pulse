@@ -40,7 +40,10 @@ export interface CreateSessionInput {
   started_at?: string;
 }
 
-type SessionEndCallback = (record: OperatorSessionRecord, cause: SessionEndCause | undefined) => void;
+type SessionEndCallback = (
+  record: OperatorSessionRecord,
+  cause: SessionEndCause | undefined,
+) => void;
 
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;

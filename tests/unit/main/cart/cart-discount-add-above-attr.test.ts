@@ -100,7 +100,14 @@ async function newCartWithLine(): Promise<Fixture> {
   });
   if (addRes.kind !== 'ok') throw new Error('linesAdd failed');
 
-  return { db, handlers, emitFn, cart_id: createRes.cart_id, line_id: addRes.line_id, cashierSession };
+  return {
+    db,
+    handlers,
+    emitFn,
+    cart_id: createRes.cart_id,
+    line_id: addRes.line_id,
+    cashierSession,
+  };
 }
 
 function readDiscountPlaceholders(db: SqlJsDatabase, cart_id: string): Record<string, unknown>[] {
@@ -261,13 +268,7 @@ describe('cart.discountPlaceholders.add — above-threshold with manager attribu
          (action_id, cart_id, line_id, action_kind, acting_operator_id,
           attribution_operator_id, operator_session_id, payload_json, applied_at)
        VALUES (?, ?, NULL, 'cart.discount_placeholder.remove', ?, NULL, ?, '{}', ?)`,
-      [
-        SHARED_KEY,
-        f.cart_id,
-        'cashier-1',
-        'sess-cashier-t061',
-        '2026-05-16T10:01:00.000Z',
-      ],
+      [SHARED_KEY, f.cart_id, 'cashier-1', 'sess-cashier-t061', '2026-05-16T10:01:00.000Z'],
     );
     const res = await f.handlers.discountPlaceholdersAdd({
       cart_id: f.cart_id,

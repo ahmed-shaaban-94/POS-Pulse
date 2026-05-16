@@ -729,10 +729,7 @@ export class CartBridgeHandlers {
 
     if (isAboveThreshold) {
       // Attribution must be present and must not be the acting cashier.
-      if (
-        !req.attribution_operator_id ||
-        req.attribution_operator_id === session.operator_id
-      ) {
+      if (!req.attribution_operator_id || req.attribution_operator_id === session.operator_id) {
         return refuse('manager_attribution_required');
       }
     }

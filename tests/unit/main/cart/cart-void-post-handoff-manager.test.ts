@@ -183,11 +183,16 @@ interface WithCancelPostHandoff {
   cancelPostHandoff(req: CancelPostHandoffReq): Promise<CancelPostHandoffRes>;
 }
 
-function hasCancelPostHandoff(h: CartBridgeHandlers): h is CartBridgeHandlers & WithCancelPostHandoff {
+function hasCancelPostHandoff(
+  h: CartBridgeHandlers,
+): h is CartBridgeHandlers & WithCancelPostHandoff {
   return typeof (h as unknown as WithCancelPostHandoff).cancelPostHandoff === 'function';
 }
 
-function callCancel(h: CartBridgeHandlers & WithCancelPostHandoff, req: CancelPostHandoffReq): Promise<CancelPostHandoffRes> {
+function callCancel(
+  h: CartBridgeHandlers & WithCancelPostHandoff,
+  req: CancelPostHandoffReq,
+): Promise<CancelPostHandoffRes> {
   return h.cancelPostHandoff(req);
 }
 
