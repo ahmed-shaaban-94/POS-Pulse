@@ -76,6 +76,13 @@ describe('VoidConfirmation — interactions', () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 
+  it('does not call onCancel for non-Escape key presses', async () => {
+    const onCancel = vi.fn();
+    render(<VoidConfirmation onConfirm={vi.fn()} onCancel={onCancel} />);
+    await userEvent.keyboard('{Enter}');
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
   it('"Void cart" button carries danger data attribute', () => {
     render(<VoidConfirmation onConfirm={vi.fn()} onCancel={vi.fn()} />);
     const btn = screen.getByRole('button', { name: 'Void cart' });

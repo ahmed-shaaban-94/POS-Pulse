@@ -81,6 +81,12 @@ describe('ManagerAttributionPrompt — interactions', () => {
     const btn = screen.getByRole('button', { name: 'Approve' });
     expect(btn).toHaveAttribute('data-variant', 'primary');
   });
+
+  it('accepts typing into the Credential field', async () => {
+    render(<ManagerAttributionPrompt onApprove={vi.fn()} onCancel={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText('Credential'), 'cred-xyz');
+    expect(screen.getByLabelText('Credential')).toHaveValue('cred-xyz');
+  });
 });
 
 describe('ManagerAttributionPrompt — accessibility', () => {

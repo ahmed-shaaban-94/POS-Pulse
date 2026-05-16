@@ -197,6 +197,26 @@ describe('CartPane — DiscountPlaceholderRow', () => {
       expect(rowText).not.toMatch(/[¤$]\d/);
     });
   });
+
+  it('calls discountPlaceholders.remove and removes the row when remove is clicked', async () => {
+    const removeMock = vi.fn().mockResolvedValue({ kind: 'ok' });
+    const bridge = makeBridge({ discountPlaceholders: { add: vi.fn(), remove: removeMock } });
+    setSignedIn({ role: 'cashier' });
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={bridge}
+        _testDiscountPlaceholders={[{ placeholderId: 'dp-1', attribution_operator_id: null }]}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /remove/i }));
+    await waitFor(() => {
+      expect(removeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ cart_id: 'cart-t074', placeholder_id: 'dp-1' }),
+      );
+    });
+    expect(screen.queryByText('Discount applied')).toBeNull();
+  });
 });
 
 // ── Cashier-forbidden information gate ─────────────────────────────────────
