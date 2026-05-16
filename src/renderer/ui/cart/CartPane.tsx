@@ -36,6 +36,8 @@ import type { CartBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api
 import { EmptyCartPlaceholder } from './EmptyCartPlaceholder.js';
 import { LineItemRow } from './LineItemRow.js';
 import { LineNotePopover } from './LineNotePopover.js';
+import { VoidConfirmation } from './VoidConfirmation.js';
+import { DiscountPlaceholderRow } from './DiscountPlaceholderRow.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { useCartStore } from '../../stores/cart-store.js';
 import { CartState } from '../../../shared/cart/cart-state.js';
@@ -62,6 +64,12 @@ export interface AddedLineResult {
   merged: boolean;
 }
 
+/** Test-only seed shape for discount placeholders. */
+export interface DiscountPlaceholderSeed {
+  placeholderId: string;
+  attribution_operator_id: string | null;
+}
+
 export interface CartPaneProps {
   /**
    * Test-only: seeds the initial line list without a bridge call.
@@ -74,6 +82,11 @@ export interface CartPaneProps {
    * MUST NOT be used in production.
    */
   _testBridge?: CartBridgeAPI;
+  /**
+   * Test-only: seeds discount placeholder rows without a bridge call.
+   * MUST NOT be used in production.
+   */
+  _testDiscountPlaceholders?: DiscountPlaceholderSeed[];
   /**
    * Registers a callback that the caller must invoke after a successful
    * cart.lines.add bridge call. CartPane updates its local line list
@@ -106,13 +119,21 @@ function readCartBridge(): CartBridgeAPI {
 export function CartPane({
   _testInitialLines,
   _testBridge,
+  _testDiscountPlaceholders,
   onLineAdded,
 }: CartPaneProps = {}): JSX.Element | null {
-  const sessionKind = useOperatorSessionStore((s) => s.state.kind);
+  const sessionState = useOperatorSessionStore((s) => s.state);
+  const sessionKind = sessionState.kind;
+  const sessionRole = sessionState.kind === 'signedIn' ? sessionState.session.role : null;
   const activeCart = useCartStore((s) => s.activeCart);
+  const cartStore = useCartStore();
   const [lines, setLines] = useState<CartLineItem[]>(_testInitialLines ?? []);
+  const [discountPlaceholders, setDiscountPlaceholders] = useState<DiscountPlaceholderSeed[]>(
+    _testDiscountPlaceholders ?? [],
+  );
   const [noteOpenLineId, setNoteOpenLineId] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false);
 
   const handleAddLine = useCallback((res: AddedLineResult): void => {
     setLines((prev) => {
@@ -153,6 +174,38 @@ export function CartPane({
   }
 
   const showEmpty = activeCart === null || activeCart.state === CartState.empty;
+
+  const isFrozen = activeCart?.state === CartState.frozen_handed_off;
+  const canVoid =
+    activeCart !== null &&
+    activeCart.state !== CartState.cancelled &&
+    (!isFrozen || sessionRole === 'manager' || sessionRole === 'admin');
+
+  async function handleVoidConfirm(): Promise<void> {
+    /* v8 ignore next — defensive guard: button only renders when activeCart exists */
+    if (activeCart === null) return;
+    const res = await getBridge().void({
+      cart_id: activeCart.cart_id,
+      idempotency_key: crypto.randomUUID(),
+    });
+    if (res.kind === 'ok') {
+      cartStore.applyCancelled();
+      setVoidDialogOpen(false);
+    }
+  }
+
+  async function handleRemoveDiscount(placeholderId: string): Promise<void> {
+    /* v8 ignore next — defensive guard */
+    if (activeCart === null) return;
+    const res = await getBridge().discountPlaceholders.remove({
+      cart_id: activeCart.cart_id,
+      placeholder_id: placeholderId,
+      idempotency_key: crypto.randomUUID(),
+    });
+    if (res.kind === 'ok') {
+      setDiscountPlaceholders((prev) => prev.filter((d) => d.placeholderId !== placeholderId));
+    }
+  }
 
   const cartSubtotalMinor = lines.reduce((acc, l) => acc + l.lineSubtotalMinor, 0);
 
@@ -261,55 +314,94 @@ export function CartPane({
 
   return (
     <section className="cart-pane" data-testid="cart-pane" aria-label="Cart">
+      {voidDialogOpen && (
+        <VoidConfirmation
+          onConfirm={() => {
+            void handleVoidConfirm();
+          }}
+          onCancel={() => {
+            setVoidDialogOpen(false);
+          }}
+        />
+      )}
       <header className="cart-pane__header">
         <h2 className="cart-pane__title">Cart</h2>
+        {canVoid && (
+          <button
+            type="button"
+            className="cart-pane__void"
+            data-testid="cart-void-button"
+            data-variant="danger"
+            onClick={() => {
+              setVoidDialogOpen(true);
+            }}
+          >
+            Void
+          </button>
+        )}
       </header>
       <div className="cart-pane__body">
         {showEmpty ? (
           <EmptyCartPlaceholder />
         ) : (
-          <ol className="cart-pane__line-list" aria-label="Cart items">
-            {lines.map((line) => (
-              <li key={line.lineId}>
-                <LineItemRow
-                  lineId={line.lineId}
-                  displayName={line.displayName}
-                  quantity={line.quantity}
-                  unitPriceMinor={line.unitPriceMinor}
-                  lineSubtotalMinor={line.lineSubtotalMinor}
-                  note={line.note}
-                  hasNote={line.note !== null}
-                  onQuantityIncrement={() => {
-                    void handleIncrementLine(line.lineId, line.version);
-                  }}
-                  onQuantityDecrement={() => {
-                    void handleDecrementLine(line.lineId, line.version);
-                  }}
-                  onRemove={() => {
-                    void handleRemoveLine(line.lineId, line.version);
-                  }}
-                  onNoteOpen={() => {
-                    setNoteError(null);
-                    setNoteOpenLineId(line.lineId);
-                  }}
-                />
-                {noteOpenLineId === line.lineId && (
-                  <LineNotePopover
-                    open={true}
-                    currentNote={line.note}
-                    error={noteError}
-                    onSave={(note) => {
-                      void handleSaveNote(line.lineId, line.version, note);
+          <>
+            <ol className="cart-pane__line-list" aria-label="Cart items">
+              {lines.map((line) => (
+                <li key={line.lineId}>
+                  <LineItemRow
+                    lineId={line.lineId}
+                    displayName={line.displayName}
+                    quantity={line.quantity}
+                    unitPriceMinor={line.unitPriceMinor}
+                    lineSubtotalMinor={line.lineSubtotalMinor}
+                    note={line.note}
+                    hasNote={line.note !== null}
+                    onQuantityIncrement={() => {
+                      void handleIncrementLine(line.lineId, line.version);
                     }}
-                    onClose={() => {
+                    onQuantityDecrement={() => {
+                      void handleDecrementLine(line.lineId, line.version);
+                    }}
+                    onRemove={() => {
+                      void handleRemoveLine(line.lineId, line.version);
+                    }}
+                    onNoteOpen={() => {
                       setNoteError(null);
-                      setNoteOpenLineId(null);
+                      setNoteOpenLineId(line.lineId);
                     }}
                   />
-                )}
-              </li>
-            ))}
-          </ol>
+                  {noteOpenLineId === line.lineId && (
+                    <LineNotePopover
+                      open={true}
+                      currentNote={line.note}
+                      error={noteError}
+                      onSave={(note) => {
+                        void handleSaveNote(line.lineId, line.version, note);
+                      }}
+                      onClose={() => {
+                        setNoteError(null);
+                        setNoteOpenLineId(null);
+                      }}
+                    />
+                  )}
+                </li>
+              ))}
+            </ol>
+            {discountPlaceholders.length > 0 && (
+              <ul className="cart-pane__discount-list" aria-label="Discount placeholders">
+                {discountPlaceholders.map((dp) => (
+                  <li key={dp.placeholderId}>
+                    <DiscountPlaceholderRow
+                      placeholderId={dp.placeholderId}
+                      onRemove={() => {
+                        void handleRemoveDiscount(dp.placeholderId);
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
       <footer className="cart-pane__footer">

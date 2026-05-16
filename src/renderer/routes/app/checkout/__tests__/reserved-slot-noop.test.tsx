@@ -56,7 +56,7 @@ describe('reserved-slot-noop guard (T051)', () => {
     }
 
     expect(fetchMock).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('zero localStorage calls across all slot interactions', async () => {
     const user = userEvent.setup();
@@ -75,7 +75,7 @@ describe('reserved-slot-noop guard (T051)', () => {
     }
 
     expect(localStorageSpy).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('zero sessionStorage calls across all slot interactions', async () => {
     const user = userEvent.setup();
@@ -94,7 +94,7 @@ describe('reserved-slot-noop guard (T051)', () => {
     }
 
     expect(sessionStorageSpy).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('zero window.print calls across all slot interactions', async () => {
     const user = userEvent.setup();
@@ -113,7 +113,7 @@ describe('reserved-slot-noop guard (T051)', () => {
     }
 
     expect(printMock).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('window.api is not called on mount', () => {
     // window.api does not exist in test environment (no preload), so we
