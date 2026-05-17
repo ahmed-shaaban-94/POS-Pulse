@@ -31,6 +31,8 @@ import { computeLineSubtotal, LineSubtotalError } from './line-subtotal.js';
 import { requireOperatorSession } from './require-operator-session.js';
 import type { CartStore, InsertDiscountPlaceholderInput } from './cart-store.js';
 import { AuditEmitter } from '../audit/audit-emitter.js';
+import { buildPaymentIntentEnvelope } from './handoff-envelope-builder.js';
+import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
 
 /**
  * 005-sales-cart S2 — `cart.*` bridge handlers (T025/T026 from S1 +
@@ -272,6 +274,7 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
 
     // Idempotency: replay-safe.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -434,6 +437,7 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
 
     // Idempotency replay (mirrors linesAdd).
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -552,6 +556,7 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
 
     return this.removeLineInternal(
       req.cart_id,
@@ -638,6 +643,7 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
 
     // Idempotency replay.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -721,6 +727,7 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
 
     // Threshold: percent_NN where NN > 10 is above-threshold.
     const pctMatch = /^percent_(\d+)$/.exec(req.placeholder_kind);
@@ -840,6 +847,7 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
 
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
@@ -1042,8 +1050,163 @@ export class CartBridgeHandlers {
 
   // ── cart.handoff ────────────────────────────────────────────────────
 
-  handoff(req: CartHandoffRequest): Promise<CartHandoffResponse> {
-    return Promise.resolve(this.gateMutatingS2(req.cart_id) ?? refuse('not_implemented'));
+  /**
+   * T086 — 7-step handoff construction algorithm.
+   *
+   * Step 1: requireOperatorSession (no_session gate)
+   * Step 2: ownership + tenant + role check (no mutable guard yet)
+   * Step 3: idempotency replay (allowed even for frozen carts)
+   * Step 4: mutable-state guard (requireMutable: true)
+   * Step 5: T088 handing_off freeze guard
+   * Step 6: per_line_versions staleness check
+   * Step 7: build PaymentIntentEnvelope via builder
+   * Step 8: atomic transaction (outbox + freeze + persist + audit)
+   * Step 9: return frozen envelope
+   *
+   * SECURITY: Envelope contains no session credentials, PINs, or secrets.
+   * Do NOT claim payment succeeded — this only freezes the cart.
+   */
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async handoff(req: CartHandoffRequest): Promise<CartHandoffResponse> {
+    // Step 1 — session gate.
+    const session = this.deps.getCurrentSession();
+    if (session === null) return refuse('no_session');
+
+    if (this.deps.cartStore === undefined) {
+      const guard = this.gateMutatingInMem(req.cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(req.cart_id);
+    if (cart === undefined) return refuse('wrong_owner');
+
+    // Step 2 — ownership, role, tenant isolation (without requireMutable — idempotency
+    // replay must be allowed even for already-frozen carts, so we defer the mutable guard).
+    const ownershipGate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+    });
+    if (ownershipGate.kind !== 'ok') return refuse(ownershipGate.reason);
+
+    // Step 3 — idempotency replay (before mutable guard so frozen carts can replay).
+    const replay = store.getOutboxRow(req.idempotency_key);
+    if (replay !== undefined) {
+      if (replay.action_kind !== 'cart.handoff_to_payment') {
+        return refuse('idempotency_payload_mismatch');
+      }
+      const persistedJson = store.getCart(req.cart_id)?.handoff_envelope_json;
+      if (persistedJson !== null && persistedJson !== undefined) {
+        const parsed = JSON.parse(persistedJson) as Parameters<typeof freezeEnvelope>[0];
+        return { kind: 'ok', envelope: freezeEnvelope(parsed) };
+      }
+      /* v8 ignore next — outbox row written but envelope_json null: impossible under atomic tx */
+      return refuse('not_implemented');
+    }
+
+    // Step 4 — mutable-state guard (after idempotency, so replay always works).
+    const mutabilityGate = requireOperatorSession({
+      session,
+      allowedRoles: ['cashier', 'manager', 'admin'],
+      cart: {
+        operator_session_id: cart.operator_session_id,
+        tenant_id: cart.tenant_id,
+        branch_id: cart.branch_id,
+        state: cart.state as CartState,
+      },
+      requireMutable: true,
+    });
+    if (mutabilityGate.kind !== 'ok') return refuse(mutabilityGate.reason);
+
+    // T088 freeze guard: defence-in-depth — requireMutable doesn't block handing_off.
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+
+    // Step 5 — per_line_versions staleness check.
+    for (const { line_id, version } of req.per_line_versions) {
+      const line = store.getLine(req.cart_id, line_id);
+      if (line === undefined || line.removed_at !== null) return refuse('stale_version');
+      if (line.version !== version) return refuse('stale_version');
+    }
+
+    const now = this.clock().toISOString();
+    const handoff_action_id = req.idempotency_key;
+
+    // Step 6 — build the PaymentIntentEnvelope.
+    const built = buildPaymentIntentEnvelope({
+      cart_id: req.cart_id,
+      handoff_action_id,
+      session,
+      terminal_id: cart.terminal_id,
+      tenant_id: cart.tenant_id,
+      branch_id: cart.branch_id,
+      created_at: now,
+      store,
+    });
+
+    if (built.kind === 'empty_cart') return refuse('empty_cart');
+    if (built.kind === 'subtotal_unsafe') return refuse('not_implemented');
+
+    const { envelope } = built;
+    const envelopeJson = JSON.stringify(envelope);
+    const event_id = randomUUID();
+
+    // Step 7 — atomic transaction: outbox + cart freeze + audit.
+    store.handoffCartAndOutbox(
+      {
+        cart_id: req.cart_id,
+        frozen_at: now,
+        handoff_envelope_json: envelopeJson,
+        last_action_id: handoff_action_id,
+        updated_at: now,
+      },
+      {
+        action_id: handoff_action_id,
+        cart_id: req.cart_id,
+        line_id: null,
+        action_kind: 'cart.handoff_to_payment',
+        acting_operator_id: session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: session.id,
+        payload_json: JSON.stringify(
+          scrubPayloadForOutbox({
+            cart_id: req.cart_id,
+            handoff_action_id,
+            line_count: built.line_count,
+            subtotal_minor: envelope.subtotal_minor,
+          }),
+        ),
+        applied_at: now,
+      },
+      () => {
+        this.deps.auditEmitter?.emit({
+          event_id,
+          tenant_id: cart.tenant_id,
+          branch_id: cart.branch_id,
+          originating_terminal_id: cart.terminal_id,
+          acting_operator_id: session.operator_id,
+          session_id: session.id,
+          shift_id: null,
+          action_category: 'cart.handoff_to_payment',
+          created_at: now,
+          approving_supervisor_id: null,
+          payload: {
+            cart_id: req.cart_id,
+            handoff_action_id,
+            line_count: built.line_count,
+            subtotal_minor: envelope.subtotal_minor,
+          },
+        });
+      },
+    );
+
+    // Step 8 — return the frozen envelope.
+    return { kind: 'ok', envelope };
   }
 
   // ── cart.subscribe ──────────────────────────────────────────────────
@@ -1083,6 +1246,7 @@ export class CartBridgeHandlers {
     return null;
   }
 
+  /* v8 ignore next 22 — scaffolded in S2, superseded by inline guards in each handler */
   /** S2 DB-aware gate for handlers that aren't yet implemented (discount/void/handoff). */
   private gateMutatingS2(cart_id: string): { kind: 'refused'; reason: CartRefusalReason } | null {
     if (this.deps.cartStore === undefined) {

@@ -610,15 +610,15 @@ describe('S2 stub handlers still gate before refusing not_implemented', () => {
     expect(r.kind).toBe('ok');
   });
 
-  it('handoff returns not_implemented in S2', async () => {
+  it('handoff succeeds for an editing cart with active lines (T086 implemented)', async () => {
     const f = await freshCartWithLine();
     const r = await f.handlers.handoff({
       cart_id: f.cart_id,
       per_line_versions: [],
       idempotency_key: 'h-1',
     });
-    expect(r.kind).toBe('refused');
-    if (r.kind === 'refused') expect(r.reason).toBe('not_implemented');
+    expect(r.kind).toBe('ok');
+    if (r.kind === 'ok') expect(r.envelope.envelope_version).toBe('v1');
   });
 
   it('stub handlers refuse no_session when not signed in (S2 DB path)', async () => {
