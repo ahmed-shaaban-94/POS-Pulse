@@ -261,3 +261,49 @@ describe('cart-store S4 query methods', () => {
     expect(draft).toBeUndefined();
   });
 });
+
+// ── 5. Envelope builder: discount_placeholders map callback ────────────────
+
+describe('buildPaymentIntentEnvelope with discount placeholders', () => {
+  it('envelope includes discount placeholders when cart has them', async () => {
+    const db = new SQL.Database();
+    for (const sql of MIGRATIONS) db.run(sql);
+    const session = makeSession({ id: 'sess-dp-h', operator_id: 'manager-dp' });
+    const handlers = new CartBridgeHandlers({
+      getCurrentSession: () => session,
+      cartStore: bindCartStore(makeSqlJsHandle(db)),
+      resolveItemRef: resolver,
+    });
+
+    const c = await handlers.create({ idempotency_key: 'dph-c' });
+    if (c.kind !== 'ok') throw new Error('create failed');
+    const a = await handlers.linesAdd({
+      cart_id: c.cart_id,
+      item_ref: 'SKU-A',
+      quantity: 1,
+      idempotency_key: 'dph-a',
+    });
+    if (a.kind !== 'ok') throw new Error('add failed');
+
+    // Add a below-threshold discount placeholder (no attribution required)
+    const dp = await handlers.discountPlaceholdersAdd({
+      cart_id: c.cart_id,
+      line_id: a.line_id,
+      placeholder_kind: 'percent_5',
+      idempotency_key: 'dph-dp',
+    });
+    if (dp.kind !== 'ok') throw new Error('discount add failed');
+
+    const res = await handlers.handoff({
+      cart_id: c.cart_id,
+      per_line_versions: [{ line_id: a.line_id, version: 1 }],
+      idempotency_key: 'dph-h',
+    });
+    expect(res.kind).toBe('ok');
+    if (res.kind === 'ok') {
+      expect(res.envelope.discount_placeholders).toHaveLength(1);
+      expect(res.envelope.discount_placeholders[0]?.placeholder_kind).toBe('percent_5');
+      expect(res.envelope.discount_placeholders[0]?.requires_manager_attribution).toBe(false);
+    }
+  });
+});
