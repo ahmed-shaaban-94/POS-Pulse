@@ -203,17 +203,18 @@ describe('CartPane handoff — bridge call', () => {
     setSignedIn();
     setCartEditing('cart-t090');
     render(
-      <CartPane
-        _testBridge={makeBridge({ handoff: handoffMock })}
-        _testInitialLines={ONE_LINE}
-      />,
+      <CartPane _testBridge={makeBridge({ handoff: handoffMock })} _testInitialLines={ONE_LINE} />,
     );
     await userEvent.click(screen.getByTestId('cart-handoff-button'));
     await waitFor(() => {
       expect(handoffMock).toHaveBeenCalledTimes(1);
     });
     const [req] = handoffMock.mock.calls[0] as [
-      { cart_id: string; per_line_versions: Array<{ line_id: string; version: number }>; idempotency_key: string },
+      {
+        cart_id: string;
+        per_line_versions: Array<{ line_id: string; version: number }>;
+        idempotency_key: string;
+      },
     ];
     expect(req.cart_id).toBe('cart-t090');
     expect(req.per_line_versions).toEqual([{ line_id: 'line-1', version: 1 }]);

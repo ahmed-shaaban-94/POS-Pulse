@@ -40,7 +40,9 @@ export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
         role="status"
         style={{ background: 'var(--color-success-soft, #e7f5ee)' }}
       >
-        <span className="handoff-summary__banner-icon" aria-hidden="true">✓</span>
+        <span className="handoff-summary__banner-icon" aria-hidden="true">
+          ✓
+        </span>
         <span>Cart sent to payment</span>
       </div>
 
@@ -56,9 +58,7 @@ export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
             <span className="handoff-summary__line-subtotal">
               {formatMinorUnits(line.line_subtotal_minor)}
             </span>
-            {line.note !== null && (
-              <span className="handoff-summary__line-note">{line.note}</span>
-            )}
+            {line.note !== null && <span className="handoff-summary__line-note">{line.note}</span>}
           </li>
         ))}
       </ol>
@@ -76,10 +76,7 @@ export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
       <div className="handoff-summary__footer">
         <div className="handoff-summary__subtotal">
           <span className="handoff-summary__subtotal-label">Subtotal</span>
-          <span
-            className="handoff-summary__subtotal-value"
-            data-testid="handoff-subtotal-value"
-          >
+          <span className="handoff-summary__subtotal-value" data-testid="handoff-subtotal-value">
             {formatMinorUnits(envelope.subtotal_minor)}
           </span>
         </div>

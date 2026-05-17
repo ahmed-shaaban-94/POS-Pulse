@@ -195,9 +195,7 @@ export function CartPane({
     activeCart.state !== CartState.cancelled &&
     (!isFrozen || sessionRole === 'manager' || sessionRole === 'admin');
   const canHandoff =
-    activeCart !== null &&
-    activeCart.state === CartState.editing &&
-    lines.length > 0;
+    activeCart !== null && activeCart.state === CartState.editing && lines.length > 0;
   const showHandoffButton = !isFrozen && !isCancelled;
 
   async function handleHandoff(): Promise<void> {
@@ -472,11 +470,7 @@ export function CartPane({
               )}
             </div>
             {handoffError !== null && (
-              <p
-                className="cart-pane__handoff-error"
-                data-testid="cart-handoff-error"
-                role="alert"
-              >
+              <p className="cart-pane__handoff-error" data-testid="cart-handoff-error" role="alert">
                 {handoffError}
               </p>
             )}
