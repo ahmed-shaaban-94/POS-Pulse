@@ -1946,9 +1946,9 @@ body {
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     color: var(--color-success);
+    background-color: var(--color-success-soft);
     border-block-end: 1px solid color-mix(in srgb, var(--color-success) 20%, transparent);
     flex-shrink: 0;
-    /* background is set inline: var(--color-success-soft) */
   }
 
   .handoff-summary__banner-icon {

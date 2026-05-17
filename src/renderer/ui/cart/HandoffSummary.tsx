@@ -35,11 +35,7 @@ function formatTimestamp(isoString: string): string {
 export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
   return (
     <div className="handoff-summary" data-testid="handoff-summary">
-      <div
-        className="handoff-summary__banner"
-        role="status"
-        style={{ background: 'var(--color-success-soft, #e7f5ee)' }}
-      >
+      <div className="handoff-summary__banner" role="status">
         <span className="handoff-summary__banner-icon" aria-hidden="true">
           ✓
         </span>
