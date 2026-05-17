@@ -286,8 +286,8 @@ describe('HandoffSummary — post-handoff Void (Dev3)', () => {
     expect(screen.queryByTestId('cart-void-button')).toBeNull();
   });
 
-  it('does not render the Void button when showVoid={false}', () => {
-    render(<HandoffSummary envelope={makeEnvelope()} showVoid={false} onVoidRequest={vi.fn()} />);
+  it('does not render the Void button when showVoid={false} (no handler permitted by type)', () => {
+    render(<HandoffSummary envelope={makeEnvelope()} showVoid={false} />);
     expect(screen.queryByTestId('cart-void-button')).toBeNull();
   });
 

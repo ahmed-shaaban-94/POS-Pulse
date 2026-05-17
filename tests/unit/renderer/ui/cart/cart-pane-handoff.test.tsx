@@ -301,6 +301,34 @@ describe('CartPane discount placement (Dev2)', () => {
     expect(lineListItem?.querySelector('.discount-placeholder-row')).not.toBeNull();
   });
 
+  it('placeholder with stale/unmatched lineId remains visible as an orphan row, not silently dropped', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={ONE_LINE}
+        _testDiscountPlaceholders={[
+          // lineId references a line that does not exist in the current cart.
+          // Could happen if the referenced line was removed while a discount
+          // referencing it is still in flight, or if the seed predates a
+          // cart mutation. The placeholder must still render.
+          { placeholderId: 'dp-stale', attribution_operator_id: null, lineId: 'line-removed' },
+        ]}
+      />,
+    );
+    // The stale-lineId placeholder appears in the unified list…
+    const discountRow = document.querySelector('.discount-placeholder-row');
+    expect(discountRow).not.toBeNull();
+    expect(discountRow?.closest('.cart-pane__line-list')).not.toBeNull();
+    // …but not nested inside the existing line-1 <li> (because line-removed
+    // is unmatched, the placeholder is routed to orphan tail rendering).
+    const lineOneItem = document.querySelector('[data-line-id="line-1"]');
+    expect(lineOneItem?.closest('.cart-pane__line-list-item')?.contains(discountRow)).toBe(false);
+    // Opaque copy preserved.
+    expect(discountRow?.textContent).toContain('Discount applied');
+  });
+
   it('discount placeholder copy stays opaque ("Discount applied" only — no magnitude)', () => {
     setSignedIn();
     setCartEditing();

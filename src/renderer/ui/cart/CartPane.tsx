@@ -272,13 +272,17 @@ export function CartPane({
   const cartSubtotalMinor = lines.reduce((acc, l) => acc + l.lineSubtotalMinor, 0);
 
   // Group discount placeholders by their associated line for inline rendering
-  // (contact-sheet Surface 2 / Surface 7). Placeholders without a lineId render
-  // as orphans at the tail of the same line list, still within the cart-line
-  // flow — never as a visually separate section.
+  // (contact-sheet Surface 2 / Surface 7). A placeholder is rendered inline
+  // only when its `lineId` matches an existing line in the current cart;
+  // stale, removed, null, or undefined `lineId` values fall through to
+  // `orphanDiscounts` so the placeholder remains visible at the tail of the
+  // same line list rather than disappearing silently if a line is removed
+  // while a discount referencing it is in flight.
+  const existingLineIds = new Set(lines.map((l) => l.lineId));
   const discountsByLine = new Map<string, DiscountPlaceholderSeed[]>();
   const orphanDiscounts: DiscountPlaceholderSeed[] = [];
   for (const dp of discountPlaceholders) {
-    if (dp.lineId !== undefined && dp.lineId !== null) {
+    if (dp.lineId !== undefined && dp.lineId !== null && existingLineIds.has(dp.lineId)) {
       const list = discountsByLine.get(dp.lineId) ?? [];
       list.push(dp);
       discountsByLine.set(dp.lineId, list);
@@ -420,13 +424,17 @@ export function CartPane({
       </header>
       {isFrozen && envelope !== null ? (
         <div className="cart-pane__frozen-body">
-          <HandoffSummary
-            envelope={envelope}
-            showVoid={showVoidInHandoff}
-            onVoidRequest={() => {
-              setVoidDialogOpen(true);
-            }}
-          />
+          {showVoidInHandoff ? (
+            <HandoffSummary
+              envelope={envelope}
+              showVoid={true}
+              onVoidRequest={() => {
+                setVoidDialogOpen(true);
+              }}
+            />
+          ) : (
+            <HandoffSummary envelope={envelope} />
+          )}
         </div>
       ) : (
         <>
