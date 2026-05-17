@@ -181,3 +181,103 @@ write occurs. This ensures at-most-once semantics even if the renderer retries a
 - Manager identity must not be shown to cashier at any point (FR-033 generic copy mandate).
 - Discount magnitudes must not appear in the cart UI (no numeric values on DiscountPlaceholderRow).
 - No cart IDs, session IDs, or UUIDs should appear in user-facing copy.
+
+---
+
+## Cashier reports cart vanished after restart
+
+**Symptom:** A cashier signs back in after the terminal restarted (planned or unplanned)
+and the draft cart they were building is no longer visible in the cart pane.
+
+**Audience:** Maintainer / support engineer triaging from local diagnostics. Do NOT relay the
+cause categories below directly to the cashier — operator-facing copy stays generic.
+
+### Generic causes to consider
+
+1. **App was force-killed before the bridge confirmed the last line.** The cart pane only
+   renders lines after the bridge confirms persistence (no optimistic add). If the process was
+   killed mid-write, the in-progress line never reached `cart_lines`; the outbox row for the
+   pending action may or may not be present depending on when the kill occurred.
+2. **Operator session ended (sign-out, lock, inactivity timeout, takeover).** Per Q3 (LOCKED
+   2026-05-14), draft carts (`empty` / `editing`) are discarded at session end and an
+   audit row `cart.discarded_on_session_end` is written with `discard_cause` set to
+   `signed_out`, `inactivity_timeout`, or `superseded_by_takeover`. The cart will not return
+   when the same cashier signs back in.
+3. **Tenant or branch mismatch.** The operator signed back in under a different tenant or
+   branch than the one that owned the cart. Cart isolation (FR-002) refuses access from any
+   other tenant/branch pairing; from the cashier's view the cart appears to have vanished.
+4. **Cart was voided pre-handoff.** The cart's state is `cancelled` with
+   `cancellation_reason = 'cashier_voided'` (no audit event — non-sensitive lifecycle event
+   per FR-031). Closed carts do not reappear in the editing surface.
+5. **Cart was handed off and is now frozen.** State is `frozen_handed_off`. Frozen carts do
+   NOT appear in the editing view; they appear in the read-only handoff summary surface
+   only. The cashier may have missed the confirmation banner before the restart.
+
+### Outbox inspection steps (maintainer-only)
+
+Use this procedure only on the user's local machine with their consent; never copy raw
+outbox rows or audit payloads off the device.
+
+1. Locate the user's local SQLite store using the 001 storage convention (per-user data dir);
+   do NOT hardcode or share the path.
+2. Query `cart_action_outbox` filtered by the suspected `operator_session_id` and `cart_id`,
+   ordered by `created_at`. Note the latest `action_kind` and whether a corresponding row
+   exists in `carts`. Use placeholders in any working notes — refer to identifiers as
+   `<cart-id>`, `<session-id>`, `<operator-id>`.
+3. Cross-reference `audit_events` for terminal action categories on the same `<cart-id>`:
+   `cart.cancel.post_handoff`, `cart.handoff_to_payment`, or `cart.discarded_on_session_end`.
+   The presence of one of these confirms category (2), (4), or (5) above.
+4. If no terminal audit row exists and the cart is absent from `carts`, suspect category (1)
+   (force-kill before commit). The outbox row, if present, is sufficient to characterise the
+   state without replaying any action.
+5. Do NOT print, screenshot, or paste `payload_json` contents into tickets, support
+   bundles, or chat. Summarise the row by `action_kind` and timestamps only.
+
+### Resolution
+
+- Categories (2), (4), (5): no action — the cart is correctly closed or frozen. Confirm to
+  the cashier with generic copy ("the previous cart has been closed; please start a new
+  cart").
+- Category (3): verify the cashier signed back in under the same tenant + branch.
+- Category (1): start a new cart. Do NOT attempt to replay outbox entries by hand — the
+  outbox is owned by the bridge and any manual mutation risks the FSM invariants.
+
+---
+
+## Cart frozen but payments feature unavailable
+
+**Symptom:** A cart is in `frozen_handed_off` state, but the downstream payments feature is
+disabled, rolled back, or not yet rolled out on this terminal. The cashier sees the
+"Cart sent to payment" banner but cannot complete the transaction.
+
+**Audience:** Maintainer / support engineer. 005 owns cart handoff; the payments feature is
+a separate downstream surface that may roll out (or roll back) independently.
+
+### Rollback coupling
+
+- A `frozen_handed_off` cart stays frozen regardless of payments-feature availability. The
+  FR-035 freeze rule explicitly forbids cart-layer mutation after the envelope is emitted;
+  the rule is unconditional and does not loosen when payments are unavailable.
+- The persisted envelope on `carts.handoff_envelope_json` remains readable and consistent.
+  Restart does not "unfreeze" the cart.
+
+### Resolution paths (in order of preference)
+
+1. **Wait for the payments feature to be re-enabled or shipped.** When payments returns, the
+   existing frozen envelope is still consumable; the cart can be completed normally. This is
+   the only path that preserves the original sale.
+2. **Manager-attributed void of the frozen cart.** A manager invokes `cart.cancelPostHandoff`
+   with their attribution; the cart transitions to `cancelled` with
+   `cancellation_reason = 'manager_voided_post_handoff'` and a `cart.cancel.post_handoff`
+   audit event is emitted. A new draft cart is then needed to retry the sale (A8: handoff is
+   one-way; a cancel does not unfreeze the original).
+
+### What NOT to do
+
+- Do NOT force-mutate `carts.state` or `carts.handoff_envelope_json` directly. The FSM
+  invariants and the envelope freeze (FR-035, A8) are load-bearing for audit and idempotency.
+- Do NOT expose envelope contents, audit payloads, manager identity, or refusal-code
+  identifiers to the cashier. Operator-facing copy stays generic per FR-033.
+- Do NOT re-issue handoff for the same cart — the bridge refuses with `frozen` and the
+  refusal is correct.
+
