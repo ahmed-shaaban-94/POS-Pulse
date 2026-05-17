@@ -15,7 +15,7 @@ description: "Task list for 005-sales-cart — APPROVED, slice-organised, §A0 C
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md) (produced in S0)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-14 (`/speckit-tasks` run; Q1–Q5 reconciled; all tasks regenerated)
+**Last updated:** 2026-05-17 (S3 reconciliation: T055–T075 marked complete via PR #157 + PR #159)
 **Status:** ✅ APPROVED — ready for implementation behind per-slice gates
 
 ---
@@ -83,7 +83,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 | §A4 — `PaymentIntentEnvelope` shape ratified with future payments owner | ⏳ **pending** | S4 merge |
 | §A5 — production readiness gate | ⏳ **rollout-time** | production rollout only (not slice merges) |
 
-**Bottom line:** S0 and S1 are startable immediately. S2 needs §A2. S3 needs §A3. S4 needs §A4. S5 needs S0–S4 merged.
+**Bottom line:** S0, S1, S2, S3 complete. Next candidate: S4 (handoff envelope + freeze rule), blocked by §A4 (`PaymentIntentEnvelope` ratification with future payments owner). S5 needs S0–S4 merged.
 
 ---
 
@@ -235,32 +235,37 @@ Per Constitution VI, tests are written first.
 
 ### Phase 6 — Tests
 
-- [ ] T055 [P] [US2] Write unit test: `cart.void` pre-handoff — cart transitions to `cancelled`; `cancellation_reason = 'cashier_voided'`; outbox row `action_kind = cart.void`; NO `audit_events` row emitted (non-sensitive per FR-031) — `tests/unit/main/cart/cart-void-pre-handoff.test.ts`
-- [ ] T056 [P] [US2] Write unit test: `cart.void` post-handoff (cashier-initiated) — refused with `{ kind: 'refused', reason: 'manager_attribution_required' }` (FR-032); cart stays in `frozen_handed_off` — `tests/unit/main/cart/cart-void-post-handoff-cashier.test.ts`
-- [ ] T057 [P] [US2] Write unit test: `cart.void` post-handoff (manager-attributed) — cart transitions to `cancelled`; `cancellation_reason = 'manager_voided_post_handoff'`; `audit_events` row emitted with `action_category = cart.cancel.post_handoff`; five mandatory FR-026 attributes present; partial record MUST NOT persist — `tests/unit/main/cart/cart-void-post-handoff-manager.test.ts`
-- [ ] T058 [P] [US2] Write unit test: `cancelled` cart refuses every mutating bridge call generically (`{ kind: 'refused', reason: 'closed' }`) — `tests/unit/main/cart/cart-cancelled-frozen.test.ts`
-- [ ] T059 [P] [US1] Write unit test: `cart.discountPlaceholders.add` below-threshold — cashier/manager/admin allowed; writes `cart_line_discount_placeholders` row; outbox `cart.discount_placeholder.add`; no audit emission — `tests/unit/main/cart/cart-discount-add-below.test.ts`
-- [ ] T060 [P] [US1] Write unit test: `cart.discountPlaceholders.add` above-threshold without attribution — refused with `{ kind: 'refused', reason: 'manager_attribution_required' }` — `tests/unit/main/cart/cart-discount-add-above-no-attr.test.ts`
-- [ ] T061 [P] [US1] Write unit test: `cart.discountPlaceholders.add` above-threshold with manager attribution — accepted; `requires_manager_attribution = true`; `audit_events` row emitted with `action_category = cart.discount.above_threshold`; manager identity in `attribution_operator_id` — `tests/unit/main/cart/cart-discount-add-above-attr.test.ts`
-- [ ] T062 [P] [US1] Write unit test: `cart.discountPlaceholders.remove` above-threshold placeholder requires manager attribution (mirrors add rule) — `tests/unit/main/cart/cart-discount-remove.test.ts`
-- [ ] T063 [P] [US2] Write unit test: session-end discard — simulated session-end event → draft cart in `editing` transitions to `cancelled`; `cancellation_reason = 'session_ended'`; outbox row `action_kind = cart.discarded_on_session_end`; `audit_events` row emitted with `action_category = cart.discarded_on_session_end` (Q3+Q5 locked) — `tests/unit/main/cart/cart-session-end-discard.test.ts`
-- [ ] T064 [P] [US2] Write integration test: `cart.void` audit record carries all five FR-026 mandatory attributes (`acting_operator_id`, `operator_session_id`, `terminal_id`, `applied_at`, `action_category`); partial record MUST NOT persist (atomic write) — `tests/integration/main/cart/cart-void-audit-completeness.test.ts`
-- [ ] T065 [P] [US2] Write integration test: above-threshold discount — cashier initiates; manager-attribution prompt wired; on manager approval: discount placeholder applied + `cart.discount.above_threshold` audit event emitted; on manager cancel: no placeholder, no audit event — `tests/integration/renderer/cart/discount-above-threshold-flow.test.tsx`
-- [ ] T066 [P] [US2] Write integration test: `audit_events` append-only invariant for cart-emitted rows — raw SQL `UPDATE`/`DELETE` refused by 004's existing trigger; confirmed via cross-feature regression — `tests/integration/main/cart/cart-audit-append-only.test.ts`
+- [x] T055 [P] [US2] Write unit test: `cart.void` pre-handoff — cart transitions to `cancelled`; `cancellation_reason = 'cashier_voided'`; outbox row `action_kind = cart.void`; NO `audit_events` row emitted (non-sensitive per FR-031) — `tests/unit/main/cart/cart-void-pre-handoff.test.ts`
+- [x] T056 [P] [US2] Write unit test: `cart.void` post-handoff (cashier-initiated) — refused with `{ kind: 'refused', reason: 'manager_attribution_required' }` (FR-032); cart stays in `frozen_handed_off` — `tests/unit/main/cart/cart-void-post-handoff-cashier.test.ts`
+- [x] T057 [P] [US2] Write unit test: `cart.void` post-handoff (manager-attributed) — cart transitions to `cancelled`; `cancellation_reason = 'manager_voided_post_handoff'`; `audit_events` row emitted with `action_category = cart.cancel.post_handoff`; five mandatory FR-026 attributes present; partial record MUST NOT persist — `tests/unit/main/cart/cart-void-post-handoff-manager.test.ts`
+- [x] T058 [P] [US2] Write unit test: `cancelled` cart refuses every mutating bridge call generically (`{ kind: 'refused', reason: 'closed' }`) — `tests/unit/main/cart/cart-cancelled-frozen.test.ts`
+- [x] T059 [P] [US1] Write unit test: `cart.discountPlaceholders.add` below-threshold — cashier/manager/admin allowed; writes `cart_line_discount_placeholders` row; outbox `cart.discount_placeholder.add`; no audit emission — `tests/unit/main/cart/cart-discount-add-below.test.ts`
+- [x] T060 [P] [US1] Write unit test: `cart.discountPlaceholders.add` above-threshold without attribution — refused with `{ kind: 'refused', reason: 'manager_attribution_required' }` — `tests/unit/main/cart/cart-discount-add-above-no-attr.test.ts`
+- [x] T061 [P] [US1] Write unit test: `cart.discountPlaceholders.add` above-threshold with manager attribution — accepted; `requires_manager_attribution = true`; `audit_events` row emitted with `action_category = cart.discount.above_threshold`; manager identity in `attribution_operator_id` — `tests/unit/main/cart/cart-discount-add-above-attr.test.ts`
+- [x] T062 [P] [US1] Write unit test: `cart.discountPlaceholders.remove` above-threshold placeholder requires manager attribution (mirrors add rule) — `tests/unit/main/cart/cart-discount-remove.test.ts`
+- [x] T063 [P] [US2] Write unit test: session-end discard — simulated session-end event → draft cart in `editing` transitions to `cancelled`; `cancellation_reason = 'session_ended'`; outbox row `action_kind = cart.discarded_on_session_end`; `audit_events` row emitted with `action_category = cart.discarded_on_session_end` (Q3+Q5 locked) — `tests/unit/main/cart/cart-session-end-discard.test.ts`
+- [x] T064 [P] [US2] Write integration test: `cart.void` audit record carries all five FR-026 mandatory attributes (`acting_operator_id`, `operator_session_id`, `terminal_id`, `applied_at`, `action_category`); partial record MUST NOT persist (atomic write) — `tests/integration/main/cart/cart-void-audit-completeness.test.ts`
+- [x] T065 [P] [US2] Write integration test: above-threshold discount — cashier initiates; manager-attribution prompt wired; on manager approval: discount placeholder applied + `cart.discount.above_threshold` audit event emitted; on manager cancel: no placeholder, no audit event — `tests/integration/renderer/cart/discount-above-threshold-flow.test.tsx`
+- [x] T066 [P] [US2] Write integration test: `audit_events` append-only invariant for cart-emitted rows — raw SQL `UPDATE`/`DELETE` refused by 004's existing trigger; confirmed via cross-feature regression — `tests/integration/main/cart/cart-audit-append-only.test.ts`
 
 ### Phase 6 — Implementation (§A3 gated)
 
-- [ ] T067 [US2] Implement `cart.void` handler: `requireOperatorSession`; state-gate (pre-handoff: any role; post-handoff: manager/admin + `attribution_operator_id` required); FSM transition → `cancelled`; set `cancellation_reason`; outbox write; conditional audit emission per FR-031/FR-033 — `src/main/cart/cart-bridge.ts` **(§A3)**
-- [ ] T068 [US1] Implement `cart.discountPlaceholders.add` handler: `requireOperatorSession`; threshold check vs tenant config; below-threshold: write `cart_line_discount_placeholders` + outbox; above-threshold without attribution: refuse; above-threshold with attribution: write + emit `cart.discount.above_threshold` audit event — `src/main/cart/cart-bridge.ts` **(§A3)**
-- [ ] T069 [US1] Implement `cart.discountPlaceholders.remove` handler: `requireOperatorSession`; check original `requires_manager_attribution`; manager attribution required if true; write removal + conditional audit — `src/main/cart/cart-bridge.ts` **(§A3)**
-- [ ] T070 [US2] Implement session-end discard subscriber: subscribe to 004's session-end emitter; transactionally look up draft cart for session; if found → transition `state→cancelled`, `cancellation_reason='session_ended'`, write outbox + emit `cart.discarded_on_session_end` audit event; session-end MUST NOT block on cart discard (queued in local outbox if write fails partially, Q5) — `src/main/cart/session-end-handler.ts` **(§A3)**
-- [ ] T071 [P] [US2] Implement `VoidConfirmation` dialog component per S0 contact sheet: generic copy; reason picker; confirm + cancel; cashier pre-handoff path (no manager prompt); manager post-handoff path triggers manager-attribution prompt — `src/renderer/ui/cart/VoidConfirmation.tsx`
-- [ ] T072 [P] [US1] Implement `ManagerAttributionPrompt` component placeholder per S0 contact sheet: generic "This action needs a manager to approve" copy; manager identifier field + Clerk-backed credential field; confirm + cancel; layout-wired to above-threshold discount and post-handoff void — `src/renderer/ui/cart/ManagerAttributionPrompt.tsx`
-- [ ] T073 [P] [US1] Implement `DiscountPlaceholderRow` component: opaque "Discount applied" pill; tap-to-remove (subject to manager attribution on remove if original required it); magnitude NOT displayed (payments feature owns magnitude display) — `src/renderer/ui/cart/DiscountPlaceholderRow.tsx`
-- [ ] T074 [US2] Extend `CartPane` with void affordance (cashier+ pre-handoff; manager post-handoff) and discount affordance (below-threshold cashier+; above-threshold triggers `ManagerAttributionPrompt`) — `src/renderer/ui/cart/CartPane.tsx`
-- [ ] T075 [P] [US2] Add runbook entry: cart cancellation troubleshooting (common void reasons, manager-attribution prompt, post-handoff void policy) — `docs/runbook/sales-cart.md` **(§A3)**
+- [x] T067 [US2] Implement `cart.void` handler: `requireOperatorSession`; state-gate (pre-handoff: any role; post-handoff: manager/admin + `attribution_operator_id` required); FSM transition → `cancelled`; set `cancellation_reason`; outbox write; conditional audit emission per FR-031/FR-033 — `src/main/cart/cart-bridge.ts` **(§A3)**
+- [x] T068 [US1] Implement `cart.discountPlaceholders.add` handler: `requireOperatorSession`; threshold check vs tenant config; below-threshold: write `cart_line_discount_placeholders` + outbox; above-threshold without attribution: refuse; above-threshold with attribution: write + emit `cart.discount.above_threshold` audit event — `src/main/cart/cart-bridge.ts` **(§A3)**
+- [x] T069 [US1] Implement `cart.discountPlaceholders.remove` handler: `requireOperatorSession`; check original `requires_manager_attribution`; manager attribution required if true; write removal + conditional audit — `src/main/cart/cart-bridge.ts` **(§A3)**
+- [x] T070 [US2] Implement session-end discard subscriber: subscribe to 004's session-end emitter; transactionally look up draft cart for session; if found → transition `state→cancelled`, `cancellation_reason='session_ended'`, write outbox + emit `cart.discarded_on_session_end` audit event; session-end MUST NOT block on cart discard (queued in local outbox if write fails partially, Q5) — `src/main/cart/session-end-handler.ts` **(§A3)**
+- [x] T071 [P] [US2] Implement `VoidConfirmation` dialog component per S0 contact sheet: generic copy; reason picker; confirm + cancel; cashier pre-handoff path (no manager prompt); manager post-handoff path triggers manager-attribution prompt — `src/renderer/ui/cart/VoidConfirmation.tsx`
+- [x] T072 [P] [US1] Implement `ManagerAttributionPrompt` component placeholder per S0 contact sheet: generic "This action needs a manager to approve" copy; manager identifier field + Clerk-backed credential field; confirm + cancel; layout-wired to above-threshold discount and post-handoff void — `src/renderer/ui/cart/ManagerAttributionPrompt.tsx`
+- [x] T073 [P] [US1] Implement `DiscountPlaceholderRow` component: opaque "Discount applied" pill; tap-to-remove (subject to manager attribution on remove if original required it); magnitude NOT displayed (payments feature owns magnitude display) — `src/renderer/ui/cart/DiscountPlaceholderRow.tsx`
+- [x] T074 [US2] Extend `CartPane` with void affordance (cashier+ pre-handoff; manager post-handoff) and discount affordance (below-threshold cashier+; above-threshold triggers `ManagerAttributionPrompt`) — `src/renderer/ui/cart/CartPane.tsx`
+- [x] T075 [P] [US2] Add runbook entry: cart cancellation troubleshooting (common void reasons, manager-attribution prompt, post-handoff void policy) — `docs/runbook/sales-cart.md` **(§A3)**
 
 **S3 exit (quickstart §US2 steps 1–7 pass):** Pre-handoff void transitions `cancelled`; post-handoff cashier void refused; manager post-handoff void emits `cart.cancel.post_handoff` audit event; above-threshold discount emits `cart.discount.above_threshold` audit event; session-end discards draft and emits `cart.discarded_on_session_end`; all five FR-026 mandatory attributes present in every audit row.
+
+> ✅ **S3 COMPLETE — 2026-05-17.** T055–T070 merged via PR #157
+> (merge commit `99b4d64`). T071–T075 merged via PR #159
+> (merge commit `8bce04c`). S4 is the next candidate slice;
+> blocked by §A4 (`PaymentIntentEnvelope` ratification).
 
 ---
 
@@ -328,39 +333,39 @@ Per Constitution VI, tests are written first.
          │
          ▼
 ┌─────────────────────────┐
-│ Phase 1 — Setup (T001–  │  no code; startable now
+│ Phase 1 — Setup (T001–  │  ✅ COMPLETE (T001–T005 done)
 │ T005) + §A3/§A4 threads │
 └────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ Phase 2 — Foundational  │  shared types + bridge skeleton; startable now
+│ Phase 2 — Foundational  │  ✅ COMPLETE (T006–T016 done)
 │ (T006–T016)             │
 └────────────┬────────────┘
-             │ ← also: S0 review complete (T017–T019)
+             │ ← also: S0 review complete (T017–T019) ✅
              ▼
 ┌─────────────────────────┐
-│ S1 — Bridge skeleton +  │  gates: Phase 2 + S0 (T020–T029)
+│ S1 — Bridge skeleton +  │  ✅ COMPLETE (T020–T029 done)
 │ CartPane shell          │
 └────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ S2 — Cart-line CRUD +   │  gates: S1 merged + §A2 (T030–T054)
+│ S2 — Cart-line CRUD +   │  ✅ COMPLETE (T030–T054 done; §A2 cleared)
 │ idempotency outbox      │
 └────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ S3 — Sensitive actions  │  gates: S2 merged + §A3 (T055–T075)
-│ + audit emission        │
+│ S3 — Sensitive actions  │  ✅ COMPLETE via PR #157 + PR #159
+│ + audit emission        │  (T055–T075 done; §A3 cleared 2026-05-15)
 └────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ S4 — Handoff envelope + │  gates: S3 merged + §A4 (T076–T091)
-│ freeze rule             │
-└────────────┬────────────┘
+│ S4 — Handoff envelope + │  ⏳ NEXT — blocked by §A4 (T076–T091)
+│ freeze rule             │  §A4: PaymentIntentEnvelope ratification
+└────────────┬────────────┘  with future payments owner (TBD)
              │
              ▼
 ┌─────────────────────────┐
@@ -374,7 +379,7 @@ Per Constitution VI, tests are written first.
 └─────────────────────────┘
 ```
 
-S0 (visual direction) runs in parallel with Phase 2 — both are startable now; S1 waits for both.
+S0 (visual direction) ran in parallel with Phase 2 — both complete; S1 waited for both and is now merged.
 
 ---
 
@@ -419,7 +424,7 @@ payments feature to exist.
 | Check | Result |
 |:--|:--|
 | Total tasks | T001–T102 (102 tasks) |
-| All tasks `[ ]` unchecked | ✅ |
+| S3 tasks T055–T075 marked complete (PR #157 + PR #159) | ✅ |
 | Every implementation task preceded by test task(s) | ✅ (Constitution VI) |
 | Gate tags match real open gates only (§A2/§A3/§A4/§A5) | ✅ — §A0 cleared; no stale `[BLOCKED: §A0]` tags |
 | Bridge handler names match `contracts/bridge-api.md` verbatim | ✅ |
@@ -437,6 +442,6 @@ payments feature to exist.
 ---
 
 **End of tasks.** ✅ APPROVED — 102 tasks across Phases 1–9 / Slices S0–S5 / Production Readiness.
-First startable: Phase 1 (T001–T005) and Phase 2 (T006–T016) and S0 (T017–T019) — all immediately
-startable with §A0 cleared. S1 waits for Phase 2 + S0. S2 waits for §A2. S3 waits for §A3.
-S4 waits for §A4. Production rollout waits for §A5.
+S3 complete 2026-05-17 (PR #157 + PR #159). Next candidate: S4 (T076–T091),
+blocked by §A4 (PaymentIntentEnvelope ratification with future payments owner).
+S5 waits for S4. Production rollout waits for §A5.
