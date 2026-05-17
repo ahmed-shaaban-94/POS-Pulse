@@ -5,23 +5,20 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-15 (§A3 audit-category extension CLEARED — S3 may start; §A4 remains pending)
+**Last updated:** 2026-05-17 (S3 complete — PR #157 T055–T070, PR #159 T071–T075; §A4 remains pending)
 
 ---
 
-> # ✅ `/speckit-tasks` COMPLETE — Phase 1 (T001–T005) IN PROGRESS; S0 SIGNED OFF
+> # ✅ S3 COMPLETE — S4 is next candidate; blocked by §A4
 >
-> **§A0 cleared 2026-05-14.** `/speckit-clarify` ran 2026-05-14 (Q1–Q5
-> locked). `/speckit-plan` ran 2026-05-14 (plan v1.0 APPROVED; PR #147
-> merged). `/speckit-tasks` ran 2026-05-14 (tasks.md regenerated; PR #148
-> merged 2026-05-14; 102 tasks, T001–T102, main SHA `31663b9`).
-> **Phase 1 coordination in progress — T002, T003, T004, T005 recorded;
-> T001 (feature-flag confirmation) remains pending.**
-> **S0 visual direction complete — contact sheet and review record signed
-> off by Ahmed Shaaban on 2026-05-14 (T017–T019 done).**
-> S1 is now unblocked (gate: Phase 2 + S0 review complete).
-> Implementation slices S2–S5 remain held on their per-slice gates only
-> (§A2, §A3, §A4, §A5 as noted per task). §A0 no longer blocks any task.
+> **§A0 cleared 2026-05-14.** S0 ✅ (T017–T019 signed off 2026-05-14).
+> Phase 2 ✅ (T006–T016). S1 ✅. S2 ✅. **S3 ✅ complete 2026-05-17**
+> — T055–T070 merged via PR #157 (main SHA `99b4d64`);
+> T071–T075 merged via PR #159 (main SHA `8bce04c`).
+> **Next candidate: S4 (handoff envelope + freeze rule, T076–T091).**
+> **S4 is blocked by §A4 — `PaymentIntentEnvelope` ratification with
+> future payments owner (TBD). §A4 has NOT been ratified.**
+> §A5 blocks production rollout only.
 
 ---
 
@@ -40,28 +37,28 @@ phase status. Updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **Phase 1 (Setup & Coordination) — IN PROGRESS.**
-  T002, T003, T004, T005 recorded. T001 (feature-flag confirmation)
-  remains pending.
-  **S0 visual direction (T017–T019) signed off 2026-05-14 by Ahmed
-  Shaaban. S1 is now unblocked (Phase 2 + S0 gate satisfied).**
-  §A0 cleared 2026-05-14. `/speckit-clarify` complete 2026-05-14
-  (Q1–Q5 locked). `/speckit-plan` complete 2026-05-14 (plan v1.0
-  APPROVED; PR #147). `/speckit-tasks` complete 2026-05-14 (tasks.md
-  APPROVED; PR #148; main SHA `31663b9`).
+- **Phase:** **S3 COMPLETE — S4 is next candidate.**
+  - §A0: ✅ cleared 2026-05-14.
+  - Phase 1 (T001–T005): ✅ complete.
+  - Phase 2 / foundational types (T006–T016): ✅ complete.
+  - S0 visual direction (T017–T019): ✅ signed off 2026-05-14 by Ahmed Shaaban.
+  - S1 (T020–T029): ✅ complete.
+  - S2 (T030–T054): ✅ complete (§A2 cleared 2026-05-14).
+  - S3 (T055–T075): ✅ complete 2026-05-17 — T055–T070 merged via PR #157
+    (merge commit `99b4d64`); T071–T075 merged via PR #159
+    (merge commit `8bce04c`).
+  - **S4 (T076–T091): next candidate. Blocked by §A4.**
+    §A4 requires `PaymentIntentEnvelope v1` ratification with the future
+    payments-feature owner (TBD). See §A4 record below. Not yet ratified.
+  - §A5: rollout-time gate — does not block slice merges.
 - **Spec Kit artifacts (all present and approved):**
   - `spec.md` — `§A0 CLEARED`; Q1–Q5 locked 2026-05-14.
   - `plan.md` — v1.0 APPROVED 2026-05-14.
-  - `tasks.md` — APPROVED; 102 tasks T001–T102.
+  - `tasks.md` — APPROVED; 102 tasks T001–T102; S3 tasks T055–T075 now marked complete.
   - `data-model.md`, `research.md`, `quickstart.md` — co-authored 2026-05-14.
   - `contracts/bridge-api.md`, `contracts/handoff-envelope.md`,
     `contracts/role-visibility-matrix-cart.md` — co-authored 2026-05-14.
   - `coordination.md` — this file.
-- **Implementation slices:**
-  Phase 2 foundational types (T006–T016) startable immediately.
-  S0 visual direction (T017–T019): **complete and signed off 2026-05-14**.
-  S1 (T020–T029): **unblocked** — Phase 2 + S0 gate satisfied.
-  §A2 blocks S2; §A3 blocks S3; §A4 blocks S4; §A5 blocks production rollout.
 
 ---
 
@@ -188,7 +185,7 @@ phase status. Updated in place as coordination items resolve.
   | T004 | ⏳ pending | S0 reviewer assignment required before S0 kickoff |
   | §A1 | ⏳ deferred | S1+S2 unblocked via R7 fixture stub; real catalogue is a future feature |
   | §A2 | ✅ CLEARED 2026-05-14 | 4-table migration review signed off; S2 (T030–T054) startable — see `security-review/s2-migration-review.md` |
-  | §A3 | ✅ CLEARED 2026-05-15 | `ActionCategory` + `AuditPayloadMap` extended with 4 cart categories (see T002); S3 (T055–T074) unblocked |
+  | §A3 | ✅ CLEARED 2026-05-15 | `ActionCategory` + `AuditPayloadMap` extended with 4 cart categories (PR #156, `b307455`); S3 complete via PR #157 + PR #159 |
   | §A4 | ⏳ pending | Blocks S4 (T076–T091); requires envelope ratification (see T003) |
   | §A5 | rollout-time | Blocks production rollout only; does not block slice merges |
 
@@ -321,20 +318,12 @@ listed in dependency order; some may be worked in parallel once
 
 ### 6. §A3 audit-event catalogue extension
 
-- **Status:** ⏳ **pending** — 004 S5 merged (SHA `d247e8a`); extension
-  not yet authored. See T002 in Phase 1 records above for full detail.
+- **Status:** ✅ **CLEARED — 2026-05-15.** `AUDIT_ACTION_CATEGORIES` and
+  `AuditPayloadMap` extended with 4 canonical cart categories via
+  `feat/005-a3-audit-categories` (PR #156, merge commit `b307455`).
+  Compile-time sync assertions added. See T002 Phase 1 record for detail.
 - **Owner:** Ahmed.
-- **Required action:** Extend `src/shared/audit/event-shape.ts`
-  `AUDIT_ACTION_CATEGORIES` with the **4 canonical cart categories**
-  (working titles from before Q5 lock are superseded):
-  - `cart.handoff_to_payment`
-  - `cart.cancel.post_handoff`
-  - `cart.discount.above_threshold`
-  - `cart.discarded_on_session_end`
-  *(Superseded names — do NOT use: `cart.void`,
-  `cart.discount_applied_above_threshold`,
-  `cart.line.removed_after_handoff_attempted`.)*
-- **Unblocks:** S3 (cart-level sensitive actions emit audit events).
+- **Unblocked:** S3 (T055–T075) — now complete via PR #157 + PR #159.
 
 ### 7. §A4 handoff-envelope ratification
 
@@ -386,7 +375,7 @@ listed in dependency order; some may be worked in parallel once
 | §A0 — 005-blocking gate (LOAD-BEARING) | ✅ **CLEARED 2026-05-14** | **Ahmed** | 004 S4 closeout ✅ (PR #124, 2026-05-11) AND 004 S5 visibility boundaries ✅ (T083–T093 merged; main SHA `d247e8a`, 2026-05-14). `/speckit-clarify` is now eligible to run. |
 | §A1 — cart-related backend / OpenAPI dependencies | ⏳ deferred | **Ahmed** + future-feature owner | Item-ref resolution only; cart drafts add NO new backend endpoints. May ship with stubbed resolver if catalogue feature is later. |
 | §A2 — migrations (`carts`, `cart_action_outbox`, `cart_lines`, `cart_line_discount_placeholders`) | ✅ **CLEARED 2026-05-14** | **Ahmed Shaaban** | Review record at [`security-review/s2-migration-review.md`](./security-review/s2-migration-review.md). 4-table FK-safe order; append-only trigger on `cart_action_outbox` only; `line_id` nullable; no SQL UNIQUE(cart_id, item_ref). Base SHA `e5c2d74`. **S2 may start.** |
-| §A3 — 004 audit-event catalogue extension | ⏳ pending | **Ahmed** | `ActionCategory` extended with 4 canonical cart categories (see T002). 004 S5 merged; extension not yet authored. |
+| §A3 — 004 audit-event catalogue extension | ✅ **CLEARED 2026-05-15** | **Ahmed** | `ActionCategory` + `AuditPayloadMap` extended with 4 cart categories (PR #156, `b307455`). S3 complete via PR #157 + PR #159. |
 | §A4 — handoff-envelope shape | ⏳ pending | **Ahmed** + future payments owner (TBD) | Contract authored 2026-05-14 (PR #147). Ratification required before S4 merges. See T003. |
 | §A5 — production-readiness rollout gate | ⏳ rollout-time | **TBD** | Production gate only. Does not block slice merges behind a feature flag. |
 
@@ -403,17 +392,16 @@ listed in dependency order; some may be worked in parallel once
 | §A0 + §A4 | S4 (handoff envelope + freeze rule) may begin |
 | §A0 + §A1 (if needed) + S2 + S3 + S4 merged | S5 (final polish + cart pane visual) may begin; production rollout may proceed pending §A5 |
 
-**Bottom line:** §A0 ✅ cleared 2026-05-14. All Spec Kit pre-implementation
-steps are complete: `/speckit-clarify` ✅ (Q1–Q5 locked), `/speckit-plan` ✅
-(PR #147), `/speckit-tasks` ✅ (PR #148, SHA `31663b9`). Phase 1 coordination
-is now in progress. S0 visual direction and Phase 2 foundational types are
-the next startable work. Per-slice gates §A2/§A3/§A4 govern individual slices.
+**Bottom line:** S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅ (PR #157 + PR #159,
+2026-05-17). Next candidate: S4 (T076–T091), blocked by §A4 (envelope
+ratification). §A4 requires future payments-feature owner sign-off on
+`contracts/handoff-envelope.md` before S4 may begin. §A4 has NOT been ratified.
 
 ---
 
 ## Required approvals (summary callout)
 
-✅ All pre-implementation Spec Kit approvals are complete:
+✅ All pre-implementation Spec Kit approvals are complete. S0–S3 merged.
 
 1. ✅ 004 S4 closeout PR merged (PR #124, 2026-05-11).
 2. ✅ 004 S5 visibility-boundaries merged (T083–T093; SHA `d247e8a`, 2026-05-14).
@@ -421,10 +409,14 @@ the next startable work. Per-slice gates §A2/§A3/§A4 govern individual slices
 4. ✅ `/speckit-clarify` resolved all `[NEEDS CLARIFICATION]` items (Q1–Q5 locked 2026-05-14).
 5. ✅ `/speckit-plan` approved (plan v1.0, PR #147, 2026-05-14).
 6. ✅ `/speckit-tasks` complete (tasks.md APPROVED, PR #148, 2026-05-14).
+7. ✅ §A2 cleared (4-table migration review, 2026-05-14).
+8. ✅ §A3 cleared (audit-category extension, PR #156, 2026-05-15).
+9. ✅ S3 complete (PR #157 T055–T070 + PR #159 T071–T075, 2026-05-17).
 
-**Remaining per-slice gates:** §A2 (S2 migrations), §A3 (S3 audit
-extension), §A4 (S4 envelope ratification), §A5 (production rollout).
-Phase 1 (T001–T005) and Phase 2 (T006–T016) may begin now.
+**Remaining per-slice gates:** §A4 (S4 envelope ratification — PENDING),
+§A5 (production rollout). **Next required action: §A4 ratification.**
+Future payments-feature owner must review `contracts/handoff-envelope.md`
+and sign off before S4 (T076–T091) may begin.
 
 ---
 
@@ -455,25 +447,25 @@ handoff-envelope version field = string literal `'v1'`.
 | `/speckit-clarify` (Q1–Q5 locked) | ✅ | 2026-05-14 | PR #146 |
 | `/speckit-plan` (`plan.md` v1.0 + contracts) | ✅ | 2026-05-14 | PR #147 |
 | `/speckit-tasks` (`tasks.md` APPROVED) | ✅ | 2026-05-14 | PR #148 |
-| Phase 1 coordination (T001–T005) | ⏳ in progress (T001 pending) | 2026-05-14 | — |
+| Phase 1 coordination (T001–T005) | ✅ | 2026-05-14 | — |
 | S0 visual direction (T017–T019) | ✅ signed off | 2026-05-14 | — |
-| Phase 2 foundational (T006–T016) | ⏳ pending | — | — |
-| S1–S5 implementation | ⏳ per-slice gated | — | — |
+| Phase 2 foundational (T006–T016) | ✅ | 2026-05-14 | — |
+| S1 (T020–T029) | ✅ | 2026-05-14 | PR #151 |
+| S2 (T030–T054) | ✅ | 2026-05-14 | — |
+| S3 (T055–T075) | ✅ | 2026-05-17 | PR #157 (T055–T070) + PR #159 (T071–T075) |
+| S4–S5 implementation | ⏳ per-slice gated | — | — |
 
 ## Explicit non-actions (current state)
 
 The following have **NOT yet started** and MUST NOT start without
 the corresponding gate clearing:
 
-- ❌ No source files created (no `src/main/cart/*`, no
-  `src/renderer/cart/*`, no `src/shared/cart/*`).
-- ❌ No migrations authored (4 cart tables do not yet exist in source).
-- ❌ No `package.json` changes for cart-related dependencies.
+- ❌ S4 source files not yet authored (T076–T091 not started; blocked by §A4).
+- ❌ S5 polish / final runbook not yet started (blocked by S4).
 - ❌ No backend / Data-Pulse-2 changes for 005 (cart drafts are
   local-only; no new backend endpoints in 005's scope).
 - ❌ No payments / receipts / inventory / reports / analytics work begun.
-- ✅ S0 visual-direction contact sheet and review record produced and
-  signed off by Ahmed Shaaban on 2026-05-14 (T017–T019 complete).
+- ✅ S0–S3 complete and merged to main (T001–T075 done).
 
 ---
 
@@ -497,8 +489,7 @@ This file is the durable coordination record across sessions.
 
 ---
 
-**End of coordination file.** All Spec Kit pre-implementation steps
-complete as of 2026-05-14 (PRs #146, #147, #148). Phase 1 coordination
-(T001–T005) in progress — T001 (feature-flag confirmation) remains pending.
-S0 visual direction (T017–T019) signed off 2026-05-14.
-Next work: Phase 2 foundational types (T006–T016) + S1 (now unblocked).
+**End of coordination file.** S3 complete 2026-05-17 (PR #157 + PR #159;
+main SHA `8bce04c`). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅.
+Next work: §A4 ratification (future payments-feature owner must sign off on
+`contracts/handoff-envelope.md`) → then S4 (T076–T091) may begin.
