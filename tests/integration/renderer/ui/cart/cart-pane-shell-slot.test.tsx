@@ -348,6 +348,98 @@ describe('T092 — frozen state', () => {
   });
 });
 
+// ── Discount placement (Dev2) ─────────────────────────────────────────────────
+
+describe('T092 — discount placeholders live within the unified cart line list (Dev2)', () => {
+  it('does not emit a separate .cart-pane__discount-list section', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={SAMPLE_LINES}
+        _testDiscountPlaceholders={[{ placeholderId: 'dp-1', attribution_operator_id: null }]}
+      />,
+    );
+    expect(document.querySelector('.cart-pane__discount-list')).toBeNull();
+  });
+
+  it('renders the discount placeholder as an <li> inside the same .cart-pane__line-list', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={SAMPLE_LINES}
+        _testDiscountPlaceholders={[{ placeholderId: 'dp-1', attribution_operator_id: null }]}
+      />,
+    );
+    const list = document.querySelector('.cart-pane__line-list');
+    expect(list).not.toBeNull();
+    expect(list?.querySelector('.discount-placeholder-row')).not.toBeNull();
+  });
+});
+
+// ── Empty-state Void absence (Dev1) ───────────────────────────────────────────
+
+describe('T092 — Void is absent in the empty state (Dev1)', () => {
+  it('does not render the Void button when activeCart is null', () => {
+    setSignedIn();
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={[]} />);
+    expect(document.querySelector('[data-testid="cart-void-button"]')).toBeNull();
+  });
+});
+
+// ── Frozen-state Void placement (Dev3) ────────────────────────────────────────
+
+describe('T092 — frozen-state Void lives in HandoffSummary footer for elevated roles (Dev3)', () => {
+  function setSignedInWithRole(role: 'cashier' | 'manager' | 'admin'): void {
+    useOperatorSessionStore.setState({
+      state: {
+        kind: 'signedIn',
+        session: {
+          id: 'sess-t092',
+          operator_id: 'op-t092',
+          display_name: 'Test User',
+          role,
+          tenant_id: 'tenant-1',
+          branch_id: 'branch-1',
+          started_at: '2026-05-17T08:00:00.000Z',
+        },
+      },
+    });
+  }
+
+  it('manager + frozen + envelope: Void is inside .handoff-summary, never in the header', () => {
+    setSignedInWithRole('manager');
+    setCartFrozen();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    const voidBtn = document.querySelector('[data-testid="cart-void-button"]');
+    expect(voidBtn).not.toBeNull();
+    expect(voidBtn?.closest('.handoff-summary')).not.toBeNull();
+    expect(voidBtn?.closest('.cart-pane__header')).toBeNull();
+  });
+
+  it('cashier + frozen + envelope: Void is absent everywhere (FR-032)', () => {
+    setSignedInWithRole('cashier');
+    setCartFrozen();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    expect(document.querySelector('[data-testid="cart-void-button"]')).toBeNull();
+  });
+});
+
 // ── Cancelled state ────────────────────────────────────────────────────────────
 
 describe('T092 — cancelled state', () => {

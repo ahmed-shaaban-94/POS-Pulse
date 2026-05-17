@@ -18,6 +18,25 @@ import { touchTarget } from '../tokens/touch.js';
 
 export interface HandoffSummaryProps {
   envelope: PaymentIntentEnvelope;
+  /**
+   * Whether the post-handoff Void affordance is shown.
+   *
+   * Manager/admin only — the parent (CartPane) gates on session role per
+   * FR-032 (cashier-forbidden post-handoff). When false or omitted, the
+   * button is rendered absent, not disabled, so it never enters the tab
+   * order or the cashier's awareness.
+   *
+   * Contact-sheet Surface 8: post-handoff Void sits at the bottom of the
+   * frozen summary, subordinate to the disabled "Continue to payment"
+   * button — not in the CartPane header.
+   */
+  showVoid?: boolean;
+  /**
+   * Invoked when the post-handoff Void button is activated. The parent
+   * is expected to open the VoidConfirmation dialog. No-op if showVoid
+   * is false.
+   */
+  onVoidRequest?: () => void;
 }
 
 function formatMinorUnits(minor: number): string {
@@ -32,7 +51,11 @@ function formatTimestamp(isoString: string): string {
   return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
+export function HandoffSummary({
+  envelope,
+  showVoid = false,
+  onVoidRequest,
+}: HandoffSummaryProps): JSX.Element {
   return (
     <div className="handoff-summary" data-testid="handoff-summary">
       <div className="handoff-summary__banner" role="status">
@@ -86,6 +109,18 @@ export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
         >
           Continue to payment
         </button>
+        {showVoid && (
+          <button
+            type="button"
+            className="handoff-summary__void"
+            data-testid="cart-void-button"
+            data-variant="danger"
+            style={{ minHeight: touchTarget.min }}
+            onClick={onVoidRequest}
+          >
+            Void (post-handoff)
+          </button>
+        )}
       </div>
 
       <div className="handoff-summary__meta">
