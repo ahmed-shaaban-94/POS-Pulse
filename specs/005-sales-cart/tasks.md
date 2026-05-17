@@ -15,7 +15,7 @@ description: "Task list for 005-sales-cart — APPROVED, slice-organised, §A0 C
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md) (produced in S0)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-17 (S3 reconciliation: T055–T075 marked complete via PR #157 + PR #159)
+**Last updated:** 2026-05-17 (§A4 cleared — PaymentIntentEnvelope v1 ratified; S4 unblocked)
 **Status:** ✅ APPROVED — ready for implementation behind per-slice gates
 
 ---
@@ -78,12 +78,12 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 |:--|:--:|:--|
 | §A0 — 004 S4 closeout + S5 visibility (LOAD-BEARING) | ✅ **CLEARED 2026-05-14** | ~~all slices~~ — cleared |
 | §A1 — item-catalogue seam (stub sufficient for S1+S2; production catalogue deferred) | ⏳ **deferred** | S1+S2 unblocked via fixture stub (R7); real catalogue is a future feature |
-| §A2 — migrations for all 4 cart tables | ⏳ **pending** | S2 (4-table migration set) |
-| §A3 — 004 `ActionCategory` enum extended with 4 cart categories | ⏳ **pending** | S3 (audit emission) |
-| §A4 — `PaymentIntentEnvelope` shape ratified with future payments owner | ⏳ **pending** | S4 merge |
+| §A2 — migrations for all 4 cart tables | ✅ **CLEARED 2026-05-14** | ~~S2~~ — complete |
+| §A3 — 004 `ActionCategory` enum extended with 4 cart categories | ✅ **CLEARED 2026-05-15** | ~~S3~~ — complete |
+| §A4 — `PaymentIntentEnvelope` shape ratified with future payments owner | ✅ **CLEARED 2026-05-17** | ~~S4 merge~~ — S4 startable |
 | §A5 — production readiness gate | ⏳ **rollout-time** | production rollout only (not slice merges) |
 
-**Bottom line:** S0, S1, S2, S3 complete. Next candidate: S4 (handoff envelope + freeze rule), blocked by §A4 (`PaymentIntentEnvelope` ratification with future payments owner). S5 needs S0–S4 merged.
+**Bottom line:** S0, S1, S2, S3 complete. §A4 cleared 2026-05-17. **S4 (T076–T091) is now startable.** S5 needs S0–S4 merged.
 
 ---
 
@@ -114,10 +114,10 @@ owners, and record the feature-flag configuration. No code, no migrations, no pa
 **Startable immediately** — §A0 is cleared.
 
 - [X] T001 Confirm the `cart` feature flag exists in 001's configuration surface and is disabled by default; record the flag key in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
-- [ ] T002 [P] Open the §A3 coordination thread: confirm 004's `ActionCategory` discriminated union (`src/shared/audit/event-shape.ts`) will be extended with the 4 canonical cart categories before S3 begins; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
-- [ ] T003 [P] Open the §A4 coordination thread: confirm the future payments-feature owner will review `contracts/handoff-envelope.md` and sign off before S4 merges; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
+- [x] T002 [P] Open the §A3 coordination thread: confirm 004's `ActionCategory` discriminated union (`src/shared/audit/event-shape.ts`) will be extended with the 4 canonical cart categories before S3 begins; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
+- [x] T003 [P] Open the §A4 coordination thread: confirm the future payments-feature owner will review `contracts/handoff-envelope.md` and sign off before S4 merges; record outcome in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
 - [x] T004 [P] Assign the S0 visual-direction reviewer; record name + expected review date in `specs/005-sales-cart/coordination.md` — `specs/005-sales-cart/coordination.md`
-- [ ] T005 Update `specs/005-sales-cart/coordination.md` to reflect `/speckit-tasks` completion and the current gate status table — `specs/005-sales-cart/coordination.md`
+- [x] T005 Update `specs/005-sales-cart/coordination.md` to reflect `/speckit-tasks` completion and the current gate status table — `specs/005-sales-cart/coordination.md`
 
 **Phase 1 exit:** T001–T005 ticked. Feature flag confirmed. §A3/§A4 coordination owners identified. S0 reviewer assigned.
 
@@ -363,9 +363,9 @@ Per Constitution VI, tests are written first.
              │
              ▼
 ┌─────────────────────────┐
-│ S4 — Handoff envelope + │  ⏳ NEXT — blocked by §A4 (T076–T091)
-│ freeze rule             │  §A4: PaymentIntentEnvelope ratification
-└────────────┬────────────┘  with future payments owner (TBD)
+│ S4 — Handoff envelope + │  ⏳ NEXT — §A4 cleared; S4 STARTABLE (T076–T091)
+│ freeze rule             │  §A4: PaymentIntentEnvelope v1 ratified 2026-05-17
+└────────────┬────────────┘  S4 has NOT started
              │
              ▼
 ┌─────────────────────────┐
@@ -442,6 +442,5 @@ payments feature to exist.
 ---
 
 **End of tasks.** ✅ APPROVED — 102 tasks across Phases 1–9 / Slices S0–S5 / Production Readiness.
-S3 complete 2026-05-17 (PR #157 + PR #159). Next candidate: S4 (T076–T091),
-blocked by §A4 (PaymentIntentEnvelope ratification with future payments owner).
-S5 waits for S4. Production rollout waits for §A5.
+S3 complete 2026-05-17 (PR #157 + PR #159). §A4 cleared 2026-05-17.
+**S4 (T076–T091) is now startable.** S5 waits for S4. Production rollout waits for §A5.
