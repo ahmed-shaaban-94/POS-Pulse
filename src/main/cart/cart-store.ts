@@ -148,6 +148,15 @@ export interface CancelCartInput {
   updated_at: string;
 }
 
+export interface HandoffCartInput {
+  cart_id: string;
+  frozen_at: string;
+  /** JSON-serialised PaymentIntentEnvelope v1. */
+  handoff_envelope_json: string;
+  last_action_id: string;
+  updated_at: string;
+}
+
 export interface InsertDiscountPlaceholderInput {
   placeholder_id: string;
   cart_id: string;
@@ -200,10 +209,24 @@ export interface CartStore {
     outbox: InsertOutboxInput,
     onInserted?: () => void,
   ): void;
+  /**
+   * Atomically writes the outbox row, freezes the cart (state=frozen_handed_off,
+   * frozen_at, handoff_envelope_json), and calls `onInserted` inside the same
+   * transaction — enabling audit emission to be atomic with the freeze.
+   */
+  handoffCartAndOutbox(
+    handoff: HandoffCartInput,
+    outbox: InsertOutboxInput,
+    onInserted?: () => void,
+  ): void;
   /** Returns the action_id of the most recent `cart.handoff_to_payment` outbox row. */
   findLatestHandoffActionId(cart_id: string): string | undefined;
   /** Returns the active (non-terminal) draft cart owned by the given session, if any. */
   findDraftCartBySession(operator_session_id: string): CartRow | undefined;
+  /** Returns all non-removed cart lines for the given cart. */
+  getActiveLines(cart_id: string): CartLineRow[];
+  /** Returns all discount placeholders for the given cart. */
+  getDiscountPlaceholdersForCart(cart_id: string): DiscountPlaceholderRow[];
   getCart(cart_id: string): CartRow | undefined;
   getLine(cart_id: string, line_id: string): CartLineRow | undefined;
   findActiveLineByItemRef(cart_id: string, item_ref: string): CartLineRow | undefined;
@@ -317,6 +340,21 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
   const getDiscountPlaceholderStmt = db.prepare(
     `SELECT * FROM cart_line_discount_placeholders WHERE placeholder_id = ?`,
   ) as PrepareGet<DiscountPlaceholderRow>;
+  const getActiveLinesStmt = db.prepare(
+    `SELECT * FROM cart_lines WHERE cart_id = ? AND removed_at IS NULL ORDER BY created_at ASC`,
+  ) as { all(...params: unknown[]): CartLineRow[] };
+  const getDiscountPlaceholdersForCartStmt = db.prepare(
+    `SELECT * FROM cart_line_discount_placeholders WHERE cart_id = ? ORDER BY created_at ASC`,
+  ) as { all(...params: unknown[]): DiscountPlaceholderRow[] };
+  const handoffCartStmt = db.prepare(
+    `UPDATE carts
+        SET state = 'frozen_handed_off',
+            frozen_at = ?,
+            handoff_envelope_json = ?,
+            updated_at = ?,
+            last_action_id = ?
+      WHERE cart_id = ?`,
+  ) as PrepareRun;
 
   function writeOutbox(row: InsertOutboxInput): void {
     insertOutbox.run(
@@ -470,6 +508,28 @@ export function bindCartStore(db: DatabaseHandle): CartStore {
         );
         onInserted?.();
       })();
+    },
+
+    handoffCartAndOutbox(handoff, outbox, onInserted): void {
+      db.transaction(() => {
+        writeOutbox(outbox);
+        handoffCartStmt.run(
+          handoff.frozen_at,
+          handoff.handoff_envelope_json,
+          handoff.updated_at,
+          handoff.last_action_id,
+          handoff.cart_id,
+        );
+        onInserted?.();
+      })();
+    },
+
+    getActiveLines(cart_id): CartLineRow[] {
+      return getActiveLinesStmt.all(cart_id);
+    },
+
+    getDiscountPlaceholdersForCart(cart_id): DiscountPlaceholderRow[] {
+      return getDiscountPlaceholdersForCartStmt.all(cart_id);
     },
 
     findLatestHandoffActionId(cart_id): string | undefined {

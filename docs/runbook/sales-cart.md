@@ -95,6 +95,86 @@
 
 ---
 
+## Cart handoff to payment (T086)
+
+### Normal handoff flow
+
+**Trigger:** Cashier clicks "Hand off to payment terminal" while cart is in `editing` state.
+
+**Preconditions:**
+- Active operator session (cashier, manager, or admin).
+- At least one non-removed line in the cart.
+- All `per_line_versions` match current line versions (staleness guard).
+
+**Normal flow:**
+1. `cart.handoff` IPC call received by bridge.
+2. Session gate + ownership check passes.
+3. Per-line version staleness check passes.
+4. `buildPaymentIntentEnvelope` computes `subtotal_minor` from active lines and freezes the envelope.
+5. Atomic SQLite transaction: outbox row (`cart.handoff_to_payment`), `carts` row updated to `frozen_handed_off` + `handoff_envelope_json`, audit event emitted.
+6. Frozen `PaymentIntentEnvelope v1` returned to renderer.
+7. Renderer displays handoff confirmation — does NOT claim payment succeeded.
+
+---
+
+### Handoff failure paths
+
+**Refused — `no_session`:**
+- No active operator session.
+- Resolution: Operator must sign in before initiating handoff.
+
+**Refused — `wrong_owner`:**
+- Cart does not exist or belongs to a different session/tenant.
+- Resolution: Verify `cart_id` is correct for the current session.
+
+**Refused — `empty_cart`:**
+- Cart has no non-removed lines at handoff time.
+- Cause: All lines were removed before handoff, or cart was never populated.
+- Resolution: Add at least one item before handing off.
+
+**Refused — `stale_version`:**
+- A `per_line_versions` entry does not match the current line version in the DB.
+- Cause: A concurrent modification (add/update/remove) occurred between the UI snapshot and the handoff call.
+- Resolution: Renderer must refetch cart state and retry with fresh versions.
+
+**Refused — `frozen`:**
+- Cart is in `frozen_handed_off` or `handing_off` state.
+- Cause: Handoff already in progress or complete; or defence-in-depth `handing_off` guard fired.
+- Resolution: Do not retry handoff. If payment must be cancelled, use `cart.cancelPostHandoff`.
+
+**Refused — `closed`:**
+- Cart is `cancelled`.
+- Resolution: Cart is already closed; no handoff possible.
+
+**Refused — `idempotency_payload_mismatch`:**
+- The `idempotency_key` was previously used for a different action kind.
+- Cause: Key reuse across unrelated operations.
+- Resolution: Generate a fresh UUID v4 for each distinct handoff attempt.
+
+---
+
+### Idempotency replay
+
+If the same `idempotency_key` is submitted after a successful handoff, the bridge returns the
+original frozen `PaymentIntentEnvelope v1` read from `carts.handoff_envelope_json` — no second
+write occurs. This ensures at-most-once semantics even if the renderer retries after a crash.
+
+---
+
+### Envelope security invariants
+
+- The envelope contains **no** session credentials, PINs, PIN hashes, passwords, device tokens,
+  or raw sensitive payloads.
+- The envelope must **not** include `payment_status`, `paid_at`, `tender_amount`,
+  `change_amount`, or `payment_confirmed` — these belong to the future payments feature.
+- `subtotal_minor` is recomputed fresh from active lines; it is **not** read from the
+  `carts.cart_subtotal_minor` running total (avoids race conditions).
+- `Number.isSafeInteger` is asserted on `subtotal_minor` before the envelope is constructed.
+- The returned envelope is `Object.freeze`d recursively (envelope, lines array, each line,
+  discount_placeholders array, each placeholder).
+
+---
+
 ## Security reminders
 
 - Never display shift totals, expected drawer cash, overages, or shortages on any cart surface.
