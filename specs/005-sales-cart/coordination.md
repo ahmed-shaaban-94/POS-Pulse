@@ -5,11 +5,11 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-17 (S5-a complete — PR #166 merged; T092–T095 done; T096–T100 remain in S5)
+**Last updated:** 2026-05-17 (S5-b complete — PRs #168/#169 merged; T097–T099 done; T096, T100 remain in S5)
 
 ---
 
-> # ◐ S5-a COMPLETE — T096–T100 remain in S5
+> # ◐ S5-b COMPLETE — T096 and T100 remain in S5
 >
 > **§A0 cleared 2026-05-14.** S0 ✅. Phase 2 ✅. S1 ✅. S2 ✅.
 > S3 ✅ (PR #157 + PR #159, 2026-05-17).
@@ -22,8 +22,10 @@
 > **S5-a ✅ COMPLETE 2026-05-17** — T092–T095 (a11y suites +
 > cart-pane shell-slot regression) merged via PR #166 (merge commit
 > `5a13be7`); test-only slice, no production source touched.
-> **Remaining S5 work:** T096 visual review, T097 redaction smoke final
-> pass, T098–T099 runbook + onboarding docs, T100 quickstart walkthrough.
+> **S5-b ✅ COMPLETE 2026-05-17** — T097 merged via PR #168 (merge
+> commit `57ba99f`); T098–T099 merged via PR #169 (merge commit
+> `50d780b`); docs-only slice, no production source touched.
+> **Remaining S5 work:** T096 visual review, T100 quickstart walkthrough.
 > §A5 remains a production-rollout-only gate (does not block S5 merges).
 
 ---
@@ -43,7 +45,7 @@ phase status. Updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **S5-a COMPLETE — T096–T100 remain in S5.**
+- **Phase:** **S5-b COMPLETE — T096 and T100 remain in S5.**
   - §A0: ✅ cleared 2026-05-14.
   - Phase 1 (T001–T005): ✅ complete.
   - Phase 2 / foundational types (T006–T016): ✅ complete.
@@ -68,15 +70,20 @@ phase status. Updated in place as coordination items resolve.
     `cart-pane-keyboard.test.tsx`). No production source touched.
     Prerequisite fix (LineNotePopover dialog accessible name) landed via
     PR #165 (merge commit `90825b1`).**
-  - **S5 remaining (T096–T100): not started.** T096 visual review,
-    T097 redaction smoke final pass, T098–T099 runbook + onboarding docs,
+  - **S5-b (T097–T099): ✅ complete 2026-05-17 — T097 merged via PR #168
+    (merge commit `57ba99f`); redaction smoke final pass, 39 passing tests
+    + 3 skipped gap docs. T098–T099 merged via PR #169 (merge commit
+    `50d780b`); runbook entry + operator onboarding guide. Docs-only
+    slice; no production source touched.**
+  - **S5 remaining (T096, T100): not started.** T096 visual review,
     T100 quickstart walkthrough.
   - §A5: rollout-time gate — does not block slice merges.
 - **Spec Kit artifacts (all present and approved):**
   - `spec.md` — `§A0 CLEARED`; Q1–Q5 locked 2026-05-14.
   - `plan.md` — v1.0 APPROVED 2026-05-14.
   - `tasks.md` — APPROVED; 102 tasks T001–T102; S3 tasks T055–T075,
-    S4 tasks T076–T091, and S5-a tasks T092–T095 now marked complete.
+    S4 tasks T076–T091, S5-a tasks T092–T095, and S5-b tasks T097–T099
+    now marked complete.
   - `data-model.md`, `research.md`, `quickstart.md` — co-authored 2026-05-14.
   - `contracts/bridge-api.md`, `contracts/handoff-envelope.md`,
     `contracts/role-visibility-matrix-cart.md` — co-authored 2026-05-14.
@@ -411,15 +418,15 @@ listed in dependency order; some may be worked in parallel once
 **Bottom line:** S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅ (PR #157 + PR #159,
 2026-05-17). §A4 ✅ CLEARED 2026-05-17. S4 ✅ COMPLETE 2026-05-17
 (PR #162 T076–T088, T091 + PR #163 T089–T090). **S5-a ✅ COMPLETE
-2026-05-17 (PR #166 T092–T095).** Remaining S5 work: T096 visual review,
-T097 redaction smoke final pass, T098–T099 runbook + onboarding docs,
+2026-05-17 (PR #166 T092–T095). S5-b ✅ COMPLETE 2026-05-17 (PR #168
+T097 + PR #169 T098–T099).** Remaining S5 work: T096 visual review,
 T100 quickstart walkthrough. §A5 blocks production rollout only.
 
 ---
 
 ## Required approvals (summary callout)
 
-✅ All pre-implementation Spec Kit approvals are complete. S0–S4 merged; S5-a merged.
+✅ All pre-implementation Spec Kit approvals are complete. S0–S4 merged; S5-a merged; S5-b merged.
 
 1. ✅ 004 S4 closeout PR merged (PR #124, 2026-05-11).
 2. ✅ 004 S5 visibility-boundaries merged (T083–T093; SHA `d247e8a`, 2026-05-14).
@@ -433,9 +440,10 @@ T100 quickstart walkthrough. §A5 blocks production rollout only.
 10. ✅ §A4 cleared — `PaymentIntentEnvelope v1` ratified by Ahmed Shaaban 2026-05-17.
 11. ✅ S4 complete (PR #162 T076–T088, T091 + PR #163 T089–T090, 2026-05-17).
 12. ✅ S5-a complete (PR #166 T092–T095 a11y + shell-slot tests, 2026-05-17).
+13. ✅ S5-b complete (PR #168 T097 redaction smoke + PR #169 T098–T099 runbook/onboarding, 2026-05-17).
 
 **Remaining per-slice gates:** §A5 (production rollout only).
-**Next startable work: T096 visual review, T097 redaction smoke final pass, T098–T099 runbook + onboarding docs, T100 quickstart walkthrough.**
+**Next startable work: T096 visual review, T100 quickstart walkthrough.**
 
 ---
 
@@ -474,15 +482,15 @@ handoff-envelope version field = string literal `'v1'`.
 | S3 (T055–T075) | ✅ | 2026-05-17 | PR #157 (T055–T070) + PR #159 (T071–T075) |
 | S4 (T076–T091) | ✅ | 2026-05-17 | PR #162 (T076–T088, T091) + PR #163 (T089–T090) |
 | S5-a (T092–T095 a11y + shell-slot tests) | ✅ | 2026-05-17 | PR #166 (merge `5a13be7`) |
-| S5 remaining (T096–T100) | ⏳ not started | — | — |
+| S5-b (T097–T099 redaction smoke + runbook/onboarding) | ✅ | 2026-05-17 | PR #168 (T097, merge `57ba99f`) + PR #169 (T098–T099, merge `50d780b`) |
+| S5 remaining (T096, T100) | ⏳ not started | — | — |
 
 ## Explicit non-actions (current state)
 
 The following have **NOT yet started** and MUST NOT start without
 the corresponding gate clearing:
 
-- ❌ S5 remaining work (T096 visual review, T097 redaction smoke final
-  pass, T098–T099 runbook + onboarding docs, T100 quickstart walkthrough)
+- ❌ S5 remaining work (T096 visual review, T100 quickstart walkthrough)
   not yet started.
 - ❌ §A5 production-readiness review not yet started (rollout-time
   gate; reviewer assigned at production-rollout PR open time).
@@ -491,6 +499,7 @@ the corresponding gate clearing:
 - ❌ No payments / receipts / inventory / reports / analytics work begun.
 - ✅ S0–S4 complete and merged to main (T001–T091 done).
 - ✅ S5-a complete and merged to main (T092–T095 done via PR #166).
+- ✅ S5-b complete and merged to main (T097–T099 done via PR #168 + PR #169).
 
 ---
 
@@ -518,7 +527,8 @@ This file is the durable coordination record across sessions.
 main SHA `8bce04c`). §A4 cleared 2026-05-17 (`PaymentIntentEnvelope v1`
 ratified by Ahmed Shaaban). S4 complete 2026-05-17 (PR #162 T076–T088, T091
 merge `dc3c383`; PR #163 T089–T090 merge `14456a0`; main SHA `14456a0`).
-S5-a complete 2026-05-17 (PR #166 T092–T095 merge `5a13be7`; main SHA
-`5a13be7`). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅, §A4 ✅, S4 ✅, S5-a ✅.
-**Next work: T096 visual review, T097 redaction smoke final pass,
-T098–T099 runbook + onboarding docs, T100 quickstart walkthrough.**
+S5-a complete 2026-05-17 (PR #166 T092–T095 merge `5a13be7`).
+S5-b complete 2026-05-17 (PR #168 T097 merge `57ba99f`; PR #169 T098–T099
+merge `50d780b`; main SHA `50d780b`). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅,
+S3 ✅, §A4 ✅, S4 ✅, S5-a ✅, S5-b ✅.
+**Next work: T096 visual review, T100 quickstart walkthrough.**
