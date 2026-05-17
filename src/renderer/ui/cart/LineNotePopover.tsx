@@ -57,6 +57,7 @@ export function LineNotePopover({
       data-testid="line-note-popover"
       role="dialog"
       aria-modal="true"
+      aria-label="Edit line note"
     >
       <textarea
         className="line-note-popover__textarea"
