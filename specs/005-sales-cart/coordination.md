@@ -5,19 +5,22 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-17 (§A4 cleared — PaymentIntentEnvelope v1 ratified by Ahmed Shaaban; S4 unblocked)
+**Last updated:** 2026-05-17 (S4 complete — PR #162 + PR #163 merged; S5 is next candidate slice)
 
 ---
 
-> # ✅ §A4 CLEARED — S4 is now startable (T076–T091)
+> # ✅ S4 COMPLETE — S5 (T092–T100) is the next candidate slice
 >
 > **§A0 cleared 2026-05-14.** S0 ✅. Phase 2 ✅. S1 ✅. S2 ✅.
 > S3 ✅ (PR #157 + PR #159, 2026-05-17).
 > **§A4 ✅ CLEARED 2026-05-17** — `PaymentIntentEnvelope v1` field shape
 > ratified by Ahmed Shaaban; conditions recorded in
 > `contracts/handoff-envelope.md §Ratification — §A4`.
-> **S4 (T076–T091) is now unblocked from the §A4 perspective.**
-> S4 has NOT started. §A5 blocks production rollout only.
+> **S4 ✅ COMPLETE 2026-05-17** — T076–T088 and T091 merged via PR #162
+> (merge commit `dc3c383`); T089–T090 merged via PR #163 (merge commit
+> `14456a0`).
+> **S5 (T092–T100) is the next candidate slice.** §A5 blocks production
+> rollout only.
 
 ---
 
@@ -36,7 +39,7 @@ phase status. Updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **S3 COMPLETE — S4 is next candidate.**
+- **Phase:** **S4 COMPLETE — S5 is next candidate.**
   - §A0: ✅ cleared 2026-05-14.
   - Phase 1 (T001–T005): ✅ complete.
   - Phase 2 / foundational types (T006–T016): ✅ complete.
@@ -46,14 +49,20 @@ phase status. Updated in place as coordination items resolve.
   - S3 (T055–T075): ✅ complete 2026-05-17 — T055–T070 merged via PR #157
     (merge commit `99b4d64`); T071–T075 merged via PR #159
     (merge commit `8bce04c`).
-  - **S4 (T076–T091): next candidate. §A4 cleared 2026-05-17 — unblocked.**
-    `PaymentIntentEnvelope v1` ratified by Ahmed Shaaban 2026-05-17.
-    See §A4 record below. S4 has NOT started.
+  - S4 (T076–T091): ✅ complete 2026-05-17 — T076–T088 and T091 merged
+    via PR #162 (merge commit `dc3c383`; `cart.handoff` core,
+    `PaymentIntentEnvelope` builder, freeze guard, runbook entry);
+    T089–T090 merged via PR #163 (merge commit `14456a0`;
+    `HandoffSummary` UI and `CartPane` handoff affordance). §A4 cleared
+    2026-05-17 — `PaymentIntentEnvelope v1` ratified by Ahmed Shaaban.
+  - **S5 (T092–T100): next candidate slice. Gate: S0–S4 all merged
+    (now satisfied). S5 has NOT started.**
   - §A5: rollout-time gate — does not block slice merges.
 - **Spec Kit artifacts (all present and approved):**
   - `spec.md` — `§A0 CLEARED`; Q1–Q5 locked 2026-05-14.
   - `plan.md` — v1.0 APPROVED 2026-05-14.
-  - `tasks.md` — APPROVED; 102 tasks T001–T102; S3 tasks T055–T075 now marked complete.
+  - `tasks.md` — APPROVED; 102 tasks T001–T102; S3 tasks T055–T075 and
+    S4 tasks T076–T091 now marked complete.
   - `data-model.md`, `research.md`, `quickstart.md` — co-authored 2026-05-14.
   - `contracts/bridge-api.md`, `contracts/handoff-envelope.md`,
     `contracts/role-visibility-matrix-cart.md` — co-authored 2026-05-14.
@@ -329,7 +338,9 @@ listed in dependency order; some may be worked in parallel once
   but not reshape v1 fields (FR-036); v1 unsigned pending explicit
   extension; clears §A4 for S4 planning/implementation only; does not
   start S4 and does not approve production rollout.
-- **Unblocked:** S4 (handoff envelope + freeze rule, T076–T091). S4 has NOT started.
+- **Unblocked:** S4 (handoff envelope + freeze rule, T076–T091) — now
+  complete via PR #162 (T076–T088, T091; merge `dc3c383`) + PR #163
+  (T089–T090; merge `14456a0`), 2026-05-17.
 
 ### 8. Slice 0 visual-direction reviewer
 
@@ -367,7 +378,7 @@ listed in dependency order; some may be worked in parallel once
 | §A1 — cart-related backend / OpenAPI dependencies | ⏳ deferred | **Ahmed** + future-feature owner | Item-ref resolution only; cart drafts add NO new backend endpoints. May ship with stubbed resolver if catalogue feature is later. |
 | §A2 — migrations (`carts`, `cart_action_outbox`, `cart_lines`, `cart_line_discount_placeholders`) | ✅ **CLEARED 2026-05-14** | **Ahmed Shaaban** | Review record at [`security-review/s2-migration-review.md`](./security-review/s2-migration-review.md). 4-table FK-safe order; append-only trigger on `cart_action_outbox` only; `line_id` nullable; no SQL UNIQUE(cart_id, item_ref). Base SHA `e5c2d74`. **S2 may start.** |
 | §A3 — 004 audit-event catalogue extension | ✅ **CLEARED 2026-05-15** | **Ahmed** | `ActionCategory` + `AuditPayloadMap` extended with 4 cart categories (PR #156, `b307455`). S3 complete via PR #157 + PR #159. |
-| §A4 — handoff-envelope shape | ✅ **CLEARED 2026-05-17** | **Ahmed Shaaban** | `PaymentIntentEnvelope v1` ratified 2026-05-17. Record in `contracts/handoff-envelope.md §Ratification — §A4`. **S4 (T076–T091) may now start.** |
+| §A4 — handoff-envelope shape | ✅ **CLEARED 2026-05-17** | **Ahmed Shaaban** | `PaymentIntentEnvelope v1` ratified 2026-05-17. Record in `contracts/handoff-envelope.md §Ratification — §A4`. S4 (T076–T091) complete via PR #162 + PR #163. |
 | §A5 — production-readiness rollout gate | ⏳ rollout-time | **TBD** | Production gate only. Does not block slice merges behind a feature flag. |
 
 ---
@@ -384,14 +395,15 @@ listed in dependency order; some may be worked in parallel once
 | §A0 + §A1 (if needed) + S2 + S3 + S4 merged | S5 (final polish + cart pane visual) may begin; production rollout may proceed pending §A5 |
 
 **Bottom line:** S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅ (PR #157 + PR #159,
-2026-05-17). §A4 ✅ CLEARED 2026-05-17 (`PaymentIntentEnvelope v1` ratified).
-**S4 (T076–T091) is now startable.** §A5 blocks production rollout only.
+2026-05-17). §A4 ✅ CLEARED 2026-05-17. S4 ✅ COMPLETE 2026-05-17
+(PR #162 T076–T088, T091 + PR #163 T089–T090). **S5 (T092–T100) is the
+next candidate slice.** §A5 blocks production rollout only.
 
 ---
 
 ## Required approvals (summary callout)
 
-✅ All pre-implementation Spec Kit approvals are complete. S0–S3 merged.
+✅ All pre-implementation Spec Kit approvals are complete. S0–S4 merged.
 
 1. ✅ 004 S4 closeout PR merged (PR #124, 2026-05-11).
 2. ✅ 004 S5 visibility-boundaries merged (T083–T093; SHA `d247e8a`, 2026-05-14).
@@ -403,9 +415,10 @@ listed in dependency order; some may be worked in parallel once
 8. ✅ §A3 cleared (audit-category extension, PR #156, 2026-05-15).
 9. ✅ S3 complete (PR #157 T055–T070 + PR #159 T071–T075, 2026-05-17).
 10. ✅ §A4 cleared — `PaymentIntentEnvelope v1` ratified by Ahmed Shaaban 2026-05-17.
+11. ✅ S4 complete (PR #162 T076–T088, T091 + PR #163 T089–T090, 2026-05-17).
 
 **Remaining per-slice gates:** §A5 (production rollout only).
-**Next startable work: S4 (T076–T091) — handoff envelope + freeze rule.**
+**Next startable work: S5 (T092–T100) — final polish, visual, runbook.**
 
 ---
 
@@ -442,19 +455,22 @@ handoff-envelope version field = string literal `'v1'`.
 | S1 (T020–T029) | ✅ | 2026-05-14 | PR #151 |
 | S2 (T030–T054) | ✅ | 2026-05-14 | — |
 | S3 (T055–T075) | ✅ | 2026-05-17 | PR #157 (T055–T070) + PR #159 (T071–T075) |
-| S4–S5 implementation | ⏳ per-slice gated | — | — |
+| S4 (T076–T091) | ✅ | 2026-05-17 | PR #162 (T076–T088, T091) + PR #163 (T089–T090) |
+| S5 implementation | ⏳ per-slice gated | — | — |
 
 ## Explicit non-actions (current state)
 
 The following have **NOT yet started** and MUST NOT start without
 the corresponding gate clearing:
 
-- ❌ S4 source files not yet authored (T076–T091 not started; §A4 cleared but S4 has not begun).
-- ❌ S5 polish / final runbook not yet started (blocked by S4).
+- ❌ S5 polish / final runbook not yet started (gate now satisfied —
+  S0–S4 merged — but S5 work has not begun).
+- ❌ §A5 production-readiness review not yet started (rollout-time
+  gate; reviewer assigned at production-rollout PR open time).
 - ❌ No backend / Data-Pulse-2 changes for 005 (cart drafts are
   local-only; no new backend endpoints in 005's scope).
 - ❌ No payments / receipts / inventory / reports / analytics work begun.
-- ✅ S0–S3 complete and merged to main (T001–T075 done).
+- ✅ S0–S4 complete and merged to main (T001–T091 done).
 
 ---
 
@@ -480,5 +496,7 @@ This file is the durable coordination record across sessions.
 
 **End of coordination file.** S3 complete 2026-05-17 (PR #157 + PR #159;
 main SHA `8bce04c`). §A4 cleared 2026-05-17 (`PaymentIntentEnvelope v1`
-ratified by Ahmed Shaaban). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅, §A4 ✅.
-**Next work: S4 (T076–T091) — handoff envelope + freeze rule.**
+ratified by Ahmed Shaaban). S4 complete 2026-05-17 (PR #162 T076–T088, T091
+merge `dc3c383`; PR #163 T089–T090 merge `14456a0`; main SHA `14456a0`).
+S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅, §A4 ✅, S4 ✅.
+**Next work: S5 (T092–T100) — final polish, visual, runbook.**
