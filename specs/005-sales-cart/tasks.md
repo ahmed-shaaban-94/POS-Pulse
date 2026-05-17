@@ -1,5 +1,5 @@
 ---
-description: "Task list for 005-sales-cart — APPROVED, slice-organised, §A0 CLEARED 2026-05-14"
+description: "Task list for 005-sales-cart — APPROVED, slice-organised, §A0 CLEARED 2026-05-14, S4 complete 2026-05-17"
 ---
 
 # Tasks: 005-sales-cart
@@ -15,7 +15,7 @@ description: "Task list for 005-sales-cart — APPROVED, slice-organised, §A0 C
 **Visual direction:** [./visual-direction/README.md](./visual-direction/README.md) (produced in S0)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-17 (§A4 cleared — PaymentIntentEnvelope v1 ratified; S4 unblocked)
+**Last updated:** 2026-05-17 (S4 complete — PR #162 + PR #163 merged; S5 next)
 **Status:** ✅ APPROVED — ready for implementation behind per-slice gates
 
 ---
@@ -80,10 +80,10 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 | §A1 — item-catalogue seam (stub sufficient for S1+S2; production catalogue deferred) | ⏳ **deferred** | S1+S2 unblocked via fixture stub (R7); real catalogue is a future feature |
 | §A2 — migrations for all 4 cart tables | ✅ **CLEARED 2026-05-14** | ~~S2~~ — complete |
 | §A3 — 004 `ActionCategory` enum extended with 4 cart categories | ✅ **CLEARED 2026-05-15** | ~~S3~~ — complete |
-| §A4 — `PaymentIntentEnvelope` shape ratified with future payments owner | ✅ **CLEARED 2026-05-17** | ~~S4 merge~~ — S4 startable |
+| §A4 — `PaymentIntentEnvelope` shape ratified with future payments owner | ✅ **CLEARED 2026-05-17** | ~~S4 merge~~ — complete |
 | §A5 — production readiness gate | ⏳ **rollout-time** | production rollout only (not slice merges) |
 
-**Bottom line:** S0, S1, S2, S3 complete. §A4 cleared 2026-05-17. **S4 (T076–T091) is now startable.** S5 needs S0–S4 merged.
+**Bottom line:** S0, S1, S2, S3, S4 complete. §A4 cleared 2026-05-17. S4 merged via PR #162 (T076–T088, T091) + PR #163 (T089–T090) on 2026-05-17. **S5 (T092–T100) is now the next candidate slice.** Production rollout still waits on §A5.
 
 ---
 
@@ -275,27 +275,34 @@ Per Constitution VI, tests are written first.
 
 ### Phase 7 — Tests
 
-- [ ] T076 [P] [US3] Write contract test: `PaymentIntentEnvelope v1` carries all fields from `contracts/handoff-envelope.md §Field shape (v1)`: `envelope_version='v1'`, `cart_id`, `operator_session_id`, `owning_operator_id`, `tenant_id`, `branch_id`, `terminal_id`, `lines[]`, `discount_placeholders[]`, `subtotal_minor` (integer), `created_at`, `handoff_action_id` — `tests/contract/handoff-envelope.contract.test.ts` **(§A4)**
-- [ ] T077 [P] [US3] Write unit test: envelope immutability — `Object.isFrozen(envelope) === true` and `Object.isFrozen(envelope.lines) === true` after construction; mutation attempts throw in strict mode — `tests/unit/shared/cart/envelope-immutability.test.ts`
-- [ ] T078 [P] [US3] Write unit test: `subtotal_minor` is integer `Σ line_subtotal_minor`; no float coercion; `Number.isSafeInteger(subtotal_minor)` — `tests/unit/main/cart/cart-handoff-subtotal.test.ts`
-- [ ] T079 [P] [US3] Write unit test: `cart.handoff` refuses empty cart with `{ kind: 'refused', reason: 'empty_cart' }` (US3-AS2; FR-037) — `tests/unit/main/cart/cart-handoff-empty.test.ts`
-- [ ] T080 [P] [US3] Write unit test: `cart.handoff` refuses stale `per_line_versions` with `{ kind: 'refused', reason: 'stale_version' }`; cart stays in `editing` (US3-AS5; FR-037) — `tests/unit/main/cart/cart-handoff-stale-version.test.ts`
-- [ ] T081 [P] [US3] Write integration test: freeze rule — after `cart.handoff` succeeds, every mutating bridge call (`cart.lines.add`, `cart.lines.update`, `cart.lines.remove`, `cart.lines.setNote`, `cart.discountPlaceholders.add`, `cart.discountPlaceholders.remove`, `cart.void` (cashier)) returns `{ kind: 'refused', reason: 'frozen' }`; envelope and lines unchanged (SC-004; FR-035) — `tests/integration/main/cart/cart-freeze-after-handoff.test.ts`
-- [ ] T082 [P] [US3] Write integration test: handoff idempotency — same `idempotency_key` submitted twice → one envelope created, one `cart.handoff_to_payment` audit event, original `{ kind: 'ok', envelope }` returned on replay — `tests/integration/main/cart/cart-handoff-idempotency.test.ts`
-- [ ] T083 [P] [US3] Write integration test: envelope persistence — after handoff, restart app; `carts.handoff_envelope_json` is readable; rehydrated envelope is re-frozen (bridge re-applies `Object.freeze` on parse; R5) — `tests/integration/main/cart/cart-envelope-persistence.test.ts`
-- [ ] T084 [P] [US3] Write unit test: `cart.handoff_to_payment` audit event carries all five FR-026 mandatory attributes; `handoff_action_id` in audit row equals the envelope's `handoff_action_id`; partial record MUST NOT persist (atomic transaction per `contracts/handoff-envelope.md §Construction algorithm`) — `tests/unit/main/cart/cart-handoff-audit.test.ts`
-- [ ] T085 [P] [US3] Write integration test: offline handoff — with network disconnected, handoff proceeds locally; `cart.handoff_to_payment` audit row queued in local outbox (`synced_at = null`); renderer surfaces 003's offline/degraded banner; renderer MUST NOT claim payment succeeded (P2; NFR-008) — `tests/integration/main/cart/cart-handoff-offline.test.ts`
+- [x] T076 [P] [US3] Write contract test: `PaymentIntentEnvelope v1` carries all fields from `contracts/handoff-envelope.md §Field shape (v1)`: `envelope_version='v1'`, `cart_id`, `operator_session_id`, `owning_operator_id`, `tenant_id`, `branch_id`, `terminal_id`, `lines[]`, `discount_placeholders[]`, `subtotal_minor` (integer), `created_at`, `handoff_action_id` — `tests/contract/handoff-envelope.contract.test.ts` **(§A4)**
+- [x] T077 [P] [US3] Write unit test: envelope immutability — `Object.isFrozen(envelope) === true` and `Object.isFrozen(envelope.lines) === true` after construction; mutation attempts throw in strict mode — `tests/unit/shared/cart/envelope-immutability.test.ts`
+- [x] T078 [P] [US3] Write unit test: `subtotal_minor` is integer `Σ line_subtotal_minor`; no float coercion; `Number.isSafeInteger(subtotal_minor)` — `tests/unit/main/cart/cart-handoff-subtotal.test.ts`
+- [x] T079 [P] [US3] Write unit test: `cart.handoff` refuses empty cart with `{ kind: 'refused', reason: 'empty_cart' }` (US3-AS2; FR-037) — `tests/unit/main/cart/cart-handoff-empty.test.ts`
+- [x] T080 [P] [US3] Write unit test: `cart.handoff` refuses stale `per_line_versions` with `{ kind: 'refused', reason: 'stale_version' }`; cart stays in `editing` (US3-AS5; FR-037) — `tests/unit/main/cart/cart-handoff-stale-version.test.ts`
+- [x] T081 [P] [US3] Write integration test: freeze rule — after `cart.handoff` succeeds, every mutating bridge call (`cart.lines.add`, `cart.lines.update`, `cart.lines.remove`, `cart.lines.setNote`, `cart.discountPlaceholders.add`, `cart.discountPlaceholders.remove`, `cart.void` (cashier)) returns `{ kind: 'refused', reason: 'frozen' }`; envelope and lines unchanged (SC-004; FR-035) — `tests/integration/main/cart/cart-freeze-after-handoff.test.ts`
+- [x] T082 [P] [US3] Write integration test: handoff idempotency — same `idempotency_key` submitted twice → one envelope created, one `cart.handoff_to_payment` audit event, original `{ kind: 'ok', envelope }` returned on replay — `tests/integration/main/cart/cart-handoff-idempotency.test.ts`
+- [x] T083 [P] [US3] Write integration test: envelope persistence — after handoff, restart app; `carts.handoff_envelope_json` is readable; rehydrated envelope is re-frozen (bridge re-applies `Object.freeze` on parse; R5) — `tests/integration/main/cart/cart-envelope-persistence.test.ts`
+- [x] T084 [P] [US3] Write unit test: `cart.handoff_to_payment` audit event carries all five FR-026 mandatory attributes; `handoff_action_id` in audit row equals the envelope's `handoff_action_id`; partial record MUST NOT persist (atomic transaction per `contracts/handoff-envelope.md §Construction algorithm`) — `tests/unit/main/cart/cart-handoff-audit.test.ts`
+- [x] T085 [P] [US3] Write integration test: offline handoff — with network disconnected, handoff proceeds locally; `cart.handoff_to_payment` audit row queued in local outbox (`synced_at = null`); renderer surfaces 003's offline/degraded banner; renderer MUST NOT claim payment succeeded (P2; NFR-008) — `tests/integration/main/cart/cart-handoff-offline.test.ts`
 
 ### Phase 7 — Implementation (§A4 gated)
 
-- [ ] T086 [US3] Implement `cart.handoff` handler following 7-step construction algorithm from `contracts/handoff-envelope.md §Construction algorithm`: `requireOperatorSession`; non-empty check; per-line version check; atomic transaction (outbox write → envelope construction → `Object.freeze` recursively → JSON serialize → `carts.handoff_envelope_json` → `state=frozen_handed_off` + `frozen_at` → `audit_events` row); return frozen envelope — `src/main/cart/cart-bridge.ts` **(§A4)**
-- [ ] T087 [US3] Implement `buildPaymentIntentEnvelope` helper: collects non-removed lines + discount placeholders; computes `subtotal_minor = Σ line_subtotal_minor` (integer arithmetic only); calls `freezeEnvelope` from T012 — `src/main/cart/handoff-envelope-builder.ts` **(§A4)**
-- [ ] T088 [US3] Add freeze guard to all mutating handlers: check `state IN (frozen_handed_off, cancelled)` before processing; return `{ kind: 'refused', reason: 'frozen' }` or `'closed'` as appropriate (defence-in-depth on top of individual handler state checks) — `src/main/cart/cart-bridge.ts` **(§A4)**
-- [ ] T089 [P] [US3] Implement `HandoffSummary` component: read-only frozen line list, cart subtotal, `frozen_at` timestamp, "Continue to payment" button (no-op in 005; payments feature owns post-handoff); cart pane transitions to clearly-frozen visual — `src/renderer/ui/cart/HandoffSummary.tsx` **(§A4)**
-- [ ] T090 [US3] Extend `CartPane` with handoff affordance ("Hand off to payment" button; visible only in `editing` state with ≥1 line); on success: render `HandoffSummary` — `src/renderer/ui/cart/CartPane.tsx` **(§A4)**
-- [ ] T091 [P] [US3] Add runbook entry: cart-payment handoff failure paths (what operator sees on abort, how to recover; `carts.handoff_envelope_json` inspection procedure) — `docs/runbook/sales-cart.md` **(§A4)**
+- [x] T086 [US3] Implement `cart.handoff` handler following 7-step construction algorithm from `contracts/handoff-envelope.md §Construction algorithm`: `requireOperatorSession`; non-empty check; per-line version check; atomic transaction (outbox write → envelope construction → `Object.freeze` recursively → JSON serialize → `carts.handoff_envelope_json` → `state=frozen_handed_off` + `frozen_at` → `audit_events` row); return frozen envelope — `src/main/cart/cart-bridge.ts` **(§A4)**
+- [x] T087 [US3] Implement `buildPaymentIntentEnvelope` helper: collects non-removed lines + discount placeholders; computes `subtotal_minor = Σ line_subtotal_minor` (integer arithmetic only); calls `freezeEnvelope` from T012 — `src/main/cart/handoff-envelope-builder.ts` **(§A4)**
+- [x] T088 [US3] Add freeze guard to all mutating handlers: check `state IN (frozen_handed_off, cancelled)` before processing; return `{ kind: 'refused', reason: 'frozen' }` or `'closed'` as appropriate (defence-in-depth on top of individual handler state checks) — `src/main/cart/cart-bridge.ts` **(§A4)**
+- [x] T089 [P] [US3] Implement `HandoffSummary` component: read-only frozen line list, cart subtotal, `frozen_at` timestamp, "Continue to payment" button (no-op in 005; payments feature owns post-handoff); cart pane transitions to clearly-frozen visual — `src/renderer/ui/cart/HandoffSummary.tsx` **(§A4)**
+- [x] T090 [US3] Extend `CartPane` with handoff affordance ("Hand off to payment" button; visible only in `editing` state with ≥1 line); on success: render `HandoffSummary` — `src/renderer/ui/cart/CartPane.tsx` **(§A4)**
+- [x] T091 [P] [US3] Add runbook entry: cart-payment handoff failure paths (what operator sees on abort, how to recover; `carts.handoff_envelope_json` inspection procedure) — `docs/runbook/sales-cart.md` **(§A4)**
 
 **S4 exit (quickstart §US3 steps 1–7 pass):** Envelope constructed with all v1 fields; frozen recursively; persisted to `carts.handoff_envelope_json`; restart-surviving; freeze rule enforced on every mutating handler; `cart.handoff_to_payment` audit row with five mandatory attributes; idempotency verified; offline path queues outbox row without claiming payment success.
+
+> ✅ **S4 COMPLETE — 2026-05-17.** T076–T088 and T091 merged via PR #162
+> (merge commit `dc3c383`) — `cart.handoff` core, `PaymentIntentEnvelope`
+> builder, freeze guard, runbook entry. T089–T090 merged via PR #163
+> (merge commit `14456a0`) — `HandoffSummary` UI and `CartPane` handoff
+> affordance. S5 (T092–T100) is the next candidate slice; §A5 remains
+> a production-rollout-only gate.
 
 ---
 
@@ -363,13 +370,13 @@ Per Constitution VI, tests are written first.
              │
              ▼
 ┌─────────────────────────┐
-│ S4 — Handoff envelope + │  ⏳ NEXT — §A4 cleared; S4 STARTABLE (T076–T091)
-│ freeze rule             │  §A4: PaymentIntentEnvelope v1 ratified 2026-05-17
-└────────────┬────────────┘  S4 has NOT started
+│ S4 — Handoff envelope + │  ✅ COMPLETE via PR #162 + PR #163
+│ freeze rule             │  (T076–T091 done; §A4 cleared 2026-05-17)
+└────────────┬────────────┘
              │
              ▼
 ┌─────────────────────────┐
-│ S5 — Final polish +     │  gates: S0–S4 all merged (T092–T100)
+│ S5 — Final polish +     │  ⏳ NEXT — gates: S0–S4 all merged (T092–T100)
 │ visual + runbook        │
 └────────────┬────────────┘
              │
@@ -425,6 +432,7 @@ payments feature to exist.
 |:--|:--|
 | Total tasks | T001–T102 (102 tasks) |
 | S3 tasks T055–T075 marked complete (PR #157 + PR #159) | ✅ |
+| S4 tasks T076–T091 marked complete (PR #162 + PR #163) | ✅ |
 | Every implementation task preceded by test task(s) | ✅ (Constitution VI) |
 | Gate tags match real open gates only (§A2/§A3/§A4/§A5) | ✅ — §A0 cleared; no stale `[BLOCKED: §A0]` tags |
 | Bridge handler names match `contracts/bridge-api.md` verbatim | ✅ |
@@ -443,4 +451,5 @@ payments feature to exist.
 
 **End of tasks.** ✅ APPROVED — 102 tasks across Phases 1–9 / Slices S0–S5 / Production Readiness.
 S3 complete 2026-05-17 (PR #157 + PR #159). §A4 cleared 2026-05-17.
-**S4 (T076–T091) is now startable.** S5 waits for S4. Production rollout waits for §A5.
+S4 complete 2026-05-17 (PR #162 T076–T088, T091 + PR #163 T089–T090).
+**S5 (T092–T100) is the next candidate slice.** Production rollout waits for §A5.
