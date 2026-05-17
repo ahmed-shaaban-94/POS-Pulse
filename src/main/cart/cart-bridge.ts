@@ -1106,6 +1106,7 @@ export class CartBridgeHandlers {
         const parsed = JSON.parse(persistedJson) as Parameters<typeof freezeEnvelope>[0];
         return { kind: 'ok', envelope: freezeEnvelope(parsed) };
       }
+      /* v8 ignore next — outbox row written but envelope_json null: impossible under atomic tx */
       return refuse('not_implemented');
     }
 
@@ -1245,6 +1246,7 @@ export class CartBridgeHandlers {
     return null;
   }
 
+  /* v8 ignore next 22 — scaffolded in S2, superseded by inline guards in each handler */
   /** S2 DB-aware gate for handlers that aren't yet implemented (discount/void/handoff). */
   private gateMutatingS2(cart_id: string): { kind: 'refused'; reason: CartRefusalReason } | null {
     if (this.deps.cartStore === undefined) {

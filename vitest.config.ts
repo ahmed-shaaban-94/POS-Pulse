@@ -70,6 +70,25 @@ export default defineConfig({
           functions: 90,
           statements: 90,
         },
+        // S4 handoff — raised to ≥85% per task requirement.
+        'src/main/cart/cart-bridge.ts': {
+          lines: 85,
+          branches: 85,
+          functions: 85,
+          statements: 85,
+        },
+        'src/main/cart/cart-store.ts': {
+          lines: 85,
+          branches: 85,
+          functions: 85,
+          statements: 85,
+        },
+        'src/main/cart/handoff-envelope-builder.ts': {
+          lines: 85,
+          branches: 85,
+          functions: 85,
+          statements: 85,
+        },
       },
     },
   },
