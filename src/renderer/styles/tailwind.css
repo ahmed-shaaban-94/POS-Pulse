@@ -1751,6 +1751,376 @@ body {
     margin: 0;
   }
 
+  /* ── Cart Pane (005-sales-cart) ─────────────────────────────────────────── */
+  /*
+   * Three-region vertical stack per S0 contact-sheet §"Layout strategy".
+   * Header strip → scrollable body → pinned footer.
+   * Surface 8 (frozen_handed_off) swaps the body for HandoffSummary.
+   */
+
+  .cart-pane {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    background-color: var(--color-surface);
+    border-inline-start: 1px solid var(--color-border);
+    overflow: hidden;
+  }
+
+  /* ── Header strip ───────────────────────────────────────────────────── */
+
+  .cart-pane__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding-inline: var(--space-4);
+    min-block-size: 56px;
+    flex-shrink: 0;
+    border-block-end: 1px solid var(--color-border-soft);
+  }
+
+  .cart-pane__title {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+
+  /* Void button — ghost destructive */
+  .cart-pane__void {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--space-3);
+    min-block-size: 44px;
+    border-radius: var(--radius-control);
+    background-color: transparent;
+    border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+    color: var(--color-danger);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-1) var(--ease-out),
+      border-color var(--duration-1) var(--ease-out);
+  }
+
+  .cart-pane__void:hover:not(:disabled) {
+    background-color: var(--color-danger-soft);
+    border-color: var(--color-danger);
+  }
+
+  .cart-pane__void:focus-visible {
+    outline: 2px solid var(--color-danger);
+    outline-offset: 2px;
+  }
+
+  /* ── Scrollable body ────────────────────────────────────────────────── */
+
+  .cart-pane__body {
+    flex: 1;
+    overflow-y: auto;
+    padding-block: var(--space-3);
+    min-block-size: 0;
+  }
+
+  .cart-pane__line-list,
+  .cart-pane__discount-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding-inline: var(--space-3);
+  }
+
+  /* ── Frozen body (Surface 8) ────────────────────────────────────────── */
+
+  .cart-pane__frozen-body {
+    flex: 1;
+    overflow-y: auto;
+    min-block-size: 0;
+  }
+
+  /* ── Footer strip ───────────────────────────────────────────────────── */
+
+  .cart-pane__footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-block-start: 1px solid var(--color-border-soft);
+    flex-shrink: 0;
+    background-color: var(--color-surface);
+  }
+
+  .cart-pane__subtotal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .cart-pane__subtotal-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+  }
+
+  .cart-pane__subtotal-value {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  /* Handoff error — generic copy only; no IDs */
+  .cart-pane__handoff-error {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-danger);
+  }
+
+  /* "Hand off to payment" primary button */
+  .cart-pane__handoff {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    min-block-size: 44px;
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-control);
+    background-color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary-on);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out),
+      opacity var(--duration-2) var(--ease-out);
+  }
+
+  .cart-pane__handoff:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--color-primary-emphasis);
+    border-color: var(--color-primary-emphasis);
+  }
+
+  .cart-pane__handoff:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .cart-pane__handoff:disabled,
+  .cart-pane__handoff[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ── HandoffSummary (Surface 8) ──────────────────────────────────────── */
+  /*
+   * Read-only frozen view. No interactive controls — quantity steppers,
+   * remove buttons, note editing, and discount editing are all absent.
+   * Security: no sensitive IDs rendered (FR-035).
+   */
+
+  .handoff-summary {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+  }
+
+  /* "Cart sent to payment" banner — success-soft tint, full width */
+  .handoff-summary__banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding-block: var(--space-3);
+    padding-inline: var(--space-4);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-success);
+    border-block-end: 1px solid color-mix(in srgb, var(--color-success) 20%, transparent);
+    flex-shrink: 0;
+    /* background is set inline: var(--color-success-soft) */
+  }
+
+  .handoff-summary__banner-icon {
+    font-size: var(--font-size-md);
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  /* "Order summary" heading */
+  .handoff-summary__title {
+    padding-inline: var(--space-4);
+    padding-block: var(--space-3);
+    font-size: 0.6875rem; /* 11px */
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    border-block-end: 1px solid var(--color-border-soft);
+    flex-shrink: 0;
+  }
+
+  /* Scrollable line list */
+  .handoff-summary__line-list {
+    flex: 1;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-block-size: 0;
+  }
+
+  /* Individual line row — read-only; no stepper, no remove */
+  .handoff-summary__line {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    grid-template-rows: auto auto;
+    align-items: baseline;
+    gap: 0 var(--space-2);
+    padding: var(--space-3);
+    background-color: var(--color-surface-elevated);
+    border-radius: var(--radius-md);
+  }
+
+  .handoff-summary__line-name {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .handoff-summary__line-qty {
+    grid-column: 2;
+    grid-row: 1;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  .handoff-summary__line-subtotal {
+    grid-column: 3;
+    grid-row: 1;
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    white-space: nowrap;
+    text-align: end;
+  }
+
+  /* Note — visible when note ≠ null; read-only */
+  .handoff-summary__line-note {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin-block-start: var(--space-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-inline-size: 40ch;
+  }
+
+  /* Opaque discount placeholders — "Discount applied" only; no magnitude */
+  .handoff-summary__discount-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 var(--space-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+
+  .handoff-summary__discount-row {
+    display: flex;
+    align-items: center;
+    padding-inline: var(--space-3);
+    padding-block: var(--space-1);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-warning);
+    background-color: var(--color-warning-soft);
+    border-radius: var(--radius-pill);
+    inline-size: fit-content;
+  }
+
+  /* Footer: frozen subtotal + disabled "Continue to payment" */
+  .handoff-summary__footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-block-start: 1px solid var(--color-border-soft);
+    flex-shrink: 0;
+  }
+
+  .handoff-summary__subtotal {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .handoff-summary__subtotal-label {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+  }
+
+  .handoff-summary__subtotal-value {
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  /* "Continue to payment" — permanently disabled; owned by future payments feature */
+  .handoff-summary__continue {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 100%;
+    min-block-size: 44px;
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-control);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Timestamp meta — "Sent at HH:MM" */
+  .handoff-summary__meta {
+    padding-inline: var(--space-4);
+    padding-block: var(--space-2);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-align: center;
+    flex-shrink: 0;
+  }
+
   /* ── ShiftClosedBanner (T091) ──────────────────────────────────────────── */
 
   .shift-closed-banner {
