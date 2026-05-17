@@ -6,7 +6,7 @@
 **Data model:** [../data-model.md](../data-model.md)
 **Created:** 2026-05-14
 **Constitution version pinned:** v1.5.1
-**Ratification gate:** §A4 (with future payment / checkout feature owner)
+**Ratification gate:** §A4 — ✅ **CLEARED 2026-05-17** (Ahmed Shaaban)
 
 > **This is the single cross-feature contract surface 005 commits to.**
 > The future payment / checkout feature consumes exactly this shape —
@@ -133,14 +133,25 @@ in `editing` and no envelope is constructed (US3-AS5).
 ## Ratification — §A4
 
 The envelope shape is **ratified jointly with the future payment /
-checkout feature owner before Slice S4 of 005 merges.** Until then, the
-shape above is the 005-side proposal.
+checkout feature owner before Slice S4 of 005 merges.**
 
-**Ratification record** (to be filled in at §A4 close-out):
+**Ratification record:**
 
 | Date | Decision | Reviewer | Reference |
 |:--|:--|:--|:--|
-| TBD | TBD | TBD | TBD |
+| 2026-05-17 | ✅ Approved | Ahmed Shaaban | `specs/005-sales-cart/contracts/handoff-envelope.md` v1 field shape |
+
+**Ratification conditions (all binding):**
+
+1. `PaymentIntentEnvelope v1` field list is **locked** for 005-sales-cart S4.
+2. Future payments work MAY add fields it owns, but MUST NOT remove,
+   rename, or reinterpret any v1 field without bumping `envelope_version`
+   and going through `/speckit-clarify` (FR-036).
+3. v1 remains **unsigned** unless a future payments slice explicitly adds
+   an extension field such as `envelope_signature`.
+4. This ratification clears §A4 for S4 planning and implementation only.
+5. This does NOT start S4 and does NOT approve production rollout (§A5
+   remains a separate production-readiness gate).
 
 **Forward-compatibility commitment:** Once ratified, the field list is
 **locked at v1.** The future payment / checkout feature MAY add fields

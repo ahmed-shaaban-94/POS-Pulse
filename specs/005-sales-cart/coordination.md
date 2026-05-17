@@ -5,20 +5,19 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-17 (S3 complete — PR #157 T055–T070, PR #159 T071–T075; §A4 remains pending)
+**Last updated:** 2026-05-17 (§A4 cleared — PaymentIntentEnvelope v1 ratified by Ahmed Shaaban; S4 unblocked)
 
 ---
 
-> # ✅ S3 COMPLETE — S4 is next candidate; blocked by §A4
+> # ✅ §A4 CLEARED — S4 is now startable (T076–T091)
 >
-> **§A0 cleared 2026-05-14.** S0 ✅ (T017–T019 signed off 2026-05-14).
-> Phase 2 ✅ (T006–T016). S1 ✅. S2 ✅. **S3 ✅ complete 2026-05-17**
-> — T055–T070 merged via PR #157 (main SHA `99b4d64`);
-> T071–T075 merged via PR #159 (main SHA `8bce04c`).
-> **Next candidate: S4 (handoff envelope + freeze rule, T076–T091).**
-> **S4 is blocked by §A4 — `PaymentIntentEnvelope` ratification with
-> future payments owner (TBD). §A4 has NOT been ratified.**
-> §A5 blocks production rollout only.
+> **§A0 cleared 2026-05-14.** S0 ✅. Phase 2 ✅. S1 ✅. S2 ✅.
+> S3 ✅ (PR #157 + PR #159, 2026-05-17).
+> **§A4 ✅ CLEARED 2026-05-17** — `PaymentIntentEnvelope v1` field shape
+> ratified by Ahmed Shaaban; conditions recorded in
+> `contracts/handoff-envelope.md §Ratification — §A4`.
+> **S4 (T076–T091) is now unblocked from the §A4 perspective.**
+> S4 has NOT started. §A5 blocks production rollout only.
 
 ---
 
@@ -47,9 +46,9 @@ phase status. Updated in place as coordination items resolve.
   - S3 (T055–T075): ✅ complete 2026-05-17 — T055–T070 merged via PR #157
     (merge commit `99b4d64`); T071–T075 merged via PR #159
     (merge commit `8bce04c`).
-  - **S4 (T076–T091): next candidate. Blocked by §A4.**
-    §A4 requires `PaymentIntentEnvelope v1` ratification with the future
-    payments-feature owner (TBD). See §A4 record below. Not yet ratified.
+  - **S4 (T076–T091): next candidate. §A4 cleared 2026-05-17 — unblocked.**
+    `PaymentIntentEnvelope v1` ratified by Ahmed Shaaban 2026-05-17.
+    See §A4 record below. S4 has NOT started.
   - §A5: rollout-time gate — does not block slice merges.
 - **Spec Kit artifacts (all present and approved):**
   - `spec.md` — `§A0 CLEARED`; Q1–Q5 locked 2026-05-14.
@@ -126,24 +125,19 @@ phase status. Updated in place as coordination items resolve.
 
 ### T003 — §A4 handoff-envelope ratification coordination
 
-- **Status:** ⏳ **COORDINATION REQUIRED before S4 begins.**
-- **Contract location:** `specs/005-sales-cart/contracts/handoff-envelope.md`
-  (co-authored 2026-05-14; currently `§A4 — ratification gate:
-  deferred, TBD`).
-- **Required action:** The future payments-feature owner MUST review
-  `contracts/handoff-envelope.md` and sign off on the `PaymentIntentEnvelope v1`
-  field shape before Slice S4 merges. Ratification is recorded in the
-  contract file's ratification table (§"Ratification — §A4").
-- **Forward-compatibility commitment:** Once ratified, the v1 field
-  list is locked. The payments feature MAY add fields it owns but MUST
-  NOT remove, rename, or rewrite any v1 field (FR-036). Any reshaping
-  bumps `envelope_version` and goes through `/speckit-clarify`.
-- **Envelope signing:** v1 is unsigned. If the payments feature
-  requests an HMAC signature at §A4 ratification, it is added as an
-  extension field (`envelope_signature`) without changing v1 shape.
-- **Owner:** Ahmed (POS-Pulse) + future payments-feature owner (TBD).
-- **Record updated:** T003 ✅ coordination requirement recorded;
-  ratification owner (payments side) remains TBD.
+- **Status:** ✅ **CLEARED 2026-05-17** — `PaymentIntentEnvelope v1`
+  field shape ratified by Ahmed Shaaban. Ratification record in
+  `contracts/handoff-envelope.md §Ratification — §A4`.
+- **Contract location:** `specs/005-sales-cart/contracts/handoff-envelope.md`.
+- **Conditions binding at ratification:**
+  1. v1 field list locked for S4.
+  2. Future payments work may add its own fields but MUST NOT remove,
+     rename, or reinterpret any v1 field without a version bump (FR-036).
+  3. v1 remains unsigned unless a future slice adds `envelope_signature`.
+  4. Clears §A4 for S4 planning/implementation only.
+  5. Does NOT start S4 and does NOT approve production rollout.
+- **Owner:** Ahmed Shaaban.
+- **Record updated:** T003 ✅ cleared 2026-05-17.
 
 ### T004 — S0 visual-direction reviewer
 
@@ -327,18 +321,15 @@ listed in dependency order; some may be worked in parallel once
 
 ### 7. §A4 handoff-envelope ratification
 
-- **Status:** ⏳ **pending** — `contracts/handoff-envelope.md` authored
-  2026-05-14 (PR #147); ratification not yet obtained. See T003 in
-  Phase 1 records above for full detail.
-- **Owners:** Ahmed (POS-Pulse) + future payments-feature owner (TBD).
-- **Required action:** Future payments-feature owner reviews
-  `contracts/handoff-envelope.md` and signs off on `PaymentIntentEnvelope v1`
-  field shape before 005 S4 merges. Ratification recorded in the
-  contract file's ratification table (§"Ratification — §A4").
-- **Backwards-compatibility commitment (P12 / P16):** once ratified,
-  v1 field list locked. Payments feature MAY add fields it owns but
-  MUST NOT remove, rename, or rewrite any v1 field (FR-036).
-- **Unblocks:** S4 (handoff envelope + freeze rule).
+- **Status:** ✅ **CLEARED 2026-05-17** — `PaymentIntentEnvelope v1`
+  field shape ratified by Ahmed Shaaban. Ratification record at
+  [`contracts/handoff-envelope.md §Ratification — §A4`](./contracts/handoff-envelope.md).
+- **Owner:** Ahmed Shaaban.
+- **Conditions:** v1 field list locked; future payments work may extend
+  but not reshape v1 fields (FR-036); v1 unsigned pending explicit
+  extension; clears §A4 for S4 planning/implementation only; does not
+  start S4 and does not approve production rollout.
+- **Unblocked:** S4 (handoff envelope + freeze rule, T076–T091). S4 has NOT started.
 
 ### 8. Slice 0 visual-direction reviewer
 
@@ -376,7 +367,7 @@ listed in dependency order; some may be worked in parallel once
 | §A1 — cart-related backend / OpenAPI dependencies | ⏳ deferred | **Ahmed** + future-feature owner | Item-ref resolution only; cart drafts add NO new backend endpoints. May ship with stubbed resolver if catalogue feature is later. |
 | §A2 — migrations (`carts`, `cart_action_outbox`, `cart_lines`, `cart_line_discount_placeholders`) | ✅ **CLEARED 2026-05-14** | **Ahmed Shaaban** | Review record at [`security-review/s2-migration-review.md`](./security-review/s2-migration-review.md). 4-table FK-safe order; append-only trigger on `cart_action_outbox` only; `line_id` nullable; no SQL UNIQUE(cart_id, item_ref). Base SHA `e5c2d74`. **S2 may start.** |
 | §A3 — 004 audit-event catalogue extension | ✅ **CLEARED 2026-05-15** | **Ahmed** | `ActionCategory` + `AuditPayloadMap` extended with 4 cart categories (PR #156, `b307455`). S3 complete via PR #157 + PR #159. |
-| §A4 — handoff-envelope shape | ⏳ pending | **Ahmed** + future payments owner (TBD) | Contract authored 2026-05-14 (PR #147). Ratification required before S4 merges. See T003. |
+| §A4 — handoff-envelope shape | ✅ **CLEARED 2026-05-17** | **Ahmed Shaaban** | `PaymentIntentEnvelope v1` ratified 2026-05-17. Record in `contracts/handoff-envelope.md §Ratification — §A4`. **S4 (T076–T091) may now start.** |
 | §A5 — production-readiness rollout gate | ⏳ rollout-time | **TBD** | Production gate only. Does not block slice merges behind a feature flag. |
 
 ---
@@ -393,9 +384,8 @@ listed in dependency order; some may be worked in parallel once
 | §A0 + §A1 (if needed) + S2 + S3 + S4 merged | S5 (final polish + cart pane visual) may begin; production rollout may proceed pending §A5 |
 
 **Bottom line:** S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅ (PR #157 + PR #159,
-2026-05-17). Next candidate: S4 (T076–T091), blocked by §A4 (envelope
-ratification). §A4 requires future payments-feature owner sign-off on
-`contracts/handoff-envelope.md` before S4 may begin. §A4 has NOT been ratified.
+2026-05-17). §A4 ✅ CLEARED 2026-05-17 (`PaymentIntentEnvelope v1` ratified).
+**S4 (T076–T091) is now startable.** §A5 blocks production rollout only.
 
 ---
 
@@ -412,11 +402,10 @@ ratification). §A4 requires future payments-feature owner sign-off on
 7. ✅ §A2 cleared (4-table migration review, 2026-05-14).
 8. ✅ §A3 cleared (audit-category extension, PR #156, 2026-05-15).
 9. ✅ S3 complete (PR #157 T055–T070 + PR #159 T071–T075, 2026-05-17).
+10. ✅ §A4 cleared — `PaymentIntentEnvelope v1` ratified by Ahmed Shaaban 2026-05-17.
 
-**Remaining per-slice gates:** §A4 (S4 envelope ratification — PENDING),
-§A5 (production rollout). **Next required action: §A4 ratification.**
-Future payments-feature owner must review `contracts/handoff-envelope.md`
-and sign off before S4 (T076–T091) may begin.
+**Remaining per-slice gates:** §A5 (production rollout only).
+**Next startable work: S4 (T076–T091) — handoff envelope + freeze rule.**
 
 ---
 
@@ -460,7 +449,7 @@ handoff-envelope version field = string literal `'v1'`.
 The following have **NOT yet started** and MUST NOT start without
 the corresponding gate clearing:
 
-- ❌ S4 source files not yet authored (T076–T091 not started; blocked by §A4).
+- ❌ S4 source files not yet authored (T076–T091 not started; §A4 cleared but S4 has not begun).
 - ❌ S5 polish / final runbook not yet started (blocked by S4).
 - ❌ No backend / Data-Pulse-2 changes for 005 (cart drafts are
   local-only; no new backend endpoints in 005's scope).
@@ -490,6 +479,6 @@ This file is the durable coordination record across sessions.
 ---
 
 **End of coordination file.** S3 complete 2026-05-17 (PR #157 + PR #159;
-main SHA `8bce04c`). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅.
-Next work: §A4 ratification (future payments-feature owner must sign off on
-`contracts/handoff-envelope.md`) → then S4 (T076–T091) may begin.
+main SHA `8bce04c`). §A4 cleared 2026-05-17 (`PaymentIntentEnvelope v1`
+ratified by Ahmed Shaaban). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅, §A4 ✅.
+**Next work: S4 (T076–T091) — handoff envelope + freeze rule.**
