@@ -247,4 +247,30 @@ describe('T093 — CartPane frozen state (HandoffSummary visible)', () => {
     );
     await expectNoAxeViolations(container);
   });
+
+  it('frozen state with manager + Void in HandoffSummary footer: no axe violations (Dev3)', async () => {
+    useOperatorSessionStore.setState({
+      state: {
+        kind: 'signedIn',
+        session: {
+          id: 'sess-t093',
+          operator_id: 'op-t093',
+          display_name: 'Test User',
+          role: 'manager',
+          tenant_id: 'tenant-1',
+          branch_id: 'branch-1',
+          started_at: '2026-05-17T08:00:00.000Z',
+        },
+      },
+    });
+    setCartFrozen();
+    const { container } = render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    await expectNoAxeViolations(container);
+  });
 });

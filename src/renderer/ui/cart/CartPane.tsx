@@ -66,10 +66,20 @@ export interface AddedLineResult {
   merged: boolean;
 }
 
-/** Test-only seed shape for discount placeholders. */
+/**
+ * Test-only seed shape for discount placeholders.
+ *
+ * `lineId` mirrors the `PaymentIntentEnvelope.discount_placeholders[].line_id`
+ * field. When present, the placeholder renders inside the matching line's
+ * row so the cashier sees it inline with that line (contact-sheet Surface 2).
+ * When omitted (or null), the placeholder renders as an orphan row at the
+ * tail of the same line list — still within the cart-line flow, never as a
+ * separate section.
+ */
 export interface DiscountPlaceholderSeed {
   placeholderId: string;
   attribution_operator_id: string | null;
+  lineId?: string | null;
 }
 
 export interface CartPaneProps {
@@ -190,10 +200,20 @@ export function CartPane({
   const isFrozen = activeCart?.state === CartState.frozen_handed_off;
   const isHandingOff = activeCart?.state === CartState.handing_off;
   const isCancelled = activeCart?.state === CartState.cancelled;
+  // Void hidden in empty/cancelled states (contact-sheet Surfaces 1, cancelled).
+  // Post-handoff Void is manager/admin only and renders inside HandoffSummary
+  // footer (Surface 8) whenever the envelope is hydrated. If the cart is
+  // frozen but the envelope has not yet hydrated (rare pre-render edge case),
+  // the header retains Void as a degraded fallback so the manager/admin
+  // affordance is never lost.
   const canVoid =
     activeCart !== null &&
+    activeCart.state !== CartState.empty &&
     activeCart.state !== CartState.cancelled &&
     (!isFrozen || sessionRole === 'manager' || sessionRole === 'admin');
+  const handoffHostsVoid = isFrozen && envelope !== null;
+  const showVoidInHeader = canVoid && !handoffHostsVoid;
+  const showVoidInHandoff = canVoid && handoffHostsVoid;
   const canHandoff =
     activeCart !== null && activeCart.state === CartState.editing && lines.length > 0;
   const showHandoffButton = !isFrozen && !isCancelled;
@@ -250,6 +270,26 @@ export function CartPane({
   }
 
   const cartSubtotalMinor = lines.reduce((acc, l) => acc + l.lineSubtotalMinor, 0);
+
+  // Group discount placeholders by their associated line for inline rendering
+  // (contact-sheet Surface 2 / Surface 7). A placeholder is rendered inline
+  // only when its `lineId` matches an existing line in the current cart;
+  // stale, removed, null, or undefined `lineId` values fall through to
+  // `orphanDiscounts` so the placeholder remains visible at the tail of the
+  // same line list rather than disappearing silently if a line is removed
+  // while a discount referencing it is in flight.
+  const existingLineIds = new Set(lines.map((l) => l.lineId));
+  const discountsByLine = new Map<string, DiscountPlaceholderSeed[]>();
+  const orphanDiscounts: DiscountPlaceholderSeed[] = [];
+  for (const dp of discountPlaceholders) {
+    if (dp.lineId !== undefined && dp.lineId !== null && existingLineIds.has(dp.lineId)) {
+      const list = discountsByLine.get(dp.lineId) ?? [];
+      list.push(dp);
+      discountsByLine.set(dp.lineId, list);
+    } else {
+      orphanDiscounts.push(dp);
+    }
+  }
 
   function getBridge(): CartBridgeAPI {
     /* v8 ignore next — readCartBridge() arm only reachable in Electron; tests always supply _testBridge */
@@ -368,7 +408,7 @@ export function CartPane({
       )}
       <header className="cart-pane__header">
         <h2 className="cart-pane__title">Cart</h2>
-        {canVoid && (
+        {showVoidInHeader && (
           <button
             type="button"
             className="cart-pane__void"
@@ -384,7 +424,17 @@ export function CartPane({
       </header>
       {isFrozen && envelope !== null ? (
         <div className="cart-pane__frozen-body">
-          <HandoffSummary envelope={envelope} />
+          {showVoidInHandoff ? (
+            <HandoffSummary
+              envelope={envelope}
+              showVoid={true}
+              onVoidRequest={() => {
+                setVoidDialogOpen(true);
+              }}
+            />
+          ) : (
+            <HandoffSummary envelope={envelope} />
+          )}
         </div>
       ) : (
         <>
@@ -392,10 +442,11 @@ export function CartPane({
             {showEmpty ? (
               <EmptyCartPlaceholder />
             ) : (
-              <>
-                <ol className="cart-pane__line-list" aria-label="Cart items">
-                  {lines.map((line) => (
-                    <li key={line.lineId}>
+              <ol className="cart-pane__line-list" aria-label="Cart items">
+                {lines.map((line) => {
+                  const lineDiscounts = discountsByLine.get(line.lineId) ?? [];
+                  return (
+                    <li key={line.lineId} className="cart-pane__line-list-item">
                       <LineItemRow
                         lineId={line.lineId}
                         displayName={line.displayName}
@@ -432,24 +483,29 @@ export function CartPane({
                           }}
                         />
                       )}
-                    </li>
-                  ))}
-                </ol>
-                {discountPlaceholders.length > 0 && (
-                  <ul className="cart-pane__discount-list" aria-label="Discount placeholders">
-                    {discountPlaceholders.map((dp) => (
-                      <li key={dp.placeholderId}>
+                      {lineDiscounts.map((dp) => (
                         <DiscountPlaceholderRow
+                          key={dp.placeholderId}
                           placeholderId={dp.placeholderId}
                           onRemove={() => {
                             void handleRemoveDiscount(dp.placeholderId);
                           }}
                         />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
+                      ))}
+                    </li>
+                  );
+                })}
+                {orphanDiscounts.map((dp) => (
+                  <li key={dp.placeholderId} className="cart-pane__line-list-item">
+                    <DiscountPlaceholderRow
+                      placeholderId={dp.placeholderId}
+                      onRemove={() => {
+                        void handleRemoveDiscount(dp.placeholderId);
+                      }}
+                    />
+                  </li>
+                ))}
+              </ol>
             )}
           </div>
           <footer className="cart-pane__footer">

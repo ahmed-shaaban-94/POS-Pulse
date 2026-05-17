@@ -140,6 +140,214 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// ── Void button visibility (Dev1, Dev3) ───────────────────────────────────────
+
+describe('CartPane void button — empty state (Dev1)', () => {
+  it('does not render the Void button when activeCart is null (default empty)', () => {
+    setSignedIn();
+    render(<CartPane _testBridge={makeBridge()} />);
+    expect(screen.queryByTestId('cart-void-button')).toBeNull();
+  });
+
+  it('does not render the Void button when cart state is empty', () => {
+    setSignedIn();
+    useCartStore.setState({
+      activeCart: { cart_id: 'cart-t090', state: CartState.empty, lastLineId: null },
+    });
+    render(<CartPane _testBridge={makeBridge()} />);
+    expect(screen.queryByTestId('cart-void-button')).toBeNull();
+  });
+});
+
+describe('CartPane void button — frozen state placement (Dev3)', () => {
+  it('renders post-handoff Void inside HandoffSummary footer (manager + envelope)', () => {
+    useOperatorSessionStore.setState({
+      state: {
+        kind: 'signedIn',
+        session: {
+          id: 'sess-t090',
+          operator_id: 'op-t090',
+          display_name: 'Test User',
+          role: 'manager',
+          tenant_id: 'tenant-1',
+          branch_id: 'branch-1',
+          started_at: new Date().toISOString(),
+        },
+      },
+    });
+    setCartFrozen();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    const voidButton = screen.getByTestId('cart-void-button');
+    // The void button must be inside the HandoffSummary, not the CartPane header.
+    expect(voidButton.closest('.handoff-summary')).not.toBeNull();
+    expect(voidButton.closest('.cart-pane__header')).toBeNull();
+  });
+
+  it('renders post-handoff Void after the Continue-to-payment button in DOM order', () => {
+    useOperatorSessionStore.setState({
+      state: {
+        kind: 'signedIn',
+        session: {
+          id: 'sess-t090',
+          operator_id: 'op-t090',
+          display_name: 'Test User',
+          role: 'admin',
+          tenant_id: 'tenant-1',
+          branch_id: 'branch-1',
+          started_at: new Date().toISOString(),
+        },
+      },
+    });
+    setCartFrozen();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    const continueBtn = screen.getByTestId('handoff-continue-button');
+    const voidBtn = screen.getByTestId('cart-void-button');
+    // Void appears after Continue per contact-sheet Surface 8.
+    const order = continueBtn.compareDocumentPosition(voidBtn);
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('cashier in frozen state cannot see the Void button at all (FR-032)', () => {
+    setSignedIn(); // role: cashier
+    setCartFrozen();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    expect(screen.queryByTestId('cart-void-button')).toBeNull();
+  });
+
+  it('clicking post-handoff Void opens the VoidConfirmation dialog', async () => {
+    useOperatorSessionStore.setState({
+      state: {
+        kind: 'signedIn',
+        session: {
+          id: 'sess-t090',
+          operator_id: 'op-t090',
+          display_name: 'Test User',
+          role: 'manager',
+          tenant_id: 'tenant-1',
+          branch_id: 'branch-1',
+          started_at: new Date().toISOString(),
+        },
+      },
+    });
+    setCartFrozen();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={[]}
+        _testInitialEnvelope={makeEnvelope()}
+      />,
+    );
+    await userEvent.click(screen.getByTestId('cart-void-button'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByText('Void this cart?')).toBeInTheDocument();
+  });
+});
+
+// ── Discount placement in cart line flow (Dev2) ───────────────────────────────
+
+describe('CartPane discount placement (Dev2)', () => {
+  it('renders discount placeholders inside the unified cart-pane__line-list, not in a separate section', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={ONE_LINE}
+        _testDiscountPlaceholders={[{ placeholderId: 'dp-1', attribution_operator_id: null }]}
+      />,
+    );
+    // The separate cart-pane__discount-list container must NOT exist any more.
+    expect(document.querySelector('.cart-pane__discount-list')).toBeNull();
+    // The discount placeholder must live inside the unified line list.
+    const discountRow = document.querySelector('.discount-placeholder-row');
+    expect(discountRow).not.toBeNull();
+    expect(discountRow?.closest('.cart-pane__line-list')).not.toBeNull();
+  });
+
+  it('renders the discount inside the matching line item when lineId is supplied', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={ONE_LINE}
+        _testDiscountPlaceholders={[
+          { placeholderId: 'dp-1', attribution_operator_id: null, lineId: 'line-1' },
+        ]}
+      />,
+    );
+    const lineItem = document.querySelector('[data-line-id="line-1"]');
+    expect(lineItem).not.toBeNull();
+    // The line's parent <li> in the unified list must contain the discount row.
+    const lineListItem = lineItem?.closest('.cart-pane__line-list-item');
+    expect(lineListItem?.querySelector('.discount-placeholder-row')).not.toBeNull();
+  });
+
+  it('placeholder with stale/unmatched lineId remains visible as an orphan row, not silently dropped', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={ONE_LINE}
+        _testDiscountPlaceholders={[
+          // lineId references a line that does not exist in the current cart.
+          // Could happen if the referenced line was removed while a discount
+          // referencing it is still in flight, or if the seed predates a
+          // cart mutation. The placeholder must still render.
+          { placeholderId: 'dp-stale', attribution_operator_id: null, lineId: 'line-removed' },
+        ]}
+      />,
+    );
+    // The stale-lineId placeholder appears in the unified list…
+    const discountRow = document.querySelector('.discount-placeholder-row');
+    expect(discountRow).not.toBeNull();
+    expect(discountRow?.closest('.cart-pane__line-list')).not.toBeNull();
+    // …but not nested inside the existing line-1 <li> (because line-removed
+    // is unmatched, the placeholder is routed to orphan tail rendering).
+    const lineOneItem = document.querySelector('[data-line-id="line-1"]');
+    expect(lineOneItem?.closest('.cart-pane__line-list-item')?.contains(discountRow)).toBe(false);
+    // Opaque copy preserved.
+    expect(discountRow?.textContent).toContain('Discount applied');
+  });
+
+  it('discount placeholder copy stays opaque ("Discount applied" only — no magnitude)', () => {
+    setSignedIn();
+    setCartEditing();
+    render(
+      <CartPane
+        _testBridge={makeBridge()}
+        _testInitialLines={ONE_LINE}
+        _testDiscountPlaceholders={[
+          { placeholderId: 'dp-1', attribution_operator_id: null, lineId: 'line-1' },
+        ]}
+      />,
+    );
+    const discountRow = document.querySelector('.discount-placeholder-row');
+    expect(discountRow?.textContent).toContain('Discount applied');
+    expect(discountRow?.textContent).not.toMatch(/\d+%/);
+    expect(discountRow?.textContent).not.toMatch(/[¤$]\d/);
+  });
+});
+
 // ── Button visibility by cart state ───────────────────────────────────────────
 
 describe('CartPane handoff button — empty / no-lines', () => {

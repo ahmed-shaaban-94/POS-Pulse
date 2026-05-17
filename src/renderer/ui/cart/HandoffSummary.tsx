@@ -16,9 +16,26 @@ import type { JSX } from 'react';
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope.js';
 import { touchTarget } from '../tokens/touch.js';
 
-export interface HandoffSummaryProps {
+/**
+ * Discriminated union enforcing that `onVoidRequest` is supplied iff
+ * `showVoid` is true. TypeScript will refuse a `showVoid: true` prop set
+ * without a handler — preventing a silently broken Void affordance from
+ * shipping. Manager/admin only — the parent (CartPane) gates on session
+ * role per FR-032 (cashier-forbidden post-handoff). When omitted or
+ * false, the button is rendered absent, not disabled, so it never
+ * enters the tab order or the cashier's awareness.
+ *
+ * Contact-sheet Surface 8: post-handoff Void sits at the bottom of the
+ * frozen summary, subordinate to the disabled "Continue to payment"
+ * button — not in the CartPane header.
+ */
+export type HandoffSummaryVoidProps =
+  | { showVoid?: false; onVoidRequest?: never }
+  | { showVoid: true; onVoidRequest: () => void };
+
+export type HandoffSummaryProps = {
   envelope: PaymentIntentEnvelope;
-}
+} & HandoffSummaryVoidProps;
 
 function formatMinorUnits(minor: number): string {
   const whole = Math.floor(minor / 100);
@@ -32,7 +49,8 @@ function formatTimestamp(isoString: string): string {
   return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
+export function HandoffSummary(props: HandoffSummaryProps): JSX.Element {
+  const { envelope } = props;
   return (
     <div className="handoff-summary" data-testid="handoff-summary">
       <div className="handoff-summary__banner" role="status">
@@ -86,6 +104,18 @@ export function HandoffSummary({ envelope }: HandoffSummaryProps): JSX.Element {
         >
           Continue to payment
         </button>
+        {props.showVoid && (
+          <button
+            type="button"
+            className="handoff-summary__void"
+            data-testid="cart-void-button"
+            data-variant="danger"
+            style={{ minHeight: touchTarget.min }}
+            onClick={props.onVoidRequest}
+          >
+            Void (post-handoff)
+          </button>
+        )}
       </div>
 
       <div className="handoff-summary__meta">

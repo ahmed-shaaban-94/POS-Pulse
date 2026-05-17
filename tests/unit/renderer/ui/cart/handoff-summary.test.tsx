@@ -12,8 +12,9 @@
  *   - No sensitive IDs (cart_id, operator_session_id, etc.) are rendered.
  */
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
 afterEach(cleanup);
@@ -274,6 +275,53 @@ describe('HandoffSummary — Continue to payment', () => {
     render(<HandoffSummary envelope={makeEnvelope()} />);
     const text = document.body.textContent;
     expect(text).not.toMatch(/payment success|paid|payment complete/i);
+  });
+});
+
+// ── Post-handoff Void (Dev3 — Surface 8 footer placement) ─────────────────────
+
+describe('HandoffSummary — post-handoff Void (Dev3)', () => {
+  it('does not render the Void button when showVoid is omitted', () => {
+    render(<HandoffSummary envelope={makeEnvelope()} />);
+    expect(screen.queryByTestId('cart-void-button')).toBeNull();
+  });
+
+  it('does not render the Void button when showVoid={false} (no handler permitted by type)', () => {
+    render(<HandoffSummary envelope={makeEnvelope()} showVoid={false} />);
+    expect(screen.queryByTestId('cart-void-button')).toBeNull();
+  });
+
+  it('renders the Void button inside the footer when showVoid={true}', () => {
+    render(<HandoffSummary envelope={makeEnvelope()} showVoid={true} onVoidRequest={vi.fn()} />);
+    const voidBtn = screen.getByTestId('cart-void-button');
+    expect(voidBtn).toBeInTheDocument();
+    expect(voidBtn.closest('.handoff-summary__footer')).not.toBeNull();
+  });
+
+  it('Void button is positioned after Continue-to-payment in DOM order (Surface 8)', () => {
+    render(<HandoffSummary envelope={makeEnvelope()} showVoid={true} onVoidRequest={vi.fn()} />);
+    const continueBtn = screen.getByTestId('handoff-continue-button');
+    const voidBtn = screen.getByTestId('cart-void-button');
+    const order = continueBtn.compareDocumentPosition(voidBtn);
+    expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('clicking the Void button invokes onVoidRequest', async () => {
+    const onVoidRequest = vi.fn();
+    render(
+      <HandoffSummary envelope={makeEnvelope()} showVoid={true} onVoidRequest={onVoidRequest} />,
+    );
+    await userEvent.click(screen.getByTestId('cart-void-button'));
+    expect(onVoidRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('Void button copy reads "Void (post-handoff)" — no IDs or magnitudes exposed', () => {
+    render(<HandoffSummary envelope={makeEnvelope()} showVoid={true} onVoidRequest={vi.fn()} />);
+    const voidBtn = screen.getByTestId('cart-void-button');
+    expect(voidBtn.textContent).toContain('Void');
+    // Ensure no sensitive envelope fields leak into the button label.
+    expect(voidBtn.textContent).not.toContain('cart-secret-id');
+    expect(voidBtn.textContent).not.toContain('handoff-action-secret');
   });
 });
 
