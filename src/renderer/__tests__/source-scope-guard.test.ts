@@ -4,6 +4,8 @@ import {
   FORBIDDEN_PATH_PREFIXES,
   CI_MAINTENANCE_BRANCH_PREFIX,
   CI_MAINTENANCE_EXEMPT_PREFIXES,
+  PAIRING_DEV_FIXTURE_BRANCH_PREFIX,
+  PAIRING_DEV_FIXTURE_EXEMPT_PREFIXES,
 } from './source-scope-guard.const';
 
 /**
@@ -92,8 +94,11 @@ describe('source-scope guard (T006)', () => {
       .map((l) => l.trim())
       .filter(Boolean);
 
-    // ci/ branches are permitted to modify .github/workflows/ — that is
-    // their sole purpose. All other forbidden prefixes stay blocked.
+    // Branch-specific exemptions narrow the forbidden list:
+    //   - ci/ branches may modify .github/workflows/ (their sole purpose).
+    //   - feat/002-dev-skip-pairing-fixture may modify src/main/pairing/
+    //     (approved 002 terminal-pairing dev fixture slice only).
+    // All other branches use the full forbidden list unchanged.
     //
     // Branch detection: GitHub Actions checks out a detached HEAD for PRs,
     // so `git rev-parse --abbrev-ref HEAD` returns "HEAD". Read the CI env
@@ -117,7 +122,11 @@ describe('source-scope guard (T006)', () => {
       ? FORBIDDEN_PATH_PREFIXES.filter(
           (p) => !(CI_MAINTENANCE_EXEMPT_PREFIXES as readonly string[]).includes(p),
         )
-      : FORBIDDEN_PATH_PREFIXES;
+      : currentBranch.startsWith(PAIRING_DEV_FIXTURE_BRANCH_PREFIX)
+        ? FORBIDDEN_PATH_PREFIXES.filter(
+            (p) => !(PAIRING_DEV_FIXTURE_EXEMPT_PREFIXES as readonly string[]).includes(p),
+          )
+        : FORBIDDEN_PATH_PREFIXES;
 
     const violations = changedFiles.filter((file) =>
       effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)),

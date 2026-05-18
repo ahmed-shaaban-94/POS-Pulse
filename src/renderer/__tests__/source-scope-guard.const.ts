@@ -45,3 +45,18 @@ export const CI_MAINTENANCE_BRANCH_PREFIX = 'ci/' as const;
 export const CI_MAINTENANCE_EXEMPT_PREFIXES = [
   '.github/workflows/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `feat/002-dev-skip-pairing-fixture` is an explicitly approved 002
+ * terminal-pairing dev fixture branch.  Its sole purpose is to add
+ * `POS_PULSE_DEV_SKIP_PAIRING` dev-only support inside `src/main/pairing/`.
+ *
+ * `src/main/pairing/` remains forbidden for all other feature slices.
+ * This exemption is NOT a general permission for future pairing changes —
+ * any future branch touching `src/main/pairing/` must add its own
+ * justified exemption here.
+ */
+export const PAIRING_DEV_FIXTURE_BRANCH_PREFIX = 'feat/002-dev-skip-pairing-fixture' as const;
+export const PAIRING_DEV_FIXTURE_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];
