@@ -314,6 +314,132 @@ dev environment must:
 
 ---
 
+## T100 Walkthrough Re-attempt — 2026-05-18 (main SHA `f667e5d`)
+
+**Date:** 2026-05-18
+**Branch:** main (SHA `f667e5d` — post PR #173 merge)
+**Attempted by:** T100 re-attempt after S5 reconciliation merge
+
+### Steps completed
+
+None. The live end-to-end walkthrough was not performed.
+
+### Blockers (two-prong)
+
+**Blocker 1 — No headed Electron environment (unchanged from prior attempt)**
+
+The automated terminal context provides no display server / GUI, no
+real process kill-and-relaunch capability, and no live SQLite inspection.
+This remains a hard blocker regardless of source state.
+
+**Blocker 2 — Source wiring gap: `CartBridgeHandlers` missing `cartStore`
+and `resolveItemRef` in `src/main/index.ts`**
+
+Even on real Windows 10/11 hardware running `npm run dev`, the live app
+cannot exercise the cart walkthrough as written, because
+`src/main/index.ts:445-450` constructs `CartBridgeHandlers` without the
+two optional dependencies that gate real cart behaviour:
+
+```typescript
+// src/main/index.ts (lines 445-450)
+const cartBridgeHandlers = new CartBridgeHandlers({
+  getCurrentSession: () => operatorSessionManager.getCurrent(),
+  logger: mainLogger,
+  auditEmitter,
+  // cartStore and resolveItemRef are absent
+});
+```
+
+Consequences:
+
+1. **`resolveItemRef` omitted** → the handler falls back to
+   `DEFAULT_ITEM_REF_RESOLVER` (`cart-bridge.ts:85-86`):
+
+   ```typescript
+   const DEFAULT_ITEM_REF_RESOLVER: ItemRefResolver = () =>
+     Promise.resolve({ kind: 'refused', reason: 'generic' });
+   ```
+
+   Every call to `cart.lines.add` with any `item_ref` (including the
+   five R7 fixture SKUs in `resolve-item-ref.ts`) is refused generically.
+   US1 step 3 ("Add line item A") cannot succeed.
+
+2. **`cartStore` omitted** → all cart state lives in an in-memory `Map`
+   only. The SQLite tables `carts`, `cart_lines`, and
+   `cart_action_outbox` are never written. Restart-survival (US1-AS4;
+   FR-028) and `audit_events` inspection (FR-026; SC-005) cannot be
+   verified even with a real process restart.
+
+These are source-level gaps that require a code change in
+`src/main/index.ts` before the live walkthrough can proceed. That change
+is outside the docs-only scope of T100.
+
+### Validation run (2026-05-18 re-attempt — source + test harness only)
+
+Performed on the source tree at main SHA `f667e5d`
+(not a substitute for the live walkthrough):
+
+| Check | Result |
+|:--|:--:|
+| `npm run typecheck` (both tsconfigs) | pass |
+| `npm run lint` (ESLint + Prettier) | exit 0 |
+| `npm run codegen:verify` (api-types.ts) | up to date |
+| Full test suite (`npm test -- --coverage`) | 39 test files, 378 passing, 3 skipped |
+
+The 3 skipped tests are documented gap-docs in
+`cart-redaction-smoke.test.ts` (T097), not failures.
+
+### Limitations
+
+- Automated tests and source review confirm the implementation is
+  correct per the acceptance scenarios, but are NOT a substitute for
+  the live walkthrough required by T100.
+- T100 remains **incomplete** and is NOT marked `[x]`.
+
+### Next action for T100 (updated two-prong)
+
+Both prongs must be resolved before T100 can be completed:
+
+**Prong A — Source wiring fix (source change, not a docs task)**
+
+Wire `cartStore` and `resolveItemRef` into the `CartBridgeHandlers`
+constructor call in `src/main/index.ts`. At minimum for a dev walkthrough:
+
+```typescript
+import { resolveItemRef } from './cart/resolve-item-ref';
+// inside the main() function, after cartStore is initialised:
+const cartBridgeHandlers = new CartBridgeHandlers({
+  getCurrentSession: () => operatorSessionManager.getCurrent(),
+  logger: mainLogger,
+  auditEmitter,
+  cartStore,          // enables SQLite persistence + restart-survival
+  resolveItemRef,     // enables R7 fixture SKUs in dev mode
+});
+```
+
+This is a source change outside T100's docs-only scope and must be
+tracked as a separate task (not T100, not T101/T102).
+
+**Prong B — Headed Electron environment**
+
+A reviewer with a Windows 10/11 machine and the POS-Pulse Electron
+dev environment (with Prong A applied) must:
+
+1. `git checkout main && npm install && npm run dev`
+2. Enable the cart feature flag (`POS_PULSE_FEATURE_CART=1`).
+3. Walk through US1, US2, US3, and the cross-cutting walkthroughs
+   in this file (above), using the R7 fixture SKUs
+   (e.g. `item_ref = "SKU-PARA-500"`).
+4. Verify restart-survival by killing and relaunching the Electron
+   process while signed in; confirm cart lines persist across restart.
+5. Inspect `audit_events` rows in the live SQLite file after handoff,
+   post-handoff void, and session-end to verify the five mandatory
+   attribution attributes (FR-026; SC-005).
+6. Record pass/fail for each "Expect" line with a spec reference.
+7. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
+
+---
+
 **End of quickstart.** Once Slices S1 + S2 + S3 + S4 ship behind the
 feature flag, a reviewer signs off on the user stories by walking
 through US1, US2, US3, and the cross-cutting walkthroughs above. Each
