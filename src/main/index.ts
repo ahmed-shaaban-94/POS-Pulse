@@ -16,6 +16,7 @@ import { createSecretStore } from './secrets/index.js';
 import { createLogger } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
+import { applyDevSkipPairingIfRequested } from './pairing/dev-skip-pairing.js';
 import { AuditEmitter } from './audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from './audit/audit-events-store.js';
 import { createNetwork } from './pairing/network.js';
@@ -256,6 +257,17 @@ app
       secretStore,
       db: bindPairingStoreDb(dbHandle),
       deviceTokenKey: DEVICE_TOKEN_KEY,
+    });
+
+    // 002-terminal-pairing dev bypass — seeds fixture pairing state so the
+    // renderer routes past /pairing in unpackaged dev builds.
+    // SECURITY: isPackaged guard is inside applyDevSkipPairingIfRequested;
+    // this call is a no-op in every packaged build regardless of env vars.
+    await applyDevSkipPairingIfRequested({
+      isPackaged: app.isPackaged,
+      env: process.env,
+      pairingStore,
+      logger: mainLogger,
     });
 
     // 002-terminal-pairing T021/T023/T025 — construct the pairing

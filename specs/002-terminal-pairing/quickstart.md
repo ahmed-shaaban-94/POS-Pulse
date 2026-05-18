@@ -191,6 +191,54 @@ npm test -- --coverage
 Open the PR using the project template. The Constitution Check line on the review must cite
 principles III, V, VI, VII, VIII (the ones this feature meaningfully exercises).
 
+## 11. Dev pairing bypass
+
+For local development without a live SmartDataPulse backend, the terminal-pairing screen can
+be bypassed by setting the `POS_PULSE_DEV_SKIP_PAIRING` environment variable before launching:
+
+```bash
+POS_PULSE_DEV_SKIP_PAIRING=1 npm run dev
+```
+
+PowerShell:
+
+```powershell
+$env:POS_PULSE_DEV_SKIP_PAIRING="1"; npm run dev
+```
+
+When the flag is truthy (`1`, `true`, `yes`, `on`) **and** the build is unpackaged
+(`app.isPackaged === false`), the main process writes fixture pairing state to the store
+before the renderer loads:
+
+| Field | Fixture value |
+|:--|:--|
+| `tenant_id` | `dev-tenant` |
+| `branch_id` | `dev-branch` |
+| `terminal_id` | `dev-terminal` |
+| `terminal_label` | `Dev Terminal` |
+
+A warning log entry is emitted with `event: 'pairing.dev_bypass.active'`. The `device_token`
+is an obviously fake placeholder string and is never included in any log payload or passed to
+the renderer (`PairingStatus` carries no token field by design).
+
+**Security invariants:**
+- `app.isPackaged === true` short-circuits unconditionally — the env var cannot activate the
+  bypass in a packaged build, even if exported.
+- No backend pairing endpoint is called in bypass mode.
+- No `device_token`, `pairing_code`, or credential values appear in logs or IPC payloads.
+
+Combined T100 dev launch (cart + fixture item resolver + pairing bypass):
+
+```bash
+POS_PULSE_DEV_SKIP_PAIRING=1 POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
+```
+
+PowerShell:
+
+```powershell
+$env:POS_PULSE_DEV_SKIP_PAIRING="1"; $env:POS_PULSE_FEATURE_CART="1"; $env:POS_PULSE_DEV_ITEM_RESOLVER="1"; npm run dev
+```
+
 ## What this quickstart deliberately leaves out
 
 - No admin-side pairing UI work (separate repo).
