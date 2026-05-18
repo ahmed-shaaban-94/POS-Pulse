@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import type { Logger } from 'pino';
 
 import { createCartBridgeHandlers } from '../../../../src/main/cart/wire-cart-handlers.js';
+import { AuditEmitter } from '../../../../src/main/audit/audit-emitter.js';
 import { makeSqlJsHandle } from './__helpers__/sql-js-handle.js';
 import type { OperatorSessionRecord } from '../../../../src/main/operator/session-manager.js';
 
@@ -35,6 +37,22 @@ let SQL: SqlJsStatic;
 beforeAll(async () => {
   SQL = await initSqlJs();
 });
+
+function makeTestLogger(): Logger {
+  return {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+    trace: vi.fn(),
+    fatal: vi.fn(),
+    child: vi.fn(),
+  } as unknown as Logger;
+}
+
+function makeTestAuditEmitter(): AuditEmitter {
+  return new AuditEmitter({ insertIgnore: () => {} });
+}
 
 function freshDb(): SqlJsDatabase {
   const db = new SQL.Database();
@@ -67,10 +85,8 @@ describe('production cart wiring (T100 regression)', () => {
     const handlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => session,
-      // pino logger not needed; wire-cart-handlers accepts Logger type
-      // but CartBridgeHandlersDeps marks it optional — pass undefined cast
-      logger: undefined as never,
-      auditEmitter: undefined as never,
+      logger: makeTestLogger(),
+      auditEmitter: makeTestAuditEmitter(),
     });
 
     const result = await handlers.create({ idempotency_key: 'ikey-t100-wiring' });

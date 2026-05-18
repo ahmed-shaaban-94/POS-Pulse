@@ -437,16 +437,21 @@ dev environment (with Prong A applied) must:
 
 1. `git checkout main && npm install && npm run dev`
 2. Enable the cart feature flag (`POS_PULSE_FEATURE_CART=1`).
-3. Walk through US1, US2, US3, and the cross-cutting walkthroughs
-   in this file (above), using the R7 fixture SKUs
-   (e.g. `item_ref = "SKU-PARA-500"`).
-4. Verify restart-survival by killing and relaunching the Electron
-   process while signed in; confirm cart lines persist across restart.
-5. Inspect `audit_events` rows in the live SQLite file after handoff,
+3. Walk through the non-line flows only (current scope):
+   - `cart.create` — create a new cart and verify it persists across
+     process restart (restart-survival, FR-028).
+   - `cart.void` — void the draft cart; verify state transitions.
+   - `cart.subscribe` — verify subscription events fire on state change.
+   - Session-end discard — sign out; verify the draft cart is cancelled.
+   - **Skip US1 line-addition steps** (`cart.lines.add`) — `resolveItemRef`
+     is intentionally unwired; all item refs refuse with `reason: 'generic'`
+     until the item-catalogue feature ships (T053 / R7 seam).
+4. Inspect `audit_events` rows in the live SQLite file after void,
    post-handoff void, and session-end to verify the five mandatory
    attribution attributes (FR-026; SC-005).
-6. Record pass/fail for each "Expect" line with a spec reference.
-7. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
+5. Record pass/fail for each "Expect" line exercised (non-line flows only),
+   noting which steps are deferred to T053.
+6. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
 
 ---
 
