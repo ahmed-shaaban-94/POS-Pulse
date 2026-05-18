@@ -400,25 +400,35 @@ The 3 skipped tests are documented gap-docs in
 
 Both prongs must be resolved before T100 can be completed:
 
-**Prong A — Source wiring fix (source change, not a docs task)**
+**Prong A — Source wiring fix (DONE — merged in this branch)**
 
-Wire `cartStore` and `resolveItemRef` into the `CartBridgeHandlers`
-constructor call in `src/main/index.ts`. At minimum for a dev walkthrough:
+`cartStore` is now wired via `createCartBridgeHandlers` in
+`src/main/cart/wire-cart-handlers.ts`, called from `src/main/index.ts`.
+`src/main/index.ts` now constructs:
 
 ```typescript
-import { resolveItemRef } from './cart/resolve-item-ref';
-// inside the main() function, after cartStore is initialised:
-const cartBridgeHandlers = new CartBridgeHandlers({
+const cartBridgeHandlers = createCartBridgeHandlers({
+  dbHandle,
   getCurrentSession: () => operatorSessionManager.getCurrent(),
   logger: mainLogger,
   auditEmitter,
-  cartStore,          // enables SQLite persistence + restart-survival
-  resolveItemRef,     // enables R7 fixture SKUs in dev mode
 });
 ```
 
-This is a source change outside T100's docs-only scope and must be
-tracked as a separate task (not T100, not T101/T102).
+`bindCartStore(dbHandle)` is wired inside the factory. This enables SQLite
+persistence and restart-survival for `cart.create` and all cart mutations.
+
+`resolveItemRef` is intentionally NOT wired. The `resolve-item-ref.ts` module
+is self-documented as a test-only fixture with 5 hard-coded pharmacy SKUs; it
+is not a production item catalogue. `cart-bridge.ts` already ships
+`DEFAULT_ITEM_REF_RESOLVER` (refuses generically for all item refs) as the
+correct production fallback. The real production resolver lands when the
+item-catalogue feature ships (T053 / R7 seam).
+
+This means `cart.lines.add` refuses all item refs in the live Electron
+walkthrough — this is the expected production behaviour at current scope.
+The T100 live walkthrough can only exercise `cart.create`, `cart.void`,
+`cart.subscribe`, and related non-line flows until T053 ships.
 
 **Prong B — Headed Electron environment**
 
