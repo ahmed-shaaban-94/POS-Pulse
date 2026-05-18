@@ -400,25 +400,35 @@ The 3 skipped tests are documented gap-docs in
 
 Both prongs must be resolved before T100 can be completed:
 
-**Prong A — Source wiring fix (source change, not a docs task)**
+**Prong A — Source wiring fix (DONE — merged in this branch)**
 
-Wire `cartStore` and `resolveItemRef` into the `CartBridgeHandlers`
-constructor call in `src/main/index.ts`. At minimum for a dev walkthrough:
+`cartStore` is now wired via `createCartBridgeHandlers` in
+`src/main/cart/wire-cart-handlers.ts`, called from `src/main/index.ts`.
+`src/main/index.ts` now constructs:
 
 ```typescript
-import { resolveItemRef } from './cart/resolve-item-ref';
-// inside the main() function, after cartStore is initialised:
-const cartBridgeHandlers = new CartBridgeHandlers({
+const cartBridgeHandlers = createCartBridgeHandlers({
+  dbHandle,
   getCurrentSession: () => operatorSessionManager.getCurrent(),
   logger: mainLogger,
   auditEmitter,
-  cartStore,          // enables SQLite persistence + restart-survival
-  resolveItemRef,     // enables R7 fixture SKUs in dev mode
 });
 ```
 
-This is a source change outside T100's docs-only scope and must be
-tracked as a separate task (not T100, not T101/T102).
+`bindCartStore(dbHandle)` is wired inside the factory. This enables SQLite
+persistence and restart-survival for `cart.create` and all cart mutations.
+
+`resolveItemRef` is intentionally NOT wired. The `resolve-item-ref.ts` module
+is self-documented as a test-only fixture with 5 hard-coded pharmacy SKUs; it
+is not a production item catalogue. `cart-bridge.ts` already ships
+`DEFAULT_ITEM_REF_RESOLVER` (refuses generically for all item refs) as the
+correct production fallback. The real production resolver lands when the
+item-catalogue feature ships (T053 / R7 seam).
+
+This means `cart.lines.add` refuses all item refs in the live Electron
+walkthrough — this is the expected production behaviour at current scope.
+The T100 live walkthrough can only exercise `cart.create`, `cart.void`,
+`cart.subscribe`, and related non-line flows until T053 ships.
 
 **Prong B — Headed Electron environment**
 
@@ -427,16 +437,21 @@ dev environment (with Prong A applied) must:
 
 1. `git checkout main && npm install && npm run dev`
 2. Enable the cart feature flag (`POS_PULSE_FEATURE_CART=1`).
-3. Walk through US1, US2, US3, and the cross-cutting walkthroughs
-   in this file (above), using the R7 fixture SKUs
-   (e.g. `item_ref = "SKU-PARA-500"`).
-4. Verify restart-survival by killing and relaunching the Electron
-   process while signed in; confirm cart lines persist across restart.
-5. Inspect `audit_events` rows in the live SQLite file after handoff,
+3. Walk through the non-line flows only (current scope):
+   - `cart.create` — create a new cart and verify it persists across
+     process restart (restart-survival, FR-028).
+   - `cart.void` — void the draft cart; verify state transitions.
+   - `cart.subscribe` — verify subscription events fire on state change.
+   - Session-end discard — sign out; verify the draft cart is cancelled.
+   - **Skip US1 line-addition steps** (`cart.lines.add`) — `resolveItemRef`
+     is intentionally unwired; all item refs refuse with `reason: 'generic'`
+     until the item-catalogue feature ships (T053 / R7 seam).
+4. Inspect `audit_events` rows in the live SQLite file after void,
    post-handoff void, and session-end to verify the five mandatory
    attribution attributes (FR-026; SC-005).
-6. Record pass/fail for each "Expect" line with a spec reference.
-7. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
+5. Record pass/fail for each "Expect" line exercised (non-line flows only),
+   noting which steps are deferred to T053.
+6. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
 
 ---
 

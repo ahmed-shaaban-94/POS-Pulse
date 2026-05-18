@@ -9,7 +9,7 @@ import { registerAppConfigHandler } from './ipc/app-config.js';
 import { registerPairingHandlers } from './ipc/pairing.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
 import { registerCartHandlers } from './ipc/cart.js';
-import { CartBridgeHandlers } from './cart/cart-bridge.js';
+import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -439,10 +439,11 @@ app
       }),
     });
 
-    // 005-sales-cart S1 — register `cart:*` IPC. Handler stub set:
-    // cart.create is in-memory; all other handlers are role-gated and
-    // return refused/not_implemented until S2 wires persistence (§A2).
-    const cartBridgeHandlers = new CartBridgeHandlers({
+    // 005-sales-cart S2 — register `cart:*` IPC with DB-backed CartStore.
+    // resolveItemRef defaults to the refusing stub in cart-bridge.ts until
+    // the item-catalogue feature ships (T053 / R7).
+    const cartBridgeHandlers = createCartBridgeHandlers({
+      dbHandle,
       getCurrentSession: () => operatorSessionManager.getCurrent(),
       logger: mainLogger,
       auditEmitter,
