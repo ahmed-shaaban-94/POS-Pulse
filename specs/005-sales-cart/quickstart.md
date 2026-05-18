@@ -472,6 +472,87 @@ dev environment (with Prong A applied) must:
 
 ---
 
+## T100 Walkthrough Attempt — 2026-05-18 (main SHA `b4df5e3` — post PR #176)
+
+**Date:** 2026-05-18
+**Branch:** main (SHA `b4df5e3` — PR #175 + PR #176 merged)
+**Attempted by:** T100 walkthrough pass (automated terminal)
+
+### Source state at this attempt
+
+Both Prong A blockers from the prior attempt are now resolved on main:
+
+- **PR #175** (merged): `createCartBridgeHandlers` factory wires `bindCartStore(dbHandle)` —
+  SQLite-backed `CartStore` is now live in production wiring.
+- **PR #176** (merged): dev-only fixture resolver wired behind `isPackaged` guard +
+  `POS_PULSE_DEV_ITEM_RESOLVER` env flag — `cart.lines.add` can now succeed in an
+  unpackaged dev build with the env flag set.
+
+### Steps completed
+
+None. The live end-to-end walkthrough was not performed.
+
+### Remaining blocker
+
+**Blocker — No headed Electron environment (unchanged from all prior attempts)**
+
+The automated terminal context provides no display server / GUI, no real
+process kill-and-relaunch capability, and no live SQLite inspection. This
+remains the **only outstanding blocker** for T100. There are no remaining
+source-level gaps.
+
+Required for the walkthrough:
+1. A live Electron renderer (display server / GUI) to exercise the sign-in
+   surface and cart pane visually.
+2. A real process kill-and-relaunch to verify restart-survival (US1-AS4; FR-028).
+3. Live SQLite inspection to verify `carts`, `cart_lines`, `cart_action_outbox`,
+   and `audit_events` rows after each action.
+4. Both env flags set: `POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1`.
+
+### Validation run (2026-05-18 — source + test harness only)
+
+Performed on main SHA `b4df5e3`
+(not a substitute for the live walkthrough):
+
+| Check | Result |
+|:--|:--:|
+| `npm run typecheck` (all 3 tsconfigs) | ✅ clean |
+| `npm run lint` | ❌ OOM (heap exhaustion on full-repo ESLint+Prettier scan — pre-existing machine-level constraint; targeted per-file ESLint on changed files passes cleanly) |
+| `npm run codegen:verify` | ✅ up to date |
+| `tests/unit/main/cart/` (23 files, 202 tests) | ✅ pass |
+| `tests/integration/main/cart/` (8 files, 32 tests) | ✅ pass |
+| `tests/integration/renderer/ui/cart/` (2 files, 31 tests) | ✅ pass |
+| `tests/integration/renderer/a11y/` (3 files, 30 tests) | ✅ pass |
+| `tests/contract/cart-bridge.contract.test.ts` (26 tests) | ✅ pass |
+| `tests/integration/cross-process-redaction-cart.test.ts` (39 pass / 3 skipped gap-docs) | ✅ pass |
+
+The 3 skipped tests are documented gap-docs in the redaction smoke suite (T097), not failures.
+The `npm run lint` OOM is a pre-existing machine-level constraint; targeted ESLint on the
+4 PR #176 files passed cleanly in the PR validation session.
+
+### T100 status
+
+T100 remains **incomplete** and is NOT marked `[x]`.
+Prong A (source wiring) is fully resolved on main.
+Prong B (headed Electron environment) remains the sole outstanding blocker.
+
+### Next action for T100
+
+The next action is identical to Prong B above. A reviewer with a Windows 10/11
+machine and the POS-Pulse Electron dev environment must:
+
+1. `git checkout main && npm install`
+2. Launch:
+   ```
+   POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
+   ```
+   (PowerShell: `$env:POS_PULSE_FEATURE_CART="1"; $env:POS_PULSE_DEV_ITEM_RESOLVER="1"; npm run dev`)
+3. Walk through US1, US2, US3, and the cross-cutting walkthroughs in this file.
+4. Record pass/fail for each "Expect" line with a spec reference.
+5. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
+
+---
+
 **End of quickstart.** Once Slices S1 + S2 + S3 + S4 ship behind the
 feature flag, a reviewer signs off on the user stories by walking
 through US1, US2, US3, and the cross-cutting walkthroughs above. Each
