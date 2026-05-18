@@ -236,6 +236,84 @@ freezes. The future payment / checkout feature consumes the envelope.
 
 ---
 
+---
+
+## T100 Walkthrough Attempt — 2026-05-18
+
+**Date:** 2026-05-18
+**Branch:** main (SHA `897815c`)
+**Attempted by:** S5 reconciliation pass
+
+### Steps completed
+
+None. The live end-to-end walkthrough was not performed.
+
+### Blocker
+
+The T100 walkthrough requires a **headed Electron environment** with:
+
+1. A live Electron renderer (display server / GUI) to exercise the
+   sign-in surface and cart pane visually.
+2. The R7 fixture item-ref resolver wired to real bridge calls
+   (`cart.resolveItemRef`) — the seam stub used in integration tests is
+   not a substitute for the live walkthrough.
+3. A real SQLite database to verify restart-survival (US1-AS4; FR-028).
+4. The ability to inspect `audit_events` rows after handoff, void, and
+   session-end to verify the five mandatory attribution attributes
+   (FR-026; SC-005).
+
+None of these are available in an automated terminal context. Attempting
+the walkthrough without them would produce false results — e.g., marking
+restart-survival as passed without restarting a real Electron process, or
+marking audit-trail as passed without querying a live SQLite file.
+
+### Validation run (2026-05-18 — source + test harness only)
+
+The following validation was performed on the source tree (not a
+substitute for the live walkthrough, but documents the state of the
+codebase at T100 attempt time):
+
+| Check | Result |
+|:--|:--:|
+| `npm run typecheck` (both tsconfigs) | ✅ clean |
+| `npm run lint` (ESLint + Prettier) | ✅ exit 0 |
+| `npm run codegen:verify` (api-types.ts) | ✅ up to date |
+| `tests/unit/shared/cart/` (27 tests) | ✅ pass |
+| `tests/unit/main/cart/` (24 tests) | ✅ pass |
+| `tests/integration/main/cart/` (23 tests) | ✅ pass |
+| `tests/integration/renderer/ui/cart/` (9 tests) | ✅ pass |
+| `tests/integration/renderer/ui/cart/cart-pane-shell-slot.test.tsx` (12 tests) | ✅ pass |
+| `tests/integration/renderer/a11y/` (9 tests) | ✅ pass |
+| `tests/integration/renderer/ui/cart/cart-redaction-smoke.test.ts` (39 pass / 3 skipped gap-docs) | ✅ pass |
+
+**Total: 7 test suites, all passing. 3 skipped tests are documented
+gap-docs in the redaction smoke suite (T097), not failures.**
+
+### Limitations
+
+- Source review and automated tests confirm the implementation is correct
+  per the acceptance scenarios, but they are NOT a substitute for the
+  live walkthrough required by T100.
+- Visual appearance, touch-target sizing in a real GUI, actual SQLite
+  persistence after process kill-and-relaunch, and real `audit_events`
+  row content are not verifiable from source alone.
+- T100 remains **incomplete** and is NOT marked `[x]` until a reviewer
+  performs the full live walkthrough on hardware.
+
+### Next action for T100
+
+A reviewer with a Windows 10/11 machine and the POS-Pulse Electron
+dev environment must:
+
+1. `git checkout main && npm install && npm run dev`
+2. Enable the cart feature flag (`POS_PULSE_FEATURE_CART=1`).
+3. Walk through US1, US2, US3, and the cross-cutting walkthroughs
+   in this file (above).
+4. Record pass/fail for each "Expect" line with a spec reference.
+5. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
+
+---
+
 **End of quickstart.** Once Slices S1 + S2 + S3 + S4 ship behind the
 feature flag, a reviewer signs off on the user stories by walking
 through US1, US2, US3, and the cross-cutting walkthroughs above. Each
