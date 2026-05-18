@@ -227,12 +227,30 @@ Per T093 (axe-clean) and T095 (keyboard-nav):
 > This review document is a read-only deliverable. Source fixes are outside the T096 scope.
 > Each item below is an input for the team's backlog.
 
-- [ ] **[BLOCKER — P2]** Fix Dev1: add `CartState.empty` exclusion to `canVoid` guard in `CartPane.tsx`.
-- [ ] **[BLOCKER — P2]** Fix Dev2: restructure discount placeholder to render inline within `LineItemRow`, matching contact-sheet Surface 4.
-- [ ] **[BLOCKER — P2]** Fix Dev3: move post-handoff Void action from CartPane header into `HandoffSummary` footer, matching contact-sheet Surface 8.
-- [ ] **[LOW]** Resolve Dev4: either remove "Order summary" heading or accept and update `contact-sheet.md`.
-- [ ] **[LOW]** Resolve Dev5: replace `✓` character with `<svg aria-hidden="true">` in `HandoffSummary` banner.
-- [ ] **[DEFERRED]** Live pixel inspection on Windows hardware — confirm colour rendering, font rasterisation, RTL layout, and spinner animation under all 6 states.
+- [x] **[FIXED — PR #172]** Dev1: `canVoid` guard in `CartPane.tsx` now excludes `CartState.empty`
+  (lines 209–213; `activeCart.state !== CartState.empty` condition added).
+  Verified by `cart-pane-shell-slot.test.tsx` — "Void is absent in the empty state (Dev1)".
+- [x] **[FIXED — PR #172]** Dev2: discount placeholders now render inline within the unified
+  `cart-pane__line-list` via `discountsByLine` grouping (`CartPane.tsx` lines 281–295 / 486–494).
+  Orphan placeholders remain visible at the tail of the line list; no separate `__discount-list`
+  section. Verified by `cart-pane-shell-slot.test.tsx` — "discount placeholders live within the
+  unified cart line list (Dev2)".
+- [x] **[FIXED — PR #172]** Dev3: post-handoff Void is now rendered inside `HandoffSummary`
+  footer (below the disabled "Continue to payment" button) via `showVoidInHandoff` prop
+  (`CartPane.tsx` lines 214–216, `HandoffSummary.tsx` lines 107–118). The CartPane header
+  retains Void only as a degraded fallback when the envelope has not yet hydrated.
+  Verified by `cart-pane-shell-slot.test.tsx` — "frozen-state Void lives in HandoffSummary
+  footer for elevated roles (Dev3)"; `handoff-summary.test.tsx` — "Void button is positioned
+  after Continue-to-payment in DOM order (Surface 8)".
+- [ ] **[LOW — P3 / deferred]** Dev4: "Order summary" uppercase heading present in
+  `HandoffSummary.tsx` — not specified in contact-sheet Surface 8. Low-risk addition; no
+  layout disruption. Accept as intentional or update contact-sheet at §A5 review time.
+- [ ] **[LOW — P3 / deferred]** Dev5: `✓` plain-text banner icon in `HandoffSummary.tsx`
+  instead of `<svg aria-hidden="true">`. Not an axe violation (icon is `aria-hidden`). Replace
+  with SVG before §A5 production-readiness gate for high-contrast robustness.
+- [ ] **[DEFERRED]** Live pixel inspection on Windows hardware — confirm colour rendering,
+  font rasterisation, RTL layout, and spinner animation under all 6 states. No display
+  server available in CI/automated context; defer to operator-driven hardware smoke run.
 
 ---
 
@@ -241,11 +259,17 @@ Per T093 (axe-clean) and T095 (keyboard-nav):
 | Field | Value |
 |:--|:--|
 | Reviewer | Ahmed Shaaban |
-| Date | 2026-05-17 |
+| Review date | 2026-05-17 |
+| Fix sign-off date | 2026-05-18 |
 | Audit score | 18 / 20 — Excellent |
-| P2 deviations | 3 (Dev1, Dev2, Dev3) — source fixes required |
-| P3 deviations | 2 (Dev4, Dev5) — low risk, team decision needed |
-| Overall verdict | **Conditional pass — P2 fixes required before S5 visual closure** |
+| P2 deviations | 3 (Dev1, Dev2, Dev3) — **all fixed by PR #172** |
+| P3 deviations | 2 (Dev4, Dev5) — low risk, deferred to §A5 |
+| Overall verdict | **PASS — P2 fixes confirmed on main (SHA `897815c`)** |
 
-> S5 visual closure is blocked on Dev1, Dev2, and Dev3. T096 is complete as a review artifact;
-> source correction tasks are separate backlog items outside the T096 scope.
+> **T096 complete.** PR #171 produced this review artifact (branch
+> `docs/005-s5-screenshot-review`); PR #172 (branch `fix/005-s5-p2-visual-deviations`,
+> merge commit `897815c`) resolved all three P2 blockers. Verification method: source-code
+> analysis of `CartPane.tsx` + `HandoffSummary.tsx` on main, confirmed by named test
+> assertions in `cart-pane-shell-slot.test.tsx` and `handoff-summary.test.tsx`.
+> Dev4 and Dev5 remain low-risk P3 items deferred to §A5.
+> Live pixel inspection remains deferred (no hardware display in this session).

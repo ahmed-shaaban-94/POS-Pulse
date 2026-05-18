@@ -5,11 +5,11 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-17 (S5-b complete — PRs #168/#169 merged; T097–T099 done; T096, T100 remain in S5)
+**Last updated:** 2026-05-18 (T096 visual review complete — PR #171 artifact + PR #172 Dev1/Dev2/Dev3 fixes verified on main SHA `897815c`; T100 remains open, walkthrough blocked pending headed Electron environment)
 
 ---
 
-> # ◐ S5-b COMPLETE — T096 and T100 remain in S5
+> # ◐ T096 COMPLETE — T100 remains in S5
 >
 > **§A0 cleared 2026-05-14.** S0 ✅. Phase 2 ✅. S1 ✅. S2 ✅.
 > S3 ✅ (PR #157 + PR #159, 2026-05-17).
@@ -25,7 +25,14 @@
 > **S5-b ✅ COMPLETE 2026-05-17** — T097 merged via PR #168 (merge
 > commit `57ba99f`); T098–T099 merged via PR #169 (merge commit
 > `50d780b`); docs-only slice, no production source touched.
-> **Remaining S5 work:** T096 visual review, T100 quickstart walkthrough.
+> **T096 ✅ COMPLETE 2026-05-18** — PR #171 artifact (`s5-screenshot-review.md`)
+> present; PR #172 Dev1/Dev2/Dev3 fixes verified on main SHA `897815c`
+> (`canVoid` guard, discount inline grouping, `showVoidInHandoff` split);
+> review record updated; live pixel inspection deferred (headed Electron
+> env unavailable); Dev4/Dev5 deferred P3.
+> **Remaining S5 work:** T100 quickstart walkthrough (blocked — headed
+> Electron environment required; R7+SQLite+audit_events harness unavailable
+> in automated terminal context).
 > §A5 remains a production-rollout-only gate (does not block S5 merges).
 
 ---
@@ -45,7 +52,7 @@ phase status. Updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **S5-b COMPLETE — T096 and T100 remain in S5.**
+- **Phase:** **T096 COMPLETE 2026-05-18 — T100 remains in S5.**
   - §A0: ✅ cleared 2026-05-14.
   - Phase 1 (T001–T005): ✅ complete.
   - Phase 2 / foundational types (T006–T016): ✅ complete.
@@ -75,8 +82,12 @@ phase status. Updated in place as coordination items resolve.
     + 3 skipped gap docs. T098–T099 merged via PR #169 (merge commit
     `50d780b`); runbook entry + operator onboarding guide. Docs-only
     slice; no production source touched.**
-  - **S5 remaining (T096, T100): not started.** T096 visual review,
-    T100 quickstart walkthrough.
+  - **T096 ✅ COMPLETE 2026-05-18** — visual review record updated; PR #171
+    artifact present; PR #172 Dev1/Dev2/Dev3 fixes verified on main SHA
+    `897815c`. Live pixel inspection deferred; Dev4/Dev5 deferred P3.
+  - **T100: not started.** Quickstart walkthrough blocked — headed Electron
+    environment required (R7+SQLite+audit_events harness unavailable in
+    automated terminal context).
   - §A5: rollout-time gate — does not block slice merges.
 - **Spec Kit artifacts (all present and approved):**
   - `spec.md` — `§A0 CLEARED`; Q1–Q5 locked 2026-05-14.
@@ -419,8 +430,10 @@ listed in dependency order; some may be worked in parallel once
 2026-05-17). §A4 ✅ CLEARED 2026-05-17. S4 ✅ COMPLETE 2026-05-17
 (PR #162 T076–T088, T091 + PR #163 T089–T090). **S5-a ✅ COMPLETE
 2026-05-17 (PR #166 T092–T095). S5-b ✅ COMPLETE 2026-05-17 (PR #168
-T097 + PR #169 T098–T099).** Remaining S5 work: T096 visual review,
-T100 quickstart walkthrough. §A5 blocks production rollout only.
+T097 + PR #169 T098–T099). T096 ✅ COMPLETE 2026-05-18 (visual review
+record updated; PR #171 artifact + PR #172 Dev1/Dev2/Dev3 fixes verified
+on main SHA `897815c`).** Remaining S5 work: T100 quickstart walkthrough
+(blocked — headed Electron env required). §A5 blocks production rollout only.
 
 ---
 
@@ -443,7 +456,7 @@ T100 quickstart walkthrough. §A5 blocks production rollout only.
 13. ✅ S5-b complete (PR #168 T097 redaction smoke + PR #169 T098–T099 runbook/onboarding, 2026-05-17).
 
 **Remaining per-slice gates:** §A5 (production rollout only).
-**Next startable work: T096 visual review, T100 quickstart walkthrough.**
+**Next startable work: T100 quickstart walkthrough** (requires headed Electron environment with R7 fixture resolver, SQLite persistence, and audit_events inspection).
 
 ---
 
@@ -483,15 +496,18 @@ handoff-envelope version field = string literal `'v1'`.
 | S4 (T076–T091) | ✅ | 2026-05-17 | PR #162 (T076–T088, T091) + PR #163 (T089–T090) |
 | S5-a (T092–T095 a11y + shell-slot tests) | ✅ | 2026-05-17 | PR #166 (merge `5a13be7`) |
 | S5-b (T097–T099 redaction smoke + runbook/onboarding) | ✅ | 2026-05-17 | PR #168 (T097, merge `57ba99f`) + PR #169 (T098–T099, merge `50d780b`) |
-| S5 remaining (T096, T100) | ⏳ not started | — | — |
+| T096 visual review | ✅ | 2026-05-18 | PR #171 artifact + PR #172 fixes on main SHA `897815c` |
+| T100 quickstart walkthrough | ⏳ blocked | — | Headed Electron env required |
 
 ## Explicit non-actions (current state)
 
 The following have **NOT yet started** and MUST NOT start without
 the corresponding gate clearing:
 
-- ❌ S5 remaining work (T096 visual review, T100 quickstart walkthrough)
-  not yet started.
+- ✅ T096 visual review complete 2026-05-18 (PR #171 artifact + PR #172 Dev1/Dev2/Dev3 fixes
+  verified on main SHA `897815c`).
+- ❌ T100 quickstart walkthrough not yet started — blocked pending headed Electron
+  environment (R7+SQLite+audit_events harness unavailable in automated terminal context).
 - ❌ §A5 production-readiness review not yet started (rollout-time
   gate; reviewer assigned at production-rollout PR open time).
 - ❌ No backend / Data-Pulse-2 changes for 005 (cart drafts are
@@ -529,6 +545,9 @@ ratified by Ahmed Shaaban). S4 complete 2026-05-17 (PR #162 T076–T088, T091
 merge `dc3c383`; PR #163 T089–T090 merge `14456a0`; main SHA `14456a0`).
 S5-a complete 2026-05-17 (PR #166 T092–T095 merge `5a13be7`).
 S5-b complete 2026-05-17 (PR #168 T097 merge `57ba99f`; PR #169 T098–T099
-merge `50d780b`; main SHA `50d780b`). S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅,
-S3 ✅, §A4 ✅, S4 ✅, S5-a ✅, S5-b ✅.
-**Next work: T096 visual review, T100 quickstart walkthrough.**
+merge `50d780b`; main SHA `50d780b`).
+T096 visual review complete 2026-05-18 (PR #171 artifact + PR #172
+Dev1/Dev2/Dev3 fixes verified on main SHA `897815c`).
+S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅, §A4 ✅, S4 ✅, S5-a ✅, S5-b ✅,
+T096 ✅.
+**Next work: T100 quickstart walkthrough** (requires headed Electron env).
