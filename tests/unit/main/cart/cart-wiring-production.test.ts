@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 import { readFileSync } from 'fs';
 import path from 'path';
@@ -21,6 +21,12 @@ import type { OperatorSessionRecord } from '../../../../src/main/operator/sessio
  *
  * After the fix, `createCartBridgeHandlers` supplies `bindCartStore(dbHandle)`
  * and the INSERT lands in SQLite.
+ *
+ * Additional tests (Option B fixture resolver) verify the `isPackaged` +
+ * `POS_PULSE_DEV_ITEM_RESOLVER` wiring matrix:
+ *   - unpackaged + flag set   → fixture resolver wired; line persists
+ *   - packaged   + flag set   → fixture resolver NOT wired; item ref refused
+ *   - unpackaged + flag absent → fixture resolver NOT wired; item ref refused
  */
 
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +42,10 @@ const MIGRATIONS = [
 let SQL: SqlJsStatic;
 beforeAll(async () => {
   SQL = await initSqlJs();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 function makeTestLogger(): Logger {
@@ -87,6 +97,7 @@ describe('production cart wiring (T100 regression)', () => {
       getCurrentSession: () => session,
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
+      isPackaged: true,
     });
 
     const result = await handlers.create({ idempotency_key: 'ikey-t100-wiring' });
@@ -110,5 +121,116 @@ describe('production cart wiring (T100 regression)', () => {
     expect(rows[0].cart_id).toBe(cartId);
     // CartState.empty is the initial state for a newly-created cart.
     expect(rows[0].state).toBe('empty');
+  });
+});
+
+describe('dev fixture resolver wiring matrix (Option B)', () => {
+  it('wires fixture resolver when isPackaged=false and POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
+    vi.stubEnv('POS_PULSE_DEV_ITEM_RESOLVER', '1');
+
+    const sqlJsDb = freshDb();
+    const dbHandle = makeSqlJsHandle(sqlJsDb);
+    const session = makeSession();
+
+    const handlers = createCartBridgeHandlers({
+      dbHandle,
+      getCurrentSession: () => session,
+      logger: makeTestLogger(),
+      auditEmitter: makeTestAuditEmitter(),
+      isPackaged: false,
+    });
+
+    const createResult = await handlers.create({ idempotency_key: 'ikey-t100-fixture-dev' });
+    expect(createResult.kind).toBe('ok');
+    if (createResult.kind !== 'ok') return;
+
+    const cartId = createResult.cart_id;
+
+    // SKU-PARA-500 is a fixture item; fixture resolver is wired here.
+    const addResult = await handlers.linesAdd({
+      cart_id: cartId,
+      item_ref: 'SKU-PARA-500',
+      quantity: 1,
+      idempotency_key: 'ikey-t100-line-dev',
+    });
+
+    expect(addResult.kind).toBe('ok');
+    if (addResult.kind !== 'ok') return;
+
+    // Verify the line was persisted to SQLite.
+    const stmt = sqlJsDb.prepare(
+      'SELECT line_id, item_ref FROM cart_lines WHERE cart_id = ? AND removed_at IS NULL',
+    );
+    stmt.bind([cartId]);
+    const rows: { line_id: string; item_ref: string }[] = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject() as { line_id: string; item_ref: string });
+    }
+    stmt.free();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].item_ref).toBe('SKU-PARA-500');
+  });
+
+  it('does NOT wire fixture resolver when isPackaged=true, even with POS_PULSE_DEV_ITEM_RESOLVER=1', async () => {
+    vi.stubEnv('POS_PULSE_DEV_ITEM_RESOLVER', '1');
+
+    const sqlJsDb = freshDb();
+    const dbHandle = makeSqlJsHandle(sqlJsDb);
+    const session = makeSession();
+
+    const handlers = createCartBridgeHandlers({
+      dbHandle,
+      getCurrentSession: () => session,
+      logger: makeTestLogger(),
+      auditEmitter: makeTestAuditEmitter(),
+      isPackaged: true,
+    });
+
+    const createResult = await handlers.create({ idempotency_key: 'ikey-t100-fixture-pkg' });
+    expect(createResult.kind).toBe('ok');
+    if (createResult.kind !== 'ok') return;
+
+    const cartId = createResult.cart_id;
+
+    // Packaged build must refuse even fixture SKUs — DEFAULT_ITEM_REF_RESOLVER is used.
+    const addResult = await handlers.linesAdd({
+      cart_id: cartId,
+      item_ref: 'SKU-PARA-500',
+      quantity: 1,
+      idempotency_key: 'ikey-t100-line-pkg',
+    });
+
+    expect(addResult.kind).toBe('refused');
+  });
+
+  it('does NOT wire fixture resolver when isPackaged=false and POS_PULSE_DEV_ITEM_RESOLVER is absent', async () => {
+    // Env flag is not set — fixture resolver must NOT be wired.
+    const sqlJsDb = freshDb();
+    const dbHandle = makeSqlJsHandle(sqlJsDb);
+    const session = makeSession();
+
+    const handlers = createCartBridgeHandlers({
+      dbHandle,
+      getCurrentSession: () => session,
+      logger: makeTestLogger(),
+      auditEmitter: makeTestAuditEmitter(),
+      isPackaged: false,
+    });
+
+    const createResult = await handlers.create({ idempotency_key: 'ikey-t100-fixture-noflag' });
+    expect(createResult.kind).toBe('ok');
+    if (createResult.kind !== 'ok') return;
+
+    const cartId = createResult.cart_id;
+
+    const addResult = await handlers.linesAdd({
+      cart_id: cartId,
+      item_ref: 'SKU-PARA-500',
+      quantity: 1,
+      idempotency_key: 'ikey-t100-line-noflag',
+    });
+
+    expect(addResult.kind).toBe('refused');
   });
 });
