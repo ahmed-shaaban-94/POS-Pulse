@@ -448,7 +448,7 @@ dev environment (with Prong A applied) must:
 
 1. `git checkout main && npm install`
 2. Launch with both feature flags:
-   ```
+   ```bash
    POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
    ```
 3. Walk through all flows:
@@ -543,7 +543,7 @@ machine and the POS-Pulse Electron dev environment must:
 
 1. `git checkout main && npm install`
 2. Launch:
-   ```
+   ```bash
    POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
    ```
    (PowerShell: `$env:POS_PULSE_FEATURE_CART="1"; $env:POS_PULSE_DEV_ITEM_RESOLVER="1"; npm run dev`)
