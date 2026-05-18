@@ -412,45 +412,62 @@ const cartBridgeHandlers = createCartBridgeHandlers({
   getCurrentSession: () => operatorSessionManager.getCurrent(),
   logger: mainLogger,
   auditEmitter,
+  isPackaged: app.isPackaged,
 });
 ```
 
 `bindCartStore(dbHandle)` is wired inside the factory. This enables SQLite
 persistence and restart-survival for `cart.create` and all cart mutations.
 
-`resolveItemRef` is intentionally NOT wired. The `resolve-item-ref.ts` module
-is self-documented as a test-only fixture with 5 hard-coded pharmacy SKUs; it
-is not a production item catalogue. `cart-bridge.ts` already ships
-`DEFAULT_ITEM_REF_RESOLVER` (refuses generically for all item refs) as the
-correct production fallback. The real production resolver lands when the
-item-catalogue feature ships (T053 / R7 seam).
+**`resolveItemRef` — dev-only fixture resolver (Option B)**
 
-This means `cart.lines.add` refuses all item refs in the live Electron
-walkthrough — this is the expected production behaviour at current scope.
-The T100 live walkthrough can only exercise `cart.create`, `cart.void`,
-`cart.subscribe`, and related non-line flows until T053 ships.
+In packaged (production) builds, `resolveItemRef` is NOT wired. The
+`cart-bridge.ts` `DEFAULT_ITEM_REF_RESOLVER` refuses all item refs generically.
+This is the correct production behaviour until the real item-catalogue feature
+ships (T053 / R7 seam).
+
+In **unpackaged dev builds** (`npm run dev`), the T053 fixture resolver can be
+enabled by setting `POS_PULSE_DEV_ITEM_RESOLVER=1` in the environment. When
+both `app.isPackaged === false` and the env flag is truthy, `createCartBridgeHandlers`
+wires `resolveItemRef` to the fixture resolver in `resolve-item-ref.ts`.
+
+**IMPORTANT caveats for the dev fixture resolver:**
+- The 5 fixture SKUs (`SKU-PARA-500`, `SKU-IBUP-400`, `SKU-AMOX-250`,
+  `SKU-VITA-C`, `SKU-OMEP-20`) and their prices are **test data only** — they
+  are NOT real catalogue prices and must never appear in a production build.
+- Setting `POS_PULSE_DEV_ITEM_RESOLVER=1` in a packaged build has no effect —
+  the `isPackaged` guard is unconditional.
+- T100 is still incomplete until a reviewer performs the full headed Electron
+  walkthrough below. Setting the env flag and running the tests does NOT
+  constitute T100 sign-off.
 
 **Prong B — Headed Electron environment**
 
 A reviewer with a Windows 10/11 machine and the POS-Pulse Electron
 dev environment (with Prong A applied) must:
 
-1. `git checkout main && npm install && npm run dev`
-2. Enable the cart feature flag (`POS_PULSE_FEATURE_CART=1`).
-3. Walk through the non-line flows only (current scope):
+1. `git checkout main && npm install`
+2. Launch with both feature flags:
+   ```
+   POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
+   ```
+3. Walk through all flows:
    - `cart.create` — create a new cart and verify it persists across
      process restart (restart-survival, FR-028).
    - `cart.void` — void the draft cart; verify state transitions.
    - `cart.subscribe` — verify subscription events fire on state change.
    - Session-end discard — sign out; verify the draft cart is cancelled.
-   - **Skip US1 line-addition steps** (`cart.lines.add`) — `resolveItemRef`
-     is intentionally unwired; all item refs refuse with `reason: 'generic'`
-     until the item-catalogue feature ships (T053 / R7 seam).
+   - **US1 line-addition** (`cart.lines.add`) — use fixture SKUs from
+     `resolve-item-ref.ts` (e.g. `SKU-PARA-500`). These are dev-only test
+     items; prices shown are fixture values, not real catalogue prices.
+     Verify merge, quantity stepper, and line persistence across restart.
+   - To verify the production guard: relaunch WITHOUT
+     `POS_PULSE_DEV_ITEM_RESOLVER` and confirm that `cart.lines.add` refuses
+     all item refs (correct fallback behaviour).
 4. Inspect `audit_events` rows in the live SQLite file after void,
    post-handoff void, and session-end to verify the five mandatory
    attribution attributes (FR-026; SC-005).
-5. Record pass/fail for each "Expect" line exercised (non-line flows only),
-   noting which steps are deferred to T053.
+5. Record pass/fail for each "Expect" line exercised.
 6. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
 
 ---

@@ -447,6 +447,7 @@ app
       getCurrentSession: () => operatorSessionManager.getCurrent(),
       logger: mainLogger,
       auditEmitter,
+      isPackaged: app.isPackaged,
     });
     registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
 
