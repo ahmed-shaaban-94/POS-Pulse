@@ -69,6 +69,12 @@ export interface OperatorSessionStore {
   resolveSignedOut(): void;
   /** Cancel a takeover prompt; FSM moves takeoverPrompt → signedOut. */
   cancelTakeover(): void;
+  /**
+   * Boot-time hydration — seeds signedIn from signedOut without going through
+   * the normal beginSignIn/resolveSignedIn sign-in flow. Only transitions from
+   * signedOut; no-op from any other state so it cannot overwrite a live session.
+   */
+  hydrateSignedIn(session: OperatorSessionView): void;
   /** Test-only reset hook — restores the store to its initial state. */
   reset(): void;
 }
@@ -140,6 +146,12 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
     set((s) => {
       if (s.state.kind !== 'takeoverPrompt') return s;
       return { state: { kind: 'signedOut' } };
+    });
+  },
+  hydrateSignedIn: (session) => {
+    set((s) => {
+      if (s.state.kind !== 'signedOut') return s;
+      return { state: { kind: 'signedIn', session } };
     });
   },
   reset: () => {
