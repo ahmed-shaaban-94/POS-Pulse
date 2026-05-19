@@ -9,11 +9,11 @@
 
 **Feature:** 006-payments-tender
 **Spec:** [./spec.md](./spec.md)
-**Plan:** [./plan.md](./plan.md) v0.1 (draft)
+**Plan:** [./plan.md](./plan.md) v1.0 (authored 2026-05-19, supersedes v0.1)
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (tender-scope amendment applied: cash-only assumption from PR #183 **superseded**; tender scope is now `cash | external_card_terminal (record-only) | internal_voucher (authority-validated)` with split tender in scope; `/speckit-plan` v1.0 must now resolve AD-DEFERRED-1..6 **and** OQ-PLAN-1..9 from the amendment; voucher authority belongs to Data-Pulse-2 — POS-Pulse does not implement voucher issuance/cancellation here)
+**Last updated:** 2026-05-19 (`/speckit-plan` v1.0 authored: AD-DEFERRED-1..6 + OQ-PLAN-1..9 all resolved; companion artefacts [./research.md](./research.md), [./data-model.md](./data-model.md), [./quickstart.md](./quickstart.md), [./contracts/bridge-api.md](./contracts/bridge-api.md) all authored; persistence locked as three new SQLite tables for Slice 3; voucher path locked on Contract V-A backend-authoritative; force-fail deferred to Slice 4; `/speckit-tasks` is the required next step. Voucher authority remains owned by Data-Pulse-2; this PR does NOT modify Data-Pulse-2.)
 
 ---
 
@@ -47,9 +47,10 @@ and it is updated in place as coordination items resolve.
 | 005 T100 functional sign-off | ✅ 2026-05-19 (PR #181; SQLite evidence verified) |
 | `/speckit-clarify` | ✅ applied 2026-05-19 (FR-002, FR-006, FR-030, FR-031 resolved; see Clarification results below) |
 | Tender-scope amendment (cash + external_card_terminal + internal_voucher + split tender) | ✅ applied 2026-05-19 — supersedes cash-only assumption from PR #183 (see "Tender-scope amendment 2026-05-19" below) |
-| `/speckit-plan` (v1.0) — now resolves **AD-DEFERRED-1..6 + OQ-PLAN-1..9** | ❌ Not yet run — required next step (scope expanded by tender-scope amendment) |
-| `/speckit-tasks` (startable list) | ❌ Deferred until after /speckit-plan |
-| `/speckit-analyze` | ❌ Deferred until after /speckit-tasks |
+| `/speckit-plan` v1.0 (resolves **AD-DEFERRED-1..6 + OQ-PLAN-1..9**) | ✅ **authored 2026-05-19** — see [./plan.md](./plan.md) §"Architectural Decisions (LOCKED in v1.0)" and §"Plan v1.0 — Session 2026-05-19" below |
+| Companion artefacts: research.md / data-model.md / quickstart.md / contracts/bridge-api.md | ✅ authored 2026-05-19 (data-model: three new SQLite tables; bridge: `payments.*` + `tender.*` namespaces, DRAFT) |
+| `/speckit-tasks` (startable list) | ❌ **Not yet run — required next step.** Generates per-slice file-path-bearing task list against plan v1.0 |
+| `/speckit-analyze` | ❌ Deferred until after `/speckit-tasks` |
 | Slice 0 visual direction | ❌ Held under §A1 |
 | Implementation slices | ❌ All held |
 
@@ -562,6 +563,125 @@ The procedural hold on §A0 remains. `/speckit-plan` v1.0 was the
 "next required step" after — with the expanded decision set above.
 006 stays DRAFT — BLOCKED until `/speckit-plan` → `/speckit-tasks`
 → `/speckit-analyze` complete in sequence.
+
+---
+
+## Plan v1.0 — Session 2026-05-19
+
+This section is the coordination-side record of the `/speckit-plan`
+v1.0 run applied on 2026-05-19. The plan-side detail lives in
+[./plan.md](./plan.md) §"Architectural Decisions (LOCKED in v1.0)";
+the rationale + alternatives in [./research.md](./research.md); the
+persistence shape in [./data-model.md](./data-model.md); the bridge
+contract in [./contracts/bridge-api.md](./contracts/bridge-api.md);
+the end-to-end walkthrough in [./quickstart.md](./quickstart.md).
+
+### Artefacts produced
+
+| Path | Status | Role |
+|:--|:--:|:--|
+| `specs/006-payments-tender/plan.md` | ✅ rewritten to v1.0 | Locks AD-1..AD-9 (resolves AD-DEFERRED-1..6 + OQ-PLAN-1..9) |
+| `specs/006-payments-tender/research.md` | ✅ new | Phase 0 Decision / Rationale / Alternatives for every AD + OQ |
+| `specs/006-payments-tender/data-model.md` | ✅ new | Three new SQLite tables + four+four audit-event categories |
+| `specs/006-payments-tender/contracts/bridge-api.md` | ✅ new (DRAFT — §A4 review required) | `payments.*` + `tender.*` namespace contract |
+| `specs/006-payments-tender/quickstart.md` | ✅ new | End-to-end walkthrough preview (cash / cancel / fail / external_card_terminal / voucher / split) |
+| `specs/006-payments-tender/coordination.md` | ✅ updated (this section) | Plan v1.0 status + reconciliation |
+| `specs/006-payments-tender/tasks.md` | ✅ banner-only update | Records plan v1.0 ✅; `/speckit-tasks` ❌ next step; all rows remain BLOCKED |
+
+### Architectural decisions locked
+
+| AD | Subject | Decision |
+|:--|:--|:--|
+| AD-1 | Payment FSM ownership | **Main process** owns PaymentAttempt FSM, TenderLine FSM, validation, settlement / cancel / fail / force-fail, audit emission, idempotency replay, trust boundary. Renderer is display + input only. |
+| AD-2 | Persistence | **Three new local SQLite tables** authored under §A3 in Slice 3: `payment_attempts`, `payment_tender_lines`, `payment_action_outbox`. Plus extension of 004's `audit_events` catalogue with 4 attempt-level + 4 per-line categories. |
+| AD-3 | Bridge namespace | Split: **`payments.*`** (attempt-level) + **`tender.*`** (per-line). Refusal envelope uses `{ kind: 'refused', reason: '...' }` (mirrors 005; diverges from 004's `category` — see [./research.md](./research.md) R-2). |
+| AD-4 | Cashier cancel UX | Cancel returns to **tender selection** with the immutable envelope still bound; all applied TenderLines are reversed LIFO per FR-006B. |
+| AD-5 | Force-fail UX | **Dedicated manager incident-response surface in Slice 4** (not inline manager re-auth). Reuses 004 S5's manager-surface pattern. |
+| AD-6 | Offline behaviour | Cash + external_card_terminal local-first; voucher gated (V-A refuses offline, V-B allows local atomic redeem if approved). |
+| AD-7 | Voucher contract | **Contract V-A — Backend-authoritative** (Data-Pulse-2 endpoints wrapped in `vouchers.*` bridge handlers). **Partial voucher redemption: refuse**, not cap-and-preserve. V-B remains an approved fallback. |
+| AD-8 | OpenAPI / backend impact | **Slices 1–3: no new OpenAPI surface.** §A2 no-op confirmed for these. **Slice 4: voucher endpoints + codegen** under §A2. |
+| AD-9 | Drawer-impact signal | `payment.settled` audit event carries full tender breakdown (per-line `tender_type`, `amount_applied_minor`, `change_due_minor`, redacted references); future shift-management derives drawer impact. No separate `drawer.cash_delta` event. |
+
+**Open questions resolved by plan v1.0** (one-line summary; full
+reasoning in [./research.md](./research.md)):
+
+| OQ | Resolution |
+|:--|:--|
+| OQ-PLAN-1 | Three new tables (data-model R-9). |
+| OQ-PLAN-2 | `payments.*` + `tender.*` split + UUID v4 idempotency keys + `{ reason }` refusal field name (R-2). |
+| OQ-PLAN-3 | **Refuse, not cap-and-preserve** partial voucher redemption (R-7). |
+| OQ-PLAN-4 | **LIFO** rollback ordering + per-call idempotency + `reversal_pending` deferred resolver (R-13). |
+| OQ-PLAN-5 | External_reference: optional, regex `^[A-Z0-9]{0,6}$`, redacted-in-logs (R-5). |
+| OQ-PLAN-6 | Partial unique index `(terminal_id) WHERE state='started'` + outbox idempotency (R-6, R-10). 006-specific design — diverges from 005's app-layer pattern (R-6). |
+| OQ-PLAN-7 | **Contract V-A** v1.0 stance; V-B remains an approved fallback (R-7). |
+| OQ-PLAN-8 | Receipt-handoff payload = `payment.settled` audit payload tender breakdown (R-8). |
+| OQ-PLAN-9 | Drawer signal preserved on `payment.settled`; no separate event (R-8). |
+
+### Slice grouping locked
+
+- **Slice 0** — Visual direction (no code).
+- **Slice 1** — Tender selection + envelope ingest.
+- **Slice 2** — Per-tender entry surfaces (cash + external_card_terminal).
+- **Slice 3** *(load-bearing)* — FSM + TenderLine FSM + three tables + `payments.*` / `tender.*` bridge handlers (minus voucher / forceFail).
+- **Slice 4** — Voucher (Contract V-A) + force-fail.
+- **Slice 5** — Production readiness.
+
+US5 (voucher) ships in Slice 4 — gated separately on OQ-PLAN-7's V-A
+contract clearing. **Cash + external_card_terminal + split tender
+ship as Slices 1–3 with zero Data-Pulse-2 dependency.**
+
+### Deliberate skips and divergences (recorded for reviewer audit)
+
+| Item | Reason |
+|:--|:--|
+| **CLAUDE.md SPECKIT marker update skipped** | The standard `/speckit-plan` skill outline (Phase 1 step 3) updates the `<!-- SPECKIT START --> ... <!-- SPECKIT END -->` markers in CLAUDE.md to reference this plan. The user prompt explicitly forbids modifying CLAUDE.md. Per the using-superpowers skill priority hierarchy (user instructions > superpowers skills > default system prompt), the user instruction wins. The skip is intentional. |
+| **Refusal field name `reason`, not `category`** | 004's `operator.*` contract uses `category`; 005's `cart.*` uses `reason`. 006 follows 005 because 005 is the closer structural predecessor (`cart.*` → `payments.*` is one feature-pair). See [./research.md](./research.md) R-2. |
+| **Partial unique index for "one started per terminal"** | 006-specific design choice. 005's analogous "one editing cart per session" is enforced at the application layer (005 data-model.md line 121). 006's per-terminal hardware coupling (single cash drawer) justifies the stronger DB-level guarantee. See [./research.md](./research.md) R-6. |
+| **`/speckit-plan` applied, not freshly run** | The AD/OQ decisions came pre-supplied by the user prompt's `Required v1.0 decisions` section; this run *applies* them against the v1.0 plan structure rather than re-deriving the architecture. Full rationale per decision is in [./research.md](./research.md). |
+| **No CLAUDE.md update / no agent context script run** | Per the user prompt forbid list. The CLAUDE.md SPECKIT-marker update is the only Phase 1 step from the standard skill outline that this plan does NOT execute. |
+
+### Data-Pulse-2 boundary
+
+**Data-Pulse-2 is NOT modified by this PR.** The voucher-authority
+contract (V-A) is *recorded as a planned boundary* in this plan
+([./contracts/bridge-api.md](./contracts/bridge-api.md) §"`vouchers.*`
+namespace") but is **not implemented**. The two endpoints
+(`POST /vouchers/validate`, `POST /vouchers/redeem`,
+`POST /vouchers/reverse`) belong to a future Data-Pulse-2-led
+integration spec that commissions before Slice 4 under §A2.
+
+Voucher issuance, voucher cancellation, voucher catalogue management,
+loyalty-campaign behaviour, and voucher-balance editing remain
+**permanently out of scope for 006** (FR-018, plan §"Hard
+non-implementation boundaries").
+
+### What plan v1.0 does NOT do
+
+- Does NOT modify Data-Pulse-2.
+- Does NOT modify any source file, test, package file, lockfile,
+  migration, OpenAPI surface, codegen output, CI workflow,
+  AGENTS.md, or CLAUDE.md.
+- Does NOT make `tasks.md` startable (banner-only update; all rows
+  remain BLOCKED until `/speckit-tasks`).
+- Does NOT open §A1–§A5 for implementation. Each gate's status is
+  *recorded* but not *cleared*. Per-slice approval still required.
+- Does NOT run `/speckit-tasks` or `/speckit-analyze`.
+- Does NOT implement any 006 code.
+- Does NOT start 007 work.
+- Does NOT start UI polish (§A1 remains held).
+
+### Reconciliation note
+
+The procedural hold on §A0 lifts for the `/speckit-plan` step only
+with this PR. The hold remains on §A0 for the next two Spec Kit
+steps (`/speckit-tasks` → `/speckit-analyze`). The gate ledger above
+tracks the remaining held items.
+
+The prior cash-only `/speckit-plan` v1.0 WIP (from a previous
+session) is preserved in `stash@{0}` on branch
+`docs/006-speckit-plan`. It is NOT applied into this branch and
+should NOT be applied — the tender-scope amendment supersedes its
+persistence model and bridge namespace.
 
 ---
 
