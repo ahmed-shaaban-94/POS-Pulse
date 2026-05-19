@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (`/speckit-plan` v1.0 authored: AD-DEFERRED-1..6 + OQ-PLAN-1..9 all resolved; companion artefacts [./research.md](./research.md), [./data-model.md](./data-model.md), [./quickstart.md](./quickstart.md), [./contracts/bridge-api.md](./contracts/bridge-api.md) all authored; persistence locked as three new SQLite tables for Slice 3; voucher path locked on Contract V-A backend-authoritative; force-fail deferred to Slice 4; `/speckit-tasks` is the required next step. Voucher authority remains owned by Data-Pulse-2; this PR does NOT modify Data-Pulse-2.)
+**Last updated:** 2026-05-19 (`/speckit-tasks` applied: tasks.md regenerated against plan v1.0's locked Slices 0–5 grouping; ~140 startable + verification tasks with file paths, TDD test/impl pairing per Constitution §VI, `[P]` parallelism markers, and per-slice gate dependencies; `/speckit-analyze` is now the required next step before any Slice 1+ implementation work may begin. Voucher authority remains owned by Data-Pulse-2; this PR does NOT modify Data-Pulse-2.)
 
 ---
 
@@ -49,8 +49,8 @@ and it is updated in place as coordination items resolve.
 | Tender-scope amendment (cash + external_card_terminal + internal_voucher + split tender) | ✅ applied 2026-05-19 — supersedes cash-only assumption from PR #183 (see "Tender-scope amendment 2026-05-19" below) |
 | `/speckit-plan` v1.0 (resolves **AD-DEFERRED-1..6 + OQ-PLAN-1..9**) | ✅ **authored 2026-05-19** — see [./plan.md](./plan.md) §"Architectural Decisions (LOCKED in v1.0)" and §"Plan v1.0 — Session 2026-05-19" below |
 | Companion artefacts: research.md / data-model.md / quickstart.md / contracts/bridge-api.md | ✅ authored 2026-05-19 (data-model: three new SQLite tables; bridge: `payments.*` + `tender.*` namespaces, DRAFT) |
-| `/speckit-tasks` (startable list) | ❌ **Not yet run — required next step.** Generates per-slice file-path-bearing task list against plan v1.0 |
-| `/speckit-analyze` | ❌ Deferred until after `/speckit-tasks` |
+| `/speckit-tasks` (startable list) | ✅ **applied 2026-05-19** — see [./tasks.md](./tasks.md) for the full per-slice task list with file paths + TDD pairing + parallelism markers |
+| `/speckit-analyze` | ❌ **Not yet run — required next step.** Cross-artifact consistency check against spec ↔ plan ↔ tasks before any Slice 1+ work begins |
 | Slice 0 visual direction | ❌ Held under §A1 |
 | Implementation slices | ❌ All held |
 
