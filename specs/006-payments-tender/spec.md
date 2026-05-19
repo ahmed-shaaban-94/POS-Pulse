@@ -2,20 +2,23 @@
 >
 > This document is a **future-spec draft only**. No code, contracts, migrations,
 > bridge-API expansion, OpenAPI changes, codegen, or UI are authorised by this
-> file. Implementation is **blocked** until:
+> file. Implementation is **blocked** until the full Spec Kit re-run sequence
+> (`/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze`)
+> completes and is approved.
 >
-> 1. **004-operator-session** Slice 4 / Slice 5 visibility boundaries are
->    complete and approved (operator identity, role-gated visibility, and the
->    cashier-forbidden information catalogue must be load-bearing before
->    payments can attribute or refuse anything).
-> 2. **005-sales-cart** spec is **created and approved**. As of this draft,
->    `specs/005-sales-cart/` is an empty placeholder. Payments cannot define
->    its checkout-handoff contract until the cart contract exists upstream.
-> 3. The **checkout / cart handoff contract** between 005 and 006 is defined,
->    reviewed, and pinned (in 005, not here).
+> **Upstream functional prerequisites — all cleared (2026-05-19):**
 >
-> Until those three conditions hold, this document defines product behaviour
-> and **questions** only — no decisions that bind future code.
+> 1. **004-operator-session** Slice 4 / Slice 5 ✅ complete 2026-05-14 (PRs
+>    #133–#143). Operator identity, role-gated visibility, and the
+>    cashier-forbidden information catalogue are load-bearing.
+> 2. **005-sales-cart** spec ✅ approved 2026-05-14; T100 functional sign-off
+>    ✅ 2026-05-19 (PR #181). `specs/005-sales-cart/` is fully authored with
+>    six implementation slices complete.
+> 3. The **checkout / cart handoff contract** (`PaymentIntentEnvelope v1`) ✅
+>    ratified 2026-05-17 in `specs/005-sales-cart/contracts/handoff-envelope.md`.
+>
+> **§A0 is functionally cleared but procedurally held.** See
+> [./coordination.md](./coordination.md) for the gate ledger and next steps.
 
 # Feature Specification: Payments & Tender
 
@@ -466,9 +469,9 @@ filed as a separate feature, not folded into 006.
 | Item | State |
 |:--|:--|
 | Status banner | DRAFT — BLOCKED |
-| 004 S4/S5 visibility boundaries complete? | ❌ pending |
-| 005-sales-cart spec approved? | ❌ pending (directory empty) |
-| Cart ↔ payments handoff contract pinned (in 005)? | ❌ pending |
+| 004 S4/S5 visibility boundaries complete? | ✅ complete 2026-05-14 |
+| 005-sales-cart spec approved? | ✅ approved 2026-05-14; T100 sign-off 2026-05-19 |
+| Cart ↔ payments handoff contract pinned (in 005)? | ✅ `PaymentIntentEnvelope v1` ratified 2026-05-17 |
 | `/speckit-clarify` rerun after upstream features close? | ❌ deferred |
 | Visual-direction Slice 0 commissioned? | ❌ deferred (gated on §A1 below) |
 
