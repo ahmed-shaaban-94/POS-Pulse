@@ -64,11 +64,96 @@ codegen, or UI. Those decisions are blocked behind the gates in
 
 ### Session 2026-05-09
 
-No clarification questions have been resolved yet. All open questions are
-recorded in [./coordination.md](./coordination.md) and the
-**[NEEDS CLARIFICATION]** markers throughout this document. Clarification
-will be re-run after 004 S4/S5 close and 005 is approved, because several
-questions depend on contracts those features own.
+No clarification questions resolved in this session. All open questions were
+deferred pending upstream contracts (004 S4/S5 and 005-sales-cart). See
+Session 2026-05-19 below for the post-upstream-clearance clarifications.
+
+### Session 2026-05-19
+
+Following the merge of 005-sales-cart S5/T100 (PR #181) and the 006 §A0
+reconciliation (PR #182), the upstream contracts on which 006 depends are
+now load-bearing. The following clarifications resolve the standing
+`[NEEDS CLARIFICATION]` markers on FR-002, FR-006, FR-030, and FR-031, and
+formally reconcile OQ-005-1..4 (already resolved in coordination.md after
+PR #182).
+
+- **Q (FR-002):** What is the exact "approved checkout-handoff cart" the
+  payment surface receives from 005?
+  **A:** The frozen `PaymentIntentEnvelope v1` produced by 005's
+  `cart.handoff` bridge handler, normatively defined in
+  `specs/005-sales-cart/contracts/handoff-envelope.md`. The envelope is
+  immutable (`Readonly<>` + `Object.freeze` recursive in memory; JSON-
+  persisted on `carts.handoff_envelope_json`). 006 treats the envelope as
+  the single authoritative input; 006 MUST NOT reach back into
+  `cart_lines`, the catalogue API, or Data-Pulse-2 to settle a cash
+  payment.
+
+- **Q (FR-006):** What is the closed set of `payment.failed` reason
+  categories for the POS-local cash-only flow?
+  **A:** The closed set is exactly:
+  `cart_lost`, `operator_session_terminated`, `dependency_unavailable`,
+  `internal_error`, `stale_handoff`, `tender_underpaid`. Reconciled
+  against 004's audit catalogue and 005's `version`/`stale_version`
+  refusal semantics; `stale_handoff` covers the case where the envelope
+  was constructed but the source cart's `last_action_id` advanced between
+  handoff and confirm. `tender_underpaid` is the audit-event category for
+  the FR-005 refusal path (`cash_received_minor < total_minor`).
+
+- **Q (FR-030):** What does the handoff *into* payments require for the
+  initial cash-only settlement path?
+  **A:** Required for Slices 1–3: read the frozen
+  `PaymentIntentEnvelope v1` produced by `cart.handoff`; use
+  `envelope.subtotal_minor` as the authoritative total input; reject any
+  attempt to start a payment when the envelope's `cart_id` no longer maps
+  to a cart in `frozen_handed_off` state (this is the `cart_lost` and
+  `stale_handoff` FR-006 paths). Deferred: any field added by future
+  payments slices (e.g., `envelope_signature`) is an extension under
+  005's §"Forward-compatibility commitment" and bumps
+  `envelope_version`; 006 v1 emits and consumes `v1` only.
+
+- **Q (FR-031):** What does the handoff *out of* payments require for
+  the initial cash-only settlement path?
+  **A:** Required for Slices 1–3: on `settled`, the cart is consumed
+  (the envelope's `handoff_action_id` is the correlation key for any
+  future receipt). 006 v1 emits a canonical `payment.settled` audit
+  event and transitions the surface to a placeholder post-settle state.
+  Deferred: the receipts-handoff data shape, rendering, and printing —
+  owned by the future receipts spec (OQ-RCPT-1).
+
+- **Q (OQ-005-1..4):** Are the four cross-feature open questions
+  (cart-handoff data shape, persistence, lifecycle, currency) resolved?
+  **A:** Yes — all four resolved by the ratification of
+  `PaymentIntentEnvelope v1` (2026-05-17). The resolutions are recorded
+  normatively in `coordination.md` §"Owned by 005, blocking 006 (all
+  resolved — 2026-05-19)". This spec section restates the linkage only;
+  the contract itself is the single source of truth.
+
+- **Q (catalogue authority):** Does 006 settlement depend on a live
+  catalogue API?
+  **A:** No. Catalogue authority belongs to Data-Pulse-2 / backend; a
+  POS-local catalogue read-model/cache is a future feature. 006 v1's
+  cash-settlement path uses only `envelope.subtotal_minor` (FR-005) and
+  MUST NOT call any catalogue API. When the live catalogue ships, 006
+  is unaffected — it always consumes the frozen envelope.
+
+- **Q (renderer error surface):** What does the cashier see on refusal?
+  **A:** Generic, non-shaming, non-disclosing copy at the renderer
+  (FR-005, FR-022, NFR-003 inherited from 004). The bridge-side reason
+  category (e.g., `tender_underpaid`, `cart_lost`) lives in the audit
+  payload, not in the renderer-facing text. No sensitive IDs, no raw
+  payloads, no envelope contents are echoed to the UI on refusal.
+
+**What this clarification does NOT do:**
+
+- Does NOT open §A1–§A5; those remain held pending `/speckit-plan`.
+- Does NOT make `tasks.md` startable.
+- Does NOT resolve the offline-payments questions (OQ-OFF-1..4) — those
+  remain deferred to a dedicated offline-payments review.
+- Does NOT resolve the drawer-impact questions (OQ-DRW-1..4) — those
+  remain deferred to the future shift-management spec.
+- Does NOT resolve OQ-3 (cancel return target) or OQ-4 (force-fail UX
+  shape); both remain owned by 006 and will be addressed in
+  `/speckit-plan` as AD-DEFERRED-3 and AD-DEFERRED-4 resolutions.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -97,27 +182,37 @@ required for this test.
 
 **Acceptance Scenarios**:
 
-1. **Given** an approved checkout-ready cart with a positive `total_minor`,
-   **When** the cashier opens the payment surface, **Then** tender selection
-   is reachable and the cart is read-only on this surface.
+> In these scenarios, `total_minor` refers to `envelope.subtotal_minor`
+> from the frozen `PaymentIntentEnvelope v1` 005 hands off (FR-002,
+> FR-030). 006 does not compute its own total.
+
+1. **Given** a frozen `PaymentIntentEnvelope v1` with a positive
+   `subtotal_minor`, **When** the cashier opens the payment surface,
+   **Then** tender selection is reachable and the cart line summary
+   rendered from the envelope is read-only on this surface.
 2. **Given** Cash is selected, **When** the cashier enters
-   `cash_received_minor ≥ total_minor`, **Then** the displayed change due is
-   `cash_received_minor − total_minor` (integer minor units; never a float).
-3. **Given** Cash is selected and `cash_received_minor < total_minor`,
-   **When** the cashier attempts to confirm, **Then** confirmation MUST be
-   refused with a non-shaming, non-disclosing message and the cashier MAY
-   amend the amount or cancel the payment attempt.
-4. **Given** a confirmed cash payment, **When** settlement completes, **Then**
-   the payment record carries the signed-in operator's identity (FR-013), an
-   immutable settled timestamp, and a deterministic outcome of `settled`.
+   `cash_received_minor ≥ envelope.subtotal_minor`, **Then** the
+   displayed change due is `cash_received_minor − envelope.subtotal_minor`
+   (integer minor units; never a float).
+3. **Given** Cash is selected and
+   `cash_received_minor < envelope.subtotal_minor`, **When** the cashier
+   attempts to confirm, **Then** confirmation MUST be refused with a
+   non-shaming, non-disclosing message and the cashier MAY amend the
+   amount or cancel the payment attempt. The audit category for the
+   refusal is `tender_underpaid` (FR-006).
+4. **Given** a confirmed cash payment, **When** settlement completes,
+   **Then** the payment record carries the signed-in operator's identity
+   (FR-013), an immutable settled timestamp, the
+   `envelope.handoff_action_id` as cross-feature correlation key, and a
+   deterministic outcome of `settled`.
 5. **Given** a `settled` payment, **When** the surface transitions out,
-   **Then** control hands off to the future receipts surface with a
-   reference to this payment; the cart is consumed and not reachable for
-   further payment.
-6. **Given** no approved cart is currently in the checkout-handoff slot,
-   **When** the cashier attempts to reach the payment surface, **Then** the
-   surface MUST NOT render and a generic refusal MUST be returned (FR-019,
-   inherited from 004).
+   **Then** the cart is consumed and not reachable for further payment;
+   the surface transitions to a placeholder post-settle state until the
+   future receipts spec ships (FR-031).
+6. **Given** no `PaymentIntentEnvelope v1` is currently bound to the
+   payment surface, **When** the cashier attempts to reach the payment
+   surface, **Then** the surface MUST NOT render and a generic refusal
+   MUST be returned (FR-022; FR-019 inherited from 004).
 
 ### User Story 2 — Cancel a payment attempt before settlement (Priority: P2)
 
@@ -142,9 +237,12 @@ was written.
    invokes cancel, **Then** the attempt transitions to `cancelled` and no
    settled payment record is produced.
 2. **Given** an attempt in `cancelled` state, **When** the surface
-   transitions, **Then** control returns to the checkout-handoff state (the
-   exact return target is owned by the 005 ↔ 006 handoff contract — see
-   coordination.md OQ-3).
+   transitions, **Then** the bound `PaymentIntentEnvelope v1` remains
+   intact and re-runnable (the envelope is immutable per 005 §"Immutability
+   guarantees"); the exact UX target after cashier-initiated cancel (return
+   to tender selection vs. exit to a re-runnable handoff state) is owned
+   by 006 and recorded as OQ-3 below — to be resolved in `/speckit-plan`
+   as AD-DEFERRED-3.
 3. **Given** a cancellation, **When** the audit log is reviewed, **Then** a
    `payment.cancelled` event is present with operator attribution (FR-013).
 
@@ -183,9 +281,11 @@ with operator attribution.
 
 ## Edge Cases & Assumptions
 
-- **Approved-cart-required**: 006 never reaches the payment surface without
-  an approved cart in the handoff slot. **OWNED BY:** the 005 ↔ 006 handoff
-  contract (defined in 005, not here). See coordination.md OQ-1.
+- **Approved-cart-required**: 006 never reaches the payment surface
+  without a frozen `PaymentIntentEnvelope v1` produced by 005's
+  `cart.handoff` handler (FR-002, FR-030). The envelope is the
+  single authoritative input; 006 MUST NOT consult `cart_lines`, the
+  catalogue API, or Data-Pulse-2 to settle a cash payment.
 - **Operator change mid-attempt**: a takeover (004 FR-013) or sign-out
   (004 FR-008) during a `started` attempt MUST resolve to `failed`. The
   cart is not marked paid; the cashier on the next operator session sees
@@ -219,9 +319,16 @@ with operator attribution.
   visibly reserved (so cashiers / customers / reviewers can see future
   options exist) but MUST be disabled and emit a generic
   `tender_not_yet_supported` refusal if invoked.
-- **FR-002**: Tender selection MUST be reachable only from an approved
-  checkout-handoff cart. **[NEEDS CLARIFICATION]** — exact handoff state
-  shape is owned by 005.
+- **FR-002**: Tender selection MUST be reachable only when a frozen
+  `PaymentIntentEnvelope v1` is available from 005's `cart.handoff`
+  bridge call. The envelope's shape, immutability, and persistence are
+  normatively defined in
+  `specs/005-sales-cart/contracts/handoff-envelope.md`; 006 treats the
+  envelope as opaque on the field level — it reads only what its own
+  product behaviour requires (notably `cart_id`, `subtotal_minor`,
+  `owning_operator_id`, `operator_session_id`, `tenant_id`, `branch_id`,
+  `terminal_id`, `handoff_action_id`). Reaching the surface without an
+  envelope refuses generically (FR-022).
 - **FR-003**: Tender selection MUST NOT permit returning to cart editing
   (cart edits are owned by 005, and 005 defines whether returning is
   possible). 006 only specifies that the cart is **read-only on the
@@ -248,10 +355,13 @@ with operator attribution.
   - the operator identity (FR-013, inherited from 004 FR-001 / FR-013);
   - a UTC timestamp;
   - a structured outcome (`settled` / `cancelled` / `failed`);
-  - for `failed`, a reason category drawn from a closed set (proposed
-    set: `cart_lost`, `operator_session_terminated`,
-    `dependency_unavailable`, `internal_error`). The exact closed set is
-    **[NEEDS CLARIFICATION]** pending review with 004 audit catalogue.
+  - for `failed`, a reason category drawn from the closed set:
+    `cart_lost`, `operator_session_terminated`, `dependency_unavailable`,
+    `internal_error`, `stale_handoff`, `tender_underpaid` (locked
+    2026-05-19; reconciled against 004's audit catalogue and 005's
+    `version` / `stale_version` refusal semantics). The category is
+    structured data on the audit event; the renderer-facing copy MUST
+    remain generic and non-disclosing (FR-022, NFR-003).
 
 ### Operator attribution
 
@@ -284,17 +394,25 @@ with operator attribution.
 
 ### Handoff contracts
 
-- **FR-030**: The handoff **into** payments — what an "approved
-  checkout-ready cart" looks like — is **owned by 005-sales-cart, not by
-  006**. 006 specifies only the *behaviour* on the receiving side: the
-  payment surface treats the handoff slot as opaque, immutable, and
-  consumed-on-settle. The slot's data shape, persistence, and lifecycle
-  are 005's contract. **[NEEDS CLARIFICATION]** — pending 005 spec.
-- **FR-031**: The handoff **out of** payments — to a future receipts
-  feature — is owned by **the future receipts spec, not by 006**. 006
-  specifies only that on `settled`, control transitions to receipts with
-  a reference to the settled payment, and that the cart is consumed.
-  **[NEEDS CLARIFICATION]** — pending receipts spec.
+- **FR-030**: The handoff **into** payments is the frozen
+  `PaymentIntentEnvelope v1` produced by 005's `cart.handoff` handler
+  (see `specs/005-sales-cart/contracts/handoff-envelope.md`). For the
+  initial cash-only settlement path (Slices 1–3), 006 v1 reads
+  `envelope.subtotal_minor` as the authoritative total input,
+  `envelope.cart_id` for FSM keying, `envelope.handoff_action_id` for
+  audit correlation, and the operator / tenant / branch / terminal
+  fields for attribution and isolation. 006 v1 emits and consumes
+  `envelope_version='v1'` only. Any future field addition by payments
+  (e.g., `envelope_signature`) is an extension governed by 005's
+  forward-compatibility commitment and bumps `envelope_version`.
+- **FR-031**: The handoff **out of** payments is owned by the future
+  receipts spec. For the initial cash-only settlement path (Slices 1–3),
+  006 v1 emits a canonical `payment.settled` audit event whose
+  attribution carries the cart's `handoff_action_id` as the cross-feature
+  correlation key, and transitions the surface to a placeholder
+  post-settle state (the cart is consumed; the surface returns to the
+  pre-handoff state pending receipts). The receipts-handoff data shape,
+  rendering, and printing are deferred to the receipts spec (OQ-RCPT-1).
 
 ### Audit and integrity
 
@@ -472,7 +590,8 @@ filed as a separate feature, not folded into 006.
 | 004 S4/S5 visibility boundaries complete? | ✅ complete 2026-05-14 |
 | 005-sales-cart spec approved? | ✅ approved 2026-05-14; T100 sign-off 2026-05-19 |
 | Cart ↔ payments handoff contract pinned (in 005)? | ✅ `PaymentIntentEnvelope v1` ratified 2026-05-17 |
-| `/speckit-clarify` rerun after upstream features close? | ❌ deferred |
+| `/speckit-clarify` rerun after upstream features close? | ✅ applied 2026-05-19 (FR-002, FR-006, FR-030, FR-031 resolved; OQ-005-1..4 reconciled) |
+| `/speckit-plan` v1.0 (resolves AD-DEFERRED-1..6) | ❌ deferred — next required step |
 | Visual-direction Slice 0 commissioned? | ❌ deferred (gated on §A1 below) |
 
 **Implementation is not authorised by this document.** See

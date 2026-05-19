@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (A0 reconciliation: 004 S4/S5 ✅, 005 spec ✅, §A4 handoff contract ✅; §A0 functionally cleared, procedurally held pending /speckit-clarify re-run)
+**Last updated:** 2026-05-19 (`/speckit-clarify` applied: FR-002, FR-006, FR-030, FR-031 resolved; OQ-005-1..4 reconciled; §A0 still procedurally held pending `/speckit-plan` v1.0)
 
 ---
 
@@ -45,8 +45,8 @@ and it is updated in place as coordination items resolve.
 | 005 spec approved | ✅ 2026-05-14 |
 | 005 ↔ 006 handoff contract (§A4) | ✅ 2026-05-17 — `PaymentIntentEnvelope v1` ratified |
 | 005 T100 functional sign-off | ✅ 2026-05-19 (PR #181; SQLite evidence verified) |
-| `/speckit-clarify` | ❌ Not yet run — required next step |
-| `/speckit-plan` (v1.0) | ❌ Deferred until after /speckit-clarify |
+| `/speckit-clarify` | ✅ applied 2026-05-19 (FR-002, FR-006, FR-030, FR-031 resolved; see Clarification results below) |
+| `/speckit-plan` (v1.0) | ❌ Not yet run — required next step |
 | `/speckit-tasks` (startable list) | ❌ Deferred until after /speckit-plan |
 | `/speckit-analyze` | ❌ Deferred until after /speckit-tasks |
 | Slice 0 visual direction | ❌ Held under §A1 |
@@ -79,7 +79,7 @@ merged.
 
 | Gate | What it gates | Status | Owner |
 |:--:|:--|:--:|:--|
-| **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 — **procedurally held** until `/speckit-clarify` re-run merges | Ahmed (POS-Pulse) |
+| **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 · `/speckit-clarify` ✅ applied 2026-05-19 — **procedurally held** until `/speckit-plan` v1.0 merges | Ahmed (POS-Pulse) |
 | **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ⛔ Held — gated on §A0 | TBD |
 | **§A2** | Backend / OpenAPI: any backend dependency 006 introduces. Currently expected: none for cash-only scope; possibly some for force-fail audit propagation. | ⛔ Held — gated on §A0 | TBD (POS-Pulse + SmartDataPulse backend, mirrored from 004 §A2) |
 | **§A3** | Migrations: any local SQLite tables 006 introduces. Currently none planned because the 004 audit-event store is the audit sink. **Explicit no-op approval still required** before code lands. | ⛔ Held — likely no-op | TBD |
@@ -184,19 +184,27 @@ merged.
 
 ### Owned by 006 once unblocked
 
-- **OQ-1 (FR-002):** Exact shape of the approved checkout-handoff
-  slot. Pending 005.
-- **OQ-2 (FR-006):** Final closed set of `payment.failed` reason
-  categories. Proposed: `cart_lost`,
+- **OQ-1 (FR-002) ✅ RESOLVED 2026-05-19:** The approved
+  checkout-handoff slot is the frozen `PaymentIntentEnvelope v1`
+  produced by 005's `cart.handoff` handler. FR-002 in
+  [./spec.md](./spec.md) now names the envelope explicitly.
+- **OQ-2 (FR-006) ✅ RESOLVED 2026-05-19:** Closed set of
+  `payment.failed` reason categories is locked: `cart_lost`,
   `operator_session_terminated`, `dependency_unavailable`,
-  `internal_error`. Pending review against 004 audit catalogue.
-- **OQ-3 (User Story 2 #2):** On cancel, where does control return —
-  to 005's pre-checkout state or to a re-runnable handoff slot?
-  Pending 005's handoff-slot lifecycle decision.
+  `internal_error`, `stale_handoff`, `tender_underpaid`. Reconciled
+  against 004's audit catalogue and 005's `version` / `stale_version`
+  refusal semantics. FR-006 in [./spec.md](./spec.md) now carries the
+  set.
+- **OQ-3 (User Story 2 #2) — REFRAMED 2026-05-19:** On cashier-initiated
+  cancel, the bound `PaymentIntentEnvelope v1` remains intact and
+  re-runnable (the envelope is immutable per 005 §"Immutability
+  guarantees"). The remaining decision is the *UX target* of the surface
+  transition (return to tender selection vs. exit to a re-runnable handoff
+  state) — to be resolved in `/speckit-plan` as AD-DEFERRED-3.
 - **OQ-4 (FR-021):** Force-fail authorisation flow shape — inline
   manager re-auth on the payment surface vs. dedicated manager
-  incident-response surface. Pending 004 S5 manager-surface
-  conventions.
+  incident-response surface. To be resolved in `/speckit-plan` as
+  AD-DEFERRED-4 (004 S5 manager-surface conventions now load-bearing).
 - **OQ-OFF-1 / OQ-OFF-2 / OQ-OFF-3 / OQ-OFF-4 (spec
   §"Offline behaviour — questions only"):** Offline cash settlement
   semantics. Deferred to a dedicated offline-payments review.
@@ -248,6 +256,61 @@ merged.
 
 ---
 
+## Clarification results — `/speckit-clarify` Session 2026-05-19
+
+This section is the canonical coordination-side record of the
+`/speckit-clarify` run applied on 2026-05-19. The spec-side detail lives
+in [./spec.md](./spec.md) §Clarifications "Session 2026-05-19"; this
+section summarises the cross-feature implications.
+
+**Markers resolved in `spec.md`:**
+
+| Marker | Resolution summary |
+|:--|:--|
+| **FR-002** | Tender selection gated on a frozen `PaymentIntentEnvelope v1` from 005's `cart.handoff`. |
+| **FR-006** | Closed failure-reason set locked at six categories (see OQ-2 above). |
+| **FR-030** | Initial cash-only path consumes `envelope.subtotal_minor` and `envelope.handoff_action_id`; `v1` only; extensions bump `envelope_version`. |
+| **FR-031** | Initial cash-only path emits `payment.settled` keyed to `handoff_action_id`; receipt rendering deferred to receipts spec. |
+
+**Open questions resolved:**
+
+| Question | Resolution |
+|:--|:--|
+| **OQ-1** | Resolved by FR-002 — the envelope is the handoff slot. |
+| **OQ-2** | Resolved by FR-006 — closed enum locked. |
+| **OQ-005-1..4** | Already resolved in PR #182 by 005's `PaymentIntentEnvelope v1` ratification; re-confirmed here. |
+
+**Open questions reframed but still owner-decision pending:**
+
+| Question | Reframing |
+|:--|:--|
+| **OQ-3** | Cashier-cancel UX target — to be resolved in `/speckit-plan` as AD-DEFERRED-3. |
+| **OQ-4** | Force-fail authorisation UX shape — to be resolved in `/speckit-plan` as AD-DEFERRED-4. |
+
+**Open questions still deferred (out of scope for this clarify pass):**
+
+- OQ-OFF-1..4 (offline cash settlement) — deferred to a dedicated
+  offline-payments review.
+- OQ-DRW-1..4 (drawer-impact contract) — deferred to the future
+  shift-management spec.
+
+**What this clarification does NOT do:**
+
+- Does NOT open §A1–§A5 (all five gates remain ⛔ Held).
+- Does NOT make `tasks.md` startable (it remains DRAFT — all rows
+  BLOCKED).
+- Does NOT lock any AD-DEFERRED-1..6 (those resolve in
+  `/speckit-plan`).
+- Does NOT modify any source file, test, package file, migration,
+  OpenAPI surface, codegen output, CI workflow, or Data-Pulse-2.
+
+**Reconciliation note:** the procedural hold on §A0 lifted by this PR
+*for the clarify step only*. The hold remains on §A0 for the next three
+Spec Kit steps (`/speckit-plan` → `/speckit-tasks` → `/speckit-analyze`).
+The gate ledger above tracks the remaining held items.
+
+---
+
 ## Required approvals
 
 Before any 006 implementation work may begin, the following approvals
@@ -262,8 +325,12 @@ this file's gate ledger):
      slices complete; T100 functional sign-off 2026-05-19 (PR #181).
    - `PaymentIntentEnvelope v1` ratified §A4 on 2026-05-17 in
      `specs/005-sales-cart/contracts/handoff-envelope.md`.
-   **Procedural hold lifts** when `/speckit-clarify` re-run is merged
-   and this gate row is updated to ✅ Cleared with a PR reference.
+   - `/speckit-clarify` ✅ applied 2026-05-19 — see §"Clarification
+     results" above.
+   **Remaining procedural hold lifts** when `/speckit-plan` v1.0
+   (resolving AD-DEFERRED-1..6) is merged, followed by `/speckit-tasks`
+   and `/speckit-analyze`. Only after that sequence completes may §A1
+   visual-direction work commission.
 2. **§A1 ✅** — Slice 0 visual direction approved-with-revisions or
    approved (mirrors 004 Slice 0 sign-off pattern).
 3. **§A2 review** — even if the conclusion is "no backend
