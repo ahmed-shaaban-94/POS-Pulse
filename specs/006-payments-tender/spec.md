@@ -29,8 +29,12 @@
 **Owner:** POS-Pulse desktop team
 **Constitution version pinned:** v1.5.1
 **Input:** "Define the payments / tender behaviour layer that runs once an
-approved sales cart is handed to checkout. Cash tender first, future tender
-types deferred."
+approved sales cart is handed to checkout. Supported tender types in v1:
+**cash**, **external card terminal (record-only — no gateway integration)**,
+**internal voucher (authority-validated)**. **Split tender is supported.**
+Tender-scope amended 2026-05-19; the prior cash-only assumption recorded
+by PR #183 is **superseded** — see §Clarifications "Session 2026-05-19 —
+Tender scope amendment" below."
 
 ---
 
@@ -45,14 +49,28 @@ product rules.
 This feature is deliberately **rules-only**. It defines:
 
 - The tender-selection flow once a cart is approved for checkout.
-- The cash-tender path (the only tender type 006 attempts to specify).
+- The three supported tender paths in v1: **cash**, **external card
+  terminal (record-only)**, and **internal voucher
+  (authority-validated)** — see §"Tender scope (amendment 2026-05-19)"
+  below.
+- **Split tender**: a customer MAY pay one cart using more than one
+  tender (e.g., part cash + part voucher); settlement succeeds only
+  when the sum of applied tender lines equals
+  `envelope.subtotal_minor`.
 - The cash-received / change-due calculation **rule**, not a calculator.
+  Only **cash** may overpay; non-cash tenders MUST NOT create change.
 - The lifecycle of a single payment attempt (start → settle / cancel / fail).
+- The lifecycle and arithmetic of `TenderLine` rows within a payment
+  attempt (apply → applied | refused | reversed).
 - The operator-attribution rules (who took payment, who authorised what).
 - The permission boundaries for sensitive tender actions.
 - The handoff *into* payments from an approved cart (contract owned by 005).
 - The handoff *out of* payments to receipts (contract owned by future
   receipts spec).
+- The boundary between POS-Pulse and Data-Pulse-2 for **internal
+  vouchers**: voucher authority (issue / list / cancel / balance)
+  belongs to Data-Pulse-2; POS-Pulse only **redeems** through an
+  approved validation contract — see §"Voucher authority boundary".
 - Offline behaviour as **questions only** — not implementation.
 - Drawer-impact behaviour as **questions only** — not shift financial maths.
 
@@ -155,6 +173,241 @@ PR #182).
   shape); both remain owned by 006 and will be addressed in
   `/speckit-plan` as AD-DEFERRED-3 and AD-DEFERRED-4 resolutions.
 
+### Session 2026-05-19 — Tender scope amendment
+
+The product owner amended tender scope **after** the 2026-05-19
+`/speckit-clarify` session above (which had recorded a cash-only first
+target) and **before** `/speckit-plan` v1.0. The cash-only assumption is
+**superseded**; the cash-only acceptance scenarios in User Story 1
+below are now the **cash variant** of the multi-tender flow, not the
+exclusive flow. The amendment is recorded here so reviewers can read
+both the original clarification and the superseding scope side-by-side
+in commit history.
+
+- **Q (tender scope):** Which tender types does 006 v1 support?
+  **A:** Three: **cash**, **external_card_terminal** (record-only —
+  no gateway integration, no payment processor API call, no card
+  data captured), and **internal_voucher** (authority-validated by
+  Data-Pulse-2 / POS-Pulse-side voucher authority). Real card
+  processor integration, wallets, BNPL, and any tender that requires
+  a live network gateway remain **out of scope** (FR-040).
+
+- **Q (split tender):** Does 006 v1 support paying one cart with
+  more than one tender?
+  **A:** Yes. A single payment attempt MAY apply multiple
+  `TenderLine`s. Settlement succeeds only when the sum of applied
+  `amount_applied_minor` across all `TenderLine`s in `applied`
+  state equals `envelope.subtotal_minor`. **Cash MAY overpay** and
+  produce `change_due_minor` on the cash line only; non-cash
+  tenders MUST NOT overpay and MUST NOT produce change. Split
+  ordering and rollback semantics are deferred to `/speckit-plan`
+  (OQ-PLAN-4 below).
+
+- **Q (external card terminal):** How does POS-Pulse handle card
+  payments?
+  **A:** **Record-only.** The cashier completes payment on a
+  separate, physical, external card terminal. POS-Pulse records
+  that an external-card-terminal `TenderLine` was applied; it does
+  NOT call any payment gateway, processor API, or terminal
+  vendor SDK. **No PAN, CVV, track data, cardholder name, auth
+  payload, raw terminal receipt text, or card data of any kind**
+  may be captured, transmitted, persisted, or logged by 006
+  (FR-040, Constitution P6). An optional operator-entered
+  `external_reference` field MAY be allowed only if it is
+  **non-sensitive** (e.g., a short alphanumeric the cashier reads
+  off the terminal printout to aid reconciliation) and is
+  **redacted from logs** (Constitution P7). The exact field
+  policy is deferred to `/speckit-plan` (OQ-PLAN-5 below).
+
+- **Q (internal voucher):** How is a voucher validated and applied?
+  **A:** Not record-only. A voucher `TenderLine` MUST be
+  **validated** against a voucher authority **before** it is
+  applied to the payment attempt, and **redeemed** atomically at
+  payment confirmation. Voucher issuance, cancellation, balance
+  authority, and the canonical voucher store belong to
+  **Data-Pulse-2 / SmartDataPulse backend**. POS-Pulse MUST NOT
+  implement voucher issuance or cancellation in this feature.
+  POS-Pulse-side voucher redemption requires either (a) a future
+  approved `vouchers.validate` / `vouchers.redeem` bridge contract
+  backed by a Data-Pulse-2 endpoint, or (b) a future approved
+  POS-local voucher authority / read-model contract — see
+  §"Voucher authority boundary". **Double-redemption MUST be
+  prevented** at the authoritative layer. **Partial voucher
+  redemption** (a voucher worth more than the cart subtotal, or
+  splitting one voucher across multiple carts) is deferred to
+  `/speckit-plan` (OQ-PLAN-3 below). **Offline voucher
+  redemption** is **deferred** unless a local voucher authority
+  contract exists at validation time — see OQ-OFF-VCHR-1 below.
+
+- **Q (settlement invariant):** What is the closed condition for
+  a `settled` outcome under the amended tender scope?
+  **A:** `Σ TenderLine.amount_applied_minor (where state='applied')`
+  `== envelope.subtotal_minor`. **No undershoot** (per-line
+  audit-event reason `tender_underpaid` from FR-006 still
+  applies). **No non-cash overshoot** (per-line refusal reason
+  `non_cash_overpayment_refused`, locked here as a new FR-006
+  failure category — see FR-006 amendment below). **Cash
+  overshoot is permitted** and produces `change_due_minor` on the
+  cash line only.
+
+**What this amendment does NOT do:**
+
+- Does NOT add real card processor / gateway integration of any
+  kind — that remains out of scope (FR-040, Non-Goals).
+- Does NOT modify Data-Pulse-2; the voucher authority contract is
+  a future, separately-spec'd integration.
+- Does NOT implement voucher issuance, voucher cancellation, or
+  loyalty-campaign behaviour — those belong to a future
+  Data-Pulse-2-led spec.
+- Does NOT generate, render, or print receipts (FR-043 still
+  binding).
+- Does NOT open §A1–§A5; all five gates remain ⛔ Held.
+- Does NOT make `tasks.md` startable.
+- Does NOT produce `/speckit-plan` v1.0 — `/speckit-plan` must
+  now resolve the expanded decision set (AD-DEFERRED-1..6 plus
+  the OQ-PLAN-1..8 below).
+- Does NOT lock the `TenderLine` data shape, persistence model,
+  bridge namespace, or rollback semantics — those are
+  `/speckit-plan` decisions.
+
+---
+
+## Tender scope (amendment 2026-05-19)
+
+This section is **normative**. It supersedes the cash-only first-target
+assumption recorded by PR #183.
+
+### Supported tender types in v1
+
+| `tender_type` | Semantics | Settlement role |
+|:--|:--|:--|
+| `cash` | Local-only. Cashier enters `cash_received_minor` (integer minor units). MAY overpay; overpay produces `change_due_minor` on the cash line. | Local-first; no backend round-trip required. |
+| `external_card_terminal` | Record-only. Cashier completes payment on a separate physical card terminal. POS-Pulse records that the line was applied; NO gateway/processor integration; NO card data captured. Optional non-sensitive `external_reference` (deferred field-policy decision — OQ-PLAN-5). | Local-first record; reconciliation contract with Data-Pulse-2 deferred. |
+| `internal_voucher` | Authority-validated. Voucher MUST be validated against a voucher authority before applied; redeemed atomically at payment confirmation. Double-redemption MUST be prevented at the authoritative layer. | Requires authoritative validation/redeem — see §"Voucher authority boundary". |
+
+Future tender slots (wallet, BNPL, real card gateway, etc.) MUST appear
+as **reserved-but-disabled** affordances if shown at all (FR-001) and
+MUST emit a generic `tender_not_yet_supported` refusal if invoked.
+
+### TenderLine concept
+
+A single payment attempt carries **one or more** `TenderLine` rows. The
+data shape, persistence model, and bridge surface for `TenderLine` are
+`/speckit-plan` v1.0 decisions (OQ-PLAN-1, OQ-PLAN-2). For spec
+purposes, a `TenderLine` is **the unit of money applied via a single
+tender type within a single payment attempt** and carries at least:
+
+| Field (behavioural; not data-shape-binding) | Notes |
+|:--|:--|
+| `tender_line_id` | Stable identifier within the attempt. |
+| `tender_type` | One of `cash` / `external_card_terminal` / `internal_voucher`. |
+| `amount_applied_minor` | Non-negative integer minor units. |
+| `state` | `applying → (applied | refused | reversed)`. Terminal states block further mutation of this line. |
+| `change_due_minor` | Only populated for `cash` lines that overpay. Always `null` / absent on non-cash lines. |
+| `external_reference` | Optional, non-sensitive, redacted-in-logs. Only meaningful for `external_card_terminal`; field-policy deferred to OQ-PLAN-5. |
+| `voucher_reference` | Reference to the redeemed voucher record. Only meaningful for `internal_voucher`. Sensitive-field policy follows §"Voucher authority boundary"; the exact wire shape and which fields cross the bridge is deferred to OQ-PLAN-7. |
+| `applied_at` / `refused_at` / `reversed_at` | UTC timestamps. |
+| `attribution_operator_id` | Inherits FR-013 / FR-014. |
+
+The above is the **behavioural minimum**. The persisted shape, the
+bridge-side return shape, the redaction boundary, and what (if anything)
+the renderer ever sees of `voucher_reference` are all deferred to
+`/speckit-plan` (OQ-PLAN-1 / OQ-PLAN-2 / OQ-PLAN-7).
+
+### Settlement invariant (closed)
+
+A payment attempt may transition to `settled` only when **all four**
+conditions hold simultaneously:
+
+1. **Total applied equals subtotal**:
+   `Σ TenderLine.amount_applied_minor (where state='applied')`
+   `== envelope.subtotal_minor`.
+2. **No non-cash overpayment**: every non-cash `TenderLine` satisfies
+   `amount_applied_minor ≤ remaining_balance_at_apply_time` (where
+   `remaining_balance` is `envelope.subtotal_minor` minus the running
+   sum of already-applied lines).
+3. **Cash overpayment is allowed only on a `cash` line**, and produces
+   a non-negative `change_due_minor` on that line only.
+4. **Every `internal_voucher` line in `applied` state has been
+   atomically redeemed** by the voucher authority; double-redemption
+   is prevented at that authority.
+
+If any of (1)–(4) is violated at confirm time, the attempt MUST refuse
+generically (FR-022 / NFR-003) and emit a `payment.failed` audit event
+with the appropriate FR-006 reason category.
+
+### Cash overpayment vs. non-cash overpayment
+
+| Tender | Overpayment behaviour |
+|:--|:--|
+| `cash` | Allowed. Produces `change_due_minor = amount_applied_minor − remaining_balance_at_apply_time` on the cash line. Refusal reason for under-tender remains `tender_underpaid`. |
+| `external_card_terminal` | **NOT allowed**. The cashier MUST enter exactly `remaining_balance_at_apply_time`. Refusal reason: `non_cash_overpayment_refused` (new FR-006 category, locked here). |
+| `internal_voucher` | **NOT allowed**. Same refusal reason: `non_cash_overpayment_refused`. The handling of voucher value that exceeds the cart subtotal (e.g., do we refuse the line, or do we apply only `remaining_balance` and leave residual voucher value) is **partial-redemption** — deferred to OQ-PLAN-3. |
+
+### Voucher authority boundary
+
+POS-Pulse MUST NOT implement voucher issuance or voucher cancellation
+in this feature. Those belong to **Data-Pulse-2 / SmartDataPulse
+backend**.
+
+POS-Pulse v1 redeems a voucher only through an **approved**
+authoritative validation contract. The contract may be either:
+
+- **Contract V-A — Backend-authoritative (preferred):** a future
+  Data-Pulse-2 endpoint pair (`POST /vouchers/validate`,
+  `POST /vouchers/redeem`) wrapped in a `vouchers.validate` /
+  `vouchers.redeem` POS-Pulse bridge handler. Validation returns a
+  short-lived non-sensitive **redemption intent** token bound to the
+  payment attempt; redeem atomically consumes the intent at payment
+  confirmation. Network failure → `dependency_unavailable` (FR-006).
+- **Contract V-B — POS-local read-model (only if approved):** a future
+  POS-Pulse local voucher authority/read-model with replicated voucher
+  balance and a local atomic redeem under the same one-redemption
+  guarantee. Acceptable only if Data-Pulse-2 explicitly grants this
+  authority to the POS terminal under a documented offline reconciliation
+  contract.
+
+The choice between V-A and V-B is a `/speckit-plan` decision
+(**OQ-PLAN-7**). Neither contract is authored by this spec.
+
+Until the chosen contract ships, **no `internal_voucher` TenderLine
+may be applied**; the voucher tender slot is reserved-but-disabled
+(FR-001), and invoking it returns `tender_not_yet_supported`. This is
+the same disabled-slot pattern that protects future wallet/BNPL
+tender types.
+
+**Renderer-side voucher data is minimised**: the renderer MUST NOT
+receive voucher-balance authority data, voucher-issuance metadata,
+loyalty-program internals, or any cross-cart voucher state. The
+renderer sees only enough to display the applied line generically
+(see §FR-017). Sensitive voucher fields and the wire shape are
+deferred to OQ-PLAN-7.
+
+### Offline behaviour (amendment)
+
+- `cash` offline behaviour remains under OQ-OFF-1..4 (unchanged by this
+  amendment).
+- `external_card_terminal` offline behaviour: POS-Pulse MAY still
+  record an external-card-terminal `TenderLine` while offline since
+  the actual settlement happens on the external device; the
+  reconciliation contract with Data-Pulse-2 is **deferred** to a
+  dedicated reconciliation review (OQ-OFF-EXT-1, see below).
+- `internal_voucher` offline behaviour: **deferred unless a local
+  voucher authority/read-model contract exists at validation time
+  (Contract V-B above)** (OQ-OFF-VCHR-1). Under Contract V-A only, a
+  voucher TenderLine MUST refuse with `dependency_unavailable`
+  (FR-006) while offline.
+
+### Drawer impact (amendment)
+
+`cash` lines retain drawer-impact deferral (OQ-DRW-1..4 unchanged).
+`external_card_terminal` and `internal_voucher` lines MUST NOT produce
+drawer impact (they never open the till), but reconciliation reporting
+on these tenders is owned by future shift-management / reporting
+specs, not by 006.
+
+---
+
 ## User Scenarios & Testing *(mandatory)*
 
 > Each story is **independently testable as product behaviour** even though
@@ -163,15 +416,22 @@ PR #182).
 
 ### User Story 1 — Take a single cash payment for an approved cart (Priority: P1)
 
+> ⚠ **Amended 2026-05-19** — this story now describes the **cash
+> variant** of the multi-tender flow. The two parallel P1 stories are
+> US1 (cash) and US4 (external card terminal, record-only). US5
+> (voucher) is P2 and gated on the voucher-authority contract; US6
+> (split tender) is P2.
+
 A cashier has an approved cart handed off from 005. The cashier selects
 **Cash** as tender, enters the amount received, sees the change due, confirms
-the payment, and the system records the payment as **settled**, attributes it
-to the signed-in cashier, and hands off to receipts. The cart cannot be
-edited from this surface, and the surface cannot be reached without an
-approved cart.
+the payment, and the system records the payment as **settled** with one
+`cash` `TenderLine`, attributes it to the signed-in cashier, and hands
+off to receipts. The cart cannot be edited from this surface, and the
+surface cannot be reached without an approved cart.
 
-**Why this priority**: Cash is the only tender 006 attempts to settle. Until
-this story works end-to-end (when unblocked), no later tender type, no
+**Why this priority**: Cash is one of two parallel P1 tender types in
+v1 (the other is `external_card_terminal` — US4). Until at least one P1
+story works end-to-end (when unblocked), no later tender type, no
 refund, no receipt, and no shift close can be exercised.
 
 **Independent Test**: A reviewer (when unblocked) drives an approved cart to
@@ -277,6 +537,140 @@ with operator attribution.
    **Then** a `payment.failed` event is present with the failure-reason
    category and operator attribution.
 
+### User Story 4 — Record an external-card-terminal payment (Priority: P1, parallel to US1)
+
+A cashier has an approved cart handed off from 005. The customer wishes
+to pay by card. The cashier selects **External card terminal**, taps the
+amount, completes the actual payment on the **separate physical card
+terminal** (a device outside POS-Pulse), then confirms in POS-Pulse that
+the external transaction succeeded. POS-Pulse records an
+`external_card_terminal` `TenderLine` against the attempt; no payment
+gateway is contacted; no card data of any kind is captured.
+
+**Why this priority**: External-card-terminal is one of the three
+in-scope tender types in v1 and is the only one that addresses card
+payments at all in 006. Together with US1, it covers the realistic
+single-tender case for the first implementation slice.
+
+**Independent Test**: A reviewer drives an approved cart to checkout,
+selects External card terminal, enters the exact amount due,
+acknowledges the cashier completed the external payment, confirms,
+observes a `settled` outcome with one `external_card_terminal`
+`TenderLine` recorded. Audit confirms no PAN / CVV / track / cardholder
+field is present.
+
+**Acceptance Scenarios**:
+
+1. **Given** an approved cart, **When** the cashier selects External
+   card terminal and enters `amount_applied_minor ==
+   envelope.subtotal_minor`, **Then** the line transitions
+   `applying → applied`, the attempt may move to `settled`, and the
+   audit row carries `tender_type = external_card_terminal` with no
+   card data and an optional non-sensitive `external_reference`
+   (subject to OQ-PLAN-5).
+2. **Given** an approved cart, **When** the cashier enters
+   `amount_applied_minor > remaining_balance_at_apply_time`, **Then**
+   the line MUST refuse with reason `non_cash_overpayment_refused`
+   (FR-010); the renderer message is generic; the cashier MAY amend
+   or cancel.
+3. **Given** any `external_card_terminal` line in any state, **When**
+   logs / audit / Sentry are reviewed, **Then** there is **zero**
+   cardholder data of any form (FR-008, Constitution P6).
+
+### User Story 5 — Apply an internal voucher (Priority: P2, gated on voucher authority contract)
+
+A cashier has an approved cart. The customer presents a voucher code.
+The cashier selects **Voucher**, enters or scans the code, the system
+validates it against the voucher authority, displays the applicable
+amount (capped at `remaining_balance_at_apply_time` per OQ-PLAN-3),
+and the cashier confirms application. At payment confirmation, the
+voucher is **atomically redeemed**; double-redemption is prevented at
+the authoritative layer.
+
+**Why this priority**: Voucher tender is required by product but is
+gated on the voucher authority contract (Contract V-A or V-B). It
+MUST NOT ship before that contract; therefore P2 relative to US1 / US4
+in the first implementation slice.
+
+**Independent Test**: A reviewer drives an approved cart to checkout,
+selects Voucher, enters a valid code, observes the validated
+applicable amount, applies it (alone or in combination with cash /
+external card terminal per US6), confirms, observes a `settled`
+outcome with the voucher redeemed at the authority. A second attempt
+to redeem the same voucher MUST refuse with `voucher_already_redeemed`.
+
+**Acceptance Scenarios**:
+
+1. **Given** an approved cart and a valid unredeemed voucher,
+   **When** the cashier applies the voucher line and confirms the
+   attempt, **Then** the voucher is atomically redeemed and the
+   line transitions `applying → applied`.
+2. **Given** a voucher previously redeemed, **When** the cashier
+   attempts to apply it, **Then** validation MUST refuse with
+   reason `voucher_already_redeemed`; the renderer message is
+   generic; the attempt is unaffected (no `failed` outcome — the
+   cashier MAY apply a different tender line).
+3. **Given** the voucher authority is unreachable (Contract V-A),
+   **When** the cashier attempts to apply a voucher, **Then**
+   validation MUST refuse with `dependency_unavailable`; under
+   Contract V-B (POS-local read-model approved), the line MAY apply
+   provided the local atomic redeem succeeds.
+4. **Given** any `internal_voucher` line in any state, **When**
+   logs / audit / Sentry are reviewed, **Then** there is **no**
+   voucher holder PII or cross-cart voucher state, only the minimised
+   reference per FR-017.
+
+### User Story 6 — Split tender (Priority: P2)
+
+A customer wishes to pay one approved cart using **more than one
+tender** — for example, part by voucher and the rest in cash, or part
+by external card terminal and part in cash. The cashier applies
+multiple `TenderLine`s within a single payment attempt; settlement
+succeeds only when their applied amounts sum to
+`envelope.subtotal_minor`.
+
+**Why this priority**: Real-world pharmacy retail routinely combines
+voucher / loyalty discounts with cash or card top-up. Without split
+tender support, the cashier is forced to refuse or work around
+mixed-tender customers. P2 because the single-tender cases
+(US1 / US4 / US5) must work first.
+
+**Independent Test**: A reviewer drives an approved cart, applies one
+non-cash line below `subtotal_minor`, then applies a cash line for
+exactly the remaining balance, confirms, observes a `settled`
+outcome with two `TenderLine`s. The reviewer also exercises a
+mid-attempt cancel after the first non-cash line is applied and
+verifies the already-applied line is reversed per FR-006B.
+
+**Acceptance Scenarios**:
+
+1. **Given** an approved cart with `subtotal_minor = N`, **When** the
+   cashier applies one or more non-cash `TenderLine`s totaling `M`
+   (where `M < N`) and then a `cash` line with
+   `amount_applied_minor == N − M`, **Then** the attempt may move to
+   `settled` (per the §"Tender scope" settlement invariant).
+2. **Given** an approved cart with `subtotal_minor = N`, **When** the
+   cashier applies one or more non-cash `TenderLine`s totaling `M`
+   (where `M < N`) and then a `cash` line with
+   `amount_applied_minor > N − M`, **Then** the cash line is allowed
+   to overpay; `change_due_minor = amount_applied_minor − (N − M)`
+   is recorded on the cash line only.
+3. **Given** an attempt with one applied non-cash line, **When** the
+   cashier cancels the attempt before total applied reaches `N`,
+   **Then** the applied non-cash line MUST be reversed per FR-006B,
+   and no `settled` outcome is recorded.
+4. **Given** an attempt with one applied non-cash line, **When** the
+   cashier attempts to apply a second non-cash line whose
+   `amount_applied_minor > remaining_balance_at_apply_time`,
+   **Then** the second line MUST refuse with
+   `non_cash_overpayment_refused`; the first line remains `applied`;
+   the cashier MAY amend the second line's amount, add a different
+   tender, or cancel.
+5. **Given** any split-tender attempt, **When** the audit log is
+   reviewed, **Then** every `TenderLine` state transition is
+   recorded with operator attribution and `handoff_action_id`
+   correlation; no PII or card data leaks.
+
 ---
 
 ## Edge Cases & Assumptions
@@ -297,9 +691,13 @@ with operator attribution.
   `cash_received_minor − total_minor` and is non-negative by construction
   (refused confirmation if it would be negative — see User Story 1 #3).
 - **Refunds / returns are out of scope**. Future spec.
-- **Card / wallet / split tender are out of scope.** Future spec(s).
+- **Real card processor / wallet / BNPL are out of scope.** Future
+  spec(s). ⚠ **Note (amended 2026-05-19):** `external_card_terminal`
+  is **record-only** and is **in scope**, but is NOT a card processor
+  integration — see FR-007 / FR-008. Split tender is **in scope** —
+  see FR-006B and User Story 6.
 - **PII / cardholder data**: no card data of any kind is captured by 006.
-  See FR-014.
+  See FR-014 and FR-008.
 - **Offline behaviour**: explicitly questions only — see "Offline behaviour
   questions" below.
 - **Drawer impact**: explicitly questions only — see "Drawer-impact
@@ -314,10 +712,18 @@ with operator attribution.
 
 ### Tender selection
 
-- **FR-001**: The payment surface MUST present a tender-selection step. In
-  006, **Cash is the only selectable tender**. Other tender slots MUST be
-  visibly reserved (so cashiers / customers / reviewers can see future
-  options exist) but MUST be disabled and emit a generic
+- **FR-001** ⚠ **amended 2026-05-19** (see §"Tender scope (amendment
+  2026-05-19)"): The payment surface MUST present a tender-selection
+  step. In 006 v1, the **selectable tender types** are:
+  - `cash` — always selectable;
+  - `external_card_terminal` — record-only; selectable;
+  - `internal_voucher` — selectable **only if** the approved voucher
+    authority contract (Contract V-A or V-B per §"Voucher authority
+    boundary") has shipped; otherwise reserved-but-disabled.
+
+  Any other tender slot (wallet / BNPL / real card gateway / etc.)
+  MUST be visibly reserved (so cashiers / customers / reviewers can
+  see future options exist) but MUST be disabled and emit a generic
   `tender_not_yet_supported` refusal if invoked.
 - **FR-002**: Tender selection MUST be reachable only when a frozen
   `PaymentIntentEnvelope v1` is available from 005's `cart.handoff`
@@ -336,32 +742,145 @@ with operator attribution.
 
 ### Cash tender
 
-- **FR-004**: The Cash tender path MUST collect a single
-  `cash_received_minor` integer in the cart's currency, in **minor units**
-  only (Constitution P-II). The UI MAY display a major-unit-formatted
-  helper for the operator, but the source of truth is the integer.
-- **FR-005**: Change due MUST be computed as
-  `cash_received_minor − total_minor` and MUST be a non-negative integer.
-  When `cash_received_minor < total_minor`, confirmation MUST be refused
-  generically (User Story 1 #3); the cashier MAY amend the amount or
-  cancel.
+- **FR-004** ⚠ **amended 2026-05-19** (split-tender aware): A `cash`
+  `TenderLine` MUST collect a single `amount_applied_minor` integer
+  in the cart's currency, in **minor units** only (Constitution P-II).
+  The UI MAY display a major-unit-formatted helper for the operator,
+  but the source of truth is the integer. The cash line's role in
+  settlement is governed by the §"Tender scope" settlement invariant.
+- **FR-005** ⚠ **amended 2026-05-19** (split-tender aware): For a
+  `cash` `TenderLine`, `change_due_minor` MUST be computed as
+  `amount_applied_minor − remaining_balance_at_apply_time` and MUST
+  be a non-negative integer; it MUST be `null` / absent on non-cash
+  lines. When `amount_applied_minor < remaining_balance_at_apply_time`
+  on the only remaining unpaid balance, confirmation MUST be refused
+  generically (User Story 1 #3); the cashier MAY amend the amount, add
+  another tender line, or cancel. **Cash MAY overpay**; non-cash
+  tenders MUST NOT — see §"Cash overpayment vs. non-cash overpayment".
+
+### External card terminal tender (record-only)
+
+- **FR-007** *(new — 2026-05-19)*: An `external_card_terminal`
+  `TenderLine` MUST be a **record-only** entry. POS-Pulse MUST NOT
+  call any payment gateway, processor API, terminal vendor SDK, or
+  third-party HTTP endpoint as part of applying or settling this
+  tender. The cashier completes payment on a separate physical
+  device; POS-Pulse only records that the line was applied.
+- **FR-008** *(new — 2026-05-19)*: POS-Pulse MUST NOT capture,
+  transmit, persist, or log any cardholder data of any kind for an
+  `external_card_terminal` line — including but not limited to PAN,
+  truncated PAN, CVV, magnetic-stripe / chip / contactless track data,
+  cardholder name, issuer bank name, expiry date, auth payload,
+  approval code, terminal-printed receipt text, or any cryptogram.
+  This obligation is **non-negotiable** (FR-040, FR-026, Constitution
+  P6).
+- **FR-009** *(new — 2026-05-19)*: An optional operator-entered
+  `external_reference` field on an `external_card_terminal`
+  `TenderLine` MAY be permitted only if the field is **non-sensitive**
+  (e.g., a short alphanumeric the cashier reads off the terminal
+  printout to aid reconciliation), and the field MUST be **redacted
+  from logs** (Constitution P7) and MUST NOT contain PAN, partial
+  PAN, or any value that could be used as cardholder data. **Whether
+  this field exists at all in v1, and its exact validation rules,
+  are deferred to `/speckit-plan` (OQ-PLAN-5).**
+- **FR-010** *(new — 2026-05-19)*: An `external_card_terminal`
+  `TenderLine` MUST refuse with reason `non_cash_overpayment_refused`
+  if `amount_applied_minor > remaining_balance_at_apply_time`. The
+  refusal copy at the renderer remains generic (FR-022, NFR-003).
+
+### Internal voucher tender (authority-validated)
+
+- **FR-015** *(new — 2026-05-19)*: An `internal_voucher` `TenderLine`
+  MUST be **validated** against the voucher authority **before** it
+  is applied to the payment attempt. Validation MUST return either
+  a positive applicable amount and a non-sensitive redemption-intent
+  token bound to the payment attempt, or a refusal reason drawn from
+  the closed set: `voucher_not_found`, `voucher_expired`,
+  `voucher_cancelled`, `voucher_already_redeemed`,
+  `voucher_tenant_mismatch`, `voucher_branch_mismatch`,
+  `dependency_unavailable`. Each refusal reason maps to a generic
+  renderer-facing message; structured reason lives in the audit
+  event only (FR-022, NFR-003).
+- **FR-016** *(new — 2026-05-19)*: A validated `internal_voucher`
+  `TenderLine` MUST be **redeemed atomically** at payment confirmation
+  by the voucher authority. **Double-redemption MUST be prevented at
+  the authoritative layer.** If redemption fails at confirm time, the
+  attempt MUST resolve to `failed` with reason
+  `voucher_already_redeemed` (the canonical failure category) or
+  `dependency_unavailable`; no `TenderLine` may move to `applied`
+  state until redemption succeeds.
+- **FR-017** *(new — 2026-05-19)*: The renderer MUST NOT receive
+  voucher-balance authority data, voucher-issuance metadata, loyalty-
+  program internals, voucher holder PII, or any cross-cart voucher
+  state. The renderer sees only enough fields to display the applied
+  line generically (e.g., a short opaque code or last-4 redaction).
+  The exact set of fields that may cross the bridge to the renderer
+  is deferred to `/speckit-plan` (OQ-PLAN-7); when in doubt during
+  planning, **minimise**. Sensitive voucher state stays main-process
+  side (Constitution P3 / P7).
+- **FR-018** *(new — 2026-05-19)*: POS-Pulse MUST NOT implement
+  voucher issuance, voucher cancellation, voucher balance editing,
+  voucher catalogue management, or loyalty-campaign behaviour in
+  this feature. Those belong to **Data-Pulse-2 / SmartDataPulse
+  backend**. POS-Pulse only **redeems** vouchers via the approved
+  contract (Contract V-A or V-B per §"Voucher authority boundary").
 
 ### Payment-attempt lifecycle
 
-- **FR-006**: A payment attempt MUST traverse a deterministic state
-  machine with these states: `idle → started → (settled | cancelled |
-  failed)`. Once any terminal state is reached, the attempt MUST NOT
-  return to `started`. Each terminal transition MUST record:
+- **FR-006** ⚠ **amended 2026-05-19** (multi-tender failure reasons):
+  A payment attempt MUST traverse a deterministic state machine with
+  these states: `idle → started → (settled | cancelled | failed)`.
+  Once any terminal state is reached, the attempt MUST NOT return to
+  `started`. Each terminal transition MUST record:
   - the operator identity (FR-013, inherited from 004 FR-001 / FR-013);
   - a UTC timestamp;
   - a structured outcome (`settled` / `cancelled` / `failed`);
   - for `failed`, a reason category drawn from the closed set:
-    `cart_lost`, `operator_session_terminated`, `dependency_unavailable`,
-    `internal_error`, `stale_handoff`, `tender_underpaid` (locked
-    2026-05-19; reconciled against 004's audit catalogue and 005's
-    `version` / `stale_version` refusal semantics). The category is
-    structured data on the audit event; the renderer-facing copy MUST
-    remain generic and non-disclosing (FR-022, NFR-003).
+    `cart_lost`, `operator_session_terminated`,
+    `dependency_unavailable`, `internal_error`, `stale_handoff`,
+    `tender_underpaid`, **`non_cash_overpayment_refused`**,
+    **`voucher_not_found`**, **`voucher_expired`**,
+    **`voucher_cancelled`**, **`voucher_already_redeemed`**,
+    **`voucher_tenant_mismatch`**, **`voucher_branch_mismatch`**,
+    **`split_tender_rollback`** (last eight added 2026-05-19 by the
+    tender-scope amendment). The category is structured data on the
+    audit event; the renderer-facing copy MUST remain generic and
+    non-disclosing (FR-022, NFR-003).
+
+- **FR-006A** *(new — 2026-05-19)* — **TenderLine FSM**: each
+  `TenderLine` within a payment attempt MUST traverse a deterministic
+  state machine: `applying → (applied | refused)`. An `applied` line
+  MAY be transitioned to `reversed` only as part of split-tender
+  rollback under FR-006B or as part of overall attempt cancellation;
+  a `refused` line is terminal and MUST NOT be re-applied (the
+  cashier MUST add a new line instead). Every state transition emits
+  a per-line audit event under 004 FR-025 / FR-026 with operator
+  attribution.
+
+- **FR-006B** *(new — 2026-05-19)* — **Split-tender ordering and
+  rollback**: when more than one `TenderLine` is applied within a
+  payment attempt, the attempt MUST process them in the order the
+  cashier applied them. If any subsequent line refuses, fails to
+  validate, or the cashier cancels before total applied reaches
+  `envelope.subtotal_minor`, **already-applied non-cash lines MUST
+  be reversed** to a defined safe state:
+  - `cash` lines: returned to the cashier; line transitions to
+    `reversed`; no till impact recorded (drawer impact remains under
+    OQ-DRW-1..4 deferral).
+  - `external_card_terminal` lines: line transitions to `reversed`;
+    a `payment.external_card.reversed` audit event records that the
+    cashier MUST manually void on the external terminal (POS-Pulse
+    has no API into the terminal).
+  - `internal_voucher` lines: **MUST be reversed at the voucher
+    authority** (the redemption intent is consumed or refunded per
+    the voucher contract). If the authority is unreachable, the line
+    transitions to `reversal_pending` and a deferred-reversal audit
+    event is emitted; this is a `dependency_unavailable` failure of
+    the rollback path.
+
+  Detailed rollback ordering, idempotency keys, and the
+  `reversal_pending` resolution path are deferred to `/speckit-plan`
+  (OQ-PLAN-4).
 
 ### Operator attribution
 
@@ -429,10 +948,17 @@ with operator attribution.
 
 ### Out-of-scope guards
 
-- **FR-040**: 006 MUST NOT capture, transmit, or persist raw card data,
-  raw PAN, raw CVV, or any value that could be used as cardholder data.
-  Card / wallet / split tender are deferred to a later, explicitly
-  scoped feature.
+- **FR-040** ⚠ **amended 2026-05-19**: 006 MUST NOT capture,
+  transmit, or persist raw card data, raw PAN, raw CVV, magnetic-stripe
+  / chip / contactless track data, cardholder name, expiry date,
+  auth payload, approval code, terminal-printed receipt text, or any
+  cryptogram. **Real card processor / payment-gateway integration,
+  wallets, and BNPL are deferred** to later, explicitly scoped
+  feature(s). `external_card_terminal` is **record-only** and is **in
+  scope** as defined in FR-007–FR-010; **split tender is in scope**
+  as defined in FR-006B and User Story 6; **internal voucher
+  redemption is in scope** as defined in FR-015–FR-018 and User
+  Story 5, gated on the §"Voucher authority boundary" contract.
 - **FR-041**: 006 MUST NOT mutate inventory. Stock movement is owned by
   a future inventory spec.
 - **FR-042**: 006 MUST NOT compute shift expected total, shift variance,
@@ -482,9 +1008,110 @@ with operator attribution.
   terminal returns online retroactively invalidate an offline-settled
   payment? (Likely no, but must be confirmed against 004's takeover
   semantics.)
+- **OQ-OFF-EXT-1** *(new — 2026-05-19)*: How does an
+  offline-recorded `external_card_terminal` `TenderLine` reconcile
+  with Data-Pulse-2 / shift-management when the terminal returns
+  online? Owned by the future reconciliation review, not by 006.
+- **OQ-OFF-VCHR-1** *(new — 2026-05-19)*: Under Contract V-A
+  (backend-authoritative), an `internal_voucher` `TenderLine`
+  refuses with `dependency_unavailable` while offline. Under
+  Contract V-B (POS-local read-model approved), local atomic
+  redeem MAY proceed, but the local-vs-authority reconciliation
+  contract and conflict resolution are deferred to the dedicated
+  voucher-authority contract review.
 
 These questions are non-binding on this draft. Resolution is required
-before any implementation slice that touches offline cash settlement.
+before any implementation slice that touches offline cash settlement
+or offline voucher / external-card-terminal behaviour.
+
+---
+
+## `/speckit-plan` open questions (added 2026-05-19 by tender-scope amendment)
+
+> The following are **explicit `/speckit-plan` decisions** raised by the
+> tender-scope amendment. They are NOT resolved by this spec; they MUST
+> be resolved in `/speckit-plan` v1.0 alongside AD-DEFERRED-1..6.
+
+- **OQ-PLAN-1**: **Payment attempt + TenderLine persistence model.**
+  Does 006 introduce local SQLite tables for payment attempts and
+  tender lines (mirroring 005's `carts` + `cart_action_outbox`
+  pattern), or does the existing 004 `audit_events` table alone
+  carry sufficient mid-flight state? If new tables, what is the
+  minimum schema, and which migration slice authors them? **Note**:
+  the tender-scope amendment makes this load-bearing — split-tender
+  rollback (FR-006B) requires queryable mid-flight state that
+  `audit_events` alone cannot represent efficiently.
+
+- **OQ-PLAN-2**: **Bridge-API namespace for `payments.*` /
+  `tender.*` / split-tender handlers.** Single `payments.*`
+  namespace covering attempt + per-line operations, or split into
+  `payments.*` (attempt-level) and `tender.*` (per-line)? What
+  handlers does v1 require (`payments.start`, `payments.confirm`,
+  `payments.cancel`, `tender.apply`, `tender.reverse`, etc.)?
+  Idempotency-key strategy across multi-line apply / reverse?
+
+- **OQ-PLAN-3**: **Partial voucher redemption.** When a voucher's
+  authoritative remaining balance exceeds
+  `remaining_balance_at_apply_time`, does the cashier apply the
+  full `remaining_balance_at_apply_time` (residual voucher value
+  preserved at the authority) or refuse the voucher line entirely
+  (`non_cash_overpayment_refused`)? Whose responsibility is residual-
+  voucher reconciliation if partial redemption is allowed —
+  POS-Pulse or Data-Pulse-2? Answer must be consistent with the
+  voucher-authority contract (V-A or V-B per OQ-PLAN-7).
+
+- **OQ-PLAN-4**: **Split-tender ordering and rollback semantics.**
+  What is the exact ordering invariant when applying multiple
+  `TenderLine`s (strict cashier-order vs. apply-then-pin-on-confirm)?
+  What is the rollback idempotency strategy when a previously-applied
+  non-cash line must be reversed (FR-006B)? How is
+  `reversal_pending` resolved if the voucher authority is unreachable
+  during rollback?
+
+- **OQ-PLAN-5**: **External card reference field policy.** Does the
+  optional `external_reference` field on `external_card_terminal`
+  `TenderLine`s exist at all in v1? If yes: max length, charset,
+  format validation, redaction-in-logs rule, and presence in audit
+  events. If no: what reconciliation hook does v1 offer instead?
+  See FR-009.
+
+- **OQ-PLAN-6**: **Idempotency and double-settlement prevention.**
+  Beyond per-line idempotency keys (OQ-PLAN-2), what attempt-level
+  guarantee prevents a stuck `started` attempt from being concurrently
+  confirmed twice? Likely solved by the partial unique index
+  `WHERE state='started'` pattern (mirroring 005's
+  `WHERE state='started'` if 005 uses one), but the exact constraint
+  shape is a `/speckit-plan` decision.
+
+- **OQ-PLAN-7**: **Voucher validation/redeem contract — V-A or V-B.**
+  Backend-authoritative (Contract V-A: Data-Pulse-2 endpoint pair
+  wrapped in `vouchers.validate` / `vouchers.redeem` POS-Pulse
+  bridge handlers, network-required) or POS-local read-model
+  (Contract V-B: replicated balance + local atomic redeem, approved
+  by Data-Pulse-2)? Which sensitive voucher fields cross the
+  bridge to the renderer (FR-017)? Which audit-event fields are
+  redacted? **No `internal_voucher` line may ship until OQ-PLAN-7
+  resolves.**
+
+- **OQ-PLAN-8**: **Receipt handoff payload fields.** When a
+  multi-tender attempt settles, what tender-line summary crosses
+  to the (future) receipts spec? Per-line tender_type + applied
+  amount only, or also non-sensitive references (e.g., voucher
+  short-code redacted, external-card-terminal reference if
+  OQ-PLAN-5 allows it)? Receipt rendering remains receipts-spec
+  territory; this OQ only locks the payload **shape**, not the
+  rendering. See FR-031.
+
+- **OQ-PLAN-9** *(carried forward as drawer-preservation question)*:
+  **Drawer-impact data to preserve, calculations deferred.** 006
+  emits `payment.settled` audit events with `tender_type` per line.
+  Does the audit payload carry enough information for the future
+  shift-management spec to compute drawer expected total, or does
+  006 need to emit a separate structured `drawer.cash_delta` event?
+  Drawer calculations remain shift-management territory (FR-042).
+
+These questions are non-binding on this draft. Resolution is required
+in `/speckit-plan` v1.0 before any 006 implementation slice may begin.
 
 ---
 
@@ -540,7 +1167,7 @@ before any shift-financial spec lands.
 
 ---
 
-## Non-Goals (explicit)
+## Non-Goals (explicit) ⚠ amended 2026-05-19
 
 This list is **normative**: any task that drifts into a non-goal MUST be
 filed as a separate feature, not folded into 006.
@@ -551,7 +1178,20 @@ filed as a separate feature, not folded into 006.
 - ❌ Reports, KPIs, dashboards, analytics surfaces.
 - ❌ Shift financial calculations (expected total, variance, shortage,
      overage, drawer reconciliation).
-- ❌ Real card processor integration (Visa / MC / wallets / etc.).
+- ❌ **Real card processor / payment-gateway integration** (Visa / MC /
+     processor APIs / terminal vendor SDKs). The in-scope
+     `external_card_terminal` tender is **record-only**, NOT a
+     gateway integration — see FR-007 / FR-008.
+- ❌ **Storing card data of any kind** (PAN, truncated PAN, CVV,
+     track data, cardholder name, expiry, auth payload, approval code,
+     terminal-printed receipt text, cryptograms — see FR-008 / FR-040).
+- ❌ **Voucher issuance, voucher cancellation, voucher catalogue
+     management, loyalty-campaign engines, voucher-balance editing.**
+     Those belong to Data-Pulse-2 / SmartDataPulse backend (FR-018).
+     POS-Pulse only **redeems** vouchers via the approved authoritative
+     contract.
+- ❌ **Voucher UI for issuance / cancellation / balance lookup.** Those
+     surfaces, if they exist, are Data-Pulse-2-led future features.
 - ❌ Refunds or returns (positive and negative).
 - ❌ Backend / API implementation for payments (any new OpenAPI surface
      is owned by a later, explicitly scoped feature).
@@ -559,6 +1199,8 @@ filed as a separate feature, not folded into 006.
 - ❌ Codegen runs (`npm run codegen:api`).
 - ❌ UI implementation (no `src/renderer/**`, no `src/main/**`, no
      `src/preload/**`, no `src/shared/**` changes from this spec).
+- ❌ UI polish (Impeccable / design-token / visual-direction work
+     remains gated under §A1).
 - ❌ Data-Pulse-2 changes of any kind.
 
 ---
@@ -591,8 +1233,10 @@ filed as a separate feature, not folded into 006.
 | 005-sales-cart spec approved? | ✅ approved 2026-05-14; T100 sign-off 2026-05-19 |
 | Cart ↔ payments handoff contract pinned (in 005)? | ✅ `PaymentIntentEnvelope v1` ratified 2026-05-17 |
 | `/speckit-clarify` rerun after upstream features close? | ✅ applied 2026-05-19 (FR-002, FR-006, FR-030, FR-031 resolved; OQ-005-1..4 reconciled) |
-| `/speckit-plan` v1.0 (resolves AD-DEFERRED-1..6) | ❌ deferred — next required step |
+| Tender-scope amendment (cash + external_card_terminal + internal_voucher + split tender) | ✅ applied 2026-05-19 — supersedes cash-only assumption recorded by PR #183; see §Clarifications "Session 2026-05-19 — Tender scope amendment" |
+| `/speckit-plan` v1.0 (resolves AD-DEFERRED-1..6 **and OQ-PLAN-1..9** from tender-scope amendment) | ❌ deferred — next required step |
 | Visual-direction Slice 0 commissioned? | ❌ deferred (gated on §A1 below) |
+| Voucher-authority contract (V-A or V-B per §"Voucher authority boundary") | ❌ deferred — gated on OQ-PLAN-7; no `internal_voucher` ships before this clears |
 
 **Implementation is not authorised by this document.** See
 [./coordination.md](./coordination.md) for the gate ledger.

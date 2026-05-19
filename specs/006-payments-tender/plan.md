@@ -1,5 +1,19 @@
 > ## STATUS: DRAFT — BLOCKED — NOT APPROVED FOR IMPLEMENTATION
 >
+> ⚠ **Cash-only premise superseded 2026-05-19** by the tender-scope
+> amendment recorded in [./spec.md](./spec.md) §"Tender scope
+> (amendment 2026-05-19)" and [./coordination.md](./coordination.md)
+> §"Tender-scope amendment — Session 2026-05-19". The plan body below
+> still describes cash-only Slices 1–3 because **this PR explicitly
+> does NOT produce plan v1.0**; the body is left intact only so
+> reviewers can see the unamended history. **`/speckit-plan` v1.0
+> MUST be re-authored against the expanded tender scope** (cash +
+> external_card_terminal + internal_voucher + split tender) and MUST
+> resolve **AD-DEFERRED-1..6 plus OQ-PLAN-1..9** (see spec
+> §"`/speckit-plan` open questions"). Until that revision lands, the
+> cash-only slice description below is **non-binding and treated as
+> stale**.
+>
 > This plan is a **planning skeleton only**. It commits to **no** source
 > files, **no** migrations, **no** OpenAPI changes, **no** package
 > additions, **no** bridge namespaces, **no** FSM state names that bind
@@ -8,12 +22,15 @@
 > **Upstream functional prerequisites are cleared (2026-05-19):** 004
 > S4/S5 ✅ complete 2026-05-14; 005-sales-cart ✅ approved with T100
 > functional sign-off 2026-05-19 (PR #181); `PaymentIntentEnvelope v1`
-> ✅ ratified 2026-05-17; `/speckit-clarify` ✅ applied 2026-05-19. §A0
-> is functionally cleared but procedurally held — implementation remains
-> blocked until the remaining Spec Kit steps (`/speckit-plan` →
-> `/speckit-tasks` → `/speckit-analyze`) complete. **This plan file is
-> still v0.1 (draft);** a v1.0 revision authored under `/speckit-plan`
-> will resolve AD-DEFERRED-1..6. See [./coordination.md](./coordination.md).
+> ✅ ratified 2026-05-17; `/speckit-clarify` ✅ applied 2026-05-19;
+> **tender-scope amendment ✅ applied 2026-05-19 — cash-only premise
+> superseded**. §A0 is functionally cleared but procedurally held —
+> implementation remains blocked until the remaining Spec Kit steps
+> (`/speckit-plan` → `/speckit-tasks` → `/speckit-analyze`) complete.
+> **This plan file is still v0.1 (draft);** a v1.0 revision authored
+> under `/speckit-plan` will resolve AD-DEFERRED-1..6 **plus
+> OQ-PLAN-1..9 from the tender-scope amendment**. See
+> [./coordination.md](./coordination.md).
 
 # Implementation Plan: Payments & Tender
 
@@ -82,6 +99,16 @@ Any task that drifts into the above MUST be filed as a separate feature.
 
 ## Architectural Decisions (deferred)
 
+> ⚠ **2026-05-19 — Decision scope expanded.** Beyond AD-DEFERRED-1..6
+> below, `/speckit-plan` v1.0 MUST now also resolve **OQ-PLAN-1..9**
+> raised by the tender-scope amendment (see
+> [./spec.md](./spec.md) §"`/speckit-plan` open questions" and
+> [./coordination.md](./coordination.md) §"Tender-scope amendment —
+> Session 2026-05-19"). AD-DEFERRED-2 (persistence) and AD-DEFERRED-3
+> (cancel UX target) are now **load-bearing** because the TenderLine
+> FSM and split-tender rollback require queryable mid-flight state
+> that audit_events alone cannot represent efficiently.
+
 This plan does **not** lock architectural decisions, because:
 
 1. The handoff contract on which payment-surface architecture would
@@ -132,6 +159,14 @@ under "Open questions".
 | **§A5** | Production readiness (analogous to 004 §A5): coverage thresholds met, security review (P8), Sentry redaction, audit-event sample audited. | ⛔ Held — blocks rollout, not slice merge |
 
 ## Slices (proposed, all blocked)
+
+> ⚠ **2026-05-19 — Slice descriptions below are STALE.** They describe
+> a cash-only first target that was **superseded** by the tender-scope
+> amendment. The body is preserved so reviewers can see the prior
+> grouping, but the actual v1.0 slicing — multi-tender, with TenderLine
+> FSM and split-tender rollback load-bearing in Slice 3 — is authored
+> by `/speckit-plan` v1.0. Until v1.0 lands, treat Slices 1–3 below
+> as illustrative only.
 
 > Slice numbering is **proposed only**. The actual slicing is finalised
 > in a later plan revision under the standard Spec Kit flow once §A0
