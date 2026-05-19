@@ -302,7 +302,7 @@ tender type within a single payment attempt** and carries at least:
 | `tender_line_id` | Stable identifier within the attempt. |
 | `tender_type` | One of `cash` / `external_card_terminal` / `internal_voucher`. |
 | `amount_applied_minor` | Non-negative integer minor units. |
-| `state` | `applying → (applied | refused)`; `applied → (reversed | reversal_pending)`; `reversal_pending → reversed` (Slice 4 deferred-reversal resolver). Five states total. Per `/speckit-plan` v1.0 research §R-11 and `data-model.md` §"PaymentTenderLine" Invariant 1. Terminal states (`refused`, `reversed`) block further mutation of this line; `reversal_pending` is the only non-terminal "applied-ish" state and resolves to `reversed` via the deferred-reversal resolver. |
+| `state` | `applying → (applied \| refused)`; `applied → (reversed \| reversal_pending)`; `reversal_pending → reversed` (Slice 4 deferred-reversal resolver). Five states total. Per `/speckit-plan` v1.0 research §R-11 and `data-model.md` §"PaymentTenderLine" Invariant 1. Terminal states (`refused`, `reversed`) block further mutation of this line; `reversal_pending` is the only non-terminal "applied-ish" state and resolves to `reversed` via the deferred-reversal resolver. |
 | `change_due_minor` | Only populated for `cash` lines that overpay. Always `null` / absent on non-cash lines. |
 | `external_reference` | Optional, non-sensitive, redacted-in-logs. Only meaningful for `external_card_terminal`; field-policy deferred to OQ-PLAN-5. |
 | `voucher_reference` | Reference to the redeemed voucher record. Only meaningful for `internal_voucher`. Sensitive-field policy follows §"Voucher authority boundary"; the exact wire shape and which fields cross the bridge is deferred to OQ-PLAN-7. |

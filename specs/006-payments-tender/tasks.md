@@ -452,7 +452,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 - [x] **T500** ✅ Applied 2026-05-19 — `/speckit-clarify` resolved FR-002, FR-006, FR-030, FR-031 + OQ-005-1..4. See [./spec.md](./spec.md) §Clarifications "Session 2026-05-19" and [./coordination.md](./coordination.md) §"Clarification results". *(formerly T100 cross-cut)*
 - [x] **T501** ✅ Applied 2026-05-19 — `/speckit-plan` v1.0 resolved AD-DEFERRED-1..6 + OQ-PLAN-1..9 as AD-1..AD-9; authored [./research.md](./research.md), [./data-model.md](./data-model.md), [./quickstart.md](./quickstart.md), and [./contracts/bridge-api.md](./contracts/bridge-api.md) (DRAFT — §A4 review required). See [./coordination.md](./coordination.md) §"Plan v1.0 — Session 2026-05-19". *(formerly T101 cross-cut)*
 - [x] **T502** ✅ **Applied 2026-05-19** — `/speckit-tasks` produced this startable list against plan v1.0; supersedes the cash-only DRAFT body. *(formerly T102 cross-cut)*
-- [x] **T503** ✅ **Applied 2026-05-19** — `/speckit-analyze` produced the cross-artifact consistency report; remediation polish PR applied 17 of its findings into spec.md + tasks.md (fixes I1, C1, C2, C3, C4, D1, A1, A2, A3, I2, I3, N1, U2/U3/A4 cleanups). *(formerly T103 cross-cut, now applied; originally "BLOCKED:§A0 — Re-run /speckit-analyze")*
+- [x] **T503** ✅ **Applied 2026-05-19** — `/speckit-analyze` produced the cross-artifact consistency report; remediation polish PR addressed 17 findings total: 13 applied into spec.md + tasks.md + quickstart.md (fixes I1, C1, C2, C3, C4, D1, A1, A2, A3, I2, I3, N1, U2/U3/A4 cleanups), and 4 intentionally not applied as non-blocking / superseded / cosmetic follow-ups (N2 naming-drift kept distinct, U1 cross-feature thread deferred to Phase 1, L1 FR numbering gaps cosmetic, A4 addressed via inline quickstart note rather than relocation). *(formerly T103 cross-cut, now applied; originally "BLOCKED:§A0 — Re-run /speckit-analyze")*
 
 ---
 
@@ -540,14 +540,14 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 | T030 | T011 | Parallel-safe: no — sole writer of the store file in Slice 1 | exclusive: `src/renderer/stores/payment-store.ts` (created here; extended in T150) | §A1 | Slice 1 PR |
 | T031 | T026 | Parallel-safe: no — touches 005-owned `CartHandoffButton.tsx`; coordinate via §A1 review note | shared (cross-feature): `src/renderer/ui/cart/CartHandoffButton.tsx` | §A1 + §A1-cross-feature-review | Slice 1 PR |
 | T032 | T020–T031 (all impl + tests done) | Parallel-safe: no — coverage gate check | none | §A1 | Slice 1 PR |
-| T033 | T032 | Parallel-safe: no — coordination edit | shared: `specs/006-payments-tender/coordination.md` | §A1 | Slice 1 PR |
-| T034 | T026, T027, T028, T030 (rendered surface must exist) | Parallel-safe: yes — new test file independent of T032/T033 | exclusive: `tests/unit/renderer/payments/PaymentSurface.a11y.test.tsx` | §A1 | Slice 1 PR |
+| T033 | T032, T034 | Parallel-safe: no — coordination edit + Slice 1 completion record (must wait on T034 a11y audit to land before sign-off) | shared: `specs/006-payments-tender/coordination.md` | §A1 | Slice 1 PR |
+| T034 | T026, T027, T028, T030 (rendered surface must exist) | Parallel-safe: yes — new test file independent of T032/T033; runs concurrently with T032's coverage check | exclusive: `tests/unit/renderer/payments/PaymentSurface.a11y.test.tsx` | §A1 | Slice 1 PR |
 
 ### Slice 2 (Per-tender entry surfaces)
 
 | Task | Dependencies | Parallel-safe | Shared / exclusive files | Gate blocked by | Suggested PR slice |
 |:--:|:--|:--:|:--|:--:|:--|
-| T040 | T033 (Slice 1 ✅) | Parallel-safe: yes | exclusive: `tests/unit/main/payments/money-math.test.ts` | §A1 | Slice 2 PR |
+| T040 | T033, T034 (Slice 1 ✅) | Parallel-safe: yes | exclusive: `tests/unit/main/payments/money-math.test.ts` | §A1 | Slice 2 PR |
 | T041 | T033 | Parallel-safe: yes | exclusive: `tests/unit/renderer/payments/CashEntry.input-validation.test.tsx` | §A1 | Slice 2 PR |
 | T042 | T033 | Parallel-safe: yes | exclusive: `tests/unit/renderer/payments/CashEntry.under-tender-refusal.test.tsx` | §A1 | Slice 2 PR |
 | T043 | T033 | Parallel-safe: yes | exclusive: `tests/unit/shared/payments/external-reference-format.test.ts` | §A1 | Slice 2 PR |
