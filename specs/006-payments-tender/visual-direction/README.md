@@ -347,8 +347,8 @@ broken.
 **Visual rules:**
 
 - This is not an error state. No danger red. Use a neutral
-  informational treatment (info-teal soft background
-  `--color-info-soft`, info-teal border, info icon + text).
+  informational treatment (`--color-surface-elevated` soft
+  background, standard border, info icon + text).
 - The copy must not say "error" or "broken".
   Approved wording: "not available on this terminal yet" or
   "coming soon".
@@ -952,7 +952,7 @@ The renderer must not receive or display:
 | Sensitive IDs (unless an approved bridge contract explicitly allows) | Operator session ID, `cashier_id`, Clerk user ID: logged internally; never displayed in the payment surface UI. |
 | Cardholder data (PAN, CVV, expiry, full card number) | Absolutely forbidden. 006 is record-only for card terminal; no card data entry field exists. |
 | Raw voucher authority payload | Not before Contract V-A ships. The disabled voucher state shows no voucher data at all. |
-| Raw bridge `reason` strings | Never displayed verbatim to cashiers. The bridge `reason` is for diagnostic logging only; the renderer translates each reason to a generic "this action isn't allowed right now" UX. |
+| Raw bridge `reason` strings | Never displayed verbatim to cashiers. The bridge `reason` is for diagnostic logging only; the renderer shows the cashier only the canonical generic copy: "This payment could not complete." |
 | Manager identity on cashier-visible surfaces | The manager who performs a force-fail is NOT shown on the cashier's failure surface. The force-fail audit event records the manager; the cashier sees only State 9 (generic failure). |
 | Other operators' data | Cashier-facing surfaces show only the current operator's display name (in the operator slot from 004/003). |
 
@@ -968,7 +968,7 @@ sign-off.
 | 1 Tender selection | Total is largest element; tender options secondary; cancel low-emphasis | "How would you like to pay?" is unambiguous; voucher "(not available)" is clear | First tender option focused on mount | Voucher disabled state visible to cashier is informational only; no authority data | No bridge reason, no PAN, no JWT, no session ID displayed | Required post-implementation |
 | 2 Cash entry | Amount input is prominent; change-due appears only when earned | "Amount received" label unambiguous; "Confirm" disabled copy clear | Amount input focused on mount | Cashier only; no manager attribution visible | No cardholder field exists | Required |
 | 3 Card terminal | Instructional copy is the primary element; reference field is secondary | "Process ... then confirm here" is unambiguous | Confirm button focused on mount | Record-only; no PAN entry; no gateway integration | No card number field; reference field is 6-char max and redacted in logs | Required |
-| 4 Voucher disabled | Informational treatment (info-teal), not error | "not available on this terminal yet" -- no "error" or "broken" | Back button focused on mount | Cashier-facing; no voucher authority data shown | No voucher code, no balance, no V-A payload | Required |
+| 4 Voucher disabled | Informational treatment (neutral surface, not error red) | "not available on this terminal yet" -- no "error" or "broken" | Back button focused on mount | Cashier-facing; no voucher authority data shown | No voucher code, no balance, no V-A payload | Required |
 | 5 Split progress | Remaining amount is prominent; applied TenderLines list is readable | Tender type labels and amounts unambiguous; "Reverse" action clear | First available tender option in "Add" section, or first applied tender row | Cashier only; no manager attribution | No bridge reason strings; applied amounts are cashier-visible correct amounts | Required |
 | 6 Change due | Change-due is the largest element; total and received secondary | "CHANGE DUE" label unambiguous; no "0.00" when not applicable | Start new sale focused | Cashier only | No shift total, no drawer cash, no KPI | Required |
 | 7 Success (no change) | "Payment complete" clear; total confirmed | Copy unambiguous | Start new sale focused | Cashier only | No shift total, no financial summary beyond envelope total | Required |
