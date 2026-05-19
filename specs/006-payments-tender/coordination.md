@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (`/speckit-clarify` applied: FR-002, FR-006, FR-030, FR-031 resolved; OQ-005-1..4 reconciled; §A0 still procedurally held pending `/speckit-plan` v1.0)
+**Last updated:** 2026-05-19 (tender-scope amendment applied: cash-only assumption from PR #183 **superseded**; tender scope is now `cash | external_card_terminal (record-only) | internal_voucher (authority-validated)` with split tender in scope; `/speckit-plan` v1.0 must now resolve AD-DEFERRED-1..6 **and** OQ-PLAN-1..9 from the amendment; voucher authority belongs to Data-Pulse-2 — POS-Pulse does not implement voucher issuance/cancellation here)
 
 ---
 
@@ -46,7 +46,8 @@ and it is updated in place as coordination items resolve.
 | 005 ↔ 006 handoff contract (§A4) | ✅ 2026-05-17 — `PaymentIntentEnvelope v1` ratified |
 | 005 T100 functional sign-off | ✅ 2026-05-19 (PR #181; SQLite evidence verified) |
 | `/speckit-clarify` | ✅ applied 2026-05-19 (FR-002, FR-006, FR-030, FR-031 resolved; see Clarification results below) |
-| `/speckit-plan` (v1.0) | ❌ Not yet run — required next step |
+| Tender-scope amendment (cash + external_card_terminal + internal_voucher + split tender) | ✅ applied 2026-05-19 — supersedes cash-only assumption from PR #183 (see "Tender-scope amendment 2026-05-19" below) |
+| `/speckit-plan` (v1.0) — now resolves **AD-DEFERRED-1..6 + OQ-PLAN-1..9** | ❌ Not yet run — required next step (scope expanded by tender-scope amendment) |
 | `/speckit-tasks` (startable list) | ❌ Deferred until after /speckit-plan |
 | `/speckit-analyze` | ❌ Deferred until after /speckit-tasks |
 | Slice 0 visual direction | ❌ Held under §A1 |
@@ -393,18 +394,174 @@ quality. **006 must not wait for that polish** before proceeding with
 its own Spec Kit re-run; 006 has its own §A1 visual-direction gate that
 governs its own payment-surface design quality.
 
-### First target for 006 planning
+### First target for 006 planning ⚠ amended 2026-05-19
 
-When `/speckit-clarify` runs, the recommended first implementation scope
-is **cash-only tender Slices 1–3** (tender selection, cash entry + change
-rule, payment FSM + audit events). This matches:
-- User Story 1 (P1) and User Story 2 (P2) from spec.md.
-- The frozen `subtotal_minor` from the `PaymentIntentEnvelope v1`
-  (no catalogue, no backend round-trip required for cash settlement).
-- Constitution P2 (no fake success), P4 (append-only audit), P10
+The 2026-05-19 tender-scope amendment expanded v1 scope to three
+tender types plus split tender. The recommended first implementation
+scope is now:
+
+- **US1 (cash) + US4 (external_card_terminal, record-only) as parallel
+  P1** in Slices 1–3 (tender selection, per-tender entry surfaces,
+  payment FSM + TenderLine FSM + audit events). Both rely on the
+  frozen `subtotal_minor` from the `PaymentIntentEnvelope v1`; neither
+  requires a backend round-trip; neither captures card data.
+- **US6 (split tender) as P2 in Slice 3** alongside the FSM work —
+  TenderLine arithmetic and split-tender rollback (FR-006B) are
+  load-bearing for the FSM and cannot be cleanly deferred.
+- **US5 (internal_voucher) as P2 deferred to a slice after the
+  voucher-authority contract clears (OQ-PLAN-7).** Until then the
+  voucher tender slot is reserved-but-disabled.
+- **Slice 4 (force-fail)** and **Slice 5 (production readiness)**
+  remain deferred per plan v0.1.
+
+This matches:
+
+- The three in-scope tender types per the amendment.
+- Constitution P2 (no fake success), P4 (append-only audit), P6 (no
+  raw cardholder data), P7 (secrets never reach renderer/logs), P10
   (operator attribution).
+- The Data-Pulse-2 voucher-authority boundary above — Slices 1–3
+  ship without any voucher work, preserving the boundary.
 
-Slice 4 (force-fail) and any non-cash tender type are deferred.
+Real card processor integration, voucher issuance, voucher
+cancellation, and all other non-in-scope tender features remain
+deferred to later, explicitly scoped features.
+
+---
+
+## Tender-scope amendment — Session 2026-05-19
+
+This section is the coordination-side record of the **tender-scope
+amendment** applied on 2026-05-19, **after** the `/speckit-clarify`
+session and **before** `/speckit-plan` v1.0. The spec-side detail lives
+in [./spec.md](./spec.md) §Clarifications "Session 2026-05-19 — Tender
+scope amendment" and §"Tender scope (amendment 2026-05-19)".
+
+### What changed
+
+The product owner amended 006's tender scope:
+
+| Aspect | Before amendment (PR #183 / earlier) | After amendment (2026-05-19) |
+|:--|:--|:--|
+| Supported tender types | Cash only | `cash` + `external_card_terminal` (record-only) + `internal_voucher` (authority-validated) |
+| Split tender | Out of scope | **In scope** — multiple `TenderLine`s per attempt, settlement when sum equals `envelope.subtotal_minor` |
+| Card payments | Out of scope entirely | `external_card_terminal` **in scope as record-only**; real card processor / gateway integration **remains out of scope** |
+| Voucher payments | Not specified | `internal_voucher` **in scope** as authority-validated; voucher **issuance / cancellation remain out of scope** and belong to Data-Pulse-2 |
+| Settlement invariant | `cash_received_minor − total_minor ≥ 0` | `Σ applied TenderLine.amount_applied_minor == envelope.subtotal_minor`; cash MAY overpay (produces change), non-cash MUST NOT overpay |
+| New FR-006 failure reasons | 6 categories | 14 categories (8 added: `non_cash_overpayment_refused`, `voucher_not_found`, `voucher_expired`, `voucher_cancelled`, `voucher_already_redeemed`, `voucher_tenant_mismatch`, `voucher_branch_mismatch`, `split_tender_rollback`) |
+
+### Why now (sequencing rationale)
+
+The cash-only assumption recorded by PR #183 was **functionally
+correct for the `/speckit-clarify` step** (FR-002 / FR-006 / FR-030 /
+FR-031 resolved against the cash-only first target) but is
+**no longer correct for `/speckit-plan` v1.0**. Locking `/speckit-plan`
+against the stale cash-only assumption would:
+
+1. Force an immediate rework of plan.md before `/speckit-tasks`.
+2. Allow Slices 1–3 to design without TenderLine arithmetic, which is
+   load-bearing for FR-006B split-tender rollback.
+3. Risk approving §A2 / §A3 / §A4 against a tender-namespace that
+   omits `external_card_terminal` and `internal_voucher`.
+
+Catching the scope expansion **before** `/speckit-plan` is the
+cheapest place in the Spec Kit pipeline to absorb it.
+
+### What `/speckit-plan` v1.0 must now resolve
+
+`/speckit-plan` v1.0 was previously expected to resolve **six**
+decisions (AD-DEFERRED-1..6). After this amendment, it must resolve
+**six existing decisions + nine new open questions** raised by the
+amendment:
+
+- AD-DEFERRED-1 — Payment FSM ownership (unchanged).
+- AD-DEFERRED-2 — Payment attempt persistence (now load-bearing: the
+  TenderLine FSM + split-tender rollback require queryable mid-flight
+  state — see OQ-PLAN-1).
+- AD-DEFERRED-3 — Cashier cancel UX target (now multi-tender-aware:
+  cancel may roll back already-applied non-cash lines per FR-006B).
+- AD-DEFERRED-4 — Force-fail manager/admin UX shape (unchanged).
+- AD-DEFERRED-5 — Offline cash settlement (unchanged; companion to
+  OQ-OFF-EXT-1 and OQ-OFF-VCHR-1 from the amendment).
+- AD-DEFERRED-6 — Drawer-impact signal (unchanged; companion to
+  OQ-PLAN-9 below).
+
+**New `/speckit-plan` open questions** (canonical list in
+[./spec.md](./spec.md) §"`/speckit-plan` open questions"):
+
+| OQ | Subject |
+|:--|:--|
+| OQ-PLAN-1 | Payment attempt + TenderLine persistence model — local SQLite tables vs. audit_events-only |
+| OQ-PLAN-2 | Bridge-API namespace for `payments.*` / `tender.*` handlers + idempotency-key strategy |
+| OQ-PLAN-3 | Partial voucher redemption — refuse vs. cap-and-preserve residual |
+| OQ-PLAN-4 | Split-tender ordering and rollback semantics + `reversal_pending` resolution |
+| OQ-PLAN-5 | External-card-terminal `external_reference` field policy — exists in v1? validation? redaction? |
+| OQ-PLAN-6 | Idempotency and double-settlement prevention (attempt-level guarantee) |
+| OQ-PLAN-7 | Voucher validation/redeem contract — V-A (backend-authoritative) vs. V-B (POS-local read-model) + minimised renderer-visible fields |
+| OQ-PLAN-8 | Receipt handoff payload — per-line tender summary fields |
+| OQ-PLAN-9 | Drawer-impact data preserved on the `payment.settled` event for future shift-management consumption |
+
+### Data-Pulse-2 / SmartDataPulse backend boundary
+
+**Voucher authority belongs to Data-Pulse-2 / SmartDataPulse backend.**
+POS-Pulse MUST NOT implement voucher issuance, voucher cancellation,
+voucher catalogue management, voucher-balance editing, or any
+loyalty-campaign engine in this feature.
+
+POS-Pulse v1 redeems vouchers only via the approved authoritative
+contract — either:
+
+- **Contract V-A — Backend-authoritative (preferred):** a future
+  Data-Pulse-2 endpoint pair (`POST /vouchers/validate`,
+  `POST /vouchers/redeem`) wrapped in `vouchers.validate` /
+  `vouchers.redeem` POS-Pulse bridge handlers. Validation returns a
+  short-lived non-sensitive redemption intent token bound to the
+  payment attempt; redeem atomically consumes the intent at confirm.
+- **Contract V-B — POS-local read-model (only if approved):** a
+  future POS-local voucher authority/read-model with replicated
+  voucher balance and a local atomic redeem; acceptable only if
+  Data-Pulse-2 explicitly grants this authority to the POS terminal
+  under a documented offline reconciliation contract.
+
+The choice is **OQ-PLAN-7**. Until that contract is approved and the
+corresponding bridge/read-model is in place, the `internal_voucher`
+tender slot is **reserved-but-disabled**; invoking it returns the
+generic `tender_not_yet_supported` refusal (same disabled-slot
+pattern that protects future wallet/BNPL tender types).
+
+**Data-Pulse-2 is NOT modified by this PR.** No
+`smart-data-pulse-2/**` files are touched; no OpenAPI surface is
+added; no codegen runs. The voucher-authority contract above is a
+**future, separately-spec'd integration** between POS-Pulse and
+Data-Pulse-2; this amendment only **records the boundary**.
+
+### What this amendment does NOT do
+
+- Does NOT modify Data-Pulse-2.
+- Does NOT add a real card processor / gateway integration of any
+  kind — `external_card_terminal` is **record-only** (FR-007/FR-008).
+- Does NOT implement voucher issuance, voucher cancellation, or any
+  loyalty-campaign behaviour (FR-018).
+- Does NOT generate, render, or print receipts (FR-043 still binding).
+- Does NOT lock the `TenderLine` data shape, persistence model,
+  bridge namespace, rollback semantics, or voucher-authority contract
+  — all are `/speckit-plan` v1.0 decisions (OQ-PLAN-1..7 above).
+- Does NOT open §A1–§A5 (all five gates remain ⛔ Held).
+- Does NOT make `tasks.md` startable (it remains DRAFT — all rows
+  BLOCKED; banner updated only).
+- Does NOT modify any source file, test, package file, migration,
+  OpenAPI surface, codegen output, CI workflow, AGENTS.md, or
+  CLAUDE.md.
+- Does NOT produce `/speckit-plan` v1.0 — `/speckit-plan` remains
+  the required next step, with expanded scope.
+
+### Reconciliation note
+
+The procedural hold on §A0 remains. `/speckit-plan` v1.0 was the
+"next required step" before this amendment, and it remains the
+"next required step" after — with the expanded decision set above.
+006 stays DRAFT — BLOCKED until `/speckit-plan` → `/speckit-tasks`
+→ `/speckit-analyze` complete in sequence.
 
 ---
 
