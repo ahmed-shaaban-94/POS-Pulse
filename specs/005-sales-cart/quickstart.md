@@ -560,6 +560,116 @@ machine and the POS-Pulse Electron dev environment must:
 
 ---
 
+## T100 Closeout — 2026-05-19
+
+**Date:** 2026-05-19
+**Branch:** main (SHA `f3e9ccf` — post PR #180 merge)
+**Status:** ✅ COMPLETE — headed Electron walkthrough passed; SQLite evidence verified.
+
+T100 sign-off is **functional**, not final UI polish. UI remains visually rough and
+is not production-polished. Visual polish is deferred to a future dedicated
+Impeccable/UI slice. Real production item catalogue remains future work; the dev
+fixture resolver was used for this walkthrough. T101/T102 and §A5 are not started.
+
+---
+
+### Dev launch commands
+
+**Bash / CMD:**
+
+```bash
+POS_PULSE_DEV_SKIP_PAIRING=1 POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1 POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
+```
+
+**PowerShell:**
+
+```powershell
+$env:POS_PULSE_DEV_SKIP_PAIRING="1"; $env:POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN="1"; $env:POS_PULSE_FEATURE_CART="1"; $env:POS_PULSE_DEV_ITEM_RESOLVER="1"; npm run dev
+```
+
+`POS_PULSE_DEV_SKIP_PAIRING=1` bypasses the terminal-pairing step.
+`POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1` auto-signs in a fixture `Dev Manager`
+(role: `manager`) so the renderer routes past `/sign-in` on first load.
+Both flags are dev-only; no-op in packaged builds (`app.isPackaged` guard is
+unconditional). No Clerk call, no backend call, no JWT is created.
+`POS_PULSE_DEV_ITEM_RESOLVER=1` wires the R7 fixture resolver (`resolve-item-ref.ts`)
+so `cart.lines.add` can succeed in unpackaged builds with the five known SKUs.
+
+---
+
+### Manual headed Electron evidence (2026-05-19)
+
+| Step | IPC call / action | Result |
+|:--|:--|:--|
+| Session hydration | `getCurrentSession` | Returned `Dev Manager` / role `manager` |
+| Route | `/app/cart` | Reachable without manual sign-in |
+| Cart create | `cart.create` | `{ kind: 'ok' }` |
+| Line add — Paracetamol | `cart.lines.add SKU-PARA-500` | Returned `Paracetamol 500mg` |
+| Line add — Ibuprofen | `cart.lines.add SKU-IBUP-400` | Returned `Ibuprofen 400mg` |
+| Duplicate add — merge | `cart.lines.add SKU-PARA-500` again | `merged: true`, `version: 2` |
+| Quantity update | `cart.lines.update` increment | `{ kind: 'ok' }`, `version: 3` |
+| Note set | `cart.lines.setNote` | `{ kind: 'ok' }`, `version: 4` |
+| Discount add | `cart.discountPlaceholders.add` (below-threshold) | Placeholder persisted |
+| Discount remove | `cart.discountPlaceholders.remove` | Placeholder removed |
+| Handoff | `cart.handoff` | Persisted; cart state became `frozen_handed_off` |
+| Post-handoff void | `cart.void` after handoff | `{ kind: 'refused', reason: 'frozen' }` — expected; post-handoff cancel is a separate future action |
+
+---
+
+### SQLite evidence (2026-05-19)
+
+**Database path:**
+`C:\Users\user\AppData\Roaming\pos-pulse\pos-pulse.db`
+
+**Cart inspected:**
+
+| Field | Value |
+|:--|:--|
+| `cart_id` | `2bc536f0-cb7f-48cb-9b50-47dd2cbb830c` |
+| `state` | `frozen_handed_off` |
+
+**`cart_lines` rows (non-removed):**
+
+| Item | Qty | Version |
+|:--|:--|:--|
+| Paracetamol 500mg | 3 | 4 |
+| Ibuprofen 400mg | 1 | 1 |
+
+**`cart_action_outbox` sequence (all 9 rows):**
+
+1. `cart.create`
+2. `cart.line.add`
+3. `cart.line.add`
+4. `cart.line.merge`
+5. `cart.line.update`
+6. `cart.line.note_set`
+7. `cart.discount_placeholder.add`
+8. `cart.discount_placeholder.remove`
+9. `cart.handoff_to_payment`
+
+**Restart survival:** Rows persisted on disk after the headed Electron session ended
+(process terminated and relaunched; same rows visible on reopen). Confirms FR-028
+(restart-survival).
+
+**`audit_events` table:** Table present; one generic row visible; no unexpected cart
+secret leakage observed.
+
+---
+
+### Manual caveats
+
+- UI remains visually rough / not production-polished. T100 sign-off is functional,
+  not final UI polish. UI polish deferred to a future dedicated Impeccable/UI slice.
+- Real production item catalogue is future work; the R7 dev fixture resolver was used.
+  Fixture SKUs (`SKU-PARA-500`, `SKU-IBUP-400`, etc.) and their prices are test data
+  only — they are NOT real catalogue prices and must never appear in a production build.
+- Post-handoff cancel (`cart.void` after handoff) returned `{ kind: 'refused', reason: 'frozen' }`.
+  This is the expected boundary: post-handoff cancel is a separate future action deferred
+  to a future slice. The frozen refusal is correct per spec.
+- T101/T102 and §A5 not started. Production rollout still waits on §A5.
+
+---
+
 **End of quickstart.** Once Slices S1 + S2 + S3 + S4 ship behind the
 feature flag, a reviewer signs off on the user stories by walking
 through US1, US2, US3, and the cross-cutting walkthroughs above. Each
