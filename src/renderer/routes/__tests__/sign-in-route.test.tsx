@@ -393,6 +393,58 @@ describe('SignInRoute — cashier sign-in responses', () => {
   });
 });
 
+describe('SignInRoute — boot hydration (getCurrentSession)', () => {
+  it('calls operator.getCurrentSession on mount', async () => {
+    const bridge = operatorBridge({});
+    renderSignInRoute(bridge);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const getCurrentSessionMock = vi.mocked(bridge.getCurrentSession);
+    await waitFor(() => {
+      expect(getCurrentSessionMock).toHaveBeenCalledOnce();
+    });
+  });
+
+  it('hydrates store to signedIn when getCurrentSession returns a session', async () => {
+    const bridge = operatorBridge({});
+    // Override the default null return with a real session.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(bridge.getCurrentSession).mockResolvedValueOnce(SESSION);
+    renderSignInRoute(bridge);
+    await waitFor(() => {
+      expect(useOperatorSessionStore.getState().state.kind).toBe('signedIn');
+    });
+    const state = useOperatorSessionStore.getState().state;
+    if (state.kind === 'signedIn') {
+      expect(state.session.operator_id).toBe(SESSION.operator_id);
+    }
+  });
+
+  it('leaves store signedOut when getCurrentSession returns null', async () => {
+    const bridge = operatorBridge({});
+    // Default mock already returns null; verify store stays signedOut.
+    renderSignInRoute(bridge);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const getCurrentSessionMock = vi.mocked(bridge.getCurrentSession);
+    await waitFor(() => {
+      expect(getCurrentSessionMock).toHaveBeenCalled();
+    });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+  });
+
+  it('leaves store signedOut and surfaces no error when getCurrentSession rejects', async () => {
+    const bridge = operatorBridge({});
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const getCurrentSessionMock = vi.mocked(bridge.getCurrentSession);
+    getCurrentSessionMock.mockRejectedValueOnce(new Error('ipc error'));
+    renderSignInRoute(bridge);
+    await waitFor(() => {
+      expect(getCurrentSessionMock).toHaveBeenCalled();
+    });
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('SignInRoute — FSM reset clears PIN (signedOut effect)', () => {
   it('FSM transition back to signedOut resets the spinner', async () => {
     // Directly manipulate the store to exercise the useEffect on fsm.kind.

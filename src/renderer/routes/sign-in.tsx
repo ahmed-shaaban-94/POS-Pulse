@@ -40,6 +40,27 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   const [pin, setPin] = useState('');
   const [cashierError, setCashierError] = useState<string | undefined>(undefined);
 
+  // On mount, check whether the main process already holds an operator session
+  // (e.g. seeded by the dev bypass). If so, hydrate the store directly so
+  // existing guard/router logic can route past /sign-in without user input.
+  useEffect(() => {
+    let cancelled = false;
+    operator
+      .getCurrentSession()
+      .then((session) => {
+        if (cancelled) return;
+        if (session !== null) {
+          useOperatorSessionStore.getState().hydrateSignedIn(session);
+        }
+      })
+      .catch(() => {
+        // IPC failure — keep current signedOut state silently.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [operator]);
+
   // Fetch roster on mount. Failure is soft — the roster renders inert
   // and the manager/admin form remains available.
   useEffect(() => {

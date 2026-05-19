@@ -98,6 +98,36 @@ describe('operator-session-store FSM (T011)', () => {
     }
   });
 
+  it('hydrateSignedIn: signedOut → signedIn with the given session', () => {
+    const store = useOperatorSessionStore.getState();
+    store.hydrateSignedIn(SAMPLE_SESSION);
+    const state = useOperatorSessionStore.getState().state;
+    expect(state.kind).toBe('signedIn');
+    if (state.kind === 'signedIn') {
+      expect(state.session.operator_id).toBe(SAMPLE_SESSION.operator_id);
+    }
+  });
+
+  it('hydrateSignedIn: no-op when already signingIn', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.hydrateSignedIn(SAMPLE_SESSION);
+    expect(useOperatorSessionStore.getState().state.kind).toBe('signingIn');
+  });
+
+  it('hydrateSignedIn: no-op when already signedIn (does not overwrite live session)', () => {
+    const store = useOperatorSessionStore.getState();
+    store.beginSignIn();
+    store.resolveSignedIn(SAMPLE_SESSION);
+    const replacement = { ...SAMPLE_SESSION, operator_id: 'op-replaced' };
+    store.hydrateSignedIn(replacement);
+    const state = useOperatorSessionStore.getState().state;
+    expect(state.kind).toBe('signedIn');
+    if (state.kind === 'signedIn') {
+      expect(state.session.operator_id).toBe(SAMPLE_SESSION.operator_id);
+    }
+  });
+
   it('out-of-graph transitions are no-ops (stale promise after state advanced)', () => {
     const store = useOperatorSessionStore.getState();
     // Calling resolveSignedIn while still in signedOut MUST be a no-op.
