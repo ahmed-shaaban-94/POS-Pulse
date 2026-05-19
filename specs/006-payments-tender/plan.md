@@ -5,10 +5,13 @@
 > additions, **no** bridge namespaces, **no** FSM state names that bind
 > code, and **no** approval gates that may be unblocked by this PR.
 >
-> Implementation is blocked until **004 S4/S5** close and **005-sales-cart**
-> is approved. As of this draft, `specs/005-sales-cart/` is an empty
-> placeholder; the cart contract this plan would otherwise reference does
-> not exist yet. See [./coordination.md](./coordination.md).
+> **Upstream functional prerequisites are cleared (2026-05-19):** 004
+> S4/S5 ✅ complete 2026-05-14; 005-sales-cart ✅ approved with T100
+> functional sign-off 2026-05-19 (PR #181); `PaymentIntentEnvelope v1`
+> ✅ ratified 2026-05-17. §A0 is functionally cleared but procedurally
+> held — implementation remains blocked until the full Spec Kit re-run
+> (`/speckit-clarify` → `/speckit-plan` → `/speckit-tasks` →
+> `/speckit-analyze`) completes. See [./coordination.md](./coordination.md).
 
 # Implementation Plan: Payments & Tender
 
@@ -119,7 +122,7 @@ under "Open questions".
 
 | Gate | What it gates | Status |
 |:--:|:--|:--:|
-| **§A0** | Upstream readiness: 004 S4/S5 closed AND 005-sales-cart spec approved AND 005 ↔ 006 handoff contract pinned (in 005). **§A0 must clear before any other 006 gate may be opened.** | ⛔ Held |
+| **§A0** | Upstream readiness: 004 S4/S5 closed AND 005-sales-cart spec approved AND 005 ↔ 006 handoff contract pinned (in 005). **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 — **procedurally held** until `/speckit-clarify` re-run merges |
 | **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ⛔ Held — gated on §A0 |
 | **§A2** | Backend / OpenAPI: any backend dependency for payment settlement (currently expected: none for cash, possibly some for force-fail audit propagation). | ⛔ Held — gated on §A0; may be moot for cash-only scope |
 | **§A3** | Migrations: any local SQLite tables 006 introduces. Currently none planned because the audit-event store from 004 is the audit sink. | ⛔ Held — likely no-op, but explicit no-op approval required before code lands |
@@ -182,10 +185,10 @@ implementation begins. No new artefacts are produced by this PR.
 
 ## Risks and concerns
 
-- **R-1 — 005 is not just incomplete; it is empty.** Any decision
-  this plan makes about cart-handoff shape risks being wrong. The
-  mitigation is to **decide nothing here** and re-enter the Spec Kit
-  flow once 005 lands.
+- **R-1 — ✅ RESOLVED 2026-05-19.** 005-sales-cart is fully authored and
+  approved; `PaymentIntentEnvelope v1` is ratified. The cart-handoff shape
+  is locked. See `specs/005-sales-cart/contracts/handoff-envelope.md`.
+  This risk is retired; the remaining procedural step is `/speckit-clarify`.
 - **R-2 — Payment audit-event categories vs. 004 catalogue.** 004
   FR-026 enumerates a starter set; payment-specific categories
   (`payment.settled`, `payment.cancelled`, `payment.failed`,

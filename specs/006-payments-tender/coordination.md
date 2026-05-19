@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-09 (draft created; all gates held)
+**Last updated:** 2026-05-19 (A0 reconciliation: 004 S4/S5 ✅, 005 spec ✅, §A4 handoff contract ✅; §A0 functionally cleared, procedurally held pending /speckit-clarify re-run)
 
 ---
 
@@ -34,17 +34,21 @@ and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-**Phase: PRE-APPROVAL DRAFT.** All gates held.
+**Phase: PRE-APPROVAL DRAFT.** §A0 functionally cleared; procedurally held (Spec Kit re-run required before any implementation may begin).
 
 | Item | State |
 |:--|:--|
-| Spec authored | ✅ DRAFT (this PR) |
-| Plan authored | ✅ DRAFT (this PR) |
-| Tasks authored | ✅ DRAFT — all rows BLOCKED (this PR) |
-| `/speckit-clarify` | ❌ Deferred (see GATE §A0) |
-| `/speckit-plan` (v1.0) | ❌ Deferred |
-| `/speckit-tasks` (startable list) | ❌ Deferred |
-| `/speckit-analyze` | ❌ Deferred |
+| Spec authored | ✅ DRAFT |
+| Plan authored | ✅ DRAFT |
+| Tasks authored | ✅ DRAFT — all rows BLOCKED |
+| 004 S4/S5 complete | ✅ 2026-05-14 (PRs #133–#143) |
+| 005 spec approved | ✅ 2026-05-14 |
+| 005 ↔ 006 handoff contract (§A4) | ✅ 2026-05-17 — `PaymentIntentEnvelope v1` ratified |
+| 005 T100 functional sign-off | ✅ 2026-05-19 (PR #181; SQLite evidence verified) |
+| `/speckit-clarify` | ❌ Not yet run — required next step |
+| `/speckit-plan` (v1.0) | ❌ Deferred until after /speckit-clarify |
+| `/speckit-tasks` (startable list) | ❌ Deferred until after /speckit-plan |
+| `/speckit-analyze` | ❌ Deferred until after /speckit-tasks |
 | Slice 0 visual direction | ❌ Held under §A1 |
 | Implementation slices | ❌ All held |
 
@@ -52,14 +56,21 @@ and it is updated in place as coordination items resolve.
 
 ## Primary blocker
 
-> **`specs/005-sales-cart/` is currently an empty placeholder directory.**
-> No `spec.md`, no `plan.md`, no checkout-handoff contract exists yet.
-> This is the *primary* blocker for 006: payments cannot define the
-> behaviour on the receiving side of a handoff that has not been authored
-> on the sending side.
+> **The functional upstream prerequisites for 006 are now resolved.**
+> `specs/005-sales-cart/` has a complete, approved spec, plan, data
+> model, contracts, and six implementation slices ending in T100
+> functional sign-off (2026-05-19, PR #181). The `PaymentIntentEnvelope
+> v1` handoff contract was ratified 2026-05-17.
 
-Until 005 has an approved spec and an approved cart-handoff contract, no
-work item in 006 — not even the visual direction Slice 0 — may begin.
+The remaining blocker is **procedural**: 006 must complete the full Spec
+Kit re-run sequence (`/speckit-clarify` → `/speckit-plan` → `/speckit-tasks`
+→ `/speckit-analyze`) before any implementation work may begin. §A0 is
+**functionally cleared** but **procedurally held** until that sequence
+completes and the resulting artefacts are approved.
+
+No work item in 006 — not even the visual direction Slice 0 — may begin
+until `/speckit-clarify` is run and the resulting OQ resolutions are
+merged.
 
 ---
 
@@ -68,7 +79,7 @@ work item in 006 — not even the visual direction Slice 0 — may begin.
 
 | Gate | What it gates | Status | Owner |
 |:--:|:--|:--:|:--|
-| **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ⛔ Held | Ahmed (POS-Pulse) |
+| **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 — **procedurally held** until `/speckit-clarify` re-run merges | Ahmed (POS-Pulse) |
 | **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ⛔ Held — gated on §A0 | TBD |
 | **§A2** | Backend / OpenAPI: any backend dependency 006 introduces. Currently expected: none for cash-only scope; possibly some for force-fail audit propagation. | ⛔ Held — gated on §A0 | TBD (POS-Pulse + SmartDataPulse backend, mirrored from 004 §A2) |
 | **§A3** | Migrations: any local SQLite tables 006 introduces. Currently none planned because the 004 audit-event store is the audit sink. **Explicit no-op approval still required** before code lands. | ⛔ Held — likely no-op | TBD |
@@ -98,9 +109,11 @@ work item in 006 — not even the visual direction Slice 0 — may begin.
   - 004 FR-025 / FR-026 / FR-028 (canonical audit events,
     append-only).
   - 004 NFR-002 (PII / cards / secrets never in logs).
-- **Status check (2026-05-09):** 004 S1 / S2 / S3 ✅; **S4 in progress
-  (gates cleared, implementation may begin)**; S5 not yet started.
-  See `specs/004-operator-session/coordination.md`.
+- **Status check (2026-05-19):** 004 S1 / S2 / S3 / S4 / S5 ✅ complete.
+  S4 closed 2026-05-14 (PRs #59–#122, T056 waived). S5 closed 2026-05-14
+  (PRs #133–#143). S6 Phase 8 (T094–T099) and production readiness
+  (T100–T102) remain open but do NOT block 006 §A0.
+  See `specs/004-operator-session/tasks.md`.
 
 ### 2. 005-sales-cart
 
@@ -117,9 +130,26 @@ work item in 006 — not even the visual direction Slice 0 — may begin.
   - The cart's `total_minor` integer-minor-unit guarantee
     (Constitution P-II) — must be load-bearing.
   - Any cart-side audit events that 006 should not duplicate.
-- **Status check (2026-05-09):** `specs/005-sales-cart/` exists as an
-  empty directory only. **No spec, no plan, no tasks, no contract.**
-  This is the primary blocker.
+- **Status check (2026-05-19):** `specs/005-sales-cart/` is fully
+  authored and approved. Spec ✅ 2026-05-14; plan ✅; data-model ✅; four
+  contracts (bridge-api.md, handoff-envelope.md, role-visibility-matrix.md,
+  and data-model.md) ✅; six implementation slices complete; T100
+  functional sign-off ✅ 2026-05-19 (PR #181). `PaymentIntentEnvelope v1`
+  ratified under §A4 on 2026-05-17 by Ahmed Shaaban. This is the
+  authoritative handoff contract 006 consumes.
+
+  **UI polish for 005 is intentionally deferred** to a future dedicated
+  Impeccable / UI slice. T100 sign-off was functional only; the 005 UX
+  is not production-polished yet. 006 must not be gated on that polish
+  completing before it runs its own Spec Kit re-run.
+
+  **Catalogue authority:** Product catalogue truth belongs in
+  Data-Pulse-2 / backend. POS-Pulse 005 uses a dev-fixture resolver
+  (R7 seam) through T100. The live catalogue integration is a future
+  feature. **006 does not need the live catalogue for cash-only tender
+  planning** — the `PaymentIntentEnvelope v1` already carries
+  `subtotal_minor` as a frozen integer in minor units, which is the
+  only money input 006 needs for its initial cash-settlement path.
 
 ### 3. Future receipts spec
 
@@ -174,16 +204,40 @@ work item in 006 — not even the visual direction Slice 0 — may begin.
   §"Drawer-impact — questions only"):** Drawer-impact contract.
   Deferred to future shift-management spec.
 
-### Owned by 005, blocking 006
+### Owned by 005, blocking 006 *(all resolved — 2026-05-19)*
 
-- **OQ-005-1:** Cart-handoff slot data shape (line items, totals,
-  metadata).
-- **OQ-005-2:** Cart-handoff slot persistence semantics (in-memory
-  vs. local-DB-backed).
-- **OQ-005-3:** Cart-handoff slot lifecycle (entry / exit on
-  settle / exit on cancel / exit on failure).
-- **OQ-005-4:** Currency contract (single currency per cart? minor-
-  unit guarantee enforced upstream?).
+- **OQ-005-1 ✅ RESOLVED:** Cart-handoff slot data shape is
+  `PaymentIntentEnvelope v1` — see
+  `specs/005-sales-cart/contracts/handoff-envelope.md`. Fields:
+  `envelope_version='v1'`, `cart_id`, `operator_session_id`,
+  `owning_operator_id`, `tenant_id`, `branch_id`, `terminal_id`,
+  `lines[]` (LineSnapshot with `item_ref`, `display_name`, `quantity`,
+  `unit_price_minor`, `line_subtotal_minor`, `note`, `version`,
+  `last_action_id`), `discount_placeholders[]`, `subtotal_minor`,
+  `created_at`, `handoff_action_id`.
+
+- **OQ-005-2 ✅ RESOLVED:** Persistence is dual — in-memory as a
+  TypeScript `Readonly<>` / `Object.freeze`-recursive object, and
+  JSON-persisted on `carts.handoff_envelope_json` (immutable once
+  written). 006 receives the frozen in-memory value; if it needs to
+  re-read after a crash the bridge re-applies `Object.freeze` on
+  JSON-parse. See `specs/005-sales-cart/contracts/handoff-envelope.md`
+  §"Immutability guarantees".
+
+- **OQ-005-3 ✅ RESOLVED:** Entry — cart.handoff handler transitions
+  `carts.state` to `frozen_handed_off` and returns the envelope.
+  Exit on cancel — a manager-attributed `cart.cancel.post_handoff`
+  action transitions the cart back to `cancelled`; 006 must trigger
+  this via the existing `cart.void` bridge handler. Exit on settle
+  and exit on failure are 006-owned transitions (details to be locked
+  in `/speckit-clarify`). See `specs/005-sales-cart/contracts/bridge-api.md`
+  §`cart.handoff` and §`cart.void`.
+
+- **OQ-005-4 ✅ RESOLVED:** Single currency per cart; integer minor-unit
+  guarantee enforced upstream. `subtotal_minor` is `Σ line_subtotal_minor`
+  — integer arithmetic only, `Number.isSafeInteger`-guarded.
+  Constitution Principle II applies end-to-end; 005 never produces a
+  float. See `specs/005-sales-cart/data-model.md` §CartLine invariant 3.
 
 ### Owned by future specs, not blocking 006 Slice 0–3
 
@@ -200,11 +254,16 @@ Before any 006 implementation work may begin, the following approvals
 MUST be recorded **in writing** (PR description, plan revision, or
 this file's gate ledger):
 
-1. **§A0 ✅** — confirmed in this file by:
-   - 004 coordination.md showing S4 ✅ and S5 ✅.
-   - `specs/005-sales-cart/spec.md` and `plan.md` exist and are
-     approved.
-   - 005 ↔ 006 handoff contract pinned in 005's contracts/.
+1. **§A0 — functionally cleared 2026-05-19; procedurally held.**
+   Functional evidence recorded in this file:
+   - 004 S4 ✅ 2026-05-14 (PRs #59–#122) and S5 ✅ 2026-05-14
+     (PRs #133–#143).
+   - `specs/005-sales-cart/spec.md`, `plan.md`, and six implementation
+     slices complete; T100 functional sign-off 2026-05-19 (PR #181).
+   - `PaymentIntentEnvelope v1` ratified §A4 on 2026-05-17 in
+     `specs/005-sales-cart/contracts/handoff-envelope.md`.
+   **Procedural hold lifts** when `/speckit-clarify` re-run is merged
+   and this gate row is updated to ✅ Cleared with a PR reference.
 2. **§A1 ✅** — Slice 0 visual direction approved-with-revisions or
    approved (mirrors 004 Slice 0 sign-off pattern).
 3. **§A2 review** — even if the conclusion is "no backend
@@ -241,11 +300,54 @@ this file's gate ledger):
 
 ---
 
+## Catalogue authority and UI polish deferral (2026-05-19)
+
+### Catalogue authority
+
+Product catalogue truth (item display names, prices, SKU master) belongs
+in **Data-Pulse-2 / SmartDataPulse backend**. POS-Pulse 005 snapshots
+display names and unit prices into `cart_lines` at add-time (FR-011,
+FR-013) and into the `PaymentIntentEnvelope v1` `lines[]` at handoff
+time. **The envelope is a complete, frozen view** — 006 does NOT need to
+reach back into `cart_lines`, the catalogue API, or Data-Pulse-2 to
+settle a cash payment. `subtotal_minor` in the envelope is the single
+authoritative money input.
+
+When a real catalogue integration ships (future feature), 006 is
+unaffected: it always consumes the frozen envelope, never the live
+catalogue.
+
+### UI polish deferral
+
+005 T100 sign-off (2026-05-19) was **functional**. The 005 cart UX is
+not yet production-polished (no Impeccable / design-token sweep has been
+applied). A future dedicated UI-polish slice will address 005 UX
+quality. **006 must not wait for that polish** before proceeding with
+its own Spec Kit re-run; 006 has its own §A1 visual-direction gate that
+governs its own payment-surface design quality.
+
+### First target for 006 planning
+
+When `/speckit-clarify` runs, the recommended first implementation scope
+is **cash-only tender Slices 1–3** (tender selection, cash entry + change
+rule, payment FSM + audit events). This matches:
+- User Story 1 (P1) and User Story 2 (P2) from spec.md.
+- The frozen `subtotal_minor` from the `PaymentIntentEnvelope v1`
+  (no catalogue, no backend round-trip required for cash settlement).
+- Constitution P2 (no fake success), P4 (append-only audit), P10
+  (operator attribution).
+
+Slice 4 (force-fail) and any non-cash tender type are deferred.
+
+---
+
 ## Cross-references
 
 - 004 coordination model: [`../004-operator-session/coordination.md`](../004-operator-session/coordination.md)
 - 004 plan §"Approval Gates": [`../004-operator-session/plan.md`](../004-operator-session/plan.md)
-- 005 spec (when authored): `../005-sales-cart/spec.md`
+- 005 spec: [`../005-sales-cart/spec.md`](../005-sales-cart/spec.md)
+- 005 handoff contract (normative): [`../005-sales-cart/contracts/handoff-envelope.md`](../005-sales-cart/contracts/handoff-envelope.md)
+- 005 bridge API: [`../005-sales-cart/contracts/bridge-api.md`](../005-sales-cart/contracts/bridge-api.md)
 - Constitution v1.5.1: [`../../.specify/memory/constitution.md`](../../.specify/memory/constitution.md)
 
 ---
