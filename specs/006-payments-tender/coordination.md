@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (`/speckit-tasks` applied: tasks.md regenerated against plan v1.0's locked Slices 0–5 grouping; ~140 startable + verification tasks with file paths, TDD test/impl pairing per Constitution §VI, `[P]` parallelism markers, and per-slice gate dependencies; `/speckit-analyze` is now the required next step before any Slice 1+ implementation work may begin. Voucher authority remains owned by Data-Pulse-2; this PR does NOT modify Data-Pulse-2.)
+**Last updated:** 2026-05-19 (Phase 1 setup recorded: T001–T006 coordination outcomes captured; `/speckit-tasks` ✅ and `/speckit-analyze` ✅ complete; Phase 1 opens the path to Slice 0 commissioning only; Slice 1+ implementation remains held on §A1–§A5.)
 
 ---
 
@@ -50,7 +50,7 @@ and it is updated in place as coordination items resolve.
 | `/speckit-plan` v1.0 (resolves **AD-DEFERRED-1..6 + OQ-PLAN-1..9**) | ✅ **authored 2026-05-19** — see [./plan.md](./plan.md) §"Architectural Decisions (LOCKED in v1.0)" and §"Plan v1.0 — Session 2026-05-19" below |
 | Companion artefacts: research.md / data-model.md / quickstart.md / contracts/bridge-api.md | ✅ authored 2026-05-19 (data-model: three new SQLite tables; bridge: `payments.*` + `tender.*` namespaces, DRAFT) |
 | `/speckit-tasks` (startable list) | ✅ **applied 2026-05-19** — see [./tasks.md](./tasks.md) for the full per-slice task list with file paths + TDD pairing + parallelism markers |
-| `/speckit-analyze` | ❌ **Not yet run — required next step.** Cross-artifact consistency check against spec ↔ plan ↔ tasks before any Slice 1+ work begins |
+| `/speckit-analyze` | ✅ **Complete — merged PR #187 (2026-05-19).** Cross-artifact consistency check cleared; Phase 1 coordination update recorded. Phase 1 opens the path to Slice 0 commissioning only. |
 | Slice 0 visual direction | ❌ Held under §A1 |
 | Implementation slices | ❌ All held |
 
@@ -682,6 +682,163 @@ session) is preserved in `stash@{0}` on branch
 `docs/006-speckit-plan`. It is NOT applied into this branch and
 should NOT be applied — the tender-scope amendment supersedes its
 persistence model and bridge namespace.
+
+---
+
+## Phase 1 setup — Session 2026-05-19
+
+This section records the coordination outcomes for tasks T001–T006,
+completing Phase 1 of 006-payments-tender. These tasks are
+**docs/coordination-only**; no source, tests, migrations, bridge
+handlers, package files, or Data-Pulse-2 changes are authorised by
+this phase.
+
+Phase 1 **opens the path to Slice 0 commissioning only.** All
+implementation slices (Slice 1+) remain held on their respective
+§A1–§A5 gates.
+
+---
+
+### T001 — Feature-flag inspection (§A5 pre-condition)
+
+**Status:** inspection recorded; implementation deferred to the owning
+implementation task
+
+**Inspection date:** 2026-05-19 (Phase 1 coordination update)
+
+**Files inspected:**
+
+- `src/shared/app-config.ts` — `AppConfig` interface
+- `src/renderer/stores/feature-flags-store.ts` — `useFeatureFlagsStore`
+
+**Findings:**
+
+| Item | Result |
+|:--|:--|
+| `payments` feature flag exists in `AppConfig.features` | ❌ **Absent.** `AppConfig.features` currently has only `{ cart?: boolean }`. No `payments` field is defined. |
+| `payments` flag disabled by default in production | ❌ **Not applicable** — flag does not exist yet. |
+| Renderer-store binding in `feature-flags-store.ts` | ❌ **Absent.** `FeatureFlagsState` only carries `cart: boolean`. No `payments` field or hydrate path for it. |
+
+**Follow-up / blocker before implementation:**
+
+The `payments` feature flag must be added to `AppConfig.features` and
+`FeatureFlagsState` (with a `false` fail-safe default) by the owning
+implementation task before any 006 renderer work lands. This is a
+**pre-condition for §A5 production readiness**, not a blocker for
+Slice 0 (visual direction has no runtime flag dependency) or the
+Slice 1–3 main-process work.
+
+Implementing the missing flag is **explicitly out of scope for this
+Phase 1 coordination PR**. The owning task is the first
+renderer-touching task in Slice 1 (T010 area) that gates on §A1
+sign-off.
+
+---
+
+### T002 — §A3 migration-ordering coordination
+
+**Status:** completed by Phase 1 coordination update
+
+The plan (AD-2, data-model.md) locks three new SQLite tables that must
+be authored in Slice 3 under §A3, in the following migration order:
+
+| Migration # | Table / action | Notes |
+|:--:|:--|:--|
+| 1 | `payment_attempts` | Header; `UNIQUE INDEX ON payment_attempts(terminal_id) WHERE state='started'` for double-settlement prevention (R-6). |
+| 2 | `payment_tender_lines` | Per-line; FK → `payment_attempts.id`. |
+| 3 | `payment_action_outbox` | Append-only; FK → `payment_attempts.id` and `payment_tender_lines.id`. UPDATE/DELETE denied by trigger. |
+| 4 | `audit_events.action_category` extension | Extend 004's closed `ActionCategory` enum with the 8 new payment/tender categories: `payment.settled`, `payment.cancelled`, `payment.failed`, `payment.force_failed`, `tender.applied`, `tender.refused`, `tender.reversed`, `tender.reversal_pending`. |
+
+**Gate dependency:** §A3 must clear (explicit no-op approval for Slices
+1–2; explicit table approval for Slice 3) before any migration SQL
+is authored. See gate ledger §A3.
+
+---
+
+### T003 — §A4 bridge security-review coordination
+
+**Status:** completed by Phase 1 coordination update; review owners TBD
+
+Two separate §A4 review items are required:
+
+| Review item | Scope | Timing | Owner |
+|:--|:--|:--|:--|
+| **§A4-A — `payments.*` + `tender.*` review** | Full security-review of `contracts/bridge-api.md` (DRAFT): handler signatures, `requireOperatorSession` gating, refusal envelopes, idempotency-key strategy, PII redaction, audit emission paths. | Must clear **before Slice 3 ships** (Slice 3 authors the bridge handlers). | review owner TBD before Slice 3 |
+| **§A4-B — `vouchers.*` review** | Security-review of the `vouchers.*` namespace (Contract V-A): `vouchers.validate` / `vouchers.redeem` / `vouchers.reverse` bridge handlers, Data-Pulse-2 endpoint surface, non-sensitive redemption-intent token handling, online-only enforcement. | Must clear **before Slice 4 ships** (voucher work is entirely Slice 4). Separate from §A4-A because voucher work ships later and introduces Data-Pulse-2 dependency. | review owner TBD before Slice 4 |
+
+---
+
+### T004 — Slice 0 visual-direction reviewer assignment
+
+**Status:** TBD — owner assignment required before T010 starts
+
+Slice 0 (visual direction) is held under §A1. No visual-direction
+content exists yet; `specs/006-payments-tender/visual-direction/README.md`
+has not been created.
+
+Before T010 (the first Slice 0 task) can start, a reviewer must be
+assigned to sign off the visual direction artefacts (payment surface,
+tender selection, cash entry, change display, success/cancel/failure
+variants, force-fail manager surface). No owner or date is known at
+the time of this Phase 1 coordination update.
+
+**Blocker:** owner assignment required before T010 starts.
+
+---
+
+### T005 — §A2 / Data-Pulse-2 voucher-endpoint coordination (Slice 4)
+
+**Status:** completed by Phase 1 coordination update; Data-Pulse-2
+endpoint contract pending Slice 4 coordination
+
+Contract V-A (AD-7, OQ-PLAN-7) requires three Data-Pulse-2 endpoints
+before Slice 4 may begin:
+
+| Endpoint | Purpose |
+|:--|:--|
+| `POST /vouchers/validate` | Returns a short-lived, non-sensitive redemption-intent token bound to the payment attempt. |
+| `POST /vouchers/redeem` | Atomically consumes the intent token; idempotent on retry within TTL. |
+| `POST /vouchers/reverse` | Reverses a committed redemption (Slice 4 `vouchers.reverse` bridge handler). |
+
+These endpoints belong to a **future, separately-spec'd Data-Pulse-2
+integration**. They are not part of the current POS-Pulse OpenAPI
+snapshot; no codegen runs until Slice 4. The `internal_voucher` tender
+slot is **reserved-but-disabled** until the contract clears (plan §AD-7;
+`tender_not_yet_supported` refusal).
+
+**§A2 state:** No-op confirmed for Slices 1–3 (plan AD-8). §A2 must
+commission for Slice 4 before any voucher bridge handler or codegen
+lands. Data-Pulse-2 endpoint contract pending Slice 4 coordination.
+
+**Data-Pulse-2 is NOT modified by this Phase 1 coordination PR.**
+
+---
+
+### T006 — Current gate / status record
+
+**Status:** completed by Phase 1 coordination update
+
+Gate status as of 2026-05-19 (Phase 1 coordination update):
+
+| Milestone | Status |
+|:--|:--|
+| `/speckit-specify` | ✅ complete |
+| `/speckit-clarify` | ✅ complete (2026-05-19) |
+| `/speckit-plan` v1.0 | ✅ complete (2026-05-19; AD-1..AD-9 locked) |
+| `/speckit-tasks` | ✅ complete (2026-05-19; ~140 tasks, Slices 0–5) |
+| `/speckit-analyze` | ✅ complete (merged PR #187, 2026-05-19) |
+| Phase 1 coordination update | ✅ complete (this PR; T001–T006 recorded) |
+| Slice 0 commissioning | ⛔ Opens now, gated on §A1 sign-off + T004 owner assignment |
+| Slice 1 implementation | ⛔ Held — gated on §A1 (Slice 0 sign-off) |
+| Slice 2 implementation | ⛔ Held — gated on §A1 (Slice 0 sign-off) |
+| Slice 3 implementation | ⛔ Held — gated on §A3 (migration approval) + §A4-A (bridge review) |
+| Slice 4 implementation | ⛔ Held — gated on §A2 (voucher endpoint contract) + §A4-B (voucher bridge review) |
+| Slice 5 (production readiness) | ⛔ Held — gated on §A5 |
+
+**Phase 1 opens the path to Slice 0 commissioning only.** Slice 1
+remains held until §A1 / Slice 0 sign-off. No implementation, source,
+test, migration, bridge handler, codegen, or Data-Pulse-2 work is
+authorised by Phase 1.
 
 ---
 
