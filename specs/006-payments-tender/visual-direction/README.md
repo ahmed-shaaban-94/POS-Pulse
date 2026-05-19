@@ -180,7 +180,7 @@ choosing a tender.
 
 **Layout sketch (1280 x 800, default state):**
 
-```
+```text
 +------------------------------------------------------------+
 | TopBar: IdentityStrip + ConnectionIndicator + OperatorSlot  |
 +------------------------------------------------------------+
@@ -237,7 +237,7 @@ calculates live. Confirm is the primary action.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment -- Cash                                   |
 |         |                                                   |
@@ -285,7 +285,7 @@ confirms the terminal processed the amount.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment -- Card terminal                          |
 |         |                                                   |
@@ -331,7 +331,7 @@ broken.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment -- Voucher                                |
 |         |                                                   |
@@ -349,7 +349,7 @@ broken.
 - This is not an error state. No danger red. Use a neutral
   informational treatment (info-teal soft background
   `--color-info-soft`, info-teal border, info icon + text).
-- The copy must not say "error", "unavailable", or "broken".
+- The copy must not say "error" or "broken".
   Approved wording: "not available on this terminal yet" or
   "coming soon".
 - "Back" returns to tender selection. Primary action, not ghost,
@@ -370,7 +370,7 @@ covered.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment -- Split tender                           |
 |         |                                                   |
@@ -420,7 +420,7 @@ give. This is the highest-stakes moment for cash handling.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment settled                                   |
 |         |                                                   |
@@ -461,7 +461,7 @@ card, or split tender fully covered the total).
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment settled                                   |
 |         |                                                   |
@@ -486,7 +486,7 @@ applied TenderLines and returning to tender selection.
 
 **Layout sketch (inline confirmation, not modal):**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment                                           |
 |         |                                                   |
@@ -533,7 +533,7 @@ bridge-internal reason strings to the cashier.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment                                           |
 |         |                                                   |
@@ -575,7 +575,7 @@ until Slice 4.
 
 **Layout sketch:**
 
-```
+```text
 +------------------------------------------------------------+
 | NavRail | Payment                                           |
 |         |                                                   |
@@ -619,7 +619,7 @@ failure), not this surface.
 
 **Layout sketch (modal on the manager's payment view):**
 
-```
+```text
          +------------------------------------------+
          |                                          |
          | Force-fail payment                       |
@@ -1090,7 +1090,7 @@ The reviewer walks this checklist for T011 sign-off:
 and §A1 (feature-flag implementation + bridge security review
 prerequisites) is satisfied.**
 
-```
+```text
 Signed-off-by: [reviewer name]             Date: [YYYY-MM-DD]
 Result:        [approved | approved-with-revisions | rejected]
 Findings:      [notes or "none"]
