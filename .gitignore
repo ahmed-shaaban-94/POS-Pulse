@@ -55,4 +55,9 @@ Thumbs.db
 
 # Claude Code — personal, per-user local state (permissions, settings).
 # Never commit; not project configuration.
-.claude/
+# Exception: project-local skills tracked as project tooling.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/impeccable/
+!.claude/skills/impeccable/**
