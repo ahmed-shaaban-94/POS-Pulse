@@ -142,7 +142,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 **Purpose:** Confirm gate ownership, feature-flag configuration, and slice-0 reviewer assignment. No code, no migrations, no packages.
 **Startable when:** `/speckit-analyze` merges (lifts §A0 procedural hold).
 
-- [ ] **T001** Confirm the `payments` feature flag exists in 001's configuration surface and is disabled by default; record the flag key — `specs/006-payments-tender/coordination.md`
+- [ ] **T001** Confirm the `payments` feature flag exists in `src/shared/app-config.ts` (the per-feature flag map authored by 001/005 — see existing entries) and is **disabled by default** in production; record the flag key + the renderer-store binding in `src/renderer/stores/feature-flags-store.ts`. If the flag does not exist yet, split into sub-tasks: (a) register the `payments` flag in `src/shared/app-config.ts`, (b) extend the renderer store's `FeatureFlagsState` interface, (c) record the key. — `specs/006-payments-tender/coordination.md`
 - [ ] **T002** Open the §A3 coordination thread: confirm migration ordering for the three new tables + 004 `ActionCategory` enum extension with the 8 new categories before Slice 3 begins; record outcome — `specs/006-payments-tender/coordination.md`
 - [ ] **T003** Open the §A4 coordination thread: confirm security-review owner for the `payments.*` + `tender.*` bridge surface before Slice 3; separate sub-thread for `vouchers.*` before Slice 4; record outcome — `specs/006-payments-tender/coordination.md`
 - [ ] **T004** Assign the Slice 0 visual-direction reviewer; record name + expected review date — `specs/006-payments-tender/coordination.md`
@@ -191,6 +191,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 - [ ] **T032** Run `npx vitest tests/unit/renderer/payments/` with coverage; assert ≥ 90 % on the new payment-surface components — `tests/unit/renderer/payments/`
 - [ ] **T033** Manual smoke (dev fixture): drive cart → handoff → tender selection in dev mode; observe envelope-required refusal when no cart is bound; record observation in slice notes — `specs/006-payments-tender/coordination.md`
+- [ ] **T034** [P] [US1/US4] Test (failing): accessibility audit on the Slice 1 payment surface — (a) every interactive control has a touch target ≥ 44×44 CSS px (NFR-004 / inherited 003 / 004 NFR-005); (b) the cash-received entry control and every tender-selection button are operable by keyboard alone (tab, shift-tab, enter, escape) with visible focus indicators; (c) focus management on surface mount lands on the first tender button; (d) screen-reader landmarks present (header, main, status). — `tests/unit/renderer/payments/PaymentSurface.a11y.test.tsx`
 
 ---
 
@@ -278,7 +279,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 ### TDD test tasks — audit emission
 
 - [ ] **T092** [P] Test (failing): `payment.settled` audit payload matches data-model §"Extension to 004's `audit_events`" shape (full `tender_lines` breakdown per AD-9) — `tests/unit/main/payments/audit-emitter.payment-settled.test.ts`
-- [ ] **T093** [P] Test (failing): `payment.cancelled` + `payment.failed` audit payloads carry operator attribution + `handoff_action_id` correlation; no PII, no card data, no voucher tokens — `tests/unit/main/payments/audit-emitter.payment-terminal.test.ts`
+- [ ] **T093** [P] Test (failing): `payment.cancelled` + `payment.failed` audit payloads carry operator attribution + `handoff_action_id` correlation; no PII, no card data, no voucher tokens. **Attribution source (FR-013 / FR-014):** the `attribution_operator_id` MUST be sourced from 004's Clerk-backed `OperatorSession.operator_id`; negative tests reject derivation from device token, cashier PIN record, terminal artefact, or any per-terminal local identifier (Constitution §VIII). — `tests/unit/main/payments/audit-emitter.payment-terminal.test.ts`
 - [ ] **T094** [P] Test (failing): per-line audit events (`tender.applied`, `tender.refused`, `tender.reversed`) carry operator attribution + line ID; `external_reference` redacted to `*****` in any non-payload log (research §R-5) — `tests/unit/main/payments/audit-emitter.tender-events.test.ts`
 
 ### TDD test tasks — bridge handlers (Slice 3 subset)
@@ -349,7 +350,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 - [ ] **T200** [§A2] Confirm Data-Pulse-2 voucher V-A endpoint contract sign-off recorded (`POST /vouchers/validate` · `/redeem` · `/reverse` with documented request/response shapes); link to Data-Pulse-2 spec PR — `specs/006-payments-tender/coordination.md`
 - [ ] **T201** [§A2] Update OpenAPI snapshot pin in 001's `npm run codegen:api` source; record SHA — `specs/006-payments-tender/coordination.md`
 - [ ] **T202** [§A2] Run `npm run codegen:api`; assert `src/shared/api-types.ts` includes the three voucher endpoint shapes — `src/shared/api-types.ts`
-- [ ] **T203** [§A2] Run `npm run codegen:verify` (regen → diff is empty) — CI parity check — *no file change*
+- [ ] **T203** [§A2] Run `npm run codegen:verify` (regen → diff is empty) — CI parity check. **Artefact:** record the CI run number, the diff line count (expected `0`), and the SHA being verified in `specs/006-payments-tender/coordination.md` under "Plan v1.0 — Session 2026-05-19 → Slice 4 §A2 verification" — `specs/006-payments-tender/coordination.md`
 
 ### §A3 voucher migration tasks (additive to Slice 3)
 
@@ -441,10 +442,17 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ## Cross-cutting historical tasks (do not re-open)
 
-- [x] **T100** ✅ Applied 2026-05-19 — `/speckit-clarify` resolved FR-002, FR-006, FR-030, FR-031 + OQ-005-1..4. See [./spec.md](./spec.md) §Clarifications "Session 2026-05-19" and [./coordination.md](./coordination.md) §"Clarification results".
-- [x] **T101** ✅ Applied 2026-05-19 — `/speckit-plan` v1.0 resolved AD-DEFERRED-1..6 + OQ-PLAN-1..9 as AD-1..AD-9; authored [./research.md](./research.md), [./data-model.md](./data-model.md), [./quickstart.md](./quickstart.md), and [./contracts/bridge-api.md](./contracts/bridge-api.md) (DRAFT — §A4 review required). See [./coordination.md](./coordination.md) §"Plan v1.0 — Session 2026-05-19".
-- [x] **T102** ✅ **Applied 2026-05-19** — `/speckit-tasks` produced this startable list against plan v1.0; supersedes the cash-only DRAFT body.
-- [ ] **T103** [BLOCKED:§A0] Re-run `/speckit-analyze` for cross-artifact consistency before any Slice 1+ work begins. **This is the required next step.**
+> **2026-05-19 renumber (`/speckit-analyze` remediation fix #12 /
+> finding N1):** Cross-cutting historical task IDs renumbered from
+> `T100`/`T101`/`T102`/`T103` to `T500`/`T501`/`T502`/`T503` to
+> eliminate collision with Slice 3 bridge-handler test IDs
+> `T100`–`T106`. The Slice 3 tests retain their original IDs since
+> they are part of the locked plan v1.0 task numbering.
+
+- [x] **T500** ✅ Applied 2026-05-19 — `/speckit-clarify` resolved FR-002, FR-006, FR-030, FR-031 + OQ-005-1..4. See [./spec.md](./spec.md) §Clarifications "Session 2026-05-19" and [./coordination.md](./coordination.md) §"Clarification results". *(formerly T100 cross-cut)*
+- [x] **T501** ✅ Applied 2026-05-19 — `/speckit-plan` v1.0 resolved AD-DEFERRED-1..6 + OQ-PLAN-1..9 as AD-1..AD-9; authored [./research.md](./research.md), [./data-model.md](./data-model.md), [./quickstart.md](./quickstart.md), and [./contracts/bridge-api.md](./contracts/bridge-api.md) (DRAFT — §A4 review required). See [./coordination.md](./coordination.md) §"Plan v1.0 — Session 2026-05-19". *(formerly T101 cross-cut)*
+- [x] **T502** ✅ **Applied 2026-05-19** — `/speckit-tasks` produced this startable list against plan v1.0; supersedes the cash-only DRAFT body. *(formerly T102 cross-cut)*
+- [x] **T503** ✅ **Applied 2026-05-19** — `/speckit-analyze` produced the cross-artifact consistency report; remediation polish PR addressed 17 findings total: 13 applied into spec.md + tasks.md + quickstart.md (fixes I1, C1, C2, C3, C4, D1, A1, A2, A3, I2, I3, N1, U2/U3/A4 cleanups), and 4 intentionally not applied as non-blocking / superseded / cosmetic follow-ups (N2 naming-drift kept distinct, U1 cross-feature thread deferred to Phase 1, L1 FR numbering gaps cosmetic, A4 addressed via inline quickstart note rather than relocation). *(formerly T103 cross-cut, now applied; originally "BLOCKED:§A0 — Re-run /speckit-analyze")*
 
 ---
 
@@ -532,13 +540,14 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 | T030 | T011 | Parallel-safe: no — sole writer of the store file in Slice 1 | exclusive: `src/renderer/stores/payment-store.ts` (created here; extended in T150) | §A1 | Slice 1 PR |
 | T031 | T026 | Parallel-safe: no — touches 005-owned `CartHandoffButton.tsx`; coordinate via §A1 review note | shared (cross-feature): `src/renderer/ui/cart/CartHandoffButton.tsx` | §A1 + §A1-cross-feature-review | Slice 1 PR |
 | T032 | T020–T031 (all impl + tests done) | Parallel-safe: no — coverage gate check | none | §A1 | Slice 1 PR |
-| T033 | T032 | Parallel-safe: no — coordination edit | shared: `specs/006-payments-tender/coordination.md` | §A1 | Slice 1 PR |
+| T033 | T032, T034 | Parallel-safe: no — coordination edit + Slice 1 completion record (must wait on T034 a11y audit to land before sign-off) | shared: `specs/006-payments-tender/coordination.md` | §A1 | Slice 1 PR |
+| T034 | T026, T027, T028, T030 (rendered surface must exist) | Parallel-safe: yes — new test file independent of T032/T033; runs concurrently with T032's coverage check | exclusive: `tests/unit/renderer/payments/PaymentSurface.a11y.test.tsx` | §A1 | Slice 1 PR |
 
 ### Slice 2 (Per-tender entry surfaces)
 
 | Task | Dependencies | Parallel-safe | Shared / exclusive files | Gate blocked by | Suggested PR slice |
 |:--:|:--|:--:|:--|:--:|:--|
-| T040 | T033 (Slice 1 ✅) | Parallel-safe: yes | exclusive: `tests/unit/main/payments/money-math.test.ts` | §A1 | Slice 2 PR |
+| T040 | T033, T034 (Slice 1 ✅) | Parallel-safe: yes | exclusive: `tests/unit/main/payments/money-math.test.ts` | §A1 | Slice 2 PR |
 | T041 | T033 | Parallel-safe: yes | exclusive: `tests/unit/renderer/payments/CashEntry.input-validation.test.tsx` | §A1 | Slice 2 PR |
 | T042 | T033 | Parallel-safe: yes | exclusive: `tests/unit/renderer/payments/CashEntry.under-tender-refusal.test.tsx` | §A1 | Slice 2 PR |
 | T043 | T033 | Parallel-safe: yes | exclusive: `tests/unit/shared/payments/external-reference-format.test.ts` | §A1 | Slice 2 PR |
@@ -665,7 +674,7 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 | T200 | T164 (Slice 3 ✅) + Data-Pulse-2 spec PR live | Parallel-safe: no — coordination edit | shared: `specs/006-payments-tender/coordination.md` | §A2 voucher commission | Slice 4 PR (subslice: §A2 voucher contract) |
 | T201 | T200 | Parallel-safe: no — coordination edit | shared: `specs/006-payments-tender/coordination.md` | §A2 | Slice 4 PR |
 | T202 | T201 | Parallel-safe: no — codegen output; only-writer of this file | exclusive: `src/shared/api-types.ts` | §A2 | Slice 4 PR |
-| T203 | T202 | Parallel-safe: no — CI parity check, no file change | none | §A2 | Slice 4 PR |
+| T203 | T202 | Parallel-safe: no — coordination edit (CI run number + diff line count + SHA recorded) | shared: `specs/006-payments-tender/coordination.md` | §A2 | Slice 4 PR |
 | T204 | T164 | Parallel-safe: yes — independent additive migration file | exclusive: `migrations/006-0005_audit_event_tender_reversal_pending.sql` | §A3 (additive review) | Slice 4 PR |
 
 ### Slice 4 — Voucher V-A client tests
@@ -770,19 +779,19 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 | Task | Dependencies | Parallel-safe | Shared / exclusive files | Gate blocked by | Suggested PR slice |
 |:--:|:--|:--:|:--|:--:|:--|
-| T100 (cross-cut) | — | — | — | — | PR #183 (merged) |
-| T101 (cross-cut) | — | — | — | — | PR #185 (merged) |
-| T102 (cross-cut) | — | — | — | — | This `/speckit-tasks` PR |
-| T103 (cross-cut) | T102 | Parallel-safe: no — full spec/plan/tasks cross-check | none (read-only) | §A0 procedural | Next PR (`/speckit-analyze`) |
+| T500 (cross-cut, formerly T100) | — | — | — | — | PR #183 (merged) |
+| T501 (cross-cut, formerly T101) | — | — | — | — | PR #185 (merged) |
+| T502 (cross-cut, formerly T102) | — | — | — | — | PR #186 (merged) |
+| T503 (cross-cut, formerly T103) | T502 | Parallel-safe: no — full spec/plan/tasks cross-check | none (read-only); polish PR added 17 docs-only edits | §A0 procedural | This `/speckit-analyze` polish PR |
 
-> **Note on task-ID collisions.** `T100`/`T101`/`T102`/`T103` appear
-> twice in this file: once in the Slice 3 bridge-handler test section
-> (lines T100–T106 in §"Slice 3 — Bridge-handler tests") and once in
-> the cross-cutting historical section. The collision is intentional
-> and inherited from the prior task list; `/speckit-analyze` will
-> resolve disambiguation by section context. If renumbering is
-> required, a future patch can renumber the Slice-3 batch to
-> `T100s`–`T106s` to make grep-able IDs unique.
+> **Note on the 2026-05-19 renumber.** The cross-cutting historical
+> task IDs were `T100`/`T101`/`T102`/`T103` until 2026-05-19, when
+> `/speckit-analyze` finding N1 flagged the collision with the Slice 3
+> bridge-handler test batch `T100`–`T106`. The cross-cutting batch was
+> shifted to `T500`–`T503`; Slice 3 retained the original IDs. Every
+> `T100`–`T103` reference elsewhere in this file now means the Slice 3
+> bridge-handler test of the same number; cross-cutting references use
+> `T500`+.
 
 ---
 

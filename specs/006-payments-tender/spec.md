@@ -302,7 +302,7 @@ tender type within a single payment attempt** and carries at least:
 | `tender_line_id` | Stable identifier within the attempt. |
 | `tender_type` | One of `cash` / `external_card_terminal` / `internal_voucher`. |
 | `amount_applied_minor` | Non-negative integer minor units. |
-| `state` | `applying → (applied | refused | reversed)`. Terminal states block further mutation of this line. |
+| `state` | `applying → (applied \| refused)`; `applied → (reversed \| reversal_pending)`; `reversal_pending → reversed` (Slice 4 deferred-reversal resolver). Five states total. Per `/speckit-plan` v1.0 research §R-11 and `data-model.md` §"PaymentTenderLine" Invariant 1. Terminal states (`refused`, `reversed`) block further mutation of this line; `reversal_pending` is the only non-terminal "applied-ish" state and resolves to `reversed` via the deferred-reversal resolver. |
 | `change_due_minor` | Only populated for `cash` lines that overpay. Always `null` / absent on non-cash lines. |
 | `external_reference` | Optional, non-sensitive, redacted-in-logs. Only meaningful for `external_card_terminal`; field-policy deferred to OQ-PLAN-5. |
 | `voucher_reference` | Reference to the redeemed voucher record. Only meaningful for `internal_voucher`. Sensitive-field policy follows §"Voucher authority boundary"; the exact wire shape and which fields cross the bridge is deferred to OQ-PLAN-7. |
@@ -319,15 +319,30 @@ the renderer ever sees of `voucher_reference` are all deferred to
 A payment attempt may transition to `settled` only when **all four**
 conditions hold simultaneously:
 
-1. **Total applied equals subtotal**:
-   `Σ TenderLine.amount_applied_minor (where state='applied')`
-   `== envelope.subtotal_minor`.
+1. **Total applied contribution equals subtotal** (canonical form;
+   matches `data-model.md` §"PaymentTenderLine" Invariant 5,
+   `research.md` §R-8, and the test in tasks.md §T080):
+
+   ```text
+   Σ (TenderLine.amount_applied_minor − COALESCE(TenderLine.change_due_minor, 0))
+   WHERE TenderLine.state = 'applied'
+       == envelope.subtotal_minor
+   ```
+
+   The `change_due_minor` subtraction is what makes cash overpayment
+   safe: an over-tendered cash line contributes
+   `amount_applied_minor − change_due_minor` to the running total
+   (the overage is returned to the customer as change, not credited
+   to the cart). Non-cash lines have `change_due_minor = NULL`
+   (condition 3 below), so they contribute `amount_applied_minor`
+   directly.
 2. **No non-cash overpayment**: every non-cash `TenderLine` satisfies
    `amount_applied_minor ≤ remaining_balance_at_apply_time` (where
    `remaining_balance` is `envelope.subtotal_minor` minus the running
-   sum of already-applied lines).
+   sum of already-applied contributions per condition 1).
 3. **Cash overpayment is allowed only on a `cash` line**, and produces
-   a non-negative `change_due_minor` on that line only.
+   a non-negative `change_due_minor` on that line only;
+   `change_due_minor` MUST be `NULL` (absent) on every non-cash line.
 4. **Every `internal_voucher` line in `applied` state has been
    atomically redeemed** by the voucher authority; double-redemption
    is prevented at that authority.
@@ -685,7 +700,11 @@ verifies the already-applied line is reversed per FR-006B.
   cart is not marked paid; the cashier on the next operator session sees
   the cart returned to the 005-defined handoff state.
 - **Concurrent attempts**: only one payment attempt MAY be in `started`
-  state per terminal at a time. Tested by SC-002.
+  state per terminal at a time. Enforced by the partial unique index
+  `CREATE UNIQUE INDEX … ON payment_attempts(terminal_id) WHERE state='started'`
+  authored in `/speckit-plan` v1.0 §AD-2 (research §R-6); verified
+  by the concurrent-start race tests `tasks.md` T084 (Slice 3
+  integration) and T306 (Slice 5 multi-process race).
 - **Money is integer minor units** (Constitution P-II / Principle II). No
   floats, no decimal-string arithmetic. Change due is computed as
   `cash_received_minor − total_minor` and is non-negative by construction
@@ -774,15 +793,26 @@ verifies the already-applied line is reversed per FR-006B.
   approval code, terminal-printed receipt text, or any cryptogram.
   This obligation is **non-negotiable** (FR-040, FR-026, Constitution
   P6).
-- **FR-009** *(new — 2026-05-19)*: An optional operator-entered
+- **FR-009** *(new — 2026-05-19; resolved by `/speckit-plan` v1.0
+  AD-5 / research §R-5)*: An optional operator-entered
   `external_reference` field on an `external_card_terminal`
-  `TenderLine` MAY be permitted only if the field is **non-sensitive**
-  (e.g., a short alphanumeric the cashier reads off the terminal
-  printout to aid reconciliation), and the field MUST be **redacted
-  from logs** (Constitution P7) and MUST NOT contain PAN, partial
-  PAN, or any value that could be used as cardholder data. **Whether
-  this field exists at all in v1, and its exact validation rules,
-  are deferred to `/speckit-plan` (OQ-PLAN-5).**
+  `TenderLine` is permitted in v1 under the following normative policy:
+  - **Optional.** Absence MUST be allowed.
+  - **Format.** Regex `^[A-Z0-9]{0,6}$` — uppercase alphanumeric, max
+    6 characters. Format constraint refuses anything PAN-shaped by
+    construction.
+  - **Non-sensitive.** Sourced by the cashier reading a short
+    alphanumeric off the external terminal's printout to aid
+    end-of-day reconciliation.
+  - **Redacted from logs.** Always `*****`-redacted in Sentry,
+    console, and log-file emission (Constitution §P7).
+  - **Forbidden content.** MUST NOT contain PAN, truncated PAN, CVV,
+    cardholder name, expiry date, auth payload, approval code, raw
+    terminal-printed receipt text, issuer name, terminal receipt
+    blob, cryptogram, or any value that could be used as cardholder
+    data (FR-008, Constitution §P6). Client-side regex enforcement
+    + main-side re-validation refuse non-conforming input as
+    `invalid_input`.
 - **FR-010** *(new — 2026-05-19)*: An `external_card_terminal`
   `TenderLine` MUST refuse with reason `non_cash_overpayment_refused`
   if `amount_applied_minor > remaining_balance_at_apply_time`. The
@@ -809,15 +839,25 @@ verifies the already-applied line is reversed per FR-006B.
   `voucher_already_redeemed` (the canonical failure category) or
   `dependency_unavailable`; no `TenderLine` may move to `applied`
   state until redemption succeeds.
-- **FR-017** *(new — 2026-05-19)*: The renderer MUST NOT receive
-  voucher-balance authority data, voucher-issuance metadata, loyalty-
-  program internals, voucher holder PII, or any cross-cart voucher
-  state. The renderer sees only enough fields to display the applied
-  line generically (e.g., a short opaque code or last-4 redaction).
-  The exact set of fields that may cross the bridge to the renderer
-  is deferred to `/speckit-plan` (OQ-PLAN-7); when in doubt during
-  planning, **minimise**. Sensitive voucher state stays main-process
-  side (Constitution P3 / P7).
+- **FR-017** *(new — 2026-05-19; resolved by `/speckit-plan` v1.0
+  AD-7 / research §R-7)*: The renderer's view of voucher state is
+  **minimised** to the following normative shape:
+  - **NEVER crosses the bridge to the renderer:**
+    `voucher_redemption_intent_token` (short-lived intent token from
+    the voucher authority — main-process only); voucher-balance
+    authority data; voucher-issuance metadata; loyalty-program
+    internals; voucher holder PII; voucher-side cross-cart state;
+    raw authority response payload.
+  - **MAY cross the bridge** (post-redeem only): a single
+    `voucher_authority_redemption_id` — an opaque, non-sensitive
+    short string returned by `vouchers.redeem` that the renderer
+    MAY display as a redacted receipt-correlation reference. The
+    identifier MUST NOT encode voucher balance, voucher code, or
+    holder identity. Pre-redeem (validate-only stage), the renderer
+    sees only the applied amount and a generic "voucher applied"
+    indicator.
+  - Sensitive voucher state stays main-process side
+    (Constitution §III / §P7).
 - **FR-018** *(new — 2026-05-19)*: POS-Pulse MUST NOT implement
   voucher issuance, voucher cancellation, voucher balance editing,
   voucher catalogue management, or loyalty-campaign behaviour in
@@ -829,7 +869,12 @@ verifies the already-applied line is reversed per FR-006B.
 
 - **FR-006** ⚠ **amended 2026-05-19** (multi-tender failure reasons):
   A payment attempt MUST traverse a deterministic state machine with
-  these states: `idle → started → (settled | cancelled | failed)`.
+  these states: `idle → started → (settled | cancelled | failed |
+  force_failed)`. `idle` is **conceptual** — the pre-insert renderer
+  pre-attempt state (no row exists in `payment_attempts` yet); the
+  first persisted row is always inserted in `state='started'` by
+  `payments.start` (`data-model.md` §"PaymentAttempt" Invariant 1).
+  `force_failed` is a Slice 4 transition (FR-021 / plan §AD-5).
   Once any terminal state is reached, the attempt MUST NOT return to
   `started`. Each terminal transition MUST record:
   - the operator identity (FR-013, inherited from 004 FR-001 / FR-013);
@@ -898,18 +943,35 @@ verifies the already-applied line is reversed per FR-006B.
 - **FR-020**: Cancelling a `started` payment is a **cashier-permitted**
   action, attributable to the signed-in cashier. No manager / admin
   authorisation is required for cashier-initiated cancel.
-- **FR-021**: Force-failing a payment attempt (e.g., to break a stuck
-  attempt during incident response) MUST be a manager- or admin-only
-  action under 004 FR-024 / FR-025 / FR-026 conventions, and MUST emit a
-  dedicated audit event (proposed: `payment.force_failed`, attribution
-  recording both the cashier whose attempt was force-failed and the
-  manager / admin actor). Mechanism deferred to implementation.
+- **FR-021** *(resolved by `/speckit-plan` v1.0 AD-5)*: Force-failing
+  a payment attempt (e.g., to break a stuck attempt during incident
+  response) MUST be a **manager- or admin-only** action under 004
+  FR-024 / FR-025 / FR-026 conventions, and MUST emit a dedicated
+  `payment.force_failed` audit event with dual attribution (the
+  cashier whose attempt was force-failed AND the manager/admin
+  actor). The mechanism is a **dedicated manager / admin incident-
+  response surface in Slice 4** (analogous to 004 S5's
+  `force_close_shift` / `unlock_cashier` / `reset_cashier_pin`
+  pattern); it is **NOT** inline manager re-auth on the cashier
+  surface. **Manager identity MUST NEVER be echoed to cashier-
+  visible UI**; it lives in the audit payload and the manager
+  surface only. Main-process role gate is primary (Constitution
+  §III); the renderer route guard is secondary UX defence only.
 - **FR-022**: Reaching the payment surface without an approved cart MUST
   be refused at the **information layer** (004 FR-019 / AD-1) — the
   surface MUST NOT render even briefly, the bridge call (when defined)
   MUST refuse generically, and audit-event emission MUST NOT disclose
   the cart's absence (so reviewers cannot probe for cart state via
   payment-surface telemetry).
+
+  > **004 FR-019 inheritance (informational one-line summary):**
+  > 006 inherits 004's information-layer refusal behaviour: renderer-
+  > facing copy on a refused sensitive action remains generic; the
+  > diagnostic `reason` / `category` lives in the bridge response
+  > payload and audit-event payload only; it is never echoed verbatim
+  > to the cashier-visible UI. The contract test in `tasks.md` T070
+  > asserts every bridge `reason` enum maps to generic renderer copy
+  > per `quickstart.md` §"Generic refusal UX".
 
 ### Handoff contracts
 
@@ -1205,22 +1267,95 @@ filed as a separate feature, not folded into 006.
 
 ---
 
-## Success Criteria (deferred until unblocked)
+## Success Criteria (live; promoted 2026-05-19 by /speckit-analyze remediation)
 
-> Success criteria are intentionally **not** declared in this draft. Once
-> 004 S4/S5 close and 005 is approved, this section will be filled by a
-> follow-up spec revision authored under the standard Spec Kit flow.
-> Sketches:
->
-> - SC-001 (P1): a cashier can settle a single cash payment for an
->   approved cart and observe `settled` outcome, attribution, and
->   handoff to receipts (when receipts ships).
-> - SC-002 (P2): a cashier can cancel a started payment; no settled
->   record is produced; an audit event is recorded.
-> - SC-003 (P3): a forced failure condition resolves to `failed`, with
->   a non-shaming user message and a `payment.failed` audit event.
-> - SC-AUDIT (cross-cutting): every state transition emits a canonical
->   audit event under 004 FR-025 / FR-026 with no PII / card data.
+> Promoted from "deferred sketches" to **live, measurable, testable**
+> success criteria. The three original sketches (SC-001/SC-002/SC-003)
+> remain valid in product wording and are restated below; three new
+> cross-cutting criteria (SC-COV, SC-REDACTION,
+> SC-SETTLEMENT-INVARIANT) lock the coverage/redaction/invariant
+> guarantees that `/speckit-plan` v1.0 and `/speckit-tasks` already
+> committed to.
+
+- **SC-001** (P1, US1/US4 path): A cashier can settle a single
+  payment for an approved cart using `cash` or `external_card_terminal`
+  and observe a `settled` outcome with operator attribution, a
+  settled-at UTC timestamp, the `envelope.handoff_action_id` as the
+  cross-feature correlation key, and the cart consumed for further
+  payment. **Measurable**: Slice 3 integration test `T161`
+  (end-to-end attempt lifecycle through all three SQLite tables);
+  Slice 3 verification `T160` coverage floors.
+- **SC-002** (P2, US2 path): A cashier can cancel a `started`
+  payment before settlement; no `settled` record is produced; a
+  `payment.cancelled` audit event is recorded with operator
+  attribution; the bound `PaymentIntentEnvelope v1` remains
+  immutable and the surface returns to tender selection per
+  `/speckit-plan` v1.0 §AD-4. **Measurable**: Slice 3 unit tests
+  `T081`, `T102`, `T135`; concurrent-start prevention verified by
+  `T084` (Slice 3 integration) and `T306` (Slice 5 multi-process
+  race).
+- **SC-003** (P3, US3 path): A forced failure condition (operator
+  session terminated, cart lost, dependency unavailable, etc.)
+  resolves the attempt to `failed` with a non-shaming, non-
+  disclosing renderer message and a `payment.failed` audit event
+  carrying one of the 14 closed FR-006 reason categories.
+  **Measurable**: Slice 3 unit tests `T082` (failure-reason
+  coverage), `T104` (`payments.discardOnSessionEnd`); generic
+  refusal copy mapping verified by `T070` contract test.
+- **SC-COV** (cross-cutting): Coverage floors from
+  `/speckit-plan` v1.0 §"Test Strategy" MUST hold at Slice merge
+  time and at production rollout:
+  - **≥ 95 %** on money-math, `PaymentAttempt` FSM, `TenderLine`
+    FSM, audit-event emitter, idempotency-replay helper, all
+    `payments.*` / `tender.*` / `vouchers.*` bridge handlers,
+    voucher V-A client.
+  - **≥ 90 %** on the renderer payment surface.
+
+  **Measurable**: Slice 2 `T050`, Slice 3 `T160`, Slice 4 `T295`,
+  Slice 5 `T300` (full-suite coverage audit).
+- **SC-REDACTION** (cross-cutting): No PII, cardholder data of any
+  form (PAN/CVV/track/cardholder name/expiry/auth payload/approval
+  code/terminal receipt text/cryptogram), voucher secret
+  (`voucher_redemption_intent_token`), authority token, raw envelope
+  payload, PIN, password, JWT, device token, attestation, or
+  credential MUST appear in any log sink (Sentry, console, log
+  file) or in any renderer-visible UI surface. `external_reference`
+  MUST be redacted to `*****` in every log sink. **Measurable**:
+  Slice 3 audit-emitter tests `T093` / `T094`; Slice 4 voucher
+  redaction test `T214`; Slice 5 redaction audit `T301`; Slice 5
+  security-review packet `T302`.
+- **SC-SETTLEMENT-INVARIANT** (cross-cutting): A payment attempt
+  may transition to `settled` only when the canonical settlement
+  invariant holds:
+
+  ```text
+  Σ (TenderLine.amount_applied_minor − COALESCE(TenderLine.change_due_minor, 0))
+  WHERE TenderLine.state = 'applied'
+      == envelope.subtotal_minor
+  ```
+
+  This is the exact expression evaluated by the Slice 3 confirm
+  transaction (`data-model.md` §"PaymentTenderLine" Invariant 5).
+  **Measurable**: Slice 3 unit test `T080` (settlement happy path),
+  property test `T163` (vitest + fast-check fuzz across random
+  tender-line mixes; `Number.isSafeInteger` guard on every running
+  sum); Slice 3 integration test `T161`.
+- **SC-AUDIT** (cross-cutting): Every state transition
+  (`payment.{settled,cancelled,failed,force_failed}`,
+  `tender.{applied,refused,reversed,reversal_pending}`) MUST emit
+  exactly one canonical audit event under 004 FR-025 / FR-026 /
+  FR-028, with operator attribution, with the
+  `envelope.handoff_action_id` correlation key where applicable,
+  with **zero** PII / card-data / voucher-secret leakage.
+  **Measurable**: Slice 3 audit-emitter tests `T092` / `T093` /
+  `T094`; Slice 4 voucher audit tests `T221` / `T222`; Slice 4
+  force-fail audit test `T241`.
+
+**SC scope note.** SC-001..SC-003 are story-level acceptance
+criteria; SC-COV / SC-REDACTION / SC-SETTLEMENT-INVARIANT / SC-AUDIT
+are cross-cutting quality gates. All six are **live and testable
+now**; their implementation is gated only by the per-slice §A1–§A5
+sign-offs.
 
 ---
 

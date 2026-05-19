@@ -467,6 +467,16 @@ Strategy":
 
 ## Generic refusal UX
 
+> ⚠ **Copy strings below are illustrative pending §A1 visual-direction
+> sign-off (Slice 0).** The bridge `reason` → renderer copy mapping is
+> normative *as a contract* (every closed-enum value MUST map to some
+> generic message; no `reason` ever appears verbatim in the cashier-
+> visible UI per FR-022 / NFR-003 / Constitution §P11). The **exact
+> wording** of each generic message is owned by §A1 visual direction
+> and may change without spec-level approval; the test in `tasks.md`
+> T070 asserts the mapping exists and is generic, not the literal
+> strings.
+
 Across every flow, refusals at the renderer follow this rule
 (FR-022 / NFR-003 / Constitution §P11):
 
