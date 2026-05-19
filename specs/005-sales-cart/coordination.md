@@ -5,11 +5,11 @@
 **Spec:** [./spec.md](./spec.md) (`§A0 CLEARED` — Q1–Q5 locked 2026-05-14)
 **Tasks:** [./tasks.md](./tasks.md) (APPROVED — 102 tasks, T001–T102; `/speckit-tasks` complete 2026-05-14)
 **Created:** 2026-05-09
-**Last updated:** 2026-05-18 (T096 visual review complete — PR #171 artifact + PR #172 Dev1/Dev2/Dev3 fixes verified on main SHA `897815c`; T100 remains open, walkthrough blocked pending headed Electron environment)
+**Last updated:** 2026-05-19 (T100 complete — headed Electron walkthrough passed; SQLite evidence verified; S5 complete in full; UI polish deferred to a future dedicated Impeccable/UI slice)
 
 ---
 
-> # ◐ T096 COMPLETE — T100 remains in S5
+> # ✅ S5 COMPLETE — T100 COMPLETE 2026-05-19
 >
 > **§A0 cleared 2026-05-14.** S0 ✅. Phase 2 ✅. S1 ✅. S2 ✅.
 > S3 ✅ (PR #157 + PR #159, 2026-05-17).
@@ -30,10 +30,13 @@
 > (`canVoid` guard, discount inline grouping, `showVoidInHandoff` split);
 > review record updated; live pixel inspection deferred (headed Electron
 > env unavailable); Dev4/Dev5 deferred P3.
-> **Remaining S5 work:** T100 quickstart walkthrough (blocked — headed
-> Electron environment required; R7+SQLite+audit_events harness unavailable
-> in automated terminal context).
+> **T100 ✅ COMPLETE 2026-05-19** — headed Electron walkthrough passed;
+> SQLite evidence verified (`cart_action_outbox` sequence of 9 actions,
+> `frozen_handed_off` state, restart-survival confirmed).
+> T100 sign-off is functional, not final UI polish. UI polish deferred
+> to a future dedicated Impeccable/UI slice. No scope change.
 > §A5 remains a production-rollout-only gate (does not block S5 merges).
+> T101/T102 not started. Production rollout still waits on §A5.
 
 ---
 
@@ -52,7 +55,7 @@ phase status. Updated in place as coordination items resolve.
 
 ## Current phase / status
 
-- **Phase:** **T096 COMPLETE 2026-05-18 — T100 remains in S5.**
+- **Phase:** **S5 COMPLETE 2026-05-19 — T100 complete; S5 complete in full.**
   - §A0: ✅ cleared 2026-05-14.
   - Phase 1 (T001–T005): ✅ complete.
   - Phase 2 / foundational types (T006–T016): ✅ complete.
@@ -85,9 +88,10 @@ phase status. Updated in place as coordination items resolve.
   - **T096 ✅ COMPLETE 2026-05-18** — visual review record updated; PR #171
     artifact present; PR #172 Dev1/Dev2/Dev3 fixes verified on main SHA
     `897815c`. Live pixel inspection deferred; Dev4/Dev5 deferred P3.
-  - **T100: not started.** Quickstart walkthrough blocked — headed Electron
-    environment required (R7+SQLite+audit_events harness unavailable in
-    automated terminal context).
+  - **T100 ✅ COMPLETE 2026-05-19.** Headed Electron walkthrough passed;
+    SQLite evidence verified. Sign-off is functional, not final UI polish.
+    UI polish deferred to a future dedicated Impeccable/UI slice.
+    See `specs/005-sales-cart/quickstart.md §T100 Closeout — 2026-05-19`.
   - §A5: rollout-time gate — does not block slice merges.
 - **Spec Kit artifacts (all present and approved):**
   - `spec.md` — `§A0 CLEARED`; Q1–Q5 locked 2026-05-14.
@@ -432,8 +436,10 @@ listed in dependency order; some may be worked in parallel once
 2026-05-17 (PR #166 T092–T095). S5-b ✅ COMPLETE 2026-05-17 (PR #168
 T097 + PR #169 T098–T099). T096 ✅ COMPLETE 2026-05-18 (visual review
 record updated; PR #171 artifact + PR #172 Dev1/Dev2/Dev3 fixes verified
-on main SHA `897815c`).** Remaining S5 work: T100 quickstart walkthrough
-(blocked — headed Electron env required). §A5 blocks production rollout only.
+on main SHA `897815c`). T100 ✅ COMPLETE 2026-05-19 (headed Electron
+walkthrough passed; SQLite evidence verified; S5 complete in full).
+UI polish deferred to a future dedicated Impeccable/UI slice; no scope change.
+T101/T102 not started.** §A5 blocks production rollout only.
 
 ---
 
@@ -456,7 +462,7 @@ on main SHA `897815c`).** Remaining S5 work: T100 quickstart walkthrough
 13. ✅ S5-b complete (PR #168 T097 redaction smoke + PR #169 T098–T099 runbook/onboarding, 2026-05-17).
 
 **Remaining per-slice gates:** §A5 (production rollout only).
-**Next startable work: T100 quickstart walkthrough** (requires headed Electron environment with R7 fixture resolver, SQLite persistence, and audit_events inspection).
+**S5 complete. T101/T102 and §A5 not started.** Next work: §A5 production-readiness gate when production rollout is planned.
 
 ---
 
@@ -497,7 +503,7 @@ handoff-envelope version field = string literal `'v1'`.
 | S5-a (T092–T095 a11y + shell-slot tests) | ✅ | 2026-05-17 | PR #166 (merge `5a13be7`) |
 | S5-b (T097–T099 redaction smoke + runbook/onboarding) | ✅ | 2026-05-17 | PR #168 (T097, merge `57ba99f`) + PR #169 (T098–T099, merge `50d780b`) |
 | T096 visual review | ✅ | 2026-05-18 | PR #171 artifact + PR #172 fixes on main SHA `897815c` |
-| T100 quickstart walkthrough | ⏳ blocked | — | Headed Electron env required |
+| T100 quickstart walkthrough | ✅ | 2026-05-19 | Headed Electron walkthrough passed; SQLite evidence verified |
 
 ## Explicit non-actions (current state)
 
@@ -506,8 +512,9 @@ the corresponding gate clearing:
 
 - ✅ T096 visual review complete 2026-05-18 (PR #171 artifact + PR #172 Dev1/Dev2/Dev3 fixes
   verified on main SHA `897815c`).
-- ❌ T100 quickstart walkthrough not yet started — blocked pending headed Electron
-  environment (R7+SQLite+audit_events harness unavailable in automated terminal context).
+- ✅ T100 quickstart walkthrough complete 2026-05-19 — headed Electron walkthrough
+  passed; SQLite evidence verified. UI polish deferred to a future dedicated
+  Impeccable/UI slice.
 - ❌ §A5 production-readiness review not yet started (rollout-time
   gate; reviewer assigned at production-rollout PR open time).
 - ❌ No backend / Data-Pulse-2 changes for 005 (cart drafts are
@@ -548,6 +555,10 @@ S5-b complete 2026-05-17 (PR #168 T097 merge `57ba99f`; PR #169 T098–T099
 merge `50d780b`; main SHA `50d780b`).
 T096 visual review complete 2026-05-18 (PR #171 artifact + PR #172
 Dev1/Dev2/Dev3 fixes verified on main SHA `897815c`).
+**T100 quickstart walkthrough complete 2026-05-19** (headed Electron walkthrough
+passed; SQLite evidence verified; `cart_action_outbox` sequence of 9 actions;
+`frozen_handed_off` state; restart-survival confirmed).
 S0 ✅, Phase 2 ✅, S1 ✅, S2 ✅, S3 ✅, §A4 ✅, S4 ✅, S5-a ✅, S5-b ✅,
-T096 ✅.
-**Next work: T100 quickstart walkthrough** (requires headed Electron env).
+T096 ✅, T100 ✅. **S5 complete in full.**
+UI polish deferred to a future dedicated Impeccable/UI slice. T101/T102 not
+started. §A5 remains a production-rollout-only gate.
