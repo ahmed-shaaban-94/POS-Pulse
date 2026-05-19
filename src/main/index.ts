@@ -17,6 +17,7 @@ import { createLogger } from './logging/logger.js';
 import { initSentryMain } from './observability/sentry-main.js';
 import { bindPairingStoreDb, createPairingStore } from './pairing/store.js';
 import { applyDevSkipPairingIfRequested } from './pairing/dev-skip-pairing.js';
+import { applyDevSkipOperatorSignInIfRequested } from './operator/dev-skip-operator-signin.js';
 import { AuditEmitter } from './audit/audit-emitter.js';
 import { bindAuditEventsStoreDb } from './audit/audit-events-store.js';
 import { createNetwork } from './pairing/network.js';
@@ -424,6 +425,18 @@ app
       sessionManager: operatorSessionManager,
       pairingStore,
       auditEmitter,
+      logger: mainLogger,
+    });
+
+    // 004-operator-session dev bypass — seeds a fixture manager session so
+    // the renderer routes past /sign-in in unpackaged dev builds.
+    // SECURITY: isPackaged guard is inside applyDevSkipOperatorSignInIfRequested;
+    // this call is a no-op in every packaged build regardless of env vars.
+    // Independent from POS_PULSE_DEV_SKIP_PAIRING; both may be set together.
+    applyDevSkipOperatorSignInIfRequested({
+      isPackaged: app.isPackaged,
+      env: process.env,
+      sessionManager: operatorSessionManager,
       logger: mainLogger,
     });
 
