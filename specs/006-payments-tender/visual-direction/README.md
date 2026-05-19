@@ -1081,18 +1081,24 @@ The reviewer walks this checklist for T011 sign-off:
 
 | Field | Value |
 |:--|:--|
-| Reviewer | TBD -- owner assignment required (see coordination.md T004) |
-| Date | TBD |
-| Result | TBD |
-| Findings | TBD |
+| Reviewer | Ahmed |
+| Date | 2026-05-20 |
+| Result | approved |
+| Findings | none |
 
-**Slice 1 implementation is blocked until this record is signed
-and §A1 (feature-flag implementation + bridge security review
-prerequisites) is satisfied.**
+**§A1 visual-direction sign-off is recorded. Slice 1 and Slice 2
+payment surfaces and the documented Slice 4 force-fail visual
+variant are cleared to proceed. §A2, §A3, §A4, and §A5 remain
+held on their own separate gates.**
+
+**T010 method note:** `specs/006-payments-tender/visual-direction/README.md`
+was produced using the manual Impeccable shape checklist (PR 189)
+because project-local Impeccable was not installed. PRODUCT.md and
+DESIGN.md were read directly; all design laws were applied manually.
 
 ```text
-Signed-off-by: [reviewer name]             Date: [YYYY-MM-DD]
-Result:        [approved | approved-with-revisions | rejected]
-Findings:      [notes or "none"]
-Next gate:     Slice 1 may begin after §A1 clears
+Signed-off-by: Ahmed                       Date: 2026-05-20
+Result:        approved
+Findings:      none
+Next gate:     Slice 1 may begin; §A2/§A3/§A4/§A5 gates remain held
 ```

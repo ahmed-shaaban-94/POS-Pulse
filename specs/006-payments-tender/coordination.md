@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (Phase 1 setup recorded: T001–T006 coordination outcomes captured; `/speckit-tasks` ✅ and `/speckit-analyze` ✅ complete; Phase 1 opens the path to Slice 0 commissioning only; Slice 1+ implementation remains held on §A1–§A5.)
+**Last updated:** 2026-05-20 (T011 §A1 visual-direction sign-off recorded: reviewer Ahmed, result approved; §A1 cleared for Slice 1 and Slice 2 payment surfaces and the documented Slice 4 force-fail visual variant; §A2/§A3/§A4/§A5 remain held.)
 
 ---
 
@@ -51,7 +51,7 @@ and it is updated in place as coordination items resolve.
 | Companion artefacts: research.md / data-model.md / quickstart.md / contracts/bridge-api.md | ✅ authored 2026-05-19 (data-model: three new SQLite tables; bridge: `payments.*` + `tender.*` namespaces, DRAFT) |
 | `/speckit-tasks` (startable list) | ✅ **applied 2026-05-19** — see [./tasks.md](./tasks.md) for the full per-slice task list with file paths + TDD pairing + parallelism markers |
 | `/speckit-analyze` | ✅ **Complete — merged PR #187 (2026-05-19).** Cross-artifact consistency check cleared; Phase 1 coordination update recorded. Phase 1 opens the path to Slice 0 commissioning only. |
-| Slice 0 visual direction | ❌ Held under §A1 |
+| Slice 0 visual direction | ✅ T011 signed off 2026-05-20 (PR #189 → PR #190; reviewer: Ahmed; result: approved) |
 | Implementation slices | ❌ All held |
 
 ---
@@ -82,7 +82,7 @@ merged.
 | Gate | What it gates | Status | Owner |
 |:--:|:--|:--:|:--|
 | **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 · `/speckit-clarify` ✅ applied 2026-05-19 — **procedurally held** until `/speckit-plan` v1.0 merges | Ahmed (POS-Pulse) |
-| **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ⛔ Held — gated on §A0 | TBD |
+| **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ✅ Signed off 2026-05-20 — PR #189 (T010 visual direction) + PR #190 (T011 sign-off). Reviewer: Ahmed. Result: approved. Clears Slice 1, Slice 2, and the documented Slice 4 force-fail visual variant. | Ahmed |
 | **§A2** | Backend / OpenAPI: any backend dependency 006 introduces. Currently expected: none for cash-only scope; possibly some for force-fail audit propagation. | ⛔ Held — gated on §A0 | TBD (POS-Pulse + SmartDataPulse backend, mirrored from 004 §A2) |
 | **§A3** | Migrations: any local SQLite tables 006 introduces. Currently none planned because the 004 audit-event store is the audit sink. **Explicit no-op approval still required** before code lands. | ⛔ Held — likely no-op | TBD |
 | **§A4** | Bridge-API surface: the `payments.*` (or equivalent) namespace, defined post-handoff-contract pinning. | ⛔ Held — gated on §A0 + AD-DEFERRED-3 | TBD |
@@ -770,19 +770,13 @@ Two separate §A4 review items are required:
 
 ### T004 — Slice 0 visual-direction reviewer assignment
 
-**Status:** TBD — owner assignment required before T010 starts
+**Status:** ✅ Resolved — T011 sign-off recorded 2026-05-20
 
-Slice 0 (visual direction) is held under §A1. No visual-direction
-content exists yet; `specs/006-payments-tender/visual-direction/README.md`
-has not been created.
-
-Before T010 (the first Slice 0 task) can start, a reviewer must be
-assigned to sign off the visual direction artefacts (payment surface,
-tender selection, cash entry, change display, success/cancel/failure
-variants, force-fail manager surface). No owner or date is known at
-the time of this Phase 1 coordination update.
-
-**Blocker:** owner assignment required before T010 starts.
+Reviewer: **Ahmed**. T010 visual-direction document (PR #189) reviewed
+and approved on 2026-05-20. T011 sign-off recorded in PR #190 and in
+`specs/006-payments-tender/visual-direction/README.md` §"Review record".
+§A1 gate is now cleared for Slice 1, Slice 2, and the documented Slice 4
+force-fail visual variant.
 
 ---
 
@@ -828,9 +822,9 @@ Gate status as of 2026-05-19 (Phase 1 coordination update):
 | `/speckit-tasks` | ✅ complete (2026-05-19; ~140 tasks, Slices 0–5) |
 | `/speckit-analyze` | ✅ complete (merged PR #187, 2026-05-19) |
 | Phase 1 coordination update | ✅ complete (this PR; T001–T006 recorded) |
-| Slice 0 commissioning | ⛔ Opens now, gated on §A1 sign-off + T004 owner assignment |
-| Slice 1 implementation | ⛔ Held — gated on §A1 (Slice 0 sign-off) |
-| Slice 2 implementation | ⛔ Held — gated on §A1 (Slice 0 sign-off) |
+| Slice 0 commissioning | ✅ Complete — T011 signed off 2026-05-20 (PR #189 + PR #190) |
+| Slice 1 implementation | ✅ §A1 cleared — may begin |
+| Slice 2 implementation | ✅ §A1 cleared — may begin |
 | Slice 3 implementation | ⛔ Held — gated on §A3 (migration approval) + §A4-A (bridge review) |
 | Slice 4 implementation | ⛔ Held — gated on §A2 (voucher endpoint contract) + §A4-B (voucher bridge review) |
 | Slice 5 (production readiness) | ⛔ Held — gated on §A5 |
@@ -839,6 +833,56 @@ Gate status as of 2026-05-19 (Phase 1 coordination update):
 remains held until §A1 / Slice 0 sign-off. No implementation, source,
 test, migration, bridge handler, codegen, or Data-Pulse-2 work is
 authorised by Phase 1.
+
+---
+
+### T011 — §A1 visual-direction sign-off (Slice 0 PR 190)
+
+**Status:** ✅ Complete — signed off 2026-05-20
+
+**Session:** 2026-05-20 (PR #190 — docs/006-slice-0-signoff)
+
+**Task:** T011 — Slice 0 review record signed; reviewer/date/result
+recorded; §A1 sign-off recorded.
+
+**Review record:**
+
+| Field | Value |
+|:--|:--|
+| T010 source | PR #189 (merged 2026-05-20) — `specs/006-payments-tender/visual-direction/README.md` |
+| T010 method | Manual Impeccable shape checklist (project-local Impeccable not installed; PRODUCT.md and DESIGN.md read directly; all design laws applied manually) |
+| Reviewer | Ahmed |
+| Review date | 2026-05-20 |
+| Result | approved |
+| Findings | none |
+
+**§A1 scope cleared by this sign-off:**
+
+- Slice 1 payment surfaces (tender selection, envelope ingest)
+- Slice 2 per-tender entry surfaces (cash, external_card_terminal)
+- The documented Slice 4 force-fail visual variant (State 11 in
+  `visual-direction/README.md`)
+
+**Gates remaining held (unchanged by this sign-off):**
+
+| Gate | Status |
+|:--|:--|
+| §A2 (Data-Pulse-2 voucher endpoint contract) | ⛔ Held — commissions before Slice 4 |
+| §A3 (migration approval — three new tables) | ⛔ Held — no-op confirmed for Slices 1–2; table review required for Slice 3 |
+| §A4-A (`payments.*` + `tender.*` bridge review) | ⛔ Held — must clear before Slice 3 ships |
+| §A4-B (`vouchers.*` bridge review) | ⛔ Held — must clear before Slice 4 ships |
+| §A5 (production readiness) | ⛔ Held — rollout-time gate |
+
+**What this sign-off does NOT do:**
+
+- Does NOT start Slice 1 implementation (Slice 1 may now begin, but
+  this PR contains no implementation).
+- Does NOT open §A2, §A3, §A4, or §A5.
+- Does NOT modify any source file, test, migration, package file,
+  OpenAPI/codegen output, CI file, AGENTS.md, CLAUDE.md, .specify/**,
+  .claude/**, .gitignore, or Data-Pulse-2.
+- Does NOT create React components, CSS, tokens, bridge handlers, FSM
+  code, migrations, voucher code, screenshots, or binary assets.
 
 ---
 

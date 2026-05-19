@@ -156,8 +156,8 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 **Purpose:** Commission §A1 visual-direction review for every 006 payment surface variant.
 **Gates:** §A0 ✅ + §A1 commission. **Held.**
 
-- [ ] **T010** Commission Slice 0 visual-direction review for the payment surfaces: tender selection, per-tender entry (cash · external_card_terminal · voucher reserved-disabled), change-due display, split-tender progress indicator, success / cancel / failure variants, deferred-reversal "pending" indicator, **and** the Slice 4 manager force-fail surface variant. Output: `specs/006-payments-tender/visual-direction/README.md`. No code. — `specs/006-payments-tender/visual-direction/README.md`
-- [ ] **T011** Slice 0 review record signed (reviewer, date, result `approved` or `approved-with-revisions`, checklists ticked); §A1 sign-off recorded — `specs/006-payments-tender/coordination.md`
+- [x] **T010** Commission Slice 0 visual-direction review for the payment surfaces: tender selection, per-tender entry (cash · external_card_terminal · voucher reserved-disabled), change-due display, split-tender progress indicator, success / cancel / failure variants, deferred-reversal "pending" indicator, **and** the Slice 4 manager force-fail surface variant. Output: `specs/006-payments-tender/visual-direction/README.md`. No code. — `specs/006-payments-tender/visual-direction/README.md`
+- [x] **T011** Slice 0 review record signed (reviewer, date, result `approved` or `approved-with-revisions`, checklists ticked); §A1 sign-off recorded — `specs/006-payments-tender/coordination.md`
 
 ---
 
