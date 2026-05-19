@@ -544,9 +544,16 @@ machine and the POS-Pulse Electron dev environment must:
 1. `git checkout main && npm install`
 2. Launch:
    ```bash
-   POS_PULSE_DEV_SKIP_PAIRING=1 POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
+   POS_PULSE_DEV_SKIP_PAIRING=1 POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1 POS_PULSE_FEATURE_CART=1 POS_PULSE_DEV_ITEM_RESOLVER=1 npm run dev
    ```
-   (PowerShell: `$env:POS_PULSE_DEV_SKIP_PAIRING="1"; $env:POS_PULSE_FEATURE_CART="1"; $env:POS_PULSE_DEV_ITEM_RESOLVER="1"; npm run dev`)
+   (PowerShell: `$env:POS_PULSE_DEV_SKIP_PAIRING="1"; $env:POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN="1"; $env:POS_PULSE_FEATURE_CART="1"; $env:POS_PULSE_DEV_ITEM_RESOLVER="1"; npm run dev`)
+
+   `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1` auto-signs in a fixture `Dev Manager`
+   (role: `manager`) so the renderer routes past `/sign-in` on first load.
+   Dev-only; unpackaged builds only. No Clerk call, no backend call, no JWT
+   is created. Normal Clerk/backend sign-in remains the default when this flag
+   is absent or falsy. T100 remains incomplete until a reviewer performs the
+   full headed walkthrough below.
 3. Walk through US1, US2, US3, and the cross-cutting walkthroughs in this file.
 4. Record pass/fail for each "Expect" line with a spec reference.
 5. Update `tasks.md` T100 to `[x]` and append the sign-off date here.
