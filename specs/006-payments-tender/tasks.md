@@ -15,26 +15,25 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 **Visual direction:** `specs/006-payments-tender/visual-direction/README.md` (to be produced in Slice 0 under §A1)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-19 (`/speckit-tasks` produced this startable list against plan v1.0; supersedes the cash-only DRAFT task body. No implementation started.)
-**Status:** **DRAFT — BLOCKED on `/speckit-analyze` + per-slice §A1–§A5 sign-off**
+**Last updated:** 2026-05-21 (Slice 1 complete via PR #192 merge `7d8588c`; T020–T034 ticked. Slice 2+ not started; per-slice gates §A2 / §A3 / §A4 remain held for Slices 2–4.)
+**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slices 2–5 not started**
 
 ---
 
-> ## STATUS: DRAFT — BLOCKED — NOT APPROVED FOR IMPLEMENTATION
+> ## STATUS: Slice 1 complete — Slices 2+ remain BLOCKED on per-slice gates
 >
-> `/speckit-tasks` ✅ applied 2026-05-19 — this file is now the
-> **authoritative executable task list** for 006 against plan v1.0's
-> locked Slices 0–5 grouping. Each task carries a file-path proposal
-> and TDD test/impl pairing per Constitution §VI.
+> Slice 0 ✅ (PR #189 / PR #190, 2026-05-20). Slice 1 ✅ — renderer-only
+> tender selection + envelope ingest merged via **PR #192** (head
+> `c48c34b`, merge commit `7d8588c`, 2026-05-21). T020–T034 complete.
 >
-> **Implementation remains BLOCKED.** `/speckit-analyze` is the
-> required next step, followed by per-slice §A1–§A5 sign-off in the
-> order locked by plan v1.0. No task in this file is startable until
-> `/speckit-analyze` clears AND the named per-slice gate is opened
-> for the relevant phase.
+> **Slices 2–5 remain BLOCKED.** Slice 2 needs §A1 entry-surface visuals
+> + Slice 1 sign-off; Slice 3 needs §A2 (no-op confirmation) + §A3
+> migrations + §A4-A bridge security review; Slice 4 needs §A2 voucher
+> endpoints + §A4-B `vouchers.*` review; §A5 is rollout-only.
 >
 > See [./coordination.md](./coordination.md) §"Gate ledger" for the
-> live gate-state table.
+> live gate-state table and §"Maestro closeout — Slice 1 (PR #192)"
+> for the durable record of the Slice 1 ship.
 
 ---
 
@@ -171,27 +170,27 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### TDD test tasks
 
-- [ ] **T020** [P] [US1] Test (failing): tender-selection surface renders only when an approved cart is in the checkout-handoff slot; refuses generically otherwise (FR-002, FR-022) — `tests/unit/renderer/payments/TenderSelection.envelope-required.test.tsx`
-- [ ] **T021** [P] [US1] Test (failing): Cash + external_card_terminal buttons are enabled; voucher slot is present, visibly disabled, and emits a generic `tender_not_yet_supported` refusal hint on click (FR-001) — `tests/unit/renderer/payments/TenderSelection.tender-availability.test.tsx`
-- [ ] **T022** [P] [US1] Test (failing): cart is read-only on the payment surface; no edit affordance is present (FR-003) — `tests/unit/renderer/payments/PaymentCartSummary.read-only.test.tsx`
-- [ ] **T023** [P] [US1] Test (failing): operator badge from 004 (FR-020 inherited) is visible at all times — `tests/unit/renderer/payments/PaymentSurface.operator-badge.test.tsx`
-- [ ] **T024** [P] [US1] Test (failing): envelope `lines[]` are rendered with redacted display name + line subtotal (minor units); no `voucher_*` / `external_reference` fields are rendered (Slice 1 surface; FR-017 enforcement) — `tests/unit/renderer/payments/PaymentCartSummary.minimised-render.test.tsx`
+- [x] **T020** [P] [US1] Test (failing): tender-selection surface renders only when an approved cart is in the checkout-handoff slot; refuses generically otherwise (FR-002, FR-022) — `tests/unit/renderer/payments/TenderSelection.envelope-required.test.tsx`
+- [x] **T021** [P] [US1] Test (failing): Cash + external_card_terminal buttons are enabled; voucher slot is present, visibly disabled, and emits a generic `tender_not_yet_supported` refusal hint on click (FR-001) — `tests/unit/renderer/payments/TenderSelection.tender-availability.test.tsx`
+- [x] **T022** [P] [US1] Test (failing): cart is read-only on the payment surface; no edit affordance is present (FR-003) — `tests/unit/renderer/payments/PaymentCartSummary.read-only.test.tsx`
+- [x] **T023** [P] [US1] Test (failing): operator badge from 004 (FR-020 inherited) is visible at all times — `tests/unit/renderer/payments/PaymentSurface.operator-badge.test.tsx`
+- [x] **T024** [P] [US1] Test (failing): envelope `lines[]` are rendered with redacted display name + line subtotal (minor units); no `voucher_*` / `external_reference` fields are rendered (Slice 1 surface; FR-017 enforcement) — `tests/unit/renderer/payments/PaymentCartSummary.minimised-render.test.tsx`
 
 ### Implementation tasks
 
-- [ ] **T025** [US1] Add `payments` feature flag entry to the renderer config layer (disabled by default in production; enabled in dev fixture); used by the route guard for the payment surface — `src/renderer/config/feature-flags.ts`
-- [ ] **T026** [US1] Implement `<PaymentSurface>` route guard: refuses to mount when no frozen envelope is in the renderer's payment context (FR-022) — `src/renderer/ui/payments/PaymentSurface.tsx`
-- [ ] **T027** [US1] Implement `<TenderSelection>` component: cash + external_card_terminal selectable; voucher reserved-disabled; emits `tender_not_yet_supported` hint on disabled-slot click — `src/renderer/ui/payments/TenderSelection.tsx`
-- [ ] **T028** [US1] Implement `<PaymentCartSummary>` component: renders envelope `lines[]` (minor units, display name only, no sensitive fields per FR-017); read-only (FR-003) — `src/renderer/ui/payments/PaymentCartSummary.tsx`
-- [ ] **T029** [US1] Wire the operator badge from 004's existing operator-session context into `<PaymentSurface>` header (FR-020) — `src/renderer/ui/payments/PaymentSurface.tsx`
-- [ ] **T030** [US1] Add the renderer-side `paymentSlice` placeholder in the payment store (envelope reference only; no FSM state; FSM lands in Slice 3) — `src/renderer/stores/payment-store.ts`
-- [ ] **T031** [US1] Wire 005's `cart.handoff` return value to mount the payment surface with the frozen envelope; ensure recursive `Object.freeze` is preserved on rehydration (FR-002, FR-030; 005 §"Immutability guarantees") — `src/renderer/ui/cart/CartHandoffButton.tsx` *(touches 005-owned file; coordinate via §A1 review note)*
+- [x] **T025** [US1] Add `payments` feature flag entry to the renderer config layer (disabled by default in production; enabled in dev fixture); used by the route guard for the payment surface — `src/renderer/config/feature-flags.ts`
+- [x] **T026** [US1] Implement `<PaymentSurface>` route guard: refuses to mount when no frozen envelope is in the renderer's payment context (FR-022) — `src/renderer/ui/payments/PaymentSurface.tsx`
+- [x] **T027** [US1] Implement `<TenderSelection>` component: cash + external_card_terminal selectable; voucher reserved-disabled; emits `tender_not_yet_supported` hint on disabled-slot click — `src/renderer/ui/payments/TenderSelection.tsx`
+- [x] **T028** [US1] Implement `<PaymentCartSummary>` component: renders envelope `lines[]` (minor units, display name only, no sensitive fields per FR-017); read-only (FR-003) — `src/renderer/ui/payments/PaymentCartSummary.tsx`
+- [x] **T029** [US1] Wire the operator badge from 004's existing operator-session context into `<PaymentSurface>` header (FR-020) — `src/renderer/ui/payments/PaymentSurface.tsx`
+- [x] **T030** [US1] Add the renderer-side `paymentSlice` placeholder in the payment store (envelope reference only; no FSM state; FSM lands in Slice 3) — `src/renderer/stores/payment-store.ts`
+- [x] **T031** [US1] Wire 005's `cart.handoff` return value to mount the payment surface with the frozen envelope; ensure recursive `Object.freeze` is preserved on rehydration (FR-002, FR-030; 005 §"Immutability guarantees") — `src/renderer/ui/cart/CartHandoffButton.tsx` *(touches 005-owned file; coordinate via §A1 review note)*
 
 ### Slice 1 verification
 
-- [ ] **T032** Run `npx vitest tests/unit/renderer/payments/` with coverage; assert ≥ 90 % on the new payment-surface components — `tests/unit/renderer/payments/`
-- [ ] **T033** Manual smoke (dev fixture): drive cart → handoff → tender selection in dev mode; observe envelope-required refusal when no cart is bound; record observation in slice notes — `specs/006-payments-tender/coordination.md`
-- [ ] **T034** [P] [US1/US4] Test (failing): accessibility audit on the Slice 1 payment surface — (a) every interactive control has a touch target ≥ 44×44 CSS px (NFR-004 / inherited 003 / 004 NFR-005); (b) the cash-received entry control and every tender-selection button are operable by keyboard alone (tab, shift-tab, enter, escape) with visible focus indicators; (c) focus management on surface mount lands on the first tender button; (d) screen-reader landmarks present (header, main, status). — `tests/unit/renderer/payments/PaymentSurface.a11y.test.tsx`
+- [x] **T032** Run `npx vitest tests/unit/renderer/payments/` with coverage; assert ≥ 90 % on the new payment-surface components — `tests/unit/renderer/payments/`
+- [x] **T033** Manual smoke (dev fixture): drive cart → handoff → tender selection in dev mode; observe envelope-required refusal when no cart is bound; record observation in slice notes — `specs/006-payments-tender/coordination.md`
+- [x] **T034** [P] [US1/US4] Test (failing): accessibility audit on the Slice 1 payment surface — (a) every interactive control has a touch target ≥ 44×44 CSS px (NFR-004 / inherited 003 / 004 NFR-005); (b) the cash-received entry control and every tender-selection button are operable by keyboard alone (tab, shift-tab, enter, escape) with visible focus indicators; (c) focus management on surface mount lands on the first tender button; (d) screen-reader landmarks present (header, main, status). — `tests/unit/renderer/payments/PaymentSurface.a11y.test.tsx`
 
 ---
 

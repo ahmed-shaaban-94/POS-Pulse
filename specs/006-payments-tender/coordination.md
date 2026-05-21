@@ -13,7 +13,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-20 (T011 §A1 visual-direction sign-off recorded: reviewer Ahmed, result approved; §A1 cleared for Slice 1 and Slice 2 payment surfaces and the documented Slice 4 force-fail visual variant; §A2/§A3/§A4/§A5 remain held.)
+**Last updated:** 2026-05-21 (Slice 1 ✅ — PR #192 merged at `7d8588c` on 2026-05-21T09:07:15Z; T020–T034 complete. Renderer-only tender selection + envelope ingest delivered against the `PaymentIntentEnvelope v1` contract; per-slice §A2 / §A3 / §A4 remain held for Slices 2–4; §A5 rollout-only. See §"Maestro closeout — Slice 1 (PR #192)" below.)
 
 ---
 
@@ -883,6 +883,100 @@ recorded; §A1 sign-off recorded.
   .claude/**, .gitignore, or Data-Pulse-2.
 - Does NOT create React components, CSS, tokens, bridge handlers, FSM
   code, migrations, voucher code, screenshots, or binary assets.
+
+---
+
+## Maestro closeout — Slice 1 (PR #192)
+
+> Concise mirror of the PR #192 description (the canonical home of the
+> full closeout). Records the durable facts only; the full diff,
+> validation logs, and reviewer thread live on GitHub. Schema:
+> [`../../docs/maestro/report-schema.md`](../../docs/maestro/report-schema.md).
+
+### Identification
+
+| Field | Value |
+|:--|:--|
+| Feature | `006-payments-tender` |
+| Slice | Slice 1 — payments tender selection + envelope ingest |
+| Branch | `feat/006-slice-1-payments-tender` |
+| Head SHA | `c48c34b` |
+| Merge commit | `7d8588c` on `main` |
+| Merged at | 2026-05-21T09:07:15Z |
+| Constitution version pinned | v1.5.1 |
+
+### Gate verdict
+
+| Gate | Status entering | Status leaving |
+|:--|:--:|:--:|
+| §A0 — Upstream readiness | ✅ | ✅ (unchanged) |
+| §A1 — Visual direction Slice 0 | ✅ | ✅ (unchanged; cleared 2026-05-20 PR #189/#190) |
+| §A2 — Backend / OpenAPI | ⛔ Held | ⛔ Held — Slice 1 was renderer-only; gate gates Slice 4 voucher endpoints |
+| §A3 — Migrations | ⛔ Held | ⛔ Held — Slice 1 introduced no persistence; gate gates Slice 3 |
+| §A4 — Bridge-API surface | ⛔ Held | ⛔ Held — Slice 1 introduced no bridge calls; gate gates Slice 3 + Slice 4 |
+| §A5 — Production readiness | ⛔ Held (rollout-only) | ⛔ Held (rollout-only) |
+
+No gate was opened or cleared by this slice.
+
+### Tasks completed
+
+T020 · T021 · T022 · T023 · T024 (tests, RED-then-GREEN per Constitution §VI)
+T025 · T026 · T027 · T028 · T029 · T030 · T031 (implementation)
+T032 · T033 · T034 (verification)
+
+All 15 ticked in `tasks.md` with original task IDs, `[P]` markers, `[US?]` labels, descriptions, and file-path proposals preserved verbatim. Maestro task-marking §"What Maestro never changes" honoured.
+
+### Files touched (per PR description)
+
+**Created (10):** `src/renderer/stores/payment-store.ts`; `src/renderer/ui/payments/{PaymentSurface,TenderSelection,PaymentCartSummary}.tsx`; six test files under `tests/unit/renderer/payments/`.
+
+**Modified (4):** `src/shared/app-config.ts` (added `payments?: boolean`); `src/renderer/stores/feature-flags-store.ts` (added `payments` flag, fail-closed default); `src/renderer/ui/cart/HandoffSummary.tsx` (added optional `onContinue` prop); `src/renderer/ui/cart/CartPane.tsx` (reads `paymentsFlag`, spreads `onContinue` into `HandoffSummary` callsites, calls `usePaymentStore.getState().mount(envelope)`).
+
+**Confirmed untouched (forbidden scope walls held):** `src/main/**`; `src/preload/**`; `src/shared/bridge-api.ts`; `src/shared/payments/**`; `migrations/**`; OpenAPI / `src/shared/api-types.ts`; CI workflows; `package.json` / `package-lock.json`; `_reference/Data-Pulse/`; `AGENTS.md`; `CLAUDE.md`.
+
+### Validation evidence (PR #192 head `c48c34b` + review-fix commit `c48c34b`)
+
+| Check | Result |
+|:--|:--:|
+| `npm run typecheck` (both tsconfigs) | ✅ clean |
+| `npx eslint --max-warnings=0` (changed files) | ✅ clean |
+| `npx prettier --check` (changed files) | ✅ clean |
+| `npx vitest run` (full) | ✅ 220 files / 2822 passed / 3 skipped / 0 fail |
+| Coverage on new payment modules | ✅ 100 % statements / branches / functions / lines |
+
+Manual smoke deferred to reviewer per PR test-plan checklist.
+
+### Security / scope boundaries honoured
+
+- **No sensitive IDs in renderer DOM** (`cart_id`, `operator_session_id`, `tenant_id`, `branch_id`, `terminal_id`, `handoff_action_id`, `item_ref`, `last_action_id`, `owning_operator_id`) — verified by `PaymentCartSummary.minimised-render.test.tsx` with sentinel IDs.
+- **No card data** of any kind (PAN, CVV, track data, cardholder name) — none introduced.
+- **No raw bridge `reason` strings** rendered to cashier.
+- **No voucher authority data** — voucher slot reserved-disabled with `(not available)` hint per AD-7 (Contract V-A not yet shipped).
+- **Feature-flag fail-closed** — `payments` defaults `false`; surface inert until hydrated.
+- **44 × 44 CSS-px touch targets** on every interactive control (P14).
+- **ARIA landmark + accessible labels** on tender buttons; voucher slot `aria-disabled="true"`.
+- **Money** handled as integer minor units (Constitution §II).
+- **No PII / cards in logs** (Constitution §VI, P6 / P7 / P11).
+
+### Deferred / follow-up
+
+- **Spec-Kit suggestion (next `/speckit-analyze`)** — T025 file-path proposal `src/renderer/config/feature-flags.ts` did not match the runtime layout. Slice 1 honoured the runtime reality and extended the existing `src/shared/app-config.ts` (`AppConfig.features.payments`) plus `src/renderer/stores/feature-flags-store.ts` (`FeatureFlagsState.payments`). No new `src/renderer/config/` directory created. Maestro task-marking §"Task descriptions and file-path proposals" applies: spec text untouched; mismatch flagged here for the next analyse cycle.
+- **Spec-Kit suggestion (next `/speckit-analyze`)** — T031 file-path proposal `src/renderer/ui/cart/CartHandoffButton.tsx` did not match runtime (no such file). The Continue-to-payment affordance lives in `src/renderer/ui/cart/HandoffSummary.tsx` (footer button) and is gated from `src/renderer/ui/cart/CartPane.tsx`. Slice 1 added an optional `onContinue` prop to `HandoffSummary.tsx` (preserving the existing "disabled when no `onContinue`" assertion that 005's tests rely on) and spread it from `CartPane.tsx` when the `payments` flag is on. Wiring chain unchanged; spec text untouched.
+- **CodeRabbit findings (resolved in PR #192 commit `c48c34b`)** — one actionable (`selectedTender` not reset across envelope / session context changes; fixed with a `useEffect` on `[sessionState.kind, envelope?.handoff_action_id]`) and three test-tightening nitpicks (exact currency-string assertions, `innerHTML`-not-`textContent` sentinel checks, explicit focus-on-cash-button assertion).
+- **Slice 1 PR-branch CI lint flake (resolved on `main`)** — PR #192 PR-branch CI failed on pre-existing parse errors against `.claude/skills/impeccable/scripts/*.mjs` introduced by PR #191. Independently fixed by **PR #194** (`chore(ci): ignore .claude/** in ESLint and Prettier`, merge SHA on `main`).
+- **`main` post-merge coverage regression (resolved)** — `main` CI tripped two coverage thresholds after the Slice 1 merge (`dev-skip-operator-signin.ts` functions 66.66 % < 80 %; `HandoffSummary.tsx` branches 87.5 % < 90 %). Independently fixed by **PR #195** (`test(coverage): cover default clock factory + onContinue branch`).
+
+### Next step (single concrete action)
+
+Open **Slice 2** preflight only when ready: §A1 visuals are already approved (covers Slices 1 and 2), but Slice 2 introduces money-math + per-tender entry controls (`CashEntry`, `ExternalCardTerminalEntry`) and the shared `computeChangeDueMinor` helper. **Do not start Slice 2 implementation in this slice's cycle.** A new Maestro Preflight (Template 1) should produce the worklist, dependency / file-conflict / parallel-safe graphs, and dispatch posture for T040–T051 before any code is written.
+
+### Run notes
+
+- Single-agent execution end-to-end (per `docs/maestro/agent-roles.md §Dispatch posture` default for ≤ 15-task renderer-only slices).
+- No `[P]` downgrades fired — all six test files lived in different paths.
+- One `needs-owner-approval` raised and cleared: T031 file-path mismatch (resolved by the owner with "modify `HandoffSummary.tsx` + `CartPane.tsx` minimally; preserve 005's existing disabled-button assertion").
+- Zero `forbidden-scope` fires.
+- Lint OOM did not occur on the slice's targeted lint; full-repo lint OOM was observed on a separate slice (see Slice-1 PR-branch CI flake above, addressed by PR #194).
 
 ---
 
