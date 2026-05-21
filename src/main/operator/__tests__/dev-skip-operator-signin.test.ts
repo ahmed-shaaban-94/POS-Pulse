@@ -137,7 +137,30 @@ describe('applyDevSkipOperatorSignInIfRequested', () => {
     }
   });
 
-  // Test 8: SessionManager.getCurrentBridgeView does not expose backend_session_id or token fields
+  // Test 8: when `clock` is omitted, the default `() => new Date()` factory runs
+  it('uses the default clock factory when deps.clock is omitted', () => {
+    const overrides = makeDeps({ envFlag: '1' });
+    // Build deps without the `clock` field so the default arrow factory on
+    // line 78 is exercised (otherwise it remains the only uncovered function
+    // in this module and trips the 80% functions threshold).
+    const { clock: _omitted, ...depsWithoutClock } = overrides;
+    void _omitted;
+    const before = Date.now();
+
+    const result = applyDevSkipOperatorSignInIfRequested(depsWithoutClock);
+
+    const after = Date.now();
+    expect(result).toBe(true);
+    expect(depsWithoutClock.sessionManager.create).toHaveBeenCalledOnce();
+    const createCall = (depsWithoutClock.sessionManager.create as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as { started_at: string };
+    const stampedMs = new Date(createCall.started_at).getTime();
+    // The default factory returns "now" — within the [before, after] window.
+    expect(stampedMs).toBeGreaterThanOrEqual(before);
+    expect(stampedMs).toBeLessThanOrEqual(after);
+  });
+
+  // Test 9: SessionManager.getCurrentBridgeView does not expose backend_session_id or token fields
   it('getCurrentBridgeView does not expose backend_session_id or token fields', () => {
     const realManager = new SessionManager();
     const deps: DevSkipOperatorSignInDeps = {
