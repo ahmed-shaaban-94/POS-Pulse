@@ -57,12 +57,23 @@ export function CashEntry({
 
   const amountAppliedMinor = useMemo(() => parseIntegerMinorUnits(rawInput), [rawInput]);
 
-  const isSufficient = amountAppliedMinor !== null && amountAppliedMinor >= remainingBalanceMinor;
-  const isUnderTender = amountAppliedMinor !== null && amountAppliedMinor < remainingBalanceMinor;
+  // Belt to the helper's braces: computeChangeDueMinor throws on a negative
+  // remainingBalanceMinor. Upstream (005's PaymentIntentEnvelope) guarantees
+  // a non-negative subtotal, but Slice 3 will subtract applied lines from it
+  // and could in principle hand us a negative value during a buggy split.
+  // Gate sufficiency/under-tender on validity first so a bad caller cannot
+  // crash the render.
+  const isRemainingValid =
+    Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
+  const isSufficient =
+    isRemainingValid && amountAppliedMinor !== null && amountAppliedMinor >= remainingBalanceMinor;
+  const isUnderTender =
+    isRemainingValid && amountAppliedMinor !== null && amountAppliedMinor < remainingBalanceMinor;
 
-  // Only compute change-due when sufficient. Under-tender path never calls
-  // computeChangeDueMinor — that function throws on under-tender by design
-  // (the renderer's confirm-enabled predicate is the gate).
+  // Only compute change-due when sufficient (and therefore remaining is valid).
+  // Under-tender path never calls computeChangeDueMinor — that function throws
+  // on under-tender by design (the renderer's confirm-enabled predicate is the
+  // gate).
   const changeDueMinor = isSufficient
     ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
     : null;

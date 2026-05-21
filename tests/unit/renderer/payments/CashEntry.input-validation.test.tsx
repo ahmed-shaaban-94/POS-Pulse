@@ -163,6 +163,31 @@ describe('<CashEntry> — formatMinorUnits safe-integer guard on remaining', () 
   });
 });
 
+describe('<CashEntry> — does not crash on negative remainingBalanceMinor', () => {
+  // Regression test for a defensive gap: a negative (but safe-integer)
+  // remaining balance must NOT cause computeChangeDueMinor to throw during
+  // render. Upstream contracts guarantee non-negative, but the renderer
+  // should not crash if a bad value lands here.
+  it('renders without throwing when remainingBalanceMinor is negative', () => {
+    expect(() => {
+      render(<CashEntry remainingBalanceMinor={-1} onConfirm={vi.fn()} />);
+    }).not.toThrow();
+  });
+
+  it('keeps Confirm disabled and skips change-due when remainingBalanceMinor is negative', () => {
+    const { input, confirm } = setup({ remainingBalanceMinor: -1 });
+    fireEvent.change(input, { target: { value: '0' } });
+    expect(confirm).toBeDisabled();
+    expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
+  });
+
+  it('does not show under-tender refusal when remainingBalanceMinor is negative', () => {
+    const { input } = setup({ remainingBalanceMinor: -1 });
+    fireEvent.change(input, { target: { value: '0' } });
+    expect(screen.queryByTestId('cash-entry-refusal')).toBeNull();
+  });
+});
+
 describe('<CashEntry> — onBack', () => {
   it('renders the Back button when onBack is provided and invokes it on click', () => {
     const onBack = vi.fn();
