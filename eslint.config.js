@@ -17,6 +17,12 @@ export default tsEslint.config(
       // pointless — its shape is dictated by openapi-typescript, not project
       // conventions, and every regeneration would otherwise trip strict rules.
       'src/shared/api-types.ts',
+      // Project-local Claude Code automation scripts (PR #191). These .mjs
+      // files are not part of any tsconfig project; the project-service-based
+      // parser cannot resolve them and fails CI lint with "was not found by
+      // the project service". They are tooling, not production source, and
+      // are out of scope for the renderer/main/preload type-check rules.
+      '.claude/**',
     ],
   },
   tsEslint.configs.strictTypeChecked,

@@ -18,3 +18,9 @@ src/shared/api-types.ts
 # The pinned OpenAPI snapshot is captured verbatim from the live URL;
 # pretty-printing it would change the bytes the codegen reads.
 scripts/openapi-snapshot.json
+
+# Project-local Claude Code automation scripts (PR #191). Tooling, not
+# production source — kept out of the Prettier check to mirror the
+# `.claude/**` entry in eslint.config.js. Without this, CI lint reports
+# unformatted-style warnings on the .mjs helper scripts.
+.claude/
