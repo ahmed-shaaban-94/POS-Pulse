@@ -21,7 +21,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below. **Slice 3 owner decisions recorded 2026-05-21** — see §"Slice 3 owner decisions — Session 2026-05-21" below.)
+**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below. **Slice 3 owner decisions recorded 2026-05-21** — see §"Slice 3 owner decisions — Session 2026-05-21" below. **Slice 3 reviewers commissioned 2026-05-21 (sign-off pending)** — §A3 reviewer: Ahmed; §A4-A reviewer: Ahmed; both gates remain ⛔ Held; see §"Reviewer commissioning — 2026-05-21" below.)
 
 ---
 
@@ -1174,6 +1174,29 @@ When §A3 and §A4-A have each been signed off by their commissioned
 reviewers (reviewer name + date recorded in the gate ledger above),
 **S3a may begin** — Maestro Preflight (Template 1) for S3a should
 be the first action in that session.
+
+---
+
+### Reviewer commissioning — 2026-05-21
+
+**Date:** 2026-05-21. **Update type:** docs-only. Does not start Slice
+3; does not clear any gate.
+
+| Gate | Reviewer commissioned | Commissioned date | Gate status |
+|:--:|:--|:--|:--:|
+| **§A3** — migration approval (three new tables) | Ahmed | 2026-05-21 | ⛔ Held — review commissioned, sign-off pending |
+| **§A4-A** — `payments.*` + `tender.*` bridge security review | Ahmed | 2026-05-21 | ⛔ Held — review commissioned, sign-off pending |
+
+**Commissioning is not clearance.** Each gate clears only when the
+reviewer records their explicit sign-off (reviewer name + date) in the
+gate ledger row above. Until that record exists, no S3a migration SQL
+and no S3c bridge handler code may be authored. **S3a is NOT
+authorized.**
+
+The Slice 3 Maestro execution ledger (PR #202) carries `gates.§A3.reviewer`
+and `gates.§A4-A.reviewer` fields; those fields will be updated from
+`TBD` to `Ahmed` in a follow-up ledger update. That ledger update is a
+separate task and does NOT happen here.
 
 ---
 
