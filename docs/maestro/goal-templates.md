@@ -362,6 +362,30 @@ Each template is optional in principle. In practice:
 - **Skip Template 4** when the owner self-reviews. (Most slices.)
 - **Never skip Template 5.** Closeout is the next person's read.
 
+## Quick prompts and execution ledger templates
+
+For shorter copy-paste invocations of the five template operations above, see
+`docs/maestro/quick-prompts.md`. Those prompts are deliberately terse — they
+reference these full templates rather than duplicating their stop conditions.
+
+The following optional artefacts complement the five templates when tracking
+execution state across parallel waves or multiple slices:
+
+- `docs/maestro/slice-schema.yaml` — YAML schema for one execution slice;
+  use as a reference when filling in an execution map.
+- `docs/maestro/templates/execution-map.yaml` — per-spec execution map;
+  tracks dependency graph references, parallel-safe groups, finding-driven
+  pivots, merged slice metadata, and blocked slice metadata.
+- `docs/maestro/templates/wave-status.md` — human-readable per-wave status;
+  useful when handing off between sessions or reviewers.
+- `docs/maestro/templates/post-merge-closeout-prompt.md` — reusable agent
+  prompt for the closeout step (Template 5 above); embeds all stop conditions
+  and forbidden-scope reminders.
+
+These artefacts are templates only — they carry no authority and do not replace
+`tasks.md`, `coordination.md`, Spec Kit, or any gate — until copied into a
+specific spec folder by an approved process task.
+
 ## Anti-patterns to avoid
 
 1. **Concatenating Templates 1 + 2 + 3 + 4 + 5 into one prompt.**

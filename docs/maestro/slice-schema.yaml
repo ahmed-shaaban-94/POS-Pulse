@@ -1,0 +1,96 @@
+# Maestro Execution Slice Schema
+#
+# A generic YAML schema for one Maestro execution slice.
+# Copy this file into a spec folder and fill in run-specific values.
+# This schema does not replace tasks.md, coordination.md, or any Spec Kit artefact.
+
+# Stable identifier for this slice within a spec (e.g. "006-S1").
+id: ""
+
+# Human-readable name for this slice (e.g. "Payments Tender Selection + Envelope Ingest").
+title: ""
+
+# Relative path to the spec folder this slice belongs to (e.g. "specs/006-payments-tender").
+spec: ""
+
+# List of tasks.md task IDs in scope for this run, in tasks.md order.
+# Do not invent new IDs; preserve source order verbatim.
+task_ids: []
+
+# Slice classification: "implementation" | "validation" | "preflight" | "closeout" | "docs-only".
+type: ""
+
+# Current execution status: "pending" | "in-progress" | "completed" | "blocked" | "stopped".
+status: ""
+
+# Whether this slice requires explicit owner approval before execution may begin.
+# Set true for slices that touch sensitive scope (bridge, main, preload, migrations, OpenAPI).
+approval_required: false
+
+# The coordination.md gate(s) that must be open (✅) before this slice may start.
+# Reference gate IDs as they appear in coordination.md (e.g. ["§A1", "§A2"]).
+gate: []
+
+# Slices or tasks this slice depends on (must complete before this slice starts).
+# Reference by slice id or task ID.
+depends_on: []
+
+# Slices or tasks blocked by this slice (cannot start until this slice completes).
+# Reference by slice id or task ID.
+blocks: []
+
+# Agent role assignment for this slice (see docs/maestro/agent-roles.md).
+# Values: "single-agent" | "multi-agent" | a named role string.
+agent: ""
+
+# Files this slice is allowed to create or modify. Prefer explicit paths over globs.
+# Aligns with the implementation template's allowed-paths list.
+allowed_files: []
+
+# Files explicitly forbidden from this slice's diff.
+# Must include at minimum: src/main/**, src/preload/**, src/shared/bridge-api.ts,
+# migrations/**, OpenAPI files, CI workflows, CLAUDE.md, AGENTS.md, package.json,
+# package-lock.json, _reference/Data-Pulse/**.
+forbidden_files: []
+
+# Validation commands to run before opening the PR for this slice.
+# Ordered list; each entry is a shell command string.
+validation: []
+
+# Stop conditions for this slice (plain-language descriptions).
+# Each entry is one condition that halts the slice on detection.
+stop: []
+
+# Fields to populate in the closeout report (from docs/maestro/report-schema.md).
+# List the section numbers or names relevant to this slice.
+report_fields: []
+
+# Whether the tasks in this slice are safe to execute in parallel (after graph analysis).
+# Values: true | false | "partial" (some groups parallel, others sequential).
+# Derive from the file-conflict graph (docs/maestro/graph-rules.md); do not guess.
+parallel_safety: false
+
+# PR number where this slice was merged (fill at closeout; leave blank until merged).
+merged_in_pr: ""
+
+# Git commit SHA at which this slice was merged (fill at closeout).
+merged_at_commit: ""
+
+# ISO date on which this slice was merged (fill at closeout; format: YYYY-MM-DD).
+merged_at_date: ""
+
+# Whether this slice was previously in a blocked state before the current run.
+previously_blocked: false
+
+# PR number that resolved the blocker allowing this slice to start (if previously_blocked: true).
+resolved_by_pr: ""
+
+# Commit SHA that resolved the blocker (if previously_blocked: true).
+resolved_by_commit: ""
+
+# ISO date on which the blocker was resolved (format: YYYY-MM-DD).
+resolved_at: ""
+
+# Free-text notes for this slice: surprises, owner decisions, retro observations.
+# Keep concise; full narrative goes in the closeout report (docs/maestro/report-schema.md §10).
+notes: ""

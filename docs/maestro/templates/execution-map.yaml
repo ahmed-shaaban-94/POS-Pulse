@@ -1,0 +1,106 @@
+# Maestro Execution Map — per-spec template
+#
+# Copy this file into a spec folder (e.g. specs/006-payments-tender/maestro/execution-map.yaml)
+# when beginning a Maestro-tracked spec. Fill in spec-specific values per run.
+#
+# This file does NOT replace tasks.md, coordination.md, spec.md, plan.md, or any Spec Kit artefact.
+# It is an optional execution-state helper for tracking parallel waves, findings, and closeout.
+
+# Spec identifier (e.g. "006-payments-tender").
+spec: ""
+
+# Version of this execution map (increment each time you update the map, e.g. "1.0", "1.1").
+version: "1.0"
+
+# Baseline git SHA at the start of the current run. Record before any edits.
+base: ""
+
+# Highest-priority source-of-truth order for this spec run (read in order):
+# 1. .specify/memory/constitution.md
+# 2. CLAUDE.md
+# 3. specs/<spec>/coordination.md  ← gates and phase status
+# 4. specs/<spec>/tasks.md         ← executable task list with T### IDs
+# 5. specs/<spec>/spec.md          ← requirements source-of-truth
+# 6. specs/<spec>/plan.md          ← architectural decisions
+source_of_truth:
+  constitution: ".specify/memory/constitution.md"
+  claude_md: "CLAUDE.md"
+  coordination: ""   # fill: specs/<spec>/coordination.md
+  tasks: ""          # fill: specs/<spec>/tasks.md
+  spec: ""           # fill: specs/<spec>/spec.md
+  plan: ""           # fill: specs/<spec>/plan.md
+
+# Gate ledger snapshot for this run.
+# Mirrors the coordination.md Gate ledger; updated at closeout when a gate changes.
+# Status values: "open" | "held" | "rollout-only" | "cleared-at:<SHA>"
+gates: {}
+# Example:
+#   A0: "open"
+#   A1: "open"
+#   A2: "held"
+#   A3: "held"
+#   A4: "held"
+#   A5: "rollout-only"
+
+# Active findings from this run that affect execution.
+# Each finding may pivot the slice scope, trigger a stop, or generate a follow-up issue.
+# findings[*].id      — short identifier (e.g. "F001")
+# findings[*].type    — "scope-creep" | "file-path-mismatch" | "gate-ambiguity" |
+#                       "same-file-conflict" | "security" | "spec-gap" | "other"
+# findings[*].task    — task ID the finding was raised against (e.g. "T031")
+# findings[*].detail  — one-line description
+# findings[*].action  — "stop" | "escalate" | "continue-with-note" | "defer-to-analyze"
+# findings[*].status  — "open" | "resolved" | "deferred"
+findings: []
+
+# Slice definitions for this execution map.
+# Each slice entry mirrors the fields in docs/maestro/slice-schema.yaml (abbreviated here).
+# slice[*].id                — slice identifier (e.g. "006-S1")
+# slice[*].title             — short title
+# slice[*].task_ids          — list of T### IDs
+# slice[*].type              — "implementation" | "validation" | "preflight" | "closeout" | "docs-only"
+# slice[*].status            — "pending" | "in-progress" | "completed" | "blocked" | "stopped"
+# slice[*].approval_required — true | false
+# slice[*].gate              — list of gate IDs that must be open
+# slice[*].depends_on        — list of slice IDs or task IDs this slice waits on
+# slice[*].blocks            — list of slice IDs or task IDs this slice blocks
+# slice[*].merged_in_pr      — PR number (filled at closeout)
+# slice[*].merged_at_commit  — SHA (filled at closeout)
+# slice[*].merged_at_date    — ISO date (filled at closeout)
+# slice[*].previously_blocked — true | false
+# slice[*].resolved_by_pr    — PR number that cleared the blocker
+# slice[*].notes             — free-text
+slices: []
+
+# Parallel-safe groups derived from the file-conflict graph (docs/maestro/graph-rules.md).
+# A group contains task IDs that may execute concurrently in the current run.
+# groups[*].name         — group label (e.g. "batch-1")
+# groups[*].task_ids     — list of T### IDs in this group
+# groups[*].safe         — true (confirmed no shared files) | false (downgraded to sequential)
+# groups[*].depends_on   — list of groups or task IDs that must complete before this group starts
+# groups[*].file_conflict_note — explanation of any [P]-to-sequential downgrade
+# File-conflict notes: two tasks sharing a file override [P]; record the downgrade here
+# so the next /speckit-analyze pass can decide whether to edit tasks.md.
+groups: []
+
+# Validation posture for the current run.
+# validation.commands    — ordered list of commands to run before opening the PR
+# validation.last_result — "pending" | "green" | "red" | "partial"
+# validation.notes       — any OOM fallback or partial-coverage notes
+validation:
+  commands: []
+  last_result: "pending"
+  notes: ""
+
+# Closeout state for this execution map.
+# closeout.pr              — merged PR number
+# closeout.sha             — merge commit SHA
+# closeout.date            — ISO date (YYYY-MM-DD)
+# closeout.next_action     — single concrete next step for whoever picks the feature up
+# closeout.report_location — where the full closeout report lives (PR description URL or coordination.md reference)
+closeout:
+  pr: ""
+  sha: ""
+  date: ""
+  next_action: ""
+  report_location: ""
