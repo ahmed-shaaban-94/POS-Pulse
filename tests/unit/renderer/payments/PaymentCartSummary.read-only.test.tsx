@@ -72,14 +72,15 @@ describe('PaymentCartSummary — line rendering', () => {
   it('renders line_subtotal_minor formatted as currency', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
     // line-1: 300 minor = ¤3.00
-    expect(screen.getByTestId('payment-summary-line-subtotal-0')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-summary-line-subtotal-0')).toHaveTextContent('¤3.00');
     // line-2: 500 minor = ¤5.00
-    expect(screen.getByTestId('payment-summary-line-subtotal-1')).toBeInTheDocument();
+    expect(screen.getByTestId('payment-summary-line-subtotal-1')).toHaveTextContent('¤5.00');
   });
 
   it('renders the envelope subtotal_minor', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(screen.getByTestId('payment-summary-subtotal')).toBeInTheDocument();
+    // makeEnvelope subtotal_minor: 800 = ¤8.00
+    expect(screen.getByTestId('payment-summary-subtotal')).toHaveTextContent('¤8.00');
   });
 });
 

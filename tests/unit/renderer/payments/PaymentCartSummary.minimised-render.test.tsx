@@ -65,47 +65,47 @@ describe('PaymentCartSummary — minimised safe render', () => {
 
   it('does not render cart_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_CART_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_CART_ID);
   });
 
   it('does not render operator_session_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_SESSION_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_SESSION_ID);
   });
 
   it('does not render tenant_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_TENANT_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_TENANT_ID);
   });
 
   it('does not render branch_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_BRANCH_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_BRANCH_ID);
   });
 
   it('does not render terminal_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_TERMINAL_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_TERMINAL_ID);
   });
 
   it('does not render handoff_action_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_HANDOFF_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_HANDOFF_ID);
   });
 
   it('does not render item_ref in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_ITEM_REF);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_ITEM_REF);
   });
 
   it('does not render last_action_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_LAST_ACTION);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_LAST_ACTION);
   });
 
   it('does not render owning_operator_id in the DOM', () => {
     render(<PaymentCartSummary envelope={makeEnvelope()} />);
-    expect(document.body.textContent).not.toContain(SENTINEL_OP_ID);
+    expect(document.body.innerHTML).not.toContain(SENTINEL_OP_ID);
   });
 
   it('renders display_name (the safe field)', () => {

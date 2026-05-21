@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { usePaymentStore } from '../../stores/payment-store.js';
@@ -30,6 +30,13 @@ export function PaymentSurface(): JSX.Element | null {
   const sessionState = useOperatorSessionStore((s) => s.state);
   const envelope = usePaymentStore((s) => s.envelope);
   const [selectedTender, setSelectedTender] = useState<TenderKind | null>(null);
+
+  // Reset selection when envelope or session context changes; otherwise a stale
+  // "tender selected" status banner could carry across a new payment attempt.
+  const envelopeHandoffId = envelope?.handoff_action_id ?? null;
+  useEffect(() => {
+    setSelectedTender(null);
+  }, [sessionState.kind, envelopeHandoffId]);
 
   if (sessionState.kind !== 'signedIn' || envelope === null) {
     return null;

@@ -112,8 +112,8 @@ describe('PaymentSurface — accessibility', () => {
     setup();
     render(<PaymentSurface />);
     await user.tab();
-    // At least one focusable element should be reachable
-    const focused = document.activeElement;
-    expect(focused).not.toBe(document.body);
+    // The first Tab from the surface root should land on the cash tender button
+    // (it's the first focusable interactive element in the body).
+    expect(screen.getByTestId('tender-cash')).toHaveFocus();
   });
 });
