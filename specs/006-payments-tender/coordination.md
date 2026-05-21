@@ -21,7 +21,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below.)
+**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below. **Slice 3 owner decisions recorded 2026-05-21** — see §"Slice 3 owner decisions — Session 2026-05-21" below.)
 
 ---
 
@@ -1104,6 +1104,76 @@ Open **Slice 3** preflight only when ready. Slice 3 is **load-bearing**: it intr
 - One coverage-gate top-up cycle was required (initial branch-coverage 88–93 %); resolution removed redundant `handleConfirm` guards and an unreachable output guard in `computeChangeDueMinor`, then added targeted tests for the `formatMinorUnits` unsafe-integer branch + `onBack` rendering. Final per-file coverage clears every threshold with margin.
 - Lint OOM did not fire — `npm run lint` ran clean on the full repo.
 - Impeccable: manual shape checklist invoked (no project-local `/impeccable` slash-command), same posture as Slice 0 T010 and Slice 1.
+
+---
+
+## Slice 3 owner decisions — Session 2026-05-21
+
+The Slice 3 Maestro preflight (run 2026-05-21) returned **STOP for
+implementation**. Slice 3 is blocked on two uncleared gates (§A3
+migration approval, §A4-A bridge security review) and surfaced two
+open coordination questions (migration-file naming convention, slice
+scope breadth). This section transcribes the owner verdicts on those
+four points. It does **not** constitute a preflight report, does not
+modify `tasks.md`, and does not authorize Slice 3 implementation.
+
+### Decision 1 — Migration naming convention
+
+Migration files MUST use **bare numeric names continuing the existing
+sequence** (e.g., `0012_create_payment_attempts.sql`, `0013_*`, `0014_*`).
+The feature-prefixed `006-0001_*` names proposed in `tasks.md` are
+advisory per Maestro task-marking conventions; the runtime migration
+runner's lexical sort ordering is the authoritative constraint, and
+that constraint requires the bare numeric sequence. The mismatch
+between `tasks.md` proposals and the runtime convention becomes a
+`/speckit-analyze` follow-up item — same pattern as the Slice 1
+T025/T031 and Slice 2 T044/T049 file-path divergences.
+
+### Decision 2 — Slice 3 scope: split into four sub-slices
+
+Slice 3 is split into four sequential sub-slices to reduce the blast
+radius of each implementation cycle and align gate clearing with
+deliverable boundaries:
+
+| Sub-slice | Scope | Task range |
+|:--:|:--|:--|
+| **S3a** | §A3 migrations + persistence repositories | T060–T067, T110–T113 |
+| **S3b** | Shared types + PaymentAttempt FSM + TenderLine FSM + audit emitter + idempotency helper | T070–T094, T120–T121, T130–T132 |
+| **S3c** | `payments.*` + `tender.*` bridge handlers + preload registration | T100–T106 GREEN, T133–T142 |
+| **S3d** | Renderer wiring + final Slice 3 verification | T150–T164 |
+
+Sub-slices are sequential: S3b gates on S3a; S3c gates on S3b; S3d
+gates on S3c. The gate order (§A3 → §A4-A) is unchanged.
+
+### Decision 3 — §A3 and §A4-A remain held
+
+Both gates remain **⛔ Held**. Neither is cleared by this session.
+Each gate clears only when a commissioned reviewer records their
+name and sign-off date in this file's gate ledger. Until that
+record exists in writing, no S3a migration SQL and no S3c bridge
+handler code may be authored.
+
+### Decision 4 — This update is documentation only
+
+This update:
+
+- Does NOT modify `tasks.md` (task rows, IDs, descriptions, or
+  file-path proposals are untouched; the sub-slice naming above is
+  a coordination record, not a tasks revision).
+- Does NOT authorize Slice 3 implementation of any kind.
+- Does NOT clear §A3 or §A4-A.
+- Does NOT modify the Slice 1 Maestro closeout (PR #192) or the
+  Slice 2 Maestro closeout (PR #198).
+- Does NOT modify any source file, test, migration, package file,
+  bridge-API surface, OpenAPI/codegen output, CI workflow, AGENTS.md,
+  CLAUDE.md, or Data-Pulse-2.
+
+### Next step
+
+When §A3 and §A4-A have each been signed off by their commissioned
+reviewers (reviewer name + date recorded in the gate ledger above),
+**S3a may begin** — Maestro Preflight (Template 1) for S3a should
+be the first action in that session.
 
 ---
 
