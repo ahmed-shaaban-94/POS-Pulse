@@ -92,6 +92,11 @@ and `CLAUDE.md` disagree, the constitution wins.
 | [`error-routing.md`](./error-routing.md) | Decision tree for routing each failure class (test, lint, scope, forbidden file, conflict, a11y, surprise migration). |
 | [`report-schema.md`](./report-schema.md) | Schema for the final closeout report (what changed, validation results, what's next). |
 | [`goal-templates.md`](./goal-templates.md) | Five reusable `/goal` templates: preflight, implementation, validation/fix, PR review, closeout. |
+| [`quick-prompts.md`](./quick-prompts.md) | Short copy-paste prompts for five common Maestro operations (preflight, execute, schedule group, closeout, PR review). |
+| [`slice-schema.yaml`](./slice-schema.yaml) | Generic YAML schema for one Maestro execution slice. |
+| [`templates/execution-map.yaml`](./templates/execution-map.yaml) | Per-spec execution map template: dependency graph, parallel-safe groups, findings, merged/blocked slice metadata. |
+| [`templates/wave-status.md`](./templates/wave-status.md) | Human-readable per-spec/per-wave status template: merged, blocked, ready, groups, validation posture, next action. |
+| [`templates/post-merge-closeout-prompt.md`](./templates/post-merge-closeout-prompt.md) | Reusable agent prompt for closing out a merged slice. |
 
 ## Spec Kit, in one paragraph (for new readers)
 
@@ -146,6 +151,30 @@ practice the team can opt into, gradually, slice by slice. If the team
 later wants to formalise it (e.g. require closeout reports per slice in
 PR descriptions), that would be a separate `/speckit-specify` cycle for a
 process feature, not a casual edit.
+
+## Hybrid execution ledger templates
+
+The `slice-schema.yaml`, `templates/execution-map.yaml`, `templates/wave-status.md`,
+and `templates/post-merge-closeout-prompt.md` files are **optional per-spec
+execution-state helpers**. `quick-prompts.md` provides copy-paste entry points for
+the five most common Maestro operations.
+
+Key constraints that always apply to these templates:
+
+- **They do not replace Spec Kit, `tasks.md`, or `coordination.md`.** The constitution,
+  `coordination.md`, and `tasks.md` remain the source-of-truth for gates, requirements,
+  and the executable task list. The templates track execution-state metadata only.
+- **They are templates, not active artefacts**, unless an approved process task copies
+  them into a specific spec folder (e.g. `specs/006-payments-tender/maestro/`).
+  Do not treat a template copy as authoritative until it is filled in for that run.
+- **They help track parallel waves, findings, and closeout status** across a spec's
+  slices — particularly useful when multiple slices are in-flight or when a finding
+  pivots execution scope mid-wave.
+- **They carry no authority to start a slice.** A `coordination.md` gate that is
+  ⛔ Held remains held regardless of what any template file says.
+
+Quick reference: `docs/maestro/quick-prompts.md` provides the five short prompts
+most frequently needed when working with these templates.
 
 ## Suggested next step before any implementation
 
