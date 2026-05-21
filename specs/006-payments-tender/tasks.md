@@ -15,25 +15,27 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 **Visual direction:** `specs/006-payments-tender/visual-direction/README.md` (to be produced in Slice 0 under §A1)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 1 complete via PR #192 merge `7d8588c`; T020–T034 ticked. Slice 2+ not started; per-slice gates §A2 / §A3 / §A4 remain held for Slices 2–4.)
-**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slices 2–5 not started**
+**Last updated:** 2026-05-21 (Slice 2 complete via PR #198 merge `9bb2af3`; T040–T051 ticked. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) + `computeChangeDueMinor` + `validateExternalReference` shipped renderer-only. Per-slice gates §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only.)
+**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · Slices 3–5 not started**
 
 ---
 
-> ## STATUS: Slice 1 complete — Slices 2+ remain BLOCKED on per-slice gates
+> ## STATUS: Slice 2 complete — Slices 3–5 remain BLOCKED on per-slice gates
 >
 > Slice 0 ✅ (PR #189 / PR #190, 2026-05-20). Slice 1 ✅ — renderer-only
 > tender selection + envelope ingest merged via **PR #192** (head
 > `c48c34b`, merge commit `7d8588c`, 2026-05-21). T020–T034 complete.
+> Slice 2 ✅ — per-tender entry surfaces (cash + external_card_terminal)
+> merged via **PR #198** (head `5c56b93`, merge commit `9bb2af3`,
+> 2026-05-21). T040–T051 complete.
 >
-> **Slices 2–5 remain BLOCKED.** Slice 2 needs §A1 entry-surface visuals
-> + Slice 1 sign-off; Slice 3 needs §A2 (no-op confirmation) + §A3
-> migrations + §A4-A bridge security review; Slice 4 needs §A2 voucher
-> endpoints + §A4-B `vouchers.*` review; §A5 is rollout-only.
+> **Slices 3–5 remain BLOCKED.** Slice 3 needs §A2 (no-op confirmation)
+> + §A3 migrations + §A4-A bridge security review; Slice 4 needs §A2
+> voucher endpoints + §A4-B `vouchers.*` review; §A5 is rollout-only.
 >
 > See [./coordination.md](./coordination.md) §"Gate ledger" for the
-> live gate-state table and §"Maestro closeout — Slice 1 (PR #192)"
-> for the durable record of the Slice 1 ship.
+> live gate-state table and §"Maestro closeout — Slice 2 (PR #198)"
+> for the durable record of the Slice 2 ship.
 
 ---
 
@@ -203,30 +205,30 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### TDD test tasks — cash entry (US1)
 
-- [ ] **T040** [P] [US1] Test (failing): money-math helper `computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)` returns non-negative integer; throws on float / negative / non-integer input; `Number.isSafeInteger` guarded (FR-004, FR-005, Constitution §II) — `tests/unit/main/payments/money-math.test.ts`
-- [ ] **T041** [P] [US1] Test (failing): `<CashEntry>` rejects float / negative / non-integer keystrokes; displays computed change-due in major units (display only); enables confirm only when `amountAppliedMinor ≥ remainingBalanceMinor` (FR-004) — `tests/unit/renderer/payments/CashEntry.input-validation.test.tsx`
-- [ ] **T042** [P] [US1] Test (failing): `<CashEntry>` refuses confirm with generic copy when `amountAppliedMinor < remainingBalanceMinor` and shows the "amount is not enough" generic message (FR-005, US1-AS3) — `tests/unit/renderer/payments/CashEntry.under-tender-refusal.test.tsx`
+- [x] **T040** [P] [US1] Test (failing): money-math helper `computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)` returns non-negative integer; throws on float / negative / non-integer input; `Number.isSafeInteger` guarded (FR-004, FR-005, Constitution §II) — `tests/unit/main/payments/money-math.test.ts`
+- [x] **T041** [P] [US1] Test (failing): `<CashEntry>` rejects float / negative / non-integer keystrokes; displays computed change-due in major units (display only); enables confirm only when `amountAppliedMinor ≥ remainingBalanceMinor` (FR-004) — `tests/unit/renderer/payments/CashEntry.input-validation.test.tsx`
+- [x] **T042** [P] [US1] Test (failing): `<CashEntry>` refuses confirm with generic copy when `amountAppliedMinor < remainingBalanceMinor` and shows the "amount is not enough" generic message (FR-005, US1-AS3) — `tests/unit/renderer/payments/CashEntry.under-tender-refusal.test.tsx`
 
 ### TDD test tasks — external_card_terminal entry (US4)
 
-- [ ] **T043** [P] [US4] Test (failing): regex helper `validateExternalReference(input)` accepts `^[A-Z0-9]{0,6}$` (research §R-5); rejects PAN-shaped input (any input ≥ 7 chars or containing lowercase / special) — `tests/unit/shared/payments/external-reference-format.test.ts`
-- [ ] **T044** [P] [US4] Test (failing): `<ExternalCardTerminalEntry>` accepts exact `remainingBalanceMinor` only; refuses overpayment with generic copy mapping to `non_cash_overpayment_refused` (FR-010) — `tests/unit/renderer/payments/ExternalCardTerminalEntry.no-overpayment.test.tsx`
-- [ ] **T045** [P] [US4] Test (failing): `<ExternalCardTerminalEntry>` optional reference field applies regex client-side; rejects long / lowercase / special input with generic `invalid_input` copy — `tests/unit/renderer/payments/ExternalCardTerminalEntry.reference-validation.test.tsx`
+- [x] **T043** [P] [US4] Test (failing): regex helper `validateExternalReference(input)` accepts `^[A-Z0-9]{0,6}$` (research §R-5); rejects PAN-shaped input (any input ≥ 7 chars or containing lowercase / special) — `tests/unit/shared/payments/external-reference-format.test.ts`
+- [x] **T044** [P] [US4] Test (failing): `<ExternalCardTerminalEntry>` accepts exact `remainingBalanceMinor` only; refuses overpayment with generic copy mapping to `non_cash_overpayment_refused` (FR-010) — `tests/unit/renderer/payments/ExternalCardTerminalEntry.no-overpayment.test.tsx`
+- [x] **T045** [P] [US4] Test (failing): `<ExternalCardTerminalEntry>` optional reference field applies regex client-side; rejects long / lowercase / special input with generic `invalid_input` copy — `tests/unit/renderer/payments/ExternalCardTerminalEntry.reference-validation.test.tsx`
 
 ### Implementation tasks — cash
 
-- [ ] **T046** [P] [US1] Implement `computeChangeDueMinor` money-math helper (integer minor units only; `Number.isSafeInteger` assertions on inputs and outputs) — `src/shared/payments/money-math.ts`
-- [ ] **T047** [P] [US1] Implement `<CashEntry>` component: integer-minor-unit guarded input; live change-due display in major units (display only); under-tender refusal copy — `src/renderer/ui/payments/CashEntry.tsx`
+- [x] **T046** [P] [US1] Implement `computeChangeDueMinor` money-math helper (integer minor units only; `Number.isSafeInteger` assertions on inputs and outputs) — `src/shared/payments/money-math.ts`
+- [x] **T047** [P] [US1] Implement `<CashEntry>` component: integer-minor-unit guarded input; live change-due display in major units (display only); under-tender refusal copy — `src/renderer/ui/payments/CashEntry.tsx`
 
 ### Implementation tasks — external_card_terminal
 
-- [ ] **T048** [P] [US4] Implement `validateExternalReference` regex helper (`^[A-Z0-9]{0,6}$`; case-sensitive; max 6 chars) — `src/shared/payments/external-reference-format.ts`
-- [ ] **T049** [P] [US4] Implement `<ExternalCardTerminalEntry>` component: amount field defaults to `remainingBalanceMinor`, refuses overpayment; optional reference field with client-side regex enforcement — `src/renderer/ui/payments/ExternalCardTerminalEntry.tsx`
+- [x] **T048** [P] [US4] Implement `validateExternalReference` regex helper (`^[A-Z0-9]{0,6}$`; case-sensitive; max 6 chars) — `src/shared/payments/external-reference-format.ts`
+- [x] **T049** [P] [US4] Implement `<ExternalCardTerminalEntry>` component: amount field defaults to `remainingBalanceMinor`, refuses overpayment; optional reference field with client-side regex enforcement — `src/renderer/ui/payments/ExternalCardTerminalEntry.tsx`
 
 ### Slice 2 verification
 
-- [ ] **T050** Run `npx vitest tests/unit/main/payments/money-math.test.ts tests/unit/shared/payments/ tests/unit/renderer/payments/` with coverage; assert ≥ 95 % on money-math + format helpers, ≥ 90 % on entry surfaces — `tests/unit/`
-- [ ] **T051** Record Slice 2 functional sign-off + per-component coverage numbers in coordination.md — `specs/006-payments-tender/coordination.md`
+- [x] **T050** Run `npx vitest tests/unit/main/payments/money-math.test.ts tests/unit/shared/payments/ tests/unit/renderer/payments/` with coverage; assert ≥ 95 % on money-math + format helpers, ≥ 90 % on entry surfaces — `tests/unit/`
+- [x] **T051** Record Slice 2 functional sign-off + per-component coverage numbers in coordination.md — `specs/006-payments-tender/coordination.md`
 
 ---
 
