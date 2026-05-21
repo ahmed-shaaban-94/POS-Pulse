@@ -276,6 +276,21 @@ describe('HandoffSummary — Continue to payment', () => {
     const text = document.body.textContent;
     expect(text).not.toMatch(/payment success|paid|payment complete/i);
   });
+
+  // 006 slice 1: when `onContinue` is provided (payments flag enabled), the
+  // Continue-to-payment button becomes enabled and invokes the callback.
+  // Exercises the `aria-disabled={onContinue === undefined ? 'true' : undefined}`
+  // truthy-branch on line 108 of HandoffSummary.tsx (otherwise uncovered:
+  // 87.5% branches < 90% src/renderer/ui/** threshold).
+  it('"Continue to payment" button is enabled when onContinue is provided', async () => {
+    const onContinue = vi.fn();
+    render(<HandoffSummary envelope={makeEnvelope()} onContinue={onContinue} />);
+    const btn = screen.getByTestId('handoff-continue-button');
+    expect(btn).not.toBeDisabled();
+    expect(btn).not.toHaveAttribute('aria-disabled');
+    await userEvent.click(btn);
+    expect(onContinue).toHaveBeenCalledOnce();
+  });
 });
 
 // ── Post-handoff Void (Dev3 — Surface 8 footer placement) ─────────────────────
