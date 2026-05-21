@@ -1,15 +1,17 @@
-> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slices 2–5 NOT STARTED
+> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · Slices 3–5 NOT STARTED
 >
 > **006-payments-tender is partially implemented.** Slice 0 (visual
-> direction) and Slice 1 (renderer-only tender selection + envelope
-> ingest) shipped via PR #189/#190 and PR #192, with the Slice 1
-> Maestro closeout merged as PR #196. **Slices 2–5 are not started.**
-> No further code, contracts, migrations, bridge-API expansion,
-> OpenAPI changes, or codegen may be authored against this spec until
-> a fresh Maestro preflight runs for Slice 2 and explicit per-slice
-> approval is recorded. Slice 3 (§A3 + §A4-A) and Slice 4 (§A2 + §A4-B)
-> remain held; §A5 is rollout-only. This file is the canonical record
-> of those gates.
+> direction), Slice 1 (renderer-only tender selection + envelope
+> ingest), and Slice 2 (per-tender entry surfaces — cash +
+> external_card_terminal) shipped via PR #189/#190, PR #192, and
+> PR #198. The Slice 1 Maestro closeout merged as PR #196; the
+> Slice 2 Maestro closeout merged with this PR. **Slices 3–5 are
+> not started.** No further code, contracts, migrations, bridge-API
+> expansion, OpenAPI changes, or codegen may be authored against
+> this spec until a fresh Maestro preflight runs for Slice 3 and
+> explicit per-slice approval is recorded. Slice 3 (§A3 + §A4-A)
+> and Slice 4 (§A2 + §A4-B) remain held; §A5 is rollout-only. This
+> file is the canonical record of those gates.
 
 # Coordination — 006-payments-tender
 
@@ -19,7 +21,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 1 ✅ — PR #192 merged at `7d8588c` on 2026-05-21T09:07:15Z; T020–T034 complete. Renderer-only tender selection + envelope ingest delivered against the `PaymentIntentEnvelope v1` contract. Slice 1 Maestro closeout merged as PR #196. **Slices 2–5 not started** — Slice 2 requires a fresh Maestro preflight and explicit approval before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 1 (PR #192)" below.)
+**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below.)
 
 ---
 
@@ -40,7 +42,7 @@ and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction) and Slice 1 (renderer-only tender selection + envelope ingest) are complete via PR #189/#190, PR #192, and closeout PR #196. **Slices 2–5 are not started.** Slice 2 requires a fresh Maestro preflight and explicit per-slice approval before implementation may begin. Slice 3 remains held on §A3 (migrations) and §A4-A (bridge review); Slice 4 remains held on §A2 (voucher endpoints) and §A4-B (voucher bridge review); §A5 is rollout-only.
+**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), and Slice 2 (per-tender entry surfaces — cash + external_card_terminal) are complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), and PR #198 (this PR includes Slice 2 closeout). **Slices 3–5 are not started.** Slice 3 requires a fresh Maestro preflight and explicit per-slice approval before implementation may begin; Slice 3 remains held on §A3 (migrations) and §A4-A (bridge review); Slice 4 remains held on §A2 (voucher endpoints) and §A4-B (voucher bridge review); §A5 is rollout-only.
 
 | Item | State |
 |:--|:--|
@@ -983,6 +985,125 @@ Open **Slice 2** preflight only when ready: §A1 visuals are already approved (c
 - One `needs-owner-approval` raised and cleared: T031 file-path mismatch (resolved by the owner with "modify `HandoffSummary.tsx` + `CartPane.tsx` minimally; preserve 005's existing disabled-button assertion").
 - Zero `forbidden-scope` fires.
 - Lint OOM did not occur on the slice's targeted lint; full-repo lint OOM was observed on a separate slice (see Slice-1 PR-branch CI flake above, addressed by PR #194).
+
+---
+
+## Maestro closeout — Slice 2 (PR #198)
+
+> Concise mirror of the PR #198 description (the canonical home of the
+> full closeout). Records the durable facts only; the full diff,
+> validation logs, and CodeRabbit thread live on GitHub. Schema:
+> [`../../docs/maestro/report-schema.md`](../../docs/maestro/report-schema.md).
+
+### Identification
+
+| Field | Value |
+|:--|:--|
+| Feature | `006-payments-tender` |
+| Slice | Slice 2 — Per-tender entry surfaces (cash + external_card_terminal) |
+| Branch | `feat/006-slice-2-payments-tender-entry` |
+| Head SHA | `5c56b93` |
+| Merge commit | `9bb2af3` on `main` |
+| Merged at | 2026-05-21T12:59:38Z |
+| Constitution version pinned | v1.5.1 |
+
+### Gate verdict
+
+| Gate | Status entering | Status leaving |
+|:--|:--:|:--:|
+| §A0 — Upstream readiness | ✅ | ✅ (unchanged) |
+| §A1 — Visual direction Slice 0 | ✅ | ✅ (unchanged; cleared 2026-05-20 PR #189/#190 for Slice 1 + Slice 2 entry surfaces) |
+| §A2 — Backend / OpenAPI | ⛔ Held | ⛔ Held — Slice 2 introduced no OpenAPI surface; gate gates Slice 4 voucher endpoints |
+| §A3 — Migrations | ⛔ Held | ⛔ Held — Slice 2 introduced no persistence; gate gates Slice 3 |
+| §A4 — Bridge-API surface | ⛔ Held | ⛔ Held — Slice 2 introduced no bridge calls; gate gates Slice 3 + Slice 4 |
+| §A5 — Production readiness | ⛔ Held (rollout-only) | ⛔ Held (rollout-only) |
+
+No gate was opened or cleared by this slice.
+
+### Tasks completed
+
+T040 · T041 · T042 · T043 · T044 · T045 (TDD test tasks, RED-then-GREEN per Constitution §VI)
+T046 · T047 · T048 · T049 (implementation tasks)
+T050 (coverage gate)
+T051 (this closeout section + tasks.md state ticks)
+
+All 12 ticked in `tasks.md` with original task IDs, `[P]` markers, `[US?]` labels, descriptions, and file-path proposals preserved verbatim. Maestro task-marking §"What Maestro never changes" honoured.
+
+### Files touched (per PR description)
+
+**Created (10):**
+
+- `src/shared/payments/money-math.ts` — `computeChangeDueMinor` helper (FR-004 / FR-005 / Constitution §II).
+- `src/shared/payments/external-reference-format.ts` — `validateExternalReference` regex helper (FR-009 / Constitution §P6).
+- `src/renderer/ui/payments/CashEntry.tsx` — cash entry surface (visual-direction §State 2).
+- `src/renderer/ui/payments/ExternalCardTerminalEntry.tsx` — record-only external-card-terminal entry surface (visual-direction §State 3).
+- `tests/unit/main/payments/money-math.test.ts` (T040).
+- `tests/unit/shared/payments/external-reference-format.test.ts` (T043).
+- `tests/unit/renderer/payments/CashEntry.input-validation.test.tsx` (T041).
+- `tests/unit/renderer/payments/CashEntry.under-tender-refusal.test.tsx` (T042).
+- `tests/unit/renderer/payments/ExternalCardTerminalEntry.no-overpayment.test.tsx` (T044).
+- `tests/unit/renderer/payments/ExternalCardTerminalEntry.reference-validation.test.tsx` (T045).
+
+**Modified by the post-review CodeRabbit-fix commit (3):** `src/renderer/ui/payments/CashEntry.tsx` (added `isRemainingValid` gate to prevent render crash on negative `remainingBalanceMinor`); `tests/unit/renderer/payments/CashEntry.input-validation.test.tsx` (added 3 regression tests for the negative-remaining gate); `tests/unit/shared/payments/external-reference-format.test.ts` (replaced hardcoded PAN-like literals `4111111111111111` / `4111111111111` with runtime-generated `'0'.repeat(N)` to satisfy PII scanners).
+
+**Confirmed untouched (forbidden scope walls held):** `src/main/**`; `src/preload/**`; `src/shared/bridge-api.ts`; `src/shared/api-types.ts`; `src/shared/payments/types.ts`, `src/shared/payments/fsm-types.ts` (Slice 3 scope); `src/renderer/stores/payment-store.ts`; `src/renderer/ui/payments/PaymentSurface.tsx`, `TenderSelection.tsx`, `PaymentCartSummary.tsx`; `migrations/**`; OpenAPI / codegen; CI workflows; `package.json` / `package-lock.json`; `_reference/Data-Pulse/`; `smart-data-pulse-2/**`; `AGENTS.md`; `CLAUDE.md`.
+
+### Validation evidence (PR #198 final head `5c56b93`)
+
+| Check | Result |
+|:--|:--:|
+| `npm run typecheck` (both tsconfigs) | ✅ clean |
+| `npm run lint` (full repo `eslint .` + `prettier --check .`) | ✅ clean (no OOM fallback needed) |
+| `npx vitest run` (full) | ✅ 226 files / 2916 passed / 3 skipped / 0 fail |
+| `npm run codegen:verify` | ✅ `api-types.ts` up to date (no OpenAPI changes) |
+| Targeted Slice 2 vitest + coverage | ✅ 92 passed |
+
+Per-file coverage on Slice 2 surfaces (above all per-module thresholds):
+
+| File | Stmt | Branch | Func | Line |
+|:--|:--:|:--:|:--:|:--:|
+| `src/shared/payments/money-math.ts` | 100 | 100 | 100 | 100 |
+| `src/shared/payments/external-reference-format.ts` | 100 | 100 | 100 | 100 |
+| `src/renderer/ui/payments/CashEntry.tsx` | 100 | 94.28 | 100 | 100 |
+| `src/renderer/ui/payments/ExternalCardTerminalEntry.tsx` | 100 | 91.89 | 100 | 100 |
+
+Manual smoke deferred to reviewer per PR test-plan checklist.
+
+### Security / scope boundaries honoured
+
+- **No card data of any kind** (PAN, CVV, track data, cardholder name, expiry, auth payload, terminal receipt text) — FR-007 / FR-008 / Constitution §P6. `<ExternalCardTerminalEntry>` has no card-data input fields; tests assert their absence.
+- **`external_reference` regex `^[A-Z0-9]{0,6}$`** is the only path text can land — makes a PAN structurally unrepresentable (FR-009 / research §R-5).
+- **No payment-gateway, processor, or terminal-SDK integration** — record-only by construction.
+- **Generic refusal copy at the renderer** — the structured FR-006 names (`tender_underpaid`, `non_cash_overpayment_refused`, `invalid_input`) are explicitly asserted **absent** from `document.body.innerHTML` by dedicated tests.
+- **Money handled as integer minor units** throughout (Constitution §II); `Number.isSafeInteger` guards on every input + the unsafe-integer rendering fallback to `—`.
+- **Defensive validity gate on `remainingBalanceMinor`** (added post-CodeRabbit) — a negative safe-integer would have caused `computeChangeDueMinor` to throw during render; the gate keeps Confirm disabled and skips change-due display instead.
+- **44 × 44 CSS-px touch targets** on every interactive control (P14).
+- **`aria-live="polite"`** on refusal regions; `aria-disabled` mirrors `disabled` state.
+- **No bridge calls, no main-process touch, no FSM, no audit emission** — those land in Slice 3 under §A3 + §A4-A.
+- **No voucher work** — voucher slot remains Slice 1's reserved-disabled affordance (Contract V-A pending Slice 4 + §A2).
+- **No new design tokens** introduced (007 Guard 1 token additivity).
+- **No `.dark` block or `prefers-color-scheme: dark`** introduced (007 Guard 5 single-light-theme).
+- **No PII / cards in logs** (Constitution §VI, P6 / P7 / P11) — Slice 2 introduces no logging at all; the only log surface in 006 is the audit-event store, which is Slice 3 territory.
+
+### Deferred / follow-up
+
+- **Spec-Kit suggestion (next `/speckit-analyze`)** — `tasks.md` T044 / T049 mandate an editable amount field on `<ExternalCardTerminalEntry>`; `visual-direction/README.md §State 3` shows no amount input (only the instructional copy + optional reference + confirm). Slice 2 followed `tasks.md` per Maestro source-of-truth order (`docs/maestro/README.md §"Source of truth"` places `tasks.md` above the visual direction). Same shape as Slice 1's T025 / T031 file-path divergences — recommend reconciling either `tasks.md` or §State 3 in the next analyze cycle.
+- **`<CashEntry>` — visual State 2 "Amount input focused on mount":** the component renders but does not currently call `ref.focus()` on mount. Slice 1 already asserts focus-on-first-tender-button in `PaymentSurface.a11y.test.tsx`; no equivalent assertion exists for `<CashEntry>` mount-focus yet. Candidate for a Slice 5 production-readiness a11y sweep, not a Slice 2 regression.
+- **CodeRabbit findings (resolved in PR #198 commit `5c56b93`)** — two 🟠 Major findings: (a) `<CashEntry>` could crash render if a future caller passed a negative `remainingBalanceMinor` (fixed with an explicit `isRemainingValid` gate + 3 regression tests); (b) hardcoded PAN-like literals in `external-reference-format.test.ts` tripped the `coderabbit.pii.credit-card-number` scanner (replaced with runtime-generated `'0'.repeat(N)` digit strings while preserving test intent).
+
+### Next step (single concrete action)
+
+Open **Slice 3** preflight only when ready. Slice 3 is **load-bearing**: it introduces the three new SQLite tables (§A3), the `payments.*` + `tender.*` bridge namespaces (§A4-A), the PaymentAttempt + TenderLine FSMs, idempotency replay, LIFO split-tender rollback, and the cash + external_card_terminal audit-event categories. Slice 3 requires §A3 (migration approval) and §A4-A (bridge security review) to clear before any handler code lands. **Do not start Slice 3 implementation in this slice's cycle.** A new Maestro Preflight (Template 1) should produce the worklist, dependency / file-conflict / parallel-safe graphs, agent dispatch posture, and §A3 + §A4-A coordination plan for T060–T164 before any code is written.
+
+### Run notes
+
+- Single-agent execution end-to-end (per `docs/maestro/graph-rules.md §"The small slice escape hatch"` default for ≤ 15-task renderer-only slices).
+- No `[P]` downgrades fired — every implementation task created a new file (zero same-file risk).
+- Zero `forbidden-scope` fires.
+- Zero `needs-owner-approval` raised in the preflight; the visual-direction §State 3 vs `tasks.md` T044/T049 mismatch was flagged for `/speckit-analyze` and the implementation honoured the executable layer per Maestro source-of-truth order.
+- One coverage-gate top-up cycle was required (initial branch-coverage 88–93 %); resolution removed redundant `handleConfirm` guards and an unreachable output guard in `computeChangeDueMinor`, then added targeted tests for the `formatMinorUnits` unsafe-integer branch + `onBack` rendering. Final per-file coverage clears every threshold with margin.
+- Lint OOM did not fire — `npm run lint` ran clean on the full repo.
+- Impeccable: manual shape checklist invoked (no project-local `/impeccable` slash-command), same posture as Slice 0 T010 and Slice 1.
 
 ---
 
