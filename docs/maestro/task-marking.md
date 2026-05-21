@@ -170,7 +170,7 @@ role (see `agent-roles.md §3`) refuses to ship the diff.
 
 ## How marks layer onto `[P]`
 
-```
+```text
 tasks.md row:        - [ ] T021 [P] [US1] Unit test: TenderSelection — tests/unit/...
                               ^^^
                               source author intent: parallelisable
@@ -186,7 +186,7 @@ Maestro working notes (preflight log):
 
 vs.
 
-```
+```text
 tasks.md row:        - [ ] T031 [P] [US3] Modify CartHandoffButton.tsx ...
 
 Maestro working notes:

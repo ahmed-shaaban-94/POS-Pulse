@@ -20,12 +20,12 @@ the worklist.
    begins with "Unit test:" / "Integration test:" / "Contract test:"
    and shares the `[US?]` label.
 3. **File-create-then-modify.** Task A creates `src/foo.tsx`; task B
-   modifies it. B → A is an edge.
+   modifies it. A → B is an edge (B waits on A).
 4. **Export-then-consume.** Task A exports `X` from a module; task B
-   imports `X`. B → A is an edge.
+   imports `X`. A → B is an edge (B waits on A).
 5. **Type-then-implement.** Task A adds the type definition; task B
-   uses it. B → A is an edge. (Often collapses to edge type 3 or 4 in
-   practice.)
+   uses it. A → B is an edge (B waits on A). (Often collapses to edge
+   type 3 or 4 in practice.)
 6. **Gate-conditional sequence.** A task labelled `[BLOCKED:gate-foo]`
    waits on the gate-clear event, not on another task. Modeled as a
    sentinel node (the gate) rather than a task-to-task edge.
@@ -56,7 +56,7 @@ antichains.
 
 Maestro reports groups, not individual pairs. Example:
 
-```
+```text
 Parallel batch 1: { T020, T021, T022, T023, T024, T034 }
   All renderer-only; all create new test files in
   tests/unit/renderer/payments/; no shared files; no inter-test deps.
@@ -117,7 +117,7 @@ Maestro:
 
 ### Worked example — `[P]` downgrade
 
-```
+```text
 tasks.md (source — unchanged):
 
   - [ ] T040 [P] [US2] Implement cart.lines.add — src/main/cart/handlers/add-line.ts
@@ -136,7 +136,7 @@ Maestro analysis:
 
 Now compare:
 
-```
+```text
 tasks.md (source — unchanged):
 
   - [ ] T050 [P] [US3] Wire cart.subscribe in main — src/main/cart/index.ts
@@ -224,7 +224,7 @@ spans multiple file directories with low inter-task coupling.
 
 ## Quick check (for a slice you're about to execute)
 
-```
+```text
 □ Did I list every task ID in scope, in tasks.md order?
 □ Did I draw Graph 1 edges from explicit clauses, TDD pairs,
   create-then-modify, export-then-consume, type-then-implement?

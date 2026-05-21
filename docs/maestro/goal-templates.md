@@ -11,7 +11,7 @@
 gate-verdict + task-extraction + graph-build pass before any
 implementation begins. No code touched.
 
-```
+```text
 You are Claude Code working in the POS-Pulse repo on the
 <branch-name> branch.
 
@@ -85,7 +85,7 @@ stop — do not auto-proceed to implementation.
 owner has confirmed the dispatch posture, and the slice is cleared
 to start.
 
-```
+```text
 You are Claude Code working in the POS-Pulse repo.
 
 Goal: implement <feature-id> Slice <N>, task IDs <T### … T###>,
@@ -148,7 +148,7 @@ Final report: produce the closeout per docs/maestro/report-schema.md.
 **Use when:** implementation looks done but validation just failed.
 You want a tightly scoped fix-and-revalidate pass, no scope creep.
 
-```
+```text
 You are Claude Code working in the POS-Pulse repo on branch
 <branch-name>.
 
@@ -197,7 +197,7 @@ update the PR. Wait for owner to invoke the next template.
 independent review pass against the constitution, the slice
 spec, and the visual reference.
 
-```
+```text
 You are Claude Code acting as an independent reviewer for
 POS-Pulse PR #<NNN> (<feature-id> Slice <N>).
 
@@ -276,7 +276,7 @@ close the PR. The owner decides.
 
 **Use when:** the slice merged. You want the durable record.
 
-```
+```text
 You are Claude Code working in the POS-Pulse repo on main.
 
 Goal: produce the Maestro closeout for <feature-id> Slice <N>,
@@ -331,7 +331,7 @@ A complete slice cycle typically uses templates 1, 2, 3 (zero or more
 iterations), 4, and 5 in that order — each in its own focused
 session. The owner inserts a decision moment between each.
 
-```
+```text
 [Template 1: Preflight]  →  owner reviews verdict and worklist
         ↓
 [Template 2: Implementation]  →  owner reviews PR

@@ -4,6 +4,9 @@
 > subset of a slice's tasks) under Maestro. Each step has a clear input,
 > a clear output, and a stop condition. None of the steps modify
 > requirements, gates, or `tasks.md` content.
+>
+> **Step counting:** Step 0 is a pre-condition phase and is not counted
+> in the 13 execution steps. The 13 steps are Step 1 through Step 13.
 
 ## Step 0 — Pre-conditions
 
