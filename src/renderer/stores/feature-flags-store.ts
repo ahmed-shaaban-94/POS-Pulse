@@ -14,17 +14,20 @@ import { create } from 'zustand';
  */
 export interface FeatureFlagsState {
   cart: boolean;
+  /** 006-payments-tender S1: enables PaymentSurface. Fail-closed default: false. */
+  payments: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
 
 export interface FeatureFlagsStore extends FeatureFlagsState {
-  hydrate(flags: { cart?: boolean }): void;
+  hydrate(flags: { cart?: boolean; payments?: boolean }): void;
   reset(): void;
 }
 
 const INITIAL: FeatureFlagsState = {
   cart: false,
+  payments: false,
   hydrated: false,
 };
 
@@ -33,6 +36,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
   hydrate: (flags) => {
     set({
       cart: flags.cart === true,
+      payments: flags.payments === true,
       hydrated: true,
     });
   },

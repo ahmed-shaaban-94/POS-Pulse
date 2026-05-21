@@ -42,6 +42,8 @@ import { DiscountPlaceholderRow } from './DiscountPlaceholderRow.js';
 import { HandoffSummary } from './HandoffSummary.js';
 import { useOperatorSessionStore } from '../../stores/operator-session-store.js';
 import { useCartStore } from '../../stores/cart-store.js';
+import { useFeatureFlagsStore } from '../../stores/feature-flags-store.js';
+import { usePaymentStore } from '../../stores/payment-store.js';
 import { CartState } from '../../../shared/cart/cart-state.js';
 
 export interface CartLineItem {
@@ -145,6 +147,7 @@ export function CartPane({
   const sessionRole = sessionState.kind === 'signedIn' ? sessionState.session.role : null;
   const activeCart = useCartStore((s) => s.activeCart);
   const cartStore = useCartStore();
+  const paymentsFlag = useFeatureFlagsStore((s) => s.payments);
   const [lines, setLines] = useState<CartLineItem[]>(_testInitialLines ?? []);
   const [discountPlaceholders, setDiscountPlaceholders] = useState<DiscountPlaceholderSeed[]>(
     _testDiscountPlaceholders ?? [],
@@ -431,9 +434,25 @@ export function CartPane({
               onVoidRequest={() => {
                 setVoidDialogOpen(true);
               }}
+              {...(paymentsFlag
+                ? {
+                    onContinue: () => {
+                      usePaymentStore.getState().mount(envelope);
+                    },
+                  }
+                : {})}
             />
           ) : (
-            <HandoffSummary envelope={envelope} />
+            <HandoffSummary
+              envelope={envelope}
+              {...(paymentsFlag
+                ? {
+                    onContinue: () => {
+                      usePaymentStore.getState().mount(envelope);
+                    },
+                  }
+                : {})}
+            />
           )}
         </div>
       ) : (

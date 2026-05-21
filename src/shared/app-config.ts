@@ -34,5 +34,11 @@ export interface AppConfig {
    */
   features?: {
     cart?: boolean;
+    /**
+     * 006-payments-tender S1 — enables PaymentSurface in the cart region.
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_PAYMENTS` in main.
+     */
+    payments?: boolean;
   };
 }

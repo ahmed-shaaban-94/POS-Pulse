@@ -35,6 +35,12 @@ export type HandoffSummaryVoidProps =
 
 export type HandoffSummaryProps = {
   envelope: PaymentIntentEnvelope;
+  /**
+   * 006-payments-tender S1 — when provided, the "Continue to payment" button
+   * becomes enabled and invokes this callback. When omitted (default), the
+   * button remains disabled (pre-006 behaviour preserved for existing tests).
+   */
+  onContinue?: () => void;
 } & HandoffSummaryVoidProps;
 
 function formatMinorUnits(minor: number): string {
@@ -50,7 +56,7 @@ function formatTimestamp(isoString: string): string {
 }
 
 export function HandoffSummary(props: HandoffSummaryProps): JSX.Element {
-  const { envelope } = props;
+  const { envelope, onContinue } = props;
   return (
     <div className="handoff-summary" data-testid="handoff-summary">
       <div className="handoff-summary__banner" role="status">
@@ -98,9 +104,10 @@ export function HandoffSummary(props: HandoffSummaryProps): JSX.Element {
           type="button"
           className="handoff-summary__continue"
           data-testid="handoff-continue-button"
-          disabled
-          aria-disabled="true"
+          disabled={onContinue === undefined}
+          aria-disabled={onContinue === undefined ? 'true' : undefined}
           style={{ minHeight: touchTarget.min }}
+          onClick={onContinue}
         >
           Continue to payment
         </button>
