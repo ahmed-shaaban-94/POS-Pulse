@@ -1,9 +1,15 @@
-> ## STATUS: DRAFT — BLOCKED — NOT APPROVED FOR IMPLEMENTATION
+> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slices 2–5 NOT STARTED
 >
-> **Implementation of 006-payments-tender is not authorised.** No code,
-> contracts, migrations, bridge-API expansion, OpenAPI changes, codegen,
-> or UI may be authored against this spec until the gates listed below
-> clear. This file is the canonical record of those gates.
+> **006-payments-tender is partially implemented.** Slice 0 (visual
+> direction) and Slice 1 (renderer-only tender selection + envelope
+> ingest) shipped via PR #189/#190 and PR #192, with the Slice 1
+> Maestro closeout merged as PR #196. **Slices 2–5 are not started.**
+> No further code, contracts, migrations, bridge-API expansion,
+> OpenAPI changes, or codegen may be authored against this spec until
+> a fresh Maestro preflight runs for Slice 2 and explicit per-slice
+> approval is recorded. Slice 3 (§A3 + §A4-A) and Slice 4 (§A2 + §A4-B)
+> remain held; §A5 is rollout-only. This file is the canonical record
+> of those gates.
 
 # Coordination — 006-payments-tender
 
@@ -13,7 +19,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 1 ✅ — PR #192 merged at `7d8588c` on 2026-05-21T09:07:15Z; T020–T034 complete. Renderer-only tender selection + envelope ingest delivered against the `PaymentIntentEnvelope v1` contract; per-slice §A2 / §A3 / §A4 remain held for Slices 2–4; §A5 rollout-only. See §"Maestro closeout — Slice 1 (PR #192)" below.)
+**Last updated:** 2026-05-21 (Slice 1 ✅ — PR #192 merged at `7d8588c` on 2026-05-21T09:07:15Z; T020–T034 complete. Renderer-only tender selection + envelope ingest delivered against the `PaymentIntentEnvelope v1` contract. Slice 1 Maestro closeout merged as PR #196. **Slices 2–5 not started** — Slice 2 requires a fresh Maestro preflight and explicit approval before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 1 (PR #192)" below.)
 
 ---
 
@@ -34,7 +40,7 @@ and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-**Phase: PRE-APPROVAL DRAFT.** §A0 functionally cleared; procedurally held (Spec Kit re-run required before any implementation may begin).
+**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction) and Slice 1 (renderer-only tender selection + envelope ingest) are complete via PR #189/#190, PR #192, and closeout PR #196. **Slices 2–5 are not started.** Slice 2 requires a fresh Maestro preflight and explicit per-slice approval before implementation may begin. Slice 3 remains held on §A3 (migrations) and §A4-A (bridge review); Slice 4 remains held on §A2 (voucher endpoints) and §A4-B (voucher bridge review); §A5 is rollout-only.
 
 | Item | State |
 |:--|:--|
