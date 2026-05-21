@@ -66,8 +66,11 @@ The following gates are **held**. No S3 sub-slice may start until both clear.
 
 | Gate | Reviewer | Status |
 |:--|:--|:--|
-| **§A3** — Migration approval (three new tables + audit-category extension) | TBD | ⛔ Held — reviewer must be assigned; sign-off recorded in `coordination.md` (T067) |
-| **§A4-A** — Bridge-API security review (`payments.*` + `tender.*`) | TBD | ⛔ Held — full security review of `contracts/bridge-api.md`; sign-off recorded in `coordination.md` before Slice 3 ships |
+| **§A3** — Migration approval (three new tables + audit-category extension) | Ahmed (commissioned 2026-05-21) | ⛔ Held — sign-off not yet recorded; must be recorded in `coordination.md` (T067) before S3a begins |
+| **§A4-A** — Bridge-API security review (`payments.*` + `tender.*`) | Ahmed (commissioned 2026-05-21) | ⛔ Held — sign-off not yet recorded; must be recorded in `coordination.md` before Slice 3 ships |
+
+> **S3a is NOT authorized.** Commissioning a reviewer is not clearance. Both §A3 and §A4-A remain
+> ⛔ Held until explicit sign-off is recorded in `coordination.md`.
 
 ---
 
@@ -157,9 +160,9 @@ Coverage floors (checked at T160):
 
 ## Next recommended action
 
-1. **Commission §A3 reviewer** — assign a reviewer name and record it in `coordination.md` gate ledger (§A3 row) with the date assigned.
-2. **Commission §A4-A reviewer** — assign a reviewer name and record it in `coordination.md` gate ledger (§A4-A row) with the date assigned.
-3. Once both reviewers are named, the reviewers work against:
+1. **§A3 reviewer commissioned** — Ahmed assigned 2026-05-21. Awaiting sign-off; record in `coordination.md` gate ledger (§A3 row) when complete.
+2. **§A4-A reviewer commissioned** — Ahmed assigned 2026-05-21. Awaiting sign-off; record in `coordination.md` gate ledger (§A4-A row) when complete.
+3. Both reviewers work against:
    - §A3: `specs/006-payments-tender/data-model.md` (three tables + invariants + migration order)
    - §A4-A: `specs/006-payments-tender/contracts/bridge-api.md` (full DRAFT bridge contract)
 4. When §A3 clears (T067 recorded in `coordination.md`), **S3a may begin**.
