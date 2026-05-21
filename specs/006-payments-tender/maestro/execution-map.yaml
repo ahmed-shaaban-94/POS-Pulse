@@ -1,0 +1,445 @@
+# Hybrid Maestro Execution Map — 006-payments-tender Slice 3
+#
+# Schema: docs/maestro/slice-schema.yaml (added by PR #201; forward ref)
+# Template: docs/maestro/templates/execution-map.yaml (added by PR #201; forward ref)
+#
+# ⚠ THIS FILE DOES NOT REPLACE tasks.md, coordination.md, OR contracts/bridge-api.md.
+# ⚠ THIS FILE DOES NOT AUTHORIZE IMPLEMENTATION.
+# ⚠ THIS FILE DOES NOT CLEAR §A3 OR §A4-A.
+#
+# Source of truth (in priority order per docs/maestro/README.md):
+#   1. specs/006-payments-tender/tasks.md  — Spec Kit executable list; canonical task IDs
+#   2. specs/006-payments-tender/coordination.md  — live gate ledger + phase status
+#   3. specs/006-payments-tender/contracts/bridge-api.md  — payments.* + tender.* contract (DRAFT)
+#
+# This file adds Maestro coordination layer on top of those documents only.
+# It does not invent requirements, task IDs, or gates.
+
+spec: 006-payments-tender
+slice: 3
+version: 1
+base: 868c7ff
+status: BLOCKED
+preflight: STOP
+
+source_of_truth:
+  tasks: specs/006-payments-tender/tasks.md
+  gates: specs/006-payments-tender/coordination.md
+  bridge_contract: specs/006-payments-tender/contracts/bridge-api.md
+  note: >
+    This execution-map.yaml does NOT replace any of the above documents.
+    When this file and tasks.md disagree, tasks.md wins.
+    When this file and coordination.md disagree, coordination.md wins.
+
+# ---------------------------------------------------------------------------
+# Gate ledger (mirror of coordination.md — DO NOT update here instead of there)
+# ---------------------------------------------------------------------------
+gates:
+  - id: §A0
+    label: Upstream readiness
+    status: cleared
+    cleared_at: "2026-05-19"
+    note: Functionally cleared 2026-05-19; procedurally cleared when /speckit-analyze merged (PR #187).
+
+  - id: §A1
+    label: Visual direction Slice 0
+    status: cleared
+    cleared_at: "2026-05-20"
+    note: T011 signed off PR #189 + PR #190. Reviewer Ahmed. Clears Slices 1-2-4 force-fail surface.
+
+  - id: §A2
+    label: Backend / OpenAPI
+    status: no-op
+    note: >
+      No-op confirmed for Slices 1-3 (plan AD-8). §A2 gates Slice 4 voucher V-A
+      endpoints + codegen only. No action required for Slice 3.
+
+  - id: §A3
+    label: Migrations (three new tables + audit-category extension)
+    status: held
+    reviewer: TBD
+    note: >
+      Held. Tables: payment_attempts, payment_tender_lines, payment_action_outbox +
+      audit_events.action_category extension (7 categories; tender.reversal_pending
+      deferred to Slice 4). Reviewer TBD. Must clear before S3a begins.
+
+  - id: §A4-A
+    label: "Bridge-API security review: payments.* + tender.*"
+    status: held
+    reviewer: TBD
+    note: >
+      Held. Full security review of contracts/bridge-api.md: handler signatures,
+      requireOperatorSession gating, refusal envelopes, idempotency-key strategy,
+      PII redaction, audit emission paths. Reviewer TBD. Must clear before Slice 3 ships.
+
+  - id: §A4-B
+    label: "Bridge-API security review: vouchers.* (Slice 4 only)"
+    status: held
+    reviewer: TBD
+    note: Slice 4 only. Not applicable to Slice 3.
+
+  - id: §A5
+    label: Production readiness
+    status: held
+    note: Rollout-time gate only. Does not block slice merge.
+
+# ---------------------------------------------------------------------------
+# Findings (divergences flagged for /speckit-analyze)
+# ---------------------------------------------------------------------------
+findings:
+  - id: F-001
+    severity: low
+    summary: Migration naming divergence — tasks.md vs. owner decision
+    detail: >
+      tasks.md (T060-T065) proposes feature-prefixed migration names:
+      006-0001_create_payment_attempts.sql, 006-0001b_..., 006-0002_...,
+      006-0003_..., 006-0003b_..., 006-0004_... The Slice 3 owner decision
+      (PR #200, session 2026-05-21) mandates bare numeric names continuing
+      the existing migration sequence — e.g., 0012_create_payment_attempts.sql,
+      0013_create_payment_tender_lines.sql, etc. The tasks.md proposals are
+      advisory per Maestro task-marking (docs/maestro/task-marking.md); the
+      divergence does not modify task IDs or descriptions. Flagged for
+      /speckit-analyze follow-up.
+
+# ---------------------------------------------------------------------------
+# Slices
+# ---------------------------------------------------------------------------
+# Schema per docs/maestro/slice-schema.yaml (forward ref — added by PR #201)
+slices:
+  - id: 006-S3a
+    title: Migrations + persistence repositories
+    spec: 006-payments-tender
+    type: implementation
+    status: blocked
+    gate:
+      required:
+        - §A3
+    task_ids:
+      - T060
+      - T061
+      - T062
+      - T063
+      - T064
+      - T065
+      - T066
+      - T067
+      - T110
+      - T111
+      - T112
+      - T113
+    depends_on: []
+    blocks:
+      - 006-S3b
+      - 006-S3c
+      - 006-S3d
+    agent: single-agent
+    # Process-boundary edges: migrations touch the SQLite schema; repositories
+    # are the only authorised callers. Both live in main-process territory.
+    # Per docs/maestro/graph-rules.md §"Process-boundary edges", single-agent
+    # is mandatory for any task that crosses the migration / repository boundary.
+    validation:
+      reference: tasks.md T066 (integration test — apply all 4 migrations + assert schema)
+    notes: >
+      §A3 reviewer must be assigned and sign-off recorded in coordination.md
+      before any migration SQL is authored. Migration names follow bare numeric
+      sequence (owner decision PR #200), not the 006-* prefix in tasks.md.
+      T067 records the §A3 sign-off.
+
+  - id: 006-S3b
+    title: Shared types + FSMs + audit emitter + idempotency helper
+    spec: 006-payments-tender
+    type: implementation
+    status: blocked
+    gate:
+      required:
+        - §A4-A
+        - §A3-cleared
+      note: §A4-A must clear AND S3a must be GREEN before S3b begins.
+    task_ids:
+      - T070
+      - T071
+      - T072
+      - T073
+      - T080
+      - T081
+      - T082
+      - T083
+      - T084
+      - T085
+      - T086
+      - T087
+      - T088
+      - T090
+      - T091
+      - T092
+      - T093
+      - T094
+      - T120
+      - T121
+      - T130
+      - T131
+      - T132
+    depends_on:
+      - 006-S3a
+    blocks:
+      - 006-S3c
+      - 006-S3d
+    agent: single-agent
+    # Shared types / FSMs form the internal trust boundary below the bridge.
+    # single-agent per process-boundary rule — FSM and audit code lives in main
+    # and the shared layer simultaneously.
+    validation:
+      reference: tasks.md T160 (full suite; >=95% on FSMs + audit-emitter + idempotency)
+    notes: >
+      Contains an 18-wide parallel-safe TDD test antichain (Wave C, see groups
+      below) but single-agent is forced by the process-boundary rule.
+      T073 (fsm-types.ts) is a compile-time contract shared across main + preload.
+
+  - id: 006-S3c
+    title: Bridge handlers + preload registration
+    spec: 006-payments-tender
+    type: implementation
+    status: blocked
+    gate:
+      required:
+        - §A4-A
+      note: §A4-A must clear AND S3b must be GREEN before S3c begins.
+    task_ids:
+      - T100
+      - T101
+      - T102
+      - T103
+      - T104
+      - T105
+      - T106
+      - T133
+      - T134
+      - T135
+      - T136
+      - T137
+      - T138
+      - T139
+      - T140
+      - T141
+      - T142
+    depends_on:
+      - 006-S3b
+    blocks:
+      - 006-S3d
+    agent: single-agent
+    # Bridge surface is the trust boundary (Constitution §III; plan AD-1).
+    # T142 registers all handlers in src/preload/payments.ts — single process
+    # boundary crossing. Process-boundary rule applies.
+    validation:
+      reference: tasks.md T160 (full suite; >=95% on all bridge handlers)
+    notes: >
+      Contains a 9-wide parallel-safe bridge handler antichain (Wave G, see
+      groups below) but single-agent is forced by the process-boundary rule.
+      T100-T106 are the TDD test tasks (GREEN required before T133-T141 impl).
+      T142 (preload registration) is the final step and depends on all handlers.
+
+  - id: 006-S3d
+    title: Renderer wiring + final verification
+    spec: 006-payments-tender
+    type: implementation
+    status: blocked
+    gate:
+      required:
+        - §A1
+        - 006-S3c-GREEN
+      note: §A1 already cleared (2026-05-20). S3c must be GREEN before S3d begins.
+    task_ids:
+      - T150
+      - T151
+      - T152
+      - T153
+      - T154
+      - T160
+      - T161
+      - T162
+      - T163
+      - T164
+    depends_on:
+      - 006-S3c
+    blocks: []
+    agent: single-agent
+    validation:
+      reference: >
+        tasks.md T160 (full suite), T161 (end-to-end lifecycle integration),
+        T162 (restart-survival integration), T163 (settlement-invariant property test),
+        T164 (Slice 3 sign-off in coordination.md)
+    notes: >
+      T152, T153, T154 all modify src/renderer/ui/payments/PaymentSurface.tsx —
+      these three tasks MUST be sequentialised within S3d (file-conflict graph;
+      see wave-status.md §"File-conflict notes"). T160-T164 are the final
+      verification + sign-off tasks.
+
+# ---------------------------------------------------------------------------
+# Groups (parallel-safe batches within each sub-slice)
+# ---------------------------------------------------------------------------
+# Per docs/maestro/graph-rules.md §"Process-boundary edges", all S3 work is
+# single-agent. Groups below reflect the THEORETICAL parallel-safe sets from
+# the preflight file-conflict analysis. They are informational — the executing
+# agent processes them sequentially within each sub-slice wave.
+groups:
+  - sub_slice: 006-S3a
+    waves:
+      - id: Wave-A
+        label: "S3a — Migration tables (partial parallel)"
+        tasks:
+          - T060  # payment_attempts (base table — T061 depends on it)
+        serial_after_T060:
+          - T061  # partial unique index (depends on T060)
+        parallel_with_T060:
+          - T062  # payment_tender_lines (independent of T060 at SQL level but FK dep — sequential)
+          - T063  # payment_action_outbox
+          - T065  # audit-category extension (independent of T060-T063)
+        note: >
+          T062 has FK -> payment_attempts, so T060 must land first.
+          T063 has FK -> both tables; must follow T060 + T062.
+          T064 (append-only trigger) depends on T063; serialised after T063.
+          T065 is independent. Effective execution order: T060 -> T061 -> T062 -> T063 -> T064; T065 parallel after T060.
+      - id: Wave-B
+        label: "S3a — Migration integration test + repositories"
+        tasks:
+          - T066  # integration test (apply all 4 migrations)
+          - T067  # §A3 sign-off record
+          - T110  # migration runner registration
+          - T111  # payment_attempts repository
+          - T112  # payment_tender_lines repository
+          - T113  # payment_action_outbox repository
+        note: T111/T112/T113 are [P]-marked; parallel-safe (separate files).
+
+  - sub_slice: 006-S3b
+    waves:
+      - id: Wave-C
+        label: "S3b — Shared types + FSM compile-time contract (18-wide antichain)"
+        tasks:
+          - T070  # bridge-api contract test
+          - T071  # payments.* + tender.* types in bridge-api.ts
+          - T072  # shared payment types module
+          - T073  # FSM-helper types
+        note: T070-T073 are the shared types layer; T071 implements what T070 tests.
+      - id: Wave-D
+        label: "S3b — PaymentAttempt FSM tests (TDD RED)"
+        tasks:
+          - T080
+          - T081
+          - T082
+          - T083
+          - T084
+        note: All [P]-marked; parallel-safe (separate test files). Run before T120.
+      - id: Wave-E
+        label: "S3b — TenderLine FSM + idempotency + audit tests (TDD RED)"
+        tasks:
+          - T085
+          - T086
+          - T087
+          - T088
+          - T090
+          - T091
+          - T092
+          - T093
+          - T094
+        note: All [P]-marked; parallel-safe (separate test files). Run before T121/T131/T132.
+      - id: Wave-F
+        label: "S3b — FSM + audit + idempotency implementation (GREEN)"
+        tasks:
+          - T120  # PaymentAttempt FSM impl
+          - T121  # TenderLine FSM impl
+          - T130  # requireOperatorSession wrapper
+          - T131  # idempotency replay helper
+          - T132  # audit emitter
+        note: T120/T121 depend on Wave-D/E going GREEN. T130/T131/T132 are [P]-marked.
+
+  - sub_slice: 006-S3c
+    waves:
+      - id: Wave-G
+        label: "S3c — Bridge handler tests (9-wide antichain, TDD RED)"
+        tasks:
+          - T100
+          - T101
+          - T102
+          - T103
+          - T104
+          - T105
+          - T106
+        note: All [P]-marked; separate test files; parallel-safe. Run before T133-T141.
+      - id: Wave-H
+        label: "S3c — Bridge handler implementation (GREEN)"
+        tasks:
+          - T133  # payments.start
+          - T134  # payments.confirm
+          - T135  # payments.cancel
+          - T136  # payments.subscribe
+          - T137  # payments.read
+          - T138  # payments.discardOnSessionEnd
+          - T139  # tender.apply
+          - T140  # tender.reverse
+          - T141  # tender.read
+        note: T133-T141 are parallel-safe (separate handler files). T135-T141 are [P]-marked.
+      - id: Wave-I
+        label: "S3c — Preload registration"
+        tasks:
+          - T142
+        note: Depends on all of Wave-H. Serialised last in S3c.
+
+  - sub_slice: 006-S3d
+    waves:
+      - id: Wave-J
+        label: "S3d — Renderer store + entry wiring"
+        tasks:
+          - T150  # paymentSlice FSM state in renderer store
+          - T151  # wire CashEntry + ExternalCardTerminalEntry to tender.apply
+        note: T150 and T151 touch different files; parallel-safe.
+      - id: Wave-K
+        label: "S3d — PaymentSurface wiring (SERIALISED — file conflict)"
+        tasks:
+          - T152  # payments.confirm wire
+          - T153  # payments.cancel wire
+          - T154  # split-tender UX
+        note: >
+          ALL THREE tasks modify src/renderer/ui/payments/PaymentSurface.tsx.
+          MUST be sequentialised: T152 -> T153 -> T154.
+          Do NOT run these in parallel.
+      - id: Wave-L
+        label: "S3d — Verification + sign-off"
+        tasks:
+          - T160  # full test suite + coverage
+          - T161  # end-to-end lifecycle integration
+          - T162  # restart-survival integration
+          - T163  # settlement-invariant property test (parallel-safe)
+          - T164  # Slice 3 sign-off record
+        note: T163 is [P]-marked; T160/T161/T162/T164 are sequential verification steps.
+
+# ---------------------------------------------------------------------------
+# Validation posture
+# ---------------------------------------------------------------------------
+validation:
+  per_sub_slice:
+    - npm run typecheck          # both tsconfigs — must be clean
+    - npm run lint               # eslint + prettier --check — must be clean
+    - npx vitest run             # full vitest — 0 failures
+    - npm run codegen:verify     # must be no-op (no OpenAPI changes in Slice 3)
+  coverage_floors:
+    money_math: ">=95%"
+    payment_attempt_fsm: ">=95%"
+    tender_line_fsm: ">=95%"
+    audit_emitter: ">=95%"
+    idempotency_replay: ">=95%"
+    bridge_handlers: ">=95%"
+    renderer_wiring: ">=90%"
+  reference: tasks.md T160
+
+# ---------------------------------------------------------------------------
+# Closeout
+# ---------------------------------------------------------------------------
+closeout:
+  template: docs/maestro/templates/post-merge-closeout-prompt.md
+  note: >
+    After each sub-slice PR merges, run the post-merge closeout prompt.
+    After S3d merges, run T164 to record Slice 3 functional sign-off +
+    coverage numbers + §A2 no-op confirmation + §A3 + §A4 review sign-offs
+    in specs/006-payments-tender/coordination.md.
+    Recommended commit message for the closeout PR:
+    "docs(pos): record 006 slice 3 closeout"
