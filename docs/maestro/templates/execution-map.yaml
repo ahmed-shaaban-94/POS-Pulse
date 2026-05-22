@@ -7,13 +7,13 @@
 # It is an optional execution-state helper for tracking parallel waves, findings, and closeout.
 
 # Spec identifier (e.g. "006-payments-tender").
-spec: ""
+spec: ''
 
 # Version of this execution map (increment each time you update the map, e.g. "1.0", "1.1").
-version: "1.0"
+version: '1.0'
 
 # Baseline git SHA at the start of the current run. Record before any edits.
-base: ""
+base: ''
 
 # Highest-priority source-of-truth order for this spec run (read in order):
 # 1. .specify/memory/constitution.md
@@ -23,12 +23,12 @@ base: ""
 # 5. specs/<spec>/spec.md          ← requirements source-of-truth
 # 6. specs/<spec>/plan.md          ← architectural decisions
 source_of_truth:
-  constitution: ".specify/memory/constitution.md"
-  claude_md: "CLAUDE.md"
-  coordination: ""   # fill: specs/<spec>/coordination.md
-  tasks: ""          # fill: specs/<spec>/tasks.md
-  spec: ""           # fill: specs/<spec>/spec.md
-  plan: ""           # fill: specs/<spec>/plan.md
+  constitution: '.specify/memory/constitution.md'
+  claude_md: 'CLAUDE.md'
+  coordination: '' # fill: specs/<spec>/coordination.md
+  tasks: '' # fill: specs/<spec>/tasks.md
+  spec: '' # fill: specs/<spec>/spec.md
+  plan: '' # fill: specs/<spec>/plan.md
 
 # Gate ledger snapshot for this run.
 # Mirrors the coordination.md Gate ledger; updated at closeout when a gate changes.
@@ -89,8 +89,8 @@ groups: []
 # validation.notes       — any OOM fallback or partial-coverage notes
 validation:
   commands: []
-  last_result: "pending"
-  notes: ""
+  last_result: 'pending'
+  notes: ''
 
 # Closeout state for this execution map.
 # closeout.pr              — merged PR number
@@ -99,8 +99,8 @@ validation:
 # closeout.next_action     — single concrete next step for whoever picks the feature up
 # closeout.report_location — where the full closeout report lives (PR description URL or coordination.md reference)
 closeout:
-  pr: ""
-  sha: ""
-  date: ""
-  next_action: ""
-  report_location: ""
+  pr: ''
+  sha: ''
+  date: ''
+  next_action: ''
+  report_location: ''

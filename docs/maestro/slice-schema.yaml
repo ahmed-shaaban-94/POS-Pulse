@@ -5,23 +5,23 @@
 # This schema does not replace tasks.md, coordination.md, or any Spec Kit artefact.
 
 # Stable identifier for this slice within a spec (e.g. "006-S1").
-id: ""
+id: ''
 
 # Human-readable name for this slice (e.g. "Payments Tender Selection + Envelope Ingest").
-title: ""
+title: ''
 
 # Relative path to the spec folder this slice belongs to (e.g. "specs/006-payments-tender").
-spec: ""
+spec: ''
 
 # List of tasks.md task IDs in scope for this run, in tasks.md order.
 # Do not invent new IDs; preserve source order verbatim.
 task_ids: []
 
 # Slice classification: "implementation" | "validation" | "preflight" | "closeout" | "docs-only".
-type: ""
+type: ''
 
 # Current execution status: "pending" | "in-progress" | "completed" | "blocked" | "stopped".
-status: ""
+status: ''
 
 # Whether this slice requires explicit owner approval before execution may begin.
 # Set true for slices that touch sensitive scope (bridge, main, preload, migrations, OpenAPI).
@@ -41,7 +41,7 @@ blocks: []
 
 # Agent role assignment for this slice (see docs/maestro/agent-roles.md).
 # Values: "single-agent" | "multi-agent" | a named role string.
-agent: ""
+agent: ''
 
 # Files this slice is allowed to create or modify. Prefer explicit paths over globs.
 # Aligns with the implementation template's allowed-paths list.
@@ -71,26 +71,26 @@ report_fields: []
 parallel_safety: false
 
 # PR number where this slice was merged (fill at closeout; leave blank until merged).
-merged_in_pr: ""
+merged_in_pr: ''
 
 # Git commit SHA at which this slice was merged (fill at closeout).
-merged_at_commit: ""
+merged_at_commit: ''
 
 # ISO date on which this slice was merged (fill at closeout; format: YYYY-MM-DD).
-merged_at_date: ""
+merged_at_date: ''
 
 # Whether this slice was previously in a blocked state before the current run.
 previously_blocked: false
 
 # PR number that resolved the blocker allowing this slice to start (if previously_blocked: true).
-resolved_by_pr: ""
+resolved_by_pr: ''
 
 # Commit SHA that resolved the blocker (if previously_blocked: true).
-resolved_by_commit: ""
+resolved_by_commit: ''
 
 # ISO date on which the blocker was resolved (format: YYYY-MM-DD).
-resolved_at: ""
+resolved_at: ''
 
 # Free-text notes for this slice: surprises, owner decisions, retro observations.
 # Keep concise; full narrative goes in the closeout report (docs/maestro/report-schema.md §10).
-notes: ""
+notes: ''
