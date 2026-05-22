@@ -1,0 +1,33 @@
+-- T065 — record the 7 new `audit_events.action_category` values cleared by §A3.
+-- Per data-model.md §"Extension to 004's audit_events" and the §A3 sign-off
+-- recorded in coordination.md §"Sign-off — 2026-05-21".
+--
+-- This migration is INTENTIONALLY a documentation-only marker. 004's
+-- audit_events table (migrations/0004_audit_events.sql) declares
+-- `action_category TEXT NOT NULL` with NO CHECK constraint — categories are
+-- open-set at the SQL layer and enforced at the application emitter
+-- (src/main/audit-events/* and Slice 3b's src/main/payments/audit-emitter.ts).
+--
+-- Adding a CHECK constraint here would silently invalidate every existing
+-- audit_events row written against open-set semantics, which is exactly the
+-- breakage Constitution §P4 (append-only) forbids. The §A3 reviewer
+-- approved the new categories as part of the application-layer emitter
+-- contract; this file ratifies that contract in the migration timeline so
+-- schema_migrations records the ordering decision durably.
+--
+-- The 7 categories now in force at the audit emitter (4 attempt-level + 3
+-- per-line; tender.reversal_pending is deferred to Slice 4):
+--
+--   payment.settled
+--   payment.cancelled
+--   payment.failed
+--   payment.force_failed
+--   tender.applied
+--   tender.refused
+--   tender.reversed
+--
+-- No DDL is executed by this migration. The runner still records the
+-- bookkeeping row in schema_migrations so future audits can confirm §A3 was
+-- applied at the expected ordinal in the sequence.
+
+SELECT 1;  -- no-op statement so the file is non-empty valid SQL.
