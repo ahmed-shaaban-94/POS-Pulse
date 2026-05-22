@@ -42,19 +42,29 @@ CREATE TABLE IF NOT EXISTS payment_tender_lines (
                                     )),
 
   -- Cash-only: positive when amount_applied_minor > remaining_balance_at_apply_time.
+  -- Bounded above by amount_applied_minor so the settlement formula
+  -- Σ (amount_applied_minor − COALESCE(change_due_minor, 0)) is always ≥ 0
+  -- (data-model.md §"Entity: PaymentTenderLine" Invariant 5).
   change_due_minor                  INTEGER
                                     CHECK (
                                       (change_due_minor IS NULL)
-                                      OR (change_due_minor >= 0 AND tender_type = 'cash')
+                                      OR (
+                                        tender_type = 'cash'
+                                        AND change_due_minor BETWEEN 0 AND amount_applied_minor
+                                      )
                                     ),
 
   -- external_card_terminal-only; uppercase alphanumeric ≤ 6 chars (FR-009).
+  -- `NOT GLOB '*[^A-Z0-9]*'` enforces "every char is A–Z or 0–9" (the prior
+  -- `GLOB '[A-Z0-9]*'` only constrained the first character because `*` in
+  -- SQLite GLOB is "any chars" — making a PAN structurally unrepresentable
+  -- required the negative-glob form).
   external_reference                TEXT
                                     CHECK (
                                       (external_reference IS NULL)
                                       OR (
                                         tender_type = 'external_card_terminal'
-                                        AND external_reference GLOB '[A-Z0-9]*'
+                                        AND external_reference NOT GLOB '*[^A-Z0-9]*'
                                         AND length(external_reference) BETWEEN 1 AND 6
                                       )
                                     ),

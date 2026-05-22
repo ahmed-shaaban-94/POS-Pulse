@@ -34,12 +34,26 @@ CREATE TABLE IF NOT EXISTS payment_action_outbox (
                            'tender.reverse'
                          )),
 
-  -- SHA-256 hex (64 chars) of the redacted canonical request payload.
+  -- SHA-256 hex (64 lowercase hex chars) of the redacted canonical request
+  -- payload. The GLOB CHECK enforces the hex character set so corrupt or
+  -- non-canonical strings cannot enter the idempotency-lookup table.
   action_payload_hash    TEXT    NOT NULL
-                         CHECK (length(action_payload_hash) = 64),
+                         CHECK (
+                           length(action_payload_hash) = 64
+                           AND action_payload_hash NOT GLOB '*[^0-9a-f]*'
+                         ),
 
   acting_operator_id     TEXT    NOT NULL,
-  created_at             TEXT    NOT NULL
+  created_at             TEXT    NOT NULL,
+
+  -- tender_line_id presence is biconditional on action_kind (data-model.md
+  -- §"Entity: PaymentActionOutbox" — per-line actions reference a line;
+  -- attempt-level actions do not). Enforced at the SQL layer so the outbox
+  -- replay path cannot encounter a malformed row.
+  CHECK (
+    (action_kind IN ('tender.apply', 'tender.reverse') AND tender_line_id IS NOT NULL)
+    OR (action_kind NOT IN ('tender.apply', 'tender.reverse') AND tender_line_id IS NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_payment_action_outbox_attempt_created

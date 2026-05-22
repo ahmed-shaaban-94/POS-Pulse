@@ -70,7 +70,20 @@ CREATE TABLE IF NOT EXISTS payment_attempts (
   force_fail_attribution_operator_id  TEXT,
 
   -- Restart-survival pointer into payment_action_outbox.
-  last_action_id                      TEXT    NOT NULL
+  last_action_id                      TEXT    NOT NULL,
+
+  -- State-coupled invariants (DB-as-source-of-truth). data-model.md §"Entity:
+  -- PaymentAttempt" Invariants 5 and 6 — failure_reason MUST be present when
+  -- state is terminal-failure, MUST be NULL otherwise; manager attribution
+  -- MUST be present iff state='force_failed'.
+  CHECK (
+    (state IN ('failed', 'force_failed') AND failure_reason IS NOT NULL)
+    OR (state NOT IN ('failed', 'force_failed') AND failure_reason IS NULL)
+  ),
+  CHECK (
+    (state = 'force_failed' AND force_fail_attribution_operator_id IS NOT NULL)
+    OR (state <> 'force_failed' AND force_fail_attribution_operator_id IS NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_payment_attempts_envelope_handoff_action_id

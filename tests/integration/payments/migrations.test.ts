@@ -459,6 +459,60 @@ describe('T066 — 006 Slice 3a migrations', () => {
       }
       db.close();
     });
+
+    it('rejects a started attempt that carries a failure_reason (state-coupling CHECK)', () => {
+      const db = freshDb();
+      expect(() => {
+        insertAttempt(db, { state: 'started', failure_reason: 'tender_underpaid' });
+      }).toThrow();
+      db.close();
+    });
+
+    it('rejects a failed attempt without a failure_reason (state-coupling CHECK)', () => {
+      const db = freshDb();
+      expect(() => {
+        insertAttempt(db, {
+          state: 'failed',
+          failed_at: '2026-05-22T10:05:00.000Z',
+          failure_reason: null,
+        });
+      }).toThrow();
+      db.close();
+    });
+
+    it('rejects a force_failed attempt without manager attribution (state-coupling CHECK)', () => {
+      const db = freshDb();
+      expect(() => {
+        insertAttempt(db, {
+          state: 'force_failed',
+          force_failed_at: '2026-05-22T10:06:00.000Z',
+          failure_reason: 'internal_error',
+          force_fail_attribution_operator_id: null,
+        });
+      }).toThrow();
+      db.close();
+    });
+
+    it('rejects a non-force_failed attempt that carries a force_fail_attribution_operator_id', () => {
+      const db = freshDb();
+      expect(() => {
+        insertAttempt(db, { force_fail_attribution_operator_id: 'mgr-x' });
+      }).toThrow();
+      db.close();
+    });
+
+    it('accepts a force_failed attempt with reason + manager attribution', () => {
+      const db = freshDb();
+      expect(() => {
+        insertAttempt(db, {
+          state: 'force_failed',
+          force_failed_at: '2026-05-22T10:06:00.000Z',
+          failure_reason: 'internal_error',
+          force_fail_attribution_operator_id: 'mgr-xyz',
+        });
+      }).not.toThrow();
+      db.close();
+    });
   });
 
   describe('partial unique index — one started per terminal (R-6)', () => {
@@ -565,6 +619,47 @@ describe('T066 — 006 Slice 3a migrations', () => {
         insertLine(db, {
           tender_type: 'external_card_terminal',
           external_reference: 'AB12XY',
+        });
+      }).not.toThrow();
+      db.close();
+    });
+
+    it.each(['AB!2', 'A___', 'A-1', 'A 1', 'A.B'])(
+      'rejects external_reference %s (non A-Z/0-9 char anywhere in the string)',
+      (value) => {
+        const db = freshDb();
+        insertAttempt(db);
+        expect(() => {
+          insertLine(db, {
+            tender_type: 'external_card_terminal',
+            external_reference: value,
+          });
+        }).toThrow();
+        db.close();
+      },
+    );
+
+    it('rejects change_due_minor that exceeds amount_applied_minor', () => {
+      const db = freshDb();
+      insertAttempt(db);
+      expect(() => {
+        insertLine(db, {
+          tender_type: 'cash',
+          amount_applied_minor: 1000,
+          change_due_minor: 1001,
+        });
+      }).toThrow();
+      db.close();
+    });
+
+    it('accepts change_due_minor equal to amount_applied_minor (zero net contribution)', () => {
+      const db = freshDb();
+      insertAttempt(db);
+      expect(() => {
+        insertLine(db, {
+          tender_type: 'cash',
+          amount_applied_minor: 1500,
+          change_due_minor: 1500,
         });
       }).not.toThrow();
       db.close();
@@ -686,6 +781,57 @@ describe('T066 — 006 Slice 3a migrations', () => {
       insertOutbox(db);
       expect(() =>
         db.run(`DELETE FROM payment_action_outbox WHERE action_id='action-1'`),
+      ).toThrow();
+      db.close();
+    });
+
+    it.each(['tender.apply', 'tender.reverse'])(
+      'rejects %s outbox row when tender_line_id is NULL (biconditional CHECK)',
+      (kind) => {
+        const db = freshDb();
+        insertAttempt(db);
+        insertLine(db);
+        expect(() =>
+          insertOutbox(db, { action_kind: kind, tender_line_id: null }),
+        ).toThrow();
+        db.close();
+      },
+    );
+
+    it.each([
+      'payment.attempt.start',
+      'payment.confirm',
+      'payment.cancel',
+      'payment.fail',
+      'payment.force_fail',
+      'payment.discarded_on_session_end',
+    ])(
+      'rejects attempt-level %s outbox row when tender_line_id is non-NULL (biconditional CHECK)',
+      (kind) => {
+        const db = freshDb();
+        insertAttempt(db);
+        insertLine(db);
+        expect(() =>
+          insertOutbox(db, { action_kind: kind, tender_line_id: 'line-1' }),
+        ).toThrow();
+        db.close();
+      },
+    );
+
+    it('rejects action_payload_hash containing non-hex characters', () => {
+      const db = freshDb();
+      insertAttempt(db);
+      // Same length (64), but with an uppercase 'A' replacing a lowercase 'a'.
+      const nonHex = 'A'.padEnd(64, 'b');
+      expect(() => insertOutbox(db, { action_payload_hash: nonHex })).toThrow();
+      db.close();
+    });
+
+    it('rejects action_payload_hash whose length is not exactly 64', () => {
+      const db = freshDb();
+      insertAttempt(db);
+      expect(() =>
+        insertOutbox(db, { action_payload_hash: 'a'.repeat(63) }),
       ).toThrow();
       db.close();
     });
