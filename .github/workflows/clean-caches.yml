@@ -3,7 +3,7 @@ name: Clean Stale Actions Caches
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * 0'   # weekly – Sunday 03:00 UTC
+    - cron: '0 3 * * 0'   # weekly - Sunday 03:00 UTC
 
 permissions:
   actions: write
@@ -14,9 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clean stale GitHub Actions caches
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -47,7 +44,8 @@ jobs:
                   data = api(f"{path}{sep}per_page=100&page={page}")
                   chunk = (data.get(key, []) if isinstance(data, dict) and key
                            else (data if isinstance(data, list) else []))
-                  if not chunk:n                      break
+                  if not chunk:
+                      break
                   items.extend(chunk)
                   if len(chunk) < 100:
                       break
@@ -70,6 +68,7 @@ jobs:
               open_pr_nums.add(pr["number"])
               open_pr_branches.add(pr["head"]["ref"])
 
+          # scan up to 500 recently-updated closed PRs to capture recent merges
           for pr in paginate("pulls?state=closed&sort=updated&direction=desc", max_pages=5):
               if not pr.get("merged_at"):
                   continue
@@ -97,10 +96,12 @@ jobs:
               cid  = c["id"]
               size = c.get("size_in_bytes", 0)
 
+              # Safety rule 1: main is always protected
               if ref == "refs/heads/main":
                   kept["on-main"] += 1
                   continue
 
+              # Pull-request cache: refs/pull/<N>/merge
               if ref.startswith("refs/pull/") and ref.endswith("/merge"):
                   try:
                       n = int(ref.split("/")[2])
@@ -119,10 +120,12 @@ jobs:
                       deleted_count += 1
                       deleted_bytes += size
                       continue
+                  # PR not in any list -> unknown, skip
                   kept["unknown-ref"] += 1
                   unknown_entries.append(c)
                   continue
 
+              # Branch cache: refs/heads/<branch>
               if ref.startswith("refs/heads/"):
                   branch = ref[len("refs/heads/"):]
                   if branch in open_pr_branches:
@@ -136,10 +139,12 @@ jobs:
                       deleted_count += 1
                       deleted_bytes += size
                       continue
+                  # Branch not tied to any known PR -> unknown, skip
                   kept["unknown-ref"] += 1
                   unknown_entries.append(c)
                   continue
 
+              # Any other ref pattern -> unknown, skip
               kept["unknown-ref"] += 1
               unknown_entries.append(c)
 
