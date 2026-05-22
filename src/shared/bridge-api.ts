@@ -500,6 +500,20 @@ export interface PreloadBridgeAPI {
    * main-process logic.
    */
   cart: CartBridgeAPI;
+  /**
+   * 006-payments-tender Slice 3: `payments.*` (attempt-level) +
+   * `tender.*` (per-line) namespaces. Slice 4 adds `payments.forceFail`
+   * and `vouchers.*`; those are intentionally absent here.
+   *
+   * Marked optional in S3b — the namespace types are declared but the
+   * preload (`src/preload/index.ts`) is wired in S3c (T142). Once S3c
+   * lands, callers that need a guarantee can narrow with the
+   * non-null-assertion operator or a runtime presence check. The
+   * Slice-3 renderer wiring (T150–T154) is the only consumer and lands
+   * in S3d after S3c is GREEN.
+   */
+  payments?: PaymentsBridgeAPI;
+  tender?: TenderBridgeAPI;
 }
 
 /**
@@ -540,4 +554,157 @@ declare global {
   interface Window {
     api: PreloadBridgeAPI;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 006-payments-tender Slice 3 — payments.* + tender.* bridge types (T071)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Mirrors specs/006-payments-tender/contracts/bridge-api.md (DRAFT — §A4-A
+// cleared 2026-05-21). Slice-3 subset only: no `payments.forceFail`, no
+// `vouchers.*`. Slice 4 will add those additively.
+
+import type {
+  PaymentAttemptRendererView,
+  PaymentRefusal,
+  TenderLineRendererView,
+  TenderType,
+} from './payments/types.js';
+
+// ── payments.start ───────────────────────────────────────────────────────────
+
+export interface PaymentsStartRequest {
+  /** From 005's `cart.handoff` return value. */
+  envelope_handoff_action_id: string;
+  envelope_cart_id: string;
+  envelope_subtotal_minor: number;
+  envelope_version: 'v1';
+  /** Client-generated UUID v4 (R-10). */
+  idempotency_key: string;
+}
+
+export type PaymentsStartResponse = { kind: 'ok'; payment_attempt_id: string } | PaymentRefusal;
+
+// ── payments.confirm ─────────────────────────────────────────────────────────
+
+export interface PaymentsConfirmRequest {
+  payment_attempt_id: string;
+  idempotency_key: string;
+}
+
+export type PaymentsConfirmResponse = { kind: 'ok'; settled_at: string } | PaymentRefusal;
+
+// ── payments.cancel ──────────────────────────────────────────────────────────
+
+export interface PaymentsCancelRequest {
+  payment_attempt_id: string;
+  idempotency_key: string;
+}
+
+export type PaymentsCancelResponse =
+  | {
+      kind: 'ok';
+      cancelled_at: string;
+      /** TenderLines successfully reversed (LIFO per FR-006B). */
+      reversed_tender_line_ids: readonly string[];
+      /** TenderLines awaiting deferred reversal (Slice 4 voucher path). */
+      reversal_pending_tender_line_ids: readonly string[];
+    }
+  | PaymentRefusal;
+
+// ── payments.read ────────────────────────────────────────────────────────────
+
+export interface PaymentsReadRequest {
+  payment_attempt_id: string;
+}
+
+export type PaymentsReadResponse =
+  | { kind: 'ok'; payment_attempt: PaymentAttemptRendererView }
+  | PaymentRefusal;
+
+// ── payments.subscribe ───────────────────────────────────────────────────────
+
+export interface PaymentsSubscribeRequest {
+  payment_attempt_id: string;
+}
+
+/**
+ * Subscribe-stream payload. Same projection as `payments.read` per
+ * contracts/bridge-api.md §"payments.subscribe".
+ */
+export type PaymentsSubscribeResponse =
+  | { kind: 'ok'; payment_attempt: PaymentAttemptRendererView }
+  | PaymentRefusal;
+
+// ── tender.apply ─────────────────────────────────────────────────────────────
+
+export interface TenderApplyRequest {
+  payment_attempt_id: string;
+  tender_type: TenderType;
+  amount_applied_minor: number;
+  /** Only for `external_card_terminal` (regex `^[A-Z0-9]{0,6}$`). */
+  external_reference?: string;
+  /** Only for `internal_voucher` (Slice 4 path). */
+  voucher_code?: string;
+  idempotency_key: string;
+}
+
+export type TenderApplyResponse =
+  | {
+      kind: 'ok';
+      tender_line_id: string;
+      applied_at: string;
+      /** Cash overpayment only. */
+      change_due_minor?: number;
+    }
+  | PaymentRefusal;
+
+// ── tender.reverse ───────────────────────────────────────────────────────────
+
+export interface TenderReverseRequest {
+  tender_line_id: string;
+  idempotency_key: string;
+}
+
+export type TenderReverseResponse =
+  | {
+      kind: 'ok';
+      reversed_at: string;
+      /** `reversed` for cash + external_card_terminal in Slice 3. */
+      state: 'reversed' | 'reversal_pending';
+    }
+  | PaymentRefusal;
+
+// ── tender.read ──────────────────────────────────────────────────────────────
+
+export interface TenderReadRequest {
+  tender_line_id: string;
+}
+
+export type TenderReadResponse =
+  | { kind: 'ok'; tender_line: TenderLineRendererView }
+  | PaymentRefusal;
+
+// ── Namespace surfaces ───────────────────────────────────────────────────────
+
+export interface PaymentsBridgeAPI {
+  /** Starts a new payment attempt against a frozen `PaymentIntentEnvelope v1`. */
+  start(req: PaymentsStartRequest): Promise<PaymentsStartResponse>;
+  /** Evaluates the settlement invariant + transitions to `settled`. */
+  confirm(req: PaymentsConfirmRequest): Promise<PaymentsConfirmResponse>;
+  /** Reverses applied TenderLines LIFO + transitions to `cancelled`. */
+  cancel(req: PaymentsCancelRequest): Promise<PaymentsCancelResponse>;
+  /** Push-stream subscription to attempt-level + per-line state. */
+  subscribe(req: PaymentsSubscribeRequest): Promise<PaymentsSubscribeResponse>;
+  /** One-shot read of the same renderer projection as `subscribe`. */
+  read(req: PaymentsReadRequest): Promise<PaymentsReadResponse>;
+}
+
+export interface TenderBridgeAPI {
+  /** Applies a tender line to a `started` payment attempt. */
+  apply(req: TenderApplyRequest): Promise<TenderApplyResponse>;
+  /** Reverses an `applied` tender line (idempotent via `idempotency_key`). */
+  reverse(req: TenderReverseRequest): Promise<TenderReverseResponse>;
+  /** One-shot read of a single line — same projection as `payments.subscribe`. */
+  read(req: TenderReadRequest): Promise<TenderReadResponse>;
 }
