@@ -1,16 +1,16 @@
-> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · Slices 3–5 NOT STARTED
+> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a AUTHORIZED (§A3 + §A4-A signed off) · Slices 3-rest pending S3a
 >
 > **006-payments-tender is partially implemented.** Slice 0 (visual
 > direction), Slice 1 (renderer-only tender selection + envelope
 > ingest), and Slice 2 (per-tender entry surfaces — cash +
 > external_card_terminal) shipped via PR #189/#190, PR #192, and
 > PR #198. The Slice 1 Maestro closeout merged as PR #196; the
-> Slice 2 Maestro closeout merged with this PR. **Slices 3–5 are
-> not started.** No further code, contracts, migrations, bridge-API
-> expansion, OpenAPI changes, or codegen may be authored against
-> this spec until a fresh Maestro preflight runs for Slice 3 and
-> explicit per-slice approval is recorded. Slice 3 (§A3 + §A4-A)
-> and Slice 4 (§A2 + §A4-B) remain held; §A5 is rollout-only. This
+> Slice 2 Maestro closeout merged with this PR. **§A3 and §A4-A
+> were signed off 2026-05-21 by Ahmed (Approved — no changes
+> requested); S3a may now begin via the next Maestro implementation
+> prompt.** S3b, S3c, and S3d remain blocked on their predecessor's
+> GREEN. §A4-B (Slice 4 voucher bridge review) remains held. §A2
+> is no-op for Slices 1–3 (plan AD-8). §A5 is rollout-only. This
 > file is the canonical record of those gates.
 
 # Coordination — 006-payments-tender
@@ -21,7 +21,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below. **Slice 3 owner decisions recorded 2026-05-21** — see §"Slice 3 owner decisions — Session 2026-05-21" below. **Slice 3 reviewers commissioned 2026-05-21 (sign-off pending)** — §A3 reviewer: Ahmed; §A4-A reviewer: Ahmed; both gates remain ⛔ Held; see §"Reviewer commissioning — 2026-05-21" below.)
+**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below. **Slice 3 owner decisions recorded 2026-05-21** — see §"Slice 3 owner decisions — Session 2026-05-21" below. **Slice 3 reviewers commissioned 2026-05-21 (sign-off pending)** — §A3 reviewer: Ahmed; §A4-A reviewer: Ahmed; both gates remain ⛔ Held; see §"Reviewer commissioning — 2026-05-21" below. **§A3 and §A4-A signed off 2026-05-21 by Ahmed (Approved — no changes requested); S3a is now AUTHORIZED.**)
 
 ---
 
@@ -42,7 +42,7 @@ and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), and Slice 2 (per-tender entry surfaces — cash + external_card_terminal) are complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), and PR #198 (this PR includes Slice 2 closeout). **Slices 3–5 are not started.** Slice 3 requires a fresh Maestro preflight and explicit per-slice approval before implementation may begin; Slice 3 remains held on §A3 (migrations) and §A4-A (bridge review); Slice 4 remains held on §A2 (voucher endpoints) and §A4-B (voucher bridge review); §A5 is rollout-only.
+**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), and Slice 2 (per-tender entry surfaces — cash + external_card_terminal) are complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), and PR #198 (Slice 2 closeout). **§A3 and §A4-A were signed off 2026-05-21 by Ahmed (Approved — no changes requested); S3a is now authorized and is the next implementation step.** S3b begins when S3a is GREEN; S3c begins when S3b is GREEN; S3d begins when S3c is GREEN. §A4-B (voucher bridge review) remains held — it gates Slice 4, not Slice 3. §A2 is no-op for Slices 1–3 (plan AD-8); it will commission before Slice 4 begins. §A5 is rollout-only.
 
 | Item | State |
 |:--|:--|
@@ -92,8 +92,9 @@ merged.
 | **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 · `/speckit-clarify` ✅ applied 2026-05-19 — **procedurally held** until `/speckit-plan` v1.0 merges | Ahmed (POS-Pulse) |
 | **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ✅ Signed off 2026-05-20 — PR #189 (T010 visual direction) + PR #190 (T011 sign-off). Reviewer: Ahmed. Result: approved. Clears Slice 1, Slice 2, and the documented Slice 4 force-fail visual variant. | Ahmed |
 | **§A2** | Backend / OpenAPI: any backend dependency 006 introduces. Currently expected: none for cash-only scope; possibly some for force-fail audit propagation. | ⛔ Held — gated on §A0 | TBD (POS-Pulse + SmartDataPulse backend, mirrored from 004 §A2) |
-| **§A3** | Migrations: any local SQLite tables 006 introduces. Currently none planned because the 004 audit-event store is the audit sink. **Explicit no-op approval still required** before code lands. | ⛔ Held — likely no-op | TBD |
-| **§A4** | Bridge-API surface: the `payments.*` (or equivalent) namespace, defined post-handoff-contract pinning. | ⛔ Held — gated on §A0 + AD-DEFERRED-3 | TBD |
+| **§A3** | Migrations: any local SQLite tables 006 introduces. Three new tables required for Slice 3: `payment_attempts`, `payment_tender_lines`, `payment_action_outbox` — plus indexes, CHECK constraints, append-only trigger, and extension of 004's `audit_events.action_category` with 7 new categories. | ✅ Signed off 2026-05-21 — Reviewer: Ahmed. Approved — no changes requested. Scope reviewed: three new SQLite tables (payment_attempts, payment_tender_lines, payment_action_outbox) + indexes + CHECK constraints + append-only trigger + extension of 004's audit_events.action_category with 7 new categories. Authorizes S3a implementation. | Ahmed |
+| **§A4-A** | Bridge-API surface review for the payments.* + tender.* namespaces (11 handlers; requireOperatorSession gating; idempotency-key strategy; refusal envelope; FR-013/FR-014 Clerk-backed attribution; PII / card-data / voucher-token redaction). Required before Slice 3 ships. | ✅ Signed off 2026-05-21 — Reviewer: Ahmed. Approved — no changes requested. Authorizes S3c bridge handlers. | Ahmed |
+| **§A4-B** | Bridge-API surface review for the vouchers.* namespace (Contract V-A: vouchers.validate / vouchers.redeem / vouchers.reverse). Required before Slice 4 ships. | ⛔ Held — pending Slice 4 voucher contract | TBD before Slice 4 |
 | **§A5** | Production readiness (coverage thresholds, security review, redaction audit). Blocks rollout, not slice merge. | ⛔ Held | TBD at rollout PR open time |
 
 ---
@@ -1197,6 +1198,50 @@ The Slice 3 Maestro execution ledger (PR #202) carries `gates.§A3.reviewer`
 and `gates.§A4-A.reviewer` fields; those fields will be updated from
 `TBD` to `Ahmed` in a follow-up ledger update. That ledger update is a
 separate task and does NOT happen here.
+
+---
+
+### Sign-off — 2026-05-21
+
+**Date:** 2026-05-21. **Update type:** docs-only. Does not start Slice
+3 implementation; records explicit gate clearance only.
+
+#### §A3 — Migration approval
+
+| Field | Value |
+|:--|:--|
+| Reviewer | Ahmed |
+| Sign-off date | 2026-05-21 |
+| Result | Approved — no changes requested |
+| Scope reviewed | `specs/006-payments-tender/data-model.md` — three new SQLite tables (`payment_attempts`, `payment_tender_lines`, `payment_action_outbox`) + partial unique index on `payment_attempts(terminal_id) WHERE state='started'` + CHECK constraints + FK relationships + append-only trigger on `payment_action_outbox` + extension of 004's `audit_events.action_category` enum with 7 new categories (4 attempt-level: `payment.settled`, `payment.cancelled`, `payment.failed`, `payment.force_failed`; 3 per-line: `tender.applied`, `tender.refused`, `tender.reversed`). Note: `tender.reversal_pending` is deferred to Slice 4. |
+| Migration naming | Bare numeric names continuing the existing migration sequence (owner decision PR #200, binding for S3a). |
+| Gate status | ✅ Cleared — S3a is now authorized |
+
+#### §A4-A — Bridge-API security review (`payments.*` + `tender.*`)
+
+| Field | Value |
+|:--|:--|
+| Reviewer | Ahmed |
+| Sign-off date | 2026-05-21 |
+| Result | Approved — no changes requested |
+| Scope reviewed | `specs/006-payments-tender/contracts/bridge-api.md` DRAFT — 11 handlers across `payments.*` (`payments.start`, `payments.confirm`, `payments.cancel`, `payments.subscribe`, `payments.read`, `payments.discardOnSessionEnd`) and `tender.*` (`tender.apply`, `tender.reverse`, `tender.read`) namespaces; `requireOperatorSession` gating on all handlers; UUID v4 idempotency keys; refusal envelope `{ kind: 'refused', reason: '...' }`; FR-013/FR-014 Clerk-backed attribution enforcement; PII / card-data / voucher-token redaction. |
+| Out of scope | Slice 4 voucher handlers (`vouchers.validate`, `vouchers.redeem`, `vouchers.reverse`) and `payments.forceFail` — those require separate §A4-B review before Slice 4 ships. |
+| Gate status | ✅ Cleared — S3c bridge handlers are now authorized |
+
+#### Authorization status
+
+**S3a (§A3 migrations + persistence repositories, T060–T067 + T110–T113) is AUTHORIZED.**
+The next Maestro implementation prompt is "Implement S3a" using
+`docs/maestro/quick-prompts.md` "Execute approved slice".
+
+#### Sequential chain after S3a
+
+| Sub-slice | Starts when… |
+|:--:|:--|
+| **S3a** | Now authorized (§A3 cleared) |
+| **S3b** | S3a is GREEN |
+| **S3c** | S3b is GREEN |
+| **S3d** | S3c is GREEN (§A1 already cleared 2026-05-20) |
 
 ---
 

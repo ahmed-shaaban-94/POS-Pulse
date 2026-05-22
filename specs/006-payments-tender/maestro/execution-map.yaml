@@ -19,8 +19,8 @@ spec: 006-payments-tender
 slice: 3
 version: 1
 base: 868c7ff
-status: BLOCKED
-preflight: STOP
+status: S3a-READY
+preflight: S3a-AUTHORIZED
 
 source_of_truth:
   tasks: specs/006-payments-tender/tasks.md
@@ -56,23 +56,29 @@ gates:
 
   - id: §A3
     label: Migrations (three new tables + audit-category extension)
-    status: held
+    status: cleared
     reviewer: Ahmed
     commissioned_at: "2026-05-21"
+    signed_off_at: "2026-05-21"
+    signed_off_result: "Approved — no changes requested"
     note: >
-      Held. Tables: payment_attempts, payment_tender_lines, payment_action_outbox +
+      Cleared. Tables: payment_attempts, payment_tender_lines, payment_action_outbox +
       audit_events.action_category extension (7 categories; tender.reversal_pending
-      deferred to Slice 4). Reviewer Ahmed (commissioned 2026-05-21). Must clear before S3a begins.
+      deferred to Slice 4). Reviewer Ahmed (commissioned 2026-05-21; signed off 2026-05-21 — Approved).
+      Authorizes S3a implementation.
 
   - id: §A4-A
     label: "Bridge-API security review: payments.* + tender.*"
-    status: held
+    status: cleared
     reviewer: Ahmed
     commissioned_at: "2026-05-21"
+    signed_off_at: "2026-05-21"
+    signed_off_result: "Approved — no changes requested"
     note: >
-      Held. Full security review of contracts/bridge-api.md: handler signatures,
+      Cleared. Full security review of contracts/bridge-api.md: handler signatures,
       requireOperatorSession gating, refusal envelopes, idempotency-key strategy,
-      PII redaction, audit emission paths. Reviewer Ahmed (commissioned 2026-05-21). Must clear before Slice 3 ships.
+      PII redaction, audit emission paths. Reviewer Ahmed (commissioned 2026-05-21; signed off 2026-05-21 — Approved).
+      Authorizes S3c bridge handlers.
 
   - id: §A4-B
     label: "Bridge-API security review: vouchers.* (Slice 4 only)"
@@ -112,7 +118,8 @@ slices:
     title: Migrations + persistence repositories
     spec: 006-payments-tender
     type: implementation
-    status: blocked
+    status: ready
+    authorized_at: "2026-05-21"
     gate:
       required:
         - §A3

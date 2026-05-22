@@ -1,6 +1,6 @@
-# 006-payments-tender — Slice 3 — BLOCKED
+# 006-payments-tender — Slice 3 — S3a AUTHORIZED
 
-**Status:** BLOCKED (preflight STOP; owner decisions recorded; gates §A3 + §A4-A held)
+**Status:** S3a AUTHORIZED (§A3 + §A4-A signed off 2026-05-21 by Ahmed — Approved); S3b/S3c/S3d remain BLOCKED on predecessor GREEN
 
 > **THIS FILE DOES NOT REPLACE `tasks.md` OR `coordination.md`.**
 > **THIS FILE DOES NOT AUTHORIZE IMPLEMENTATION.**
@@ -60,23 +60,40 @@ None. All coordination work is upstreamed.
 
 ---
 
-## Blocked
+## Recently signed off (now cleared)
 
-The following gates are **held**. No S3 sub-slice may start until both clear.
+Both gates that were blocking S3a have been signed off. S3a is now authorized.
 
 | Gate | Reviewer | Status |
 |:--|:--|:--|
-| **§A3** — Migration approval (three new tables + audit-category extension) | Ahmed (commissioned 2026-05-21) | ⛔ Held — sign-off not yet recorded; must be recorded in `coordination.md` (T067) before S3a begins |
-| **§A4-A** — Bridge-API security review (`payments.*` + `tender.*`) | Ahmed (commissioned 2026-05-21) | ⛔ Held — sign-off not yet recorded; must be recorded in `coordination.md` before Slice 3 ships |
+| **§A3** — Migration approval (three new tables + audit-category extension) | Ahmed (commissioned 2026-05-21) | ✅ Signed off 2026-05-21 — Approved, no changes requested |
+| **§A4-A** — Bridge-API security review (`payments.*` + `tender.*`) | Ahmed (commissioned 2026-05-21) | ✅ Signed off 2026-05-21 — Approved, no changes requested |
 
-> **S3a is NOT authorized.** Commissioning a reviewer is not clearance. Both §A3 and §A4-A remain
-> ⛔ Held until explicit sign-off is recorded in `coordination.md`.
+> **S3a is now AUTHORIZED.** Both §A3 and §A4-A are cleared. Sign-off is recorded in
+> `coordination.md` §"Sign-off — 2026-05-21". S3a (T060–T067 + T110–T113) may now begin.
+
+---
+
+## Blocked
+
+S3b, S3c, and S3d remain blocked on predecessor GREEN. §A4-B remains held (Slice 4 only).
+
+| Gate / Sub-slice | Status |
+|:--|:--|
+| **§A4-B** — Bridge-API review for `vouchers.*` (Slice 4 only) | ⛔ Held — TBD before Slice 4 |
+| **S3b** — Shared types + FSMs + audit emitter + idempotency helper | ⛔ Blocked — starts when S3a is GREEN |
+| **S3c** — Bridge handlers + preload registration | ⛔ Blocked — starts when S3b is GREEN |
+| **S3d** — Renderer wiring + final verification | ⛔ Blocked — starts when S3c is GREEN |
 
 ---
 
 ## Ready
 
-None. Every S3 sub-slice is blocked until §A3 and §A4-A clear.
+**S3a** is ready to implement.
+
+| Sub-slice | Task range | Gate reference |
+|:--|:--|:--|
+| **006-S3a** — Migrations + persistence repositories | T060–T067, T110–T113 | §A3 cleared 2026-05-21 (Ahmed, Approved) |
 
 ---
 
@@ -160,22 +177,33 @@ Coverage floors (checked at T160):
 
 ## Next recommended action
 
-1. **§A3 reviewer commissioned** — Ahmed assigned 2026-05-21. Awaiting sign-off; record in `coordination.md` gate ledger (§A3 row) when complete.
-2. **§A4-A reviewer commissioned** — Ahmed assigned 2026-05-21. Awaiting sign-off; record in `coordination.md` gate ledger (§A4-A row) when complete.
-3. Both reviewers work against:
-   - §A3: `specs/006-payments-tender/data-model.md` (three tables + invariants + migration order)
-   - §A4-A: `specs/006-payments-tender/contracts/bridge-api.md` (full DRAFT bridge contract)
-4. When §A3 clears (T067 recorded in `coordination.md`), **S3a may begin**.
-5. When §A4-A clears (recorded in `coordination.md`) AND S3a is GREEN, **S3b may begin**.
+1. ~~**§A3 reviewer commissioned** — Ahmed assigned 2026-05-21.~~ ✅ **Signed off 2026-05-21 — Approved.**
+2. ~~**§A4-A reviewer commissioned** — Ahmed assigned 2026-05-21.~~ ✅ **Signed off 2026-05-21 — Approved.**
+3. **Implement S3a** — both gates are now cleared. Use the "Execute approved slice" prompt from `docs/maestro/quick-prompts.md`. S3a covers T060–T067 + T110–T113 (migrations + persistence repositories).
+4. When S3a is GREEN, **S3b may begin** (§A4-A is already cleared).
+5. S3c begins when S3b is GREEN; S3d begins when S3c is GREEN.
 
 ---
 
 ## Next short Maestro prompt
 
-To start S3a implementation once §A3 clears, use the "Execute approved slice" prompt from:
+S3a is now authorized. Use this prompt to start S3a implementation (copy-paste ready):
 
 ```
-docs/maestro/quick-prompts.md  (added by PR #201)
+Implement 006-payments-tender S3a.
+
+Spec: specs/006-payments-tender/
+Sub-slice: S3a — Migrations + persistence repositories
+Task range: T060–T067, T110–T113
+Gate cleared: §A3 signed off 2026-05-21 by Ahmed (Approved — no changes requested)
+Migration naming: bare numeric sequence continuing existing migrations (owner decision PR #200)
+Execution map: specs/006-payments-tender/maestro/execution-map.yaml
+Wave order: Wave-A (T060 → T061 → T062 → T063 → T064; T065 parallel after T060),
+            then Wave-B (T066, T067, T110, T111, T112, T113)
+Agent: single-agent (process-boundary rule — migrations cross schema/repository boundary)
+
+Follow TDD: write failing tests first (RED), then implement (GREEN).
+Validate after each task: npm run typecheck && npm run lint && npx vitest run && npm run codegen:verify
 ```
 
 ---
