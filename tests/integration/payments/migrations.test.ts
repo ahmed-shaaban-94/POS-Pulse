@@ -791,9 +791,9 @@ describe('T066 — 006 Slice 3a migrations', () => {
         const db = freshDb();
         insertAttempt(db);
         insertLine(db);
-        expect(() =>
-          insertOutbox(db, { action_kind: kind, tender_line_id: null }),
-        ).toThrow();
+        expect(() => {
+          insertOutbox(db, { action_kind: kind, tender_line_id: null });
+        }).toThrow();
         db.close();
       },
     );
@@ -811,9 +811,9 @@ describe('T066 — 006 Slice 3a migrations', () => {
         const db = freshDb();
         insertAttempt(db);
         insertLine(db);
-        expect(() =>
-          insertOutbox(db, { action_kind: kind, tender_line_id: 'line-1' }),
-        ).toThrow();
+        expect(() => {
+          insertOutbox(db, { action_kind: kind, tender_line_id: 'line-1' });
+        }).toThrow();
         db.close();
       },
     );
@@ -823,16 +823,18 @@ describe('T066 — 006 Slice 3a migrations', () => {
       insertAttempt(db);
       // Same length (64), but with an uppercase 'A' replacing a lowercase 'a'.
       const nonHex = 'A'.padEnd(64, 'b');
-      expect(() => insertOutbox(db, { action_payload_hash: nonHex })).toThrow();
+      expect(() => {
+        insertOutbox(db, { action_payload_hash: nonHex });
+      }).toThrow();
       db.close();
     });
 
     it('rejects action_payload_hash whose length is not exactly 64', () => {
       const db = freshDb();
       insertAttempt(db);
-      expect(() =>
-        insertOutbox(db, { action_payload_hash: 'a'.repeat(63) }),
-      ).toThrow();
+      expect(() => {
+        insertOutbox(db, { action_payload_hash: 'a'.repeat(63) });
+      }).toThrow();
       db.close();
     });
   });

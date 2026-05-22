@@ -100,11 +100,24 @@ export type UpdateTenderLineStateInput =
 
 export interface PaymentTenderLinesRepository {
   insert(input: InsertPaymentTenderLineInput): void;
+  /**
+   * Transitions a tender line to a terminal state.
+   *
+   * **Caller contract:** the TenderLine FSM (S3b) is responsible for
+   * verifying that the target line exists and that the transition is legal
+   * before calling this method. This method does NOT throw on
+   * `tender_line_id` not-found — the UPDATE silently affects zero rows.
+   * The S3b FSM calls `findByAttempt` first as part of its transition
+   * matrix, which is also where legal-vs-illegal transition enforcement
+   * happens. Trust-internal-code boundary per CLAUDE.md.
+   */
   updateState(input: UpdateTenderLineStateInput): void;
   findByAttempt(payment_attempt_id: string): PaymentTenderLineRow[];
   /**
    * Canonical settlement-invariant sum per data-model §"Invariant 5".
-   * Returns 0 when the attempt has no applied lines yet.
+   * Returns 0 when the attempt has no applied lines yet. Throws
+   * `TypeError` if the SUM exceeds `Number.MAX_SAFE_INTEGER` — a money
+   * defence-in-depth check at the aggregate boundary.
    */
   settlementSumMinor(payment_attempt_id: string): number;
 }
@@ -210,7 +223,19 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
 
     settlementSumMinor(payment_attempt_id: string): number {
       const row = settlementSumStmt.get(payment_attempt_id);
-      return row?.settlement_sum_minor ?? 0;
+      const total = row?.settlement_sum_minor ?? 0;
+      // Constitution §II — money is integer minor units. The per-line CHECKs
+      // make exceeding MAX_SAFE_INTEGER practically impossible, but a SUM is
+      // the one boundary where defence-in-depth is warranted: a corrupted
+      // migration or a future column-shape change could violate the invariant
+      // silently. Throw here so S3b's settlement comparison cannot proceed
+      // against an unsafe sum.
+      if (!Number.isSafeInteger(total)) {
+        throw new TypeError(
+          `payment_tender_lines settlement_sum_minor is not a safe integer for attempt ${payment_attempt_id}: ${String(total)}`,
+        );
+      }
+      return total;
     },
   };
 }

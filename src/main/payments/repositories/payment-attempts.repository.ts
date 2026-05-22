@@ -112,6 +112,17 @@ export type UpdatePaymentAttemptStateInput =
 
 export interface PaymentAttemptsRepository {
   insert(input: InsertPaymentAttemptInput): void;
+  /**
+   * Transitions a payment attempt to a terminal state.
+   *
+   * **Caller contract:** the FSM (S3b) is responsible for verifying that the
+   * target attempt exists and that the transition is legal before calling
+   * this method. This method does NOT throw on `payment_attempt_id`
+   * not-found — the UPDATE silently affects zero rows. The S3b FSM calls
+   * `findById` first as part of its transition matrix, which is also where
+   * legal-vs-illegal transition enforcement happens. Trust-internal-code
+   * boundary per CLAUDE.md.
+   */
   updateState(input: UpdatePaymentAttemptStateInput): void;
   findById(payment_attempt_id: string): PaymentAttemptRow | undefined;
   findStartedByTerminal(terminal_id: string): PaymentAttemptRow | undefined;

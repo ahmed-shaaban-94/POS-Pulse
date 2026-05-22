@@ -141,5 +141,26 @@ describe('T113 — payment_action_outbox repository', () => {
       });
       expect(h1).toBe(h2);
     });
+
+    it('throws on a cyclic object reference (stack-safety guard)', () => {
+      const cyclic: Record<string, unknown> = { a: 1 };
+      cyclic.self = cyclic;
+      expect(() => computeActionPayloadHash(cyclic)).toThrow(/cycles/);
+    });
+
+    it('throws on a cyclic array reference (stack-safety guard)', () => {
+      const arr: unknown[] = [1, 2];
+      arr.push(arr);
+      expect(() => computeActionPayloadHash(arr)).toThrow(/cycles/);
+    });
+
+    it('handles the same plain object referenced twice without throwing (DAG, not cycle)', () => {
+      const shared = { x: 1 };
+      // Two siblings reference `shared` — that is NOT a cycle, just a DAG.
+      // The seen-set logic must remove `shared` from `seen` after visiting it
+      // so the second sibling re-encounter does not falsely trigger.
+      const payload = { a: shared, b: shared };
+      expect(() => computeActionPayloadHash(payload)).not.toThrow();
+    });
   });
 });

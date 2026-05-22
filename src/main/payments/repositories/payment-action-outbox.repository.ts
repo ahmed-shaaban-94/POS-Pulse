@@ -116,24 +116,36 @@ export function bindPaymentActionOutboxRepository(
  * This helper enforces no semantic redaction; it only canonicalises.
  */
 export function computeActionPayloadHash(payload: unknown): string {
-  const canonical = canonicalise(payload);
+  const canonical = canonicalise(payload, new WeakSet());
   return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
-function canonicalise(value: unknown): string {
+function canonicalise(value: unknown, seen: WeakSet<object>): string {
   if (value === null || value === undefined) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
   if (typeof value === 'number' || typeof value === 'boolean') return JSON.stringify(value);
   if (Array.isArray(value)) {
-    return `[${value.map(canonicalise).join(',')}]`;
+    if (seen.has(value)) {
+      throw new TypeError('computeActionPayloadHash payload must not contain cycles');
+    }
+    seen.add(value);
+    const out = `[${value.map((v) => canonicalise(v, seen)).join(',')}]`;
+    seen.delete(value);
+    return out;
   }
   // The bridge layer only forwards plain JSON-shaped data (string / number /
   // boolean / null / object / array); types narrow `unknown` to that subset by
-  // the time payloads reach this function.
+  // the time payloads reach this function. We still guard against cycles —
+  // those would otherwise blow the stack rather than produce a clear error.
   const obj = value as Record<string, unknown>;
+  if (seen.has(obj)) {
+    throw new TypeError('computeActionPayloadHash payload must not contain cycles');
+  }
+  seen.add(obj);
   const keys = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
     .sort();
-  const entries = keys.map((k) => `${JSON.stringify(k)}:${canonicalise(obj[k])}`);
+  const entries = keys.map((k) => `${JSON.stringify(k)}:${canonicalise(obj[k], seen)}`);
+  seen.delete(obj);
   return `{${entries.join(',')}}`;
 }

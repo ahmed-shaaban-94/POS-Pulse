@@ -263,4 +263,32 @@ describe('T112 — payment_tender_lines repository', () => {
     );
     expect(repo.findByAttempt('attempt-1')[0].external_reference).toBe('AB12XY');
   });
+
+  it('settlementSumMinor throws when the SUM exceeds MAX_SAFE_INTEGER (defence-in-depth)', () => {
+    // The per-line CHECKs make this unreachable in practice, but a corrupted
+    // migration or a future schema change could violate the invariant. The
+    // guard fires at the aggregate boundary so S3b's settlement comparison
+    // cannot proceed against an unsafe sum (Constitution §II).
+    const stub = {
+      pragma: () => null,
+      exec: () => undefined,
+      transaction: <T extends (...args: never[]) => unknown>(fn: T): T => fn,
+      close: () => undefined,
+      prepare() {
+        return {
+          run() {
+            return { changes: 0, lastInsertRowid: 0 };
+          },
+          get() {
+            return { settlement_sum_minor: Number.MAX_SAFE_INTEGER + 100 };
+          },
+          all(): unknown[] {
+            return [];
+          },
+        };
+      },
+    };
+    const repo = bindPaymentTenderLinesRepository(stub);
+    expect(() => repo.settlementSumMinor('attempt-x')).toThrow(TypeError);
+  });
 });
