@@ -241,14 +241,14 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### §A3 migration tasks
 
-- [ ] **T060** [§A3] Migration: create `payment_attempts` table per data-model.md §"PaymentAttempt" + primary key + index on `(envelope_handoff_action_id)` + index on `(state, branch_id)` — `migrations/006-0001_create_payment_attempts.sql`
-- [ ] **T061** [§A3] Migration: create partial unique index `payment_attempts_one_started_per_terminal ON payment_attempts (terminal_id) WHERE state = 'started'` (research §R-6) — `migrations/006-0001b_payment_attempts_partial_unique_started.sql`
-- [ ] **T062** [§A3] [P] Migration: create `payment_tender_lines` table per data-model.md §"PaymentTenderLine" + FK → `payment_attempts` + CHECK constraints (non-cash `change_due_minor IS NULL`; `external_reference` only for external_card_terminal; voucher fields only for internal_voucher) + indexes on `(payment_attempt_id, apply_order)` and `(payment_attempt_id, state)` and filtered `(state)` for `reversal_pending` — `migrations/006-0002_create_payment_tender_lines.sql`
-- [ ] **T063** [§A3] [P] Migration: create `payment_action_outbox` table per data-model.md §"PaymentActionOutbox" + FKs + unique `action_id` + indexes on `(payment_attempt_id, created_at)` and `(tender_line_id, created_at)` — `migrations/006-0003_create_payment_action_outbox.sql`
-- [ ] **T064** [§A3] Migration: append-only trigger on `payment_action_outbox` (RAISE on UPDATE; RAISE on DELETE) — Constitution §P4 / §P16 — `migrations/006-0003b_payment_action_outbox_append_only_trigger.sql`
-- [ ] **T065** [§A3] [P] Migration: extend 004's `audit_events.action_category` enum / CHECK with the 4 attempt-level + 3 per-line categories (voucher's `tender.reversal_pending` deferred to Slice 4) — `migrations/006-0004_extend_audit_event_categories.sql`
-- [ ] **T066** [§A3] Test (integration): apply all four migrations against a fresh better-sqlite3 file; assert schema matches data-model.md fields; assert append-only trigger refuses UPDATE and DELETE on outbox — `tests/integration/payments/migrations.test.ts`
-- [ ] **T067** [§A3] Record §A3 migration review sign-off (reviewer, date) — `specs/006-payments-tender/coordination.md`
+- [x] **T060** [§A3] Migration: create `payment_attempts` table per data-model.md §"PaymentAttempt" + primary key + index on `(envelope_handoff_action_id)` + index on `(state, branch_id)` — `migrations/006-0001_create_payment_attempts.sql`
+- [x] **T061** [§A3] Migration: create partial unique index `payment_attempts_one_started_per_terminal ON payment_attempts (terminal_id) WHERE state = 'started'` (research §R-6) — `migrations/006-0001b_payment_attempts_partial_unique_started.sql`
+- [x] **T062** [§A3] [P] Migration: create `payment_tender_lines` table per data-model.md §"PaymentTenderLine" + FK → `payment_attempts` + CHECK constraints (non-cash `change_due_minor IS NULL`; `external_reference` only for external_card_terminal; voucher fields only for internal_voucher) + indexes on `(payment_attempt_id, apply_order)` and `(payment_attempt_id, state)` and filtered `(state)` for `reversal_pending` — `migrations/006-0002_create_payment_tender_lines.sql`
+- [x] **T063** [§A3] [P] Migration: create `payment_action_outbox` table per data-model.md §"PaymentActionOutbox" + FKs + unique `action_id` + indexes on `(payment_attempt_id, created_at)` and `(tender_line_id, created_at)` — `migrations/006-0003_create_payment_action_outbox.sql`
+- [x] **T064** [§A3] Migration: append-only trigger on `payment_action_outbox` (RAISE on UPDATE; RAISE on DELETE) — Constitution §P4 / §P16 — `migrations/006-0003b_payment_action_outbox_append_only_trigger.sql`
+- [x] **T065** [§A3] [P] Migration: extend 004's `audit_events.action_category` enum / CHECK with the 4 attempt-level + 3 per-line categories (voucher's `tender.reversal_pending` deferred to Slice 4) — `migrations/006-0004_extend_audit_event_categories.sql`
+- [x] **T066** [§A3] Test (integration): apply all four migrations against a fresh better-sqlite3 file; assert schema matches data-model.md fields; assert append-only trigger refuses UPDATE and DELETE on outbox — `tests/integration/payments/migrations.test.ts`
+- [x] **T067** [§A3] Record §A3 migration review sign-off (reviewer, date) — `specs/006-payments-tender/coordination.md`
 
 ### Shared types (compile-time contract)
 
@@ -295,10 +295,10 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### Implementation — persistence layer
 
-- [ ] **T110** [US1] Implement migration runner registration for the four new migrations (compose with 001's existing better-sqlite3 transactional runner) — `src/main/db/migrations-registry.ts`
-- [ ] **T111** [US1] [P] Implement `payment_attempts` repository: insert / update-state / read-by-id / read-by-terminal-where-started (uses the partial unique index) — `src/main/payments/repositories/payment-attempts.repository.ts`
-- [ ] **T112** [US1] [P] Implement `payment_tender_lines` repository: insert / update-state / read-by-attempt / settlement-sum query (the canonical invariant SQL from data-model §"Invariant 5") — `src/main/payments/repositories/payment-tender-lines.repository.ts`
-- [ ] **T113** [US1] [P] Implement `payment_action_outbox` repository: insert / lookup-by-action-id; computes `action_payload_hash` over redacted canonical payload (research §R-10) — `src/main/payments/repositories/payment-action-outbox.repository.ts`
+- [x] **T110** [US1] Implement migration runner registration for the four new migrations (compose with 001's existing better-sqlite3 transactional runner) — `src/main/db/migrations-registry.ts`
+- [x] **T111** [US1] [P] Implement `payment_attempts` repository: insert / update-state / read-by-id / read-by-terminal-where-started (uses the partial unique index) — `src/main/payments/repositories/payment-attempts.repository.ts`
+- [x] **T112** [US1] [P] Implement `payment_tender_lines` repository: insert / update-state / read-by-attempt / settlement-sum query (the canonical invariant SQL from data-model §"Invariant 5") — `src/main/payments/repositories/payment-tender-lines.repository.ts`
+- [x] **T113** [US1] [P] Implement `payment_action_outbox` repository: insert / lookup-by-action-id; computes `action_payload_hash` over redacted canonical payload (research §R-10) — `src/main/payments/repositories/payment-action-outbox.repository.ts`
 
 ### Implementation — FSMs
 

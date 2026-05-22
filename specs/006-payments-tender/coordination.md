@@ -1245,6 +1245,148 @@ The next Maestro implementation prompt is "Implement S3a" using
 
 ---
 
+## Maestro closeout — S3a (PR #207)
+
+> Concise mirror of the PR #207 description (the canonical home of the
+> full closeout). Records the durable facts only; the full diff,
+> validation logs, and CodeRabbit thread live on GitHub. Schema:
+> [`../../docs/maestro/report-schema.md`](../../docs/maestro/report-schema.md).
+
+### Identification
+
+| Field | Value |
+|:--|:--|
+| Feature | `006-payments-tender` |
+| Sub-slice | S3a — Migrations + persistence repositories |
+| Branch | `feat/006-s3a-payments-persistence` |
+| Head SHA | `e3784c1` |
+| Merge commit | `e8b33d5` on `main` |
+| Merged at | 2026-05-22T14:07:11Z |
+| Constitution version pinned | v1.5.1 |
+
+### Gate verdict
+
+| Gate | Status entering | Status leaving |
+|:--|:--:|:--:|
+| §A0 — Upstream readiness | ✅ | ✅ (unchanged) |
+| §A1 — Visual direction Slice 0 | ✅ | ✅ (unchanged) |
+| §A2 — Backend / OpenAPI | no-op (Slices 1–3) | no-op (unchanged; gates Slice 4 voucher endpoints only) |
+| §A3 — Migrations | ✅ (signed off 2026-05-21) | ✅ (S3a delivered the migrations under §A3 authorization) |
+| §A4-A — Bridge-API security review (`payments.*` + `tender.*`) | ✅ (signed off 2026-05-21) | ✅ (unchanged; gates S3b/S3c, not S3a) |
+| §A4-B — Bridge-API review (`vouchers.*`, Slice 4) | ⛔ Held | ⛔ Held (unchanged) |
+| §A5 — Production readiness | ⛔ Held (rollout-only) | ⛔ Held (rollout-only) |
+
+No gate was opened or cleared by this sub-slice. S3a operated entirely under the §A3 clearance recorded 2026-05-21.
+
+### Tasks completed
+
+T060 · T061 · T062 · T063 · T064 · T065 (§A3 migrations, six bare-numeric files `0012`–`0017`)
+T066 (integration test — 39 cases: schema, CHECK, FK, partial unique, append-only, audit categories)
+T067 (§A3 sign-off — the durable record itself was already on `main` in §"Sign-off — 2026-05-21"; this closeout finalises the per-row `[x]` tick)
+T110 (migration runner registration — zero code change; `src/main/db/migrate.ts:readMigrationsFromDisk` reads `migrations/*.sql` lexically)
+T111 · T112 · T113 (three [P]-marked repositories under `src/main/payments/repositories/`)
+
+All 12 ticked in `tasks.md` with original task IDs, `[P]` markers, `[US?]` / `[§A3]` labels, descriptions, and advisory file-path proposals preserved verbatim. The migration filenames on disk follow the bare-numeric sequence per owner decision PR #200 (Finding F-001 in `maestro/execution-map.yaml`); the `tasks.md` `006-*` proposals are advisory and unchanged. Maestro task-marking §"What Maestro never changes" honoured.
+
+### Files touched (per PR description; 13 files, +2 176 lines)
+
+**New SQL migrations (6) — bare-numeric sequence (PR #200 owner decision):**
+
+- `migrations/0012_create_payment_attempts.sql`
+- `migrations/0013_payment_attempts_partial_unique_started.sql`
+- `migrations/0014_create_payment_tender_lines.sql`
+- `migrations/0015_create_payment_action_outbox.sql`
+- `migrations/0016_payment_action_outbox_append_only_trigger.sql`
+- `migrations/0017_extend_audit_event_categories.sql`
+
+**New TypeScript repositories (3):**
+
+- `src/main/payments/repositories/payment-attempts.repository.ts` — `insert` · `updateState` (discriminated-union typed per state) · `findById` · `findStartedByTerminal`
+- `src/main/payments/repositories/payment-tender-lines.repository.ts` — `insert` · `updateState` · `findByAttempt` · `settlementSumMinor` (canonical invariant SQL from data-model §"Invariant 5")
+- `src/main/payments/repositories/payment-action-outbox.repository.ts` — `insert` · `findByActionId` + `computeActionPayloadHash` (deterministic SHA-256 over sorted-key canonical JSON; redaction is the bridge layer responsibility — research §R-10)
+
+**New tests (4):**
+
+- `tests/integration/payments/migrations.test.ts` (39 cases)
+- `tests/unit/main/payments/repositories/payment-attempts.repository.test.ts` (11 cases)
+- `tests/unit/main/payments/repositories/payment-tender-lines.repository.test.ts` (15 cases)
+- `tests/unit/main/payments/repositories/payment-action-outbox.repository.test.ts` (7 cases)
+
+**Confirmed untouched (forbidden scope walls held):** S3b shared types / FSMs / audit emitter / idempotency helper (T070–T094, T120–T132); S3c bridge handlers + preload registration (T100–T106, T133–T142); S3d renderer wiring + final verification (T150–T164); `src/main/**` outside `src/main/payments/repositories/`; `src/main/index.ts` wiring (lands in S3c); `src/preload/**`; `src/shared/bridge-api.ts`; `src/shared/api-types.ts`; `src/renderer/**`; OpenAPI / codegen; CI workflows; `package.json` / `package-lock.json`; `_reference/Data-Pulse/`; `smart-data-pulse-2/**`; `AGENTS.md`; `CLAUDE.md`. No `tasks.md` / `coordination.md` / `docs/maestro/**` edits in the PR itself — those are this closeout's job.
+
+### Migrations delivered (per PR body)
+
+1. `payment_attempts` — five-state FSM column + 14-value `failure_reason` CHECK + 2 indexes (header in `0012`).
+2. Partial unique `payment_attempts_one_started_per_terminal` on `(terminal_id) WHERE state='started'` (research §R-6; prevents two concurrent attempts on the same drawer) — `0013`.
+3. `payment_tender_lines` — FK → `payment_attempts`; CHECKs enforcing per-type field presence (cash-only `change_due_minor`, external_card_terminal-only `external_reference` with regex `^[A-Z0-9]{0,6}$` making a PAN structurally unrepresentable, voucher-only `voucher_*` fields); 3 indexes including a filtered index on `reversal_pending` for the Slice 4 deferred resolver — `0014`.
+4. `payment_action_outbox` — FK → both new tables; unique `action_id` for idempotency lookup; SHA-256 `action_payload_hash` CHECK on length=64; 2 indexes — `0015`.
+5. Append-only triggers (UPDATE+DELETE RAISE) on `payment_action_outbox` (Constitution §P4) — `0016`.
+6. Audit-category documentation marker for the 7 categories cleared by §A3 (4 attempt-level: `payment.settled`, `payment.cancelled`, `payment.failed`, `payment.force_failed`; 3 per-line: `tender.applied`, `tender.refused`, `tender.reversed`; `tender.reversal_pending` deferred to Slice 4). Documentation-only — 0004 already used open-set `TEXT NOT NULL` for `action_category` — `0017`.
+
+### Validation evidence (PR #207 final head `e3784c1`)
+
+| Check | Result |
+|:--|:--:|
+| `npm run typecheck` (both tsconfigs) | ✅ clean |
+| `npm run lint` (`eslint .` + `prettier --check .`) | ✅ clean on S3a surface; 3 pre-existing prettier warnings on `.github/workflows/clean-caches.yml`, `docs/maestro/slice-schema.yaml`, `docs/maestro/templates/execution-map.yaml` reproduced identically on `main` (subsequently unblocked by PR #208 on 2026-05-22) |
+| `npx vitest run` (full) | ✅ 230 files / 2 984 passed / 3 skipped / 0 fail |
+| `npm run codegen:verify` | ✅ `api-types.ts` up to date (no OpenAPI changes) |
+| Targeted S3a coverage (`src/main/payments/repositories/**`) | ✅ 98.38 % statements / 92.85 % branches / 100 % functions / 100 % lines — clears the 80 % global floor with margin |
+
+**Coverage note:** the per-file branch floors come from `vitest.config.ts` global thresholds (80 %); the S3a surface clears them. The Slice 3 final coverage gate (T160; ≥ 95 % on FSMs + audit-emitter + idempotency + bridge handlers; ≥ 90 % on renderer wiring) is a Slice 3d concern, not S3a.
+
+**Known flake (pre-existing, not S3a-related):** running `npm test -- --coverage` (full suite + coverage) flakes occasionally on `scripts/__tests__/codegen.test.ts` with two 5 s-timeout failures due to coverage-instrumentation overhead on child-process IO. Running the file in isolation passes 8/8; running `npx vitest run` without coverage on the whole suite passes 2 984/2 984. The flake reproduces on `main` HEAD before the PR.
+
+### CodeRabbit findings — resolved
+
+- **Round 1 findings 1–5** — addressed in commit `7964e40` ("tighten 006 s3a sql invariants"). SQL-invariant tightening across the four migration files.
+- **Round 2 findings 6, 9 + docstrings 8/10** — addressed in commit `f582824` ("harden 006 s3a repo edges"). Repository edge-case hardening + improved docstrings on the three new repositories.
+- **Round 2 test-intent sharpening** — addressed in commit `e3784c1` ("sharpen 006 s3a migration test intent"). Test assertion intent clarified in the migrations integration test.
+
+All raised findings on PR #207 are resolved at merge.
+
+### Security / scope boundaries honoured
+
+- **No card data of any kind** at the persistence layer — the `external_reference` CHECK regex `^[A-Z0-9]{0,6}$` (FR-009 / research §R-5) makes a PAN structurally unrepresentable; `payment_tender_lines` has no PAN / CVV / track / expiry / cardholder-name column.
+- **No PII in logs** (Constitution §P6 / §P7 / §P11) — S3a introduces no logging; `payment_action_outbox` stores only a SHA-256 `action_payload_hash` (length=64 CHECK). Redaction of the canonical payload is the bridge layer's responsibility (S3c), not S3a's.
+- **Money handled as integer minor units** throughout (Constitution §II); `amount_minor` and related columns are typed accordingly; settlement invariant SQL uses integer arithmetic only.
+- **Append-only enforcement at the DB layer** (Constitution §P4 / §P16) — UPDATE and DELETE on `payment_action_outbox` raise via SQLite triggers (`0016`); no application-layer bypass possible.
+- **Partial unique index** prevents two `state='started'` rows per `terminal_id` (research §R-6) — drawer-level concurrency invariant enforced at the DB layer.
+- **No bridge calls, no IPC, no FSM rules, no idempotency logic, no audit emission** in S3a — those belong to S3b (FSMs + helpers) and S3c (bridge handlers).
+- **No `_reference/Data-Pulse/` content reused** (Constitution Principle IX) — schema re-derived from `data-model.md`.
+
+### Scope exclusions (forbidden walls held)
+
+- **No S3b work** — T070–T094, T120–T132 not started (shared types, PaymentAttempt FSM, TenderLine FSM, `requireOperatorSession` wrapper, idempotency-replay helper, audit emitter).
+- **No S3c work** — T100–T106, T133–T142 not started (bridge handlers, preload registration).
+- **No S3d work** — T150–T164 not started (renderer wiring, final verification + sign-off).
+- **No Slice 4 work** — T200+ not started (voucher / force-fail / Contract V-A).
+- **No OpenAPI / codegen changes** — `api-types.ts` untouched; `codegen:verify` clean.
+- **No `package.json` / `package-lock.json` changes.**
+- **No CI workflow changes** — `.github/workflows/` untouched.
+- **No `src/main/index.ts` wiring** — repositories are file-only until S3c bridge handlers register them.
+- **No `_reference/Data-Pulse/` touches; no `smart-data-pulse-2/**` touches.**
+- **No `git add -A` / `git add .`** — every staged file was on the S3a allow-list.
+
+### Deferred / follow-up
+
+- **Migration-naming divergence (F-001)** — `tasks.md` T060–T065 propose `006-*`-prefixed migration filenames; on-disk reality follows bare-numeric `0012`–`0017` per owner decision PR #200. Recorded as `findings.F-001` in `specs/006-payments-tender/maestro/execution-map.yaml`. Recommend the next `/speckit-analyze` cycle reconcile `tasks.md` to match the bare-numeric reality (or formally record the divergence as accepted).
+- **`tender.reversal_pending` audit category** — deferred from `0017` to Slice 4 (voucher reversal is a Slice 4 concern; S3a's filtered index on `reversal_pending` is in place ready for it).
+
+### Next step (single concrete action)
+
+Run a **fresh Maestro preflight for S3b** (Template 1). S3b is the next-candidate sub-slice: shared types (`src/shared/payments/types.ts`, `src/shared/payments/fsm-types.ts`, `src/shared/bridge-api.ts` extensions), PaymentAttempt FSM, TenderLine FSM, `requireOperatorSession` wrapper, idempotency-replay helper, audit emitter (T070–T094 tests + T120–T132 impl). S3b's gates (§A4-A and §A3) are already cleared; the only remaining precondition was S3a-GREEN, satisfied by this merge. **Do not start S3b implementation without the preflight.** S3c and S3d remain BLOCKED on S3b-GREEN and S3c-GREEN respectively; Slice 4 gates remain held.
+
+### Run notes
+
+- Single-agent execution end-to-end (process-boundary rule — migrations cross schema/repository boundary; per `docs/maestro/graph-rules.md`).
+- No `[P]` downgrades fired — T062, T063, T065, T111, T112, T113 stayed parallel-safe by file (executed in their tasks.md sequence by the single agent).
+- Zero `forbidden-scope` fires.
+- Zero `needs-owner-approval` raised during execution; the migration-naming divergence (F-001) was a preflight-time finding and the owner decision (PR #200) carried into execution unchanged.
+- Two CodeRabbit review rounds + a third sharpening pass were absorbed pre-merge (commits `7964e40`, `f582824`, `e3784c1`); all raised findings resolved.
+
+---
+
 ## Cross-references
 
 - 004 coordination model: [`../004-operator-session/coordination.md`](../004-operator-session/coordination.md)

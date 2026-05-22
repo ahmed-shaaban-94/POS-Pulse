@@ -17,10 +17,11 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 1
+version: 2
 base: 868c7ff
-status: S3a-READY
+status: S3a-COMPLETED
 preflight: S3a-AUTHORIZED
+last_updated: "2026-05-22"
 
 source_of_truth:
   tasks: specs/006-payments-tender/tasks.md
@@ -118,8 +119,13 @@ slices:
     title: Migrations + persistence repositories
     spec: 006-payments-tender
     type: implementation
-    status: ready
+    status: completed
     authorized_at: "2026-05-21"
+    merged_in_pr: 207
+    merged_at_commit: e8b33d5
+    merged_at_date: "2026-05-22"
+    head_sha: e3784c1
+    merged_at_iso: "2026-05-22T14:07:11Z"
     gate:
       required:
         - §A3
@@ -148,22 +154,41 @@ slices:
     # is mandatory for any task that crosses the migration / repository boundary.
     validation:
       reference: tasks.md T066 (integration test — apply all 4 migrations + assert schema)
+      result: green
+      evidence: >
+        PR #207 head e3784c1 — typecheck clean, lint clean on S3a surface
+        (3 pre-existing prettier warnings on main, since unblocked by PR #208),
+        vitest 230 files / 2 984 passed / 3 skipped / 0 fail,
+        codegen:verify clean, S3a repository coverage 98.38% stmt / 92.85% br
+        / 100% func / 100% line.
     notes: >
-      §A3 reviewer must be assigned and sign-off recorded in coordination.md
-      before any migration SQL is authored. Migration names follow bare numeric
-      sequence (owner decision PR #200), not the 006-* prefix in tasks.md.
-      T067 records the §A3 sign-off.
+      Delivered under §A3 + §A4-A clearance recorded 2026-05-21. Migration
+      filenames follow bare-numeric sequence 0012–0017 per owner decision
+      PR #200 (the 006-* prefixes in tasks.md remain advisory; F-001 stands
+      for the next /speckit-analyze). Repositories landed under
+      src/main/payments/repositories/. No bridge wiring, no FSM, no audit
+      emission — those land in S3b/S3c. CodeRabbit rounds 1+2 + a third
+      sharpening pass all absorbed pre-merge.
 
   - id: 006-S3b
     title: Shared types + FSMs + audit emitter + idempotency helper
     spec: 006-payments-tender
     type: implementation
-    status: blocked
+    status: next-candidate
+    authorized: false
+    preflight_required: true
     gate:
       required:
         - §A4-A
         - §A3-cleared
-      note: §A4-A must clear AND S3a must be GREEN before S3b begins.
+        - 006-S3a-GREEN
+      note: >
+        §A4-A and §A3 are both cleared (signed off 2026-05-21). S3a is GREEN
+        as of PR #207 (merge commit e8b33d5, 2026-05-22). S3b is the next
+        candidate sub-slice but is NOT YET AUTHORIZED — a fresh Maestro
+        preflight (Template 1) must produce the worklist, dependency /
+        file-conflict / parallel-safe graphs, and agent-dispatch posture
+        for T070–T094 + T120–T132 before any code is written.
     task_ids:
       - T070
       - T071
@@ -452,3 +477,35 @@ closeout:
     in specs/006-payments-tender/coordination.md.
     Recommended commit message for the closeout PR:
     "docs(pos): record 006 slice 3 closeout"
+
+  # Per-sub-slice closeout records (append-only; one block per merged sub-slice).
+  sub_slices:
+    - sub_slice: 006-S3a
+      pr: 207
+      sha: e8b33d5
+      head_sha: e3784c1
+      date: "2026-05-22"
+      merged_at_iso: "2026-05-22T14:07:11Z"
+      report_location: >
+        PR #207 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Maestro closeout — S3a (PR #207)"
+      tasks_completed:
+        - T060
+        - T061
+        - T062
+        - T063
+        - T064
+        - T065
+        - T066
+        - T067
+        - T110
+        - T111
+        - T112
+        - T113
+      next_action: >
+        Run a fresh Maestro preflight for S3b (Template 1). S3b is the
+        next-candidate sub-slice; its gates (§A4-A and §A3) are already
+        cleared and S3a is GREEN, but a preflight worklist + dependency /
+        file-conflict / parallel-safe graphs are required before any S3b
+        code is written. S3c and S3d remain blocked on their predecessors;
+        Slice 4 gates (§A4-B, §A2) remain held.

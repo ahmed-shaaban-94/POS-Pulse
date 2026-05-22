@@ -1,6 +1,6 @@
-# 006-payments-tender — Slice 3 — S3a AUTHORIZED
+# 006-payments-tender — Slice 3 — S3a COMPLETED · S3b next candidate (preflight required)
 
-**Status:** S3a AUTHORIZED (§A3 + §A4-A signed off 2026-05-21 by Ahmed — Approved); S3b/S3c/S3d remain BLOCKED on predecessor GREEN
+**Status:** S3a ✅ COMPLETED — merged via PR #207 at `e8b33d5` on 2026-05-22T14:07:11Z. S3b is the next-candidate sub-slice (§A4-A + §A3 both cleared, S3a GREEN) but is NOT AUTHORIZED — a fresh Maestro preflight is required. S3c and S3d remain BLOCKED on S3b-GREEN and S3c-GREEN respectively. Slice 4 gates (§A4-B, §A2) remain held.
 
 > **THIS FILE DOES NOT REPLACE `tasks.md` OR `coordination.md`.**
 > **THIS FILE DOES NOT AUTHORIZE IMPLEMENTATION.**
@@ -25,7 +25,7 @@ The `execution-map.yaml` in this directory adds Maestro execution structure on t
 
 ---
 
-## Merged (on `main` at `868c7ff`)
+## Merged
 
 | PR | Title | Key Artefact |
 |:--|:--|:--|
@@ -36,13 +36,11 @@ The `execution-map.yaml` in this directory adds Maestro execution structure on t
 | PR #199 | 006 Slice 2 closeout | Maestro closeout recorded in `coordination.md` |
 | PR #200 | Slice 3 owner decisions — Session 2026-05-21 | Migration naming + sub-slice scoping recorded in `coordination.md` |
 | PR #201 | Hybrid Maestro templates | `docs/maestro/slice-schema.yaml`, `docs/maestro/quick-prompts.md`, `docs/maestro/templates/` added |
+| **PR #207** | **006 Slice 3a — payment persistence** | **T060–T067 + T110–T113 complete; merge commit `e8b33d5` on 2026-05-22T14:07:11Z; head SHA `e3784c1`. Six migrations (`0012`–`0017`) + three repositories under `src/main/payments/repositories/` + 39-case migrations integration test + 33 repo unit tests. Maestro closeout recorded in `coordination.md` §"Maestro closeout — S3a (PR #207)".** |
 
-All of the above are on `main` at `868c7ff`.
+All of the above are on `main`.
 
-> **Note:** At the time this file was created, the worktree HEAD is `868c7ff`
-> (PR #199 — Slice 2 closeout). PRs #200 and #201 are referenced above as
-> owner-recorded decisions and template additions; their artefacts are
-> forward-referenced here and will be present once merged.
+> **Note:** Prior baseline `868c7ff` (PR #199 — Slice 2 closeout) is now superseded by S3a's merge commit `e8b33d5` (PR #207). Slice 3 source-of-truth pointers (`execution-map.yaml §base`) remain pinned to the pre-Slice-3 baseline for traceability of the preflight that authorised S3a.
 
 ---
 
@@ -62,38 +60,42 @@ None. All coordination work is upstreamed.
 
 ## Recently signed off (now cleared)
 
-Both gates that were blocking S3a have been signed off. S3a is now authorized.
+Both gates that were blocking S3a have been signed off, and S3a has subsequently shipped.
 
 | Gate | Reviewer | Status |
 |:--|:--|:--|
-| **§A3** — Migration approval (three new tables + audit-category extension) | Ahmed (commissioned 2026-05-21) | ✅ Signed off 2026-05-21 — Approved, no changes requested |
-| **§A4-A** — Bridge-API security review (`payments.*` + `tender.*`) | Ahmed (commissioned 2026-05-21) | ✅ Signed off 2026-05-21 — Approved, no changes requested |
+| **§A3** — Migration approval (three new tables + audit-category extension) | Ahmed (commissioned 2026-05-21) | ✅ Signed off 2026-05-21 — Approved, no changes requested; delivered under this clearance via PR #207 |
+| **§A4-A** — Bridge-API security review (`payments.*` + `tender.*`) | Ahmed (commissioned 2026-05-21) | ✅ Signed off 2026-05-21 — Approved, no changes requested; gates S3b/S3c, both pending |
 
-> **S3a is now AUTHORIZED.** Both §A3 and §A4-A are cleared. Sign-off is recorded in
-> `coordination.md` §"Sign-off — 2026-05-21". S3a (T060–T067 + T110–T113) may now begin.
+> **S3a is COMPLETE.** Merged via PR #207 (merge commit `e8b33d5`) on 2026-05-22T14:07:11Z. Closeout recorded in `coordination.md` §"Maestro closeout — S3a (PR #207)" and in `execution-map.yaml §closeout.sub_slices[0]`.
 
 ---
 
 ## Blocked
 
-S3b, S3c, and S3d remain blocked on predecessor GREEN. §A4-B remains held (Slice 4 only).
+S3c and S3d remain blocked on their predecessors. §A4-B remains held (Slice 4 only). S3b is the next-candidate sub-slice — its gates are cleared but it requires a fresh Maestro preflight before authorisation.
 
 | Gate / Sub-slice | Status |
 |:--|:--|
 | **§A4-B** — Bridge-API review for `vouchers.*` (Slice 4 only) | ⛔ Held — TBD before Slice 4 |
-| **S3b** — Shared types + FSMs + audit emitter + idempotency helper | ⛔ Blocked — starts when S3a is GREEN |
+| **§A2** — Backend / OpenAPI (Slice 4 voucher endpoints) | ⛔ Held — TBD before Slice 4 |
+| **S3b** — Shared types + FSMs + audit emitter + idempotency helper | ⚠ Next candidate — gates (§A4-A + §A3) cleared and S3a GREEN, but a fresh Maestro preflight is required before authorisation. **Not yet authorised.** |
 | **S3c** — Bridge handlers + preload registration | ⛔ Blocked — starts when S3b is GREEN |
 | **S3d** — Renderer wiring + final verification | ⛔ Blocked — starts when S3c is GREEN |
+| Slice 4 gates (force-fail + voucher Contract V-A) | ⛔ Held — TBD after Slice 3 closes (T164) |
 
 ---
 
 ## Ready
 
-**S3a** is ready to implement.
+No sub-slice is currently authorised for implementation.
 
-| Sub-slice | Task range | Gate reference |
+**S3b** is the next candidate but requires a fresh Maestro preflight (Template 1) before any T070–T094 / T120–T132 work begins.
+
+| Sub-slice | Task range | Status |
 |:--|:--|:--|
-| **006-S3a** — Migrations + persistence repositories | T060–T067, T110–T113 | §A3 cleared 2026-05-21 (Ahmed, Approved) |
+| **006-S3a** — Migrations + persistence repositories | T060–T067, T110–T113 | ✅ Completed (PR #207) |
+| **006-S3b** — Shared types + FSMs + audit emitter + idempotency helper | T070–T094 (tests) + T120–T132 (impl) | ⚠ Preflight required — gates cleared, S3a GREEN |
 
 ---
 
@@ -179,31 +181,34 @@ Coverage floors (checked at T160):
 
 1. ~~**§A3 reviewer commissioned** — Ahmed assigned 2026-05-21.~~ ✅ **Signed off 2026-05-21 — Approved.**
 2. ~~**§A4-A reviewer commissioned** — Ahmed assigned 2026-05-21.~~ ✅ **Signed off 2026-05-21 — Approved.**
-3. **Implement S3a** — both gates are now cleared. Use the "Execute approved slice" prompt from `docs/maestro/quick-prompts.md`. S3a covers T060–T067 + T110–T113 (migrations + persistence repositories).
-4. When S3a is GREEN, **S3b may begin** (§A4-A is already cleared).
-5. S3c begins when S3b is GREEN; S3d begins when S3c is GREEN.
+3. ~~**Implement S3a**~~ ✅ **Completed via PR #207 (merge commit `e8b33d5`, 2026-05-22T14:07:11Z).** Closeout recorded.
+4. **Run a fresh Maestro preflight for S3b** (Template 1) before any S3b code is written. The preflight must produce the worklist, dependency / file-conflict / parallel-safe graphs (the 18-wide test antichain at Wave C–E), and the agent-dispatch posture for T070–T094 + T120–T132. **S3b is NOT YET AUTHORIZED** even though its gates are cleared — the preflight is the gate.
+5. After S3b preflight completes and is owner-approved, S3b implementation may begin.
+6. S3c begins when S3b is GREEN; S3d begins when S3c is GREEN. Slice 4 gates (§A4-B, §A2) remain held throughout.
 
 ---
 
 ## Next short Maestro prompt
 
-S3a is now authorized. Use this prompt to start S3a implementation (copy-paste ready):
+S3a is complete. The next Maestro work is the S3b preflight — **not** S3b implementation. Use this prompt to commission the preflight (copy-paste ready):
 
 ```
-Implement 006-payments-tender S3a.
+Run Maestro Preflight for 006-payments-tender S3b.
 
 Spec: specs/006-payments-tender/
-Sub-slice: S3a — Migrations + persistence repositories
-Task range: T060–T067, T110–T113
-Gate cleared: §A3 signed off 2026-05-21 by Ahmed (Approved — no changes requested)
-Migration naming: bare numeric sequence continuing existing migrations (owner decision PR #200)
-Execution map: specs/006-payments-tender/maestro/execution-map.yaml
-Wave order: Wave-A (T060 → T061 → T062 → T063 → T064; T065 parallel after T060),
-            then Wave-B (T066, T067, T110, T111, T112, T113)
-Agent: single-agent (process-boundary rule — migrations cross schema/repository boundary)
+Sub-slice: S3b — Shared types + FSMs + audit emitter + idempotency helper
+Task range: T070–T094 (TDD tests) + T120–T132 (impl)
+Gate status: §A4-A and §A3 cleared 2026-05-21 (Ahmed, Approved); 006-S3a GREEN as of PR #207 (e8b33d5, 2026-05-22)
+Preflight authority: docs/maestro/templates/ (Template 1)
+Execution map: specs/006-payments-tender/maestro/execution-map.yaml (slices.006-S3b)
 
-Follow TDD: write failing tests first (RED), then implement (GREEN).
-Validate after each task: npm run typecheck && npm run lint && npx vitest run && npm run codegen:verify
+Produce: worklist, dependency graph, file-conflict graph,
+         parallel-safe groups (Wave-C/D/E test antichains; Wave-F GREEN impl),
+         agent-dispatch posture (expect single-agent per process-boundary rule),
+         and any divergences from tasks.md flagged for /speckit-analyze.
+
+Do NOT author any S3b code. Stop after the preflight artefacts are produced
+and the owner approves them.
 ```
 
 ---
