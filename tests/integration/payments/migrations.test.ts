@@ -624,8 +624,14 @@ describe('T066 — 006 Slice 3a migrations', () => {
       db.close();
     });
 
-    it.each(['AB!2', 'A___', 'A-1', 'A 1', 'A.B'])(
-      'rejects external_reference %s (non A-Z/0-9 char anywhere in the string)',
+    // Each value is between 1 and 6 chars (within the length BETWEEN leg) and
+    // contains at least one character outside [A-Z0-9]. The test therefore
+    // exercises the char-class clause unambiguously; the length leg is
+    // satisfied for every input. Includes lowercase ('abc12X'), embedded space
+    // ('AB CD'), tab ('AB\tCD'), control char (DEL=0x7F), punctuation, and
+    // common shell chars to cover the breadth of the negative-glob.
+    it.each(['AB!2', 'A___', 'A-1', 'A 1', 'A.B', 'abc12X', 'AB\tCD', 'ABCD'])(
+      'rejects external_reference %j (non A-Z/0-9 char anywhere in the string)',
       (value) => {
         const db = freshDb();
         insertAttempt(db);
@@ -821,10 +827,26 @@ describe('T066 — 006 Slice 3a migrations', () => {
     it('rejects action_payload_hash containing non-hex characters', () => {
       const db = freshDb();
       insertAttempt(db);
-      // Same length (64), but with an uppercase 'A' replacing a lowercase 'a'.
-      const nonHex = 'A'.padEnd(64, 'b');
+      // Same length (64), with a truly out-of-hex char ('g' — first letter
+      // past 'f') so the test exercises the char-class clause unambiguously
+      // rather than relying on the lowercase-only design choice.
+      const nonHex = 'g'.padEnd(64, 'a');
       expect(() => {
         insertOutbox(db, { action_payload_hash: nonHex });
+      }).toThrow();
+      db.close();
+    });
+
+    it('rejects action_payload_hash containing uppercase hex (lowercase-only by design)', () => {
+      // Distinct from the previous test: this asserts the deliberate
+      // lowercase-only design choice (matches createHash().digest('hex')
+      // output exactly). 'A' is a hex digit semantically, but our CHECK
+      // accepts only [0-9a-f].
+      const db = freshDb();
+      insertAttempt(db);
+      const uppercaseHex = 'A'.padEnd(64, 'b');
+      expect(() => {
+        insertOutbox(db, { action_payload_hash: uppercaseHex });
       }).toThrow();
       db.close();
     });
