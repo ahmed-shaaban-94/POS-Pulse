@@ -108,6 +108,11 @@ export function ExternalCardTerminalEntry({
         } else {
           setBridgeRefusal(true);
         }
+      } catch {
+        // CR-7: bridge rejection (network / IPC layer error). Surface generic
+        // copy; never let the promise reject up as an unhandled rejection
+        // through `void handleConfirm()`.
+        setBridgeRefusal(true);
       } finally {
         setIsApplying(false);
       }

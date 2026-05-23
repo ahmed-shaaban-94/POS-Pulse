@@ -121,6 +121,12 @@ export function CashEntry({
         } else {
           setBridgeRefusal(true);
         }
+      } catch {
+        // CR-6: bridge rejection (network / IPC layer error). Treat the same
+        // as a structured refusal — surface generic copy, never let the
+        // promise reject up through `void handleConfirm()` as an unhandled
+        // rejection.
+        setBridgeRefusal(true);
       } finally {
         setIsApplying(false);
       }

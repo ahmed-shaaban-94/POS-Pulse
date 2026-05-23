@@ -7,7 +7,11 @@ import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
-import type { PaymentsBridgeAPI, TenderBridgeAPI } from '../../../shared/bridge-api.js';
+import type {
+  PaymentsBridgeAPI,
+  PreloadBridgeAPI,
+  TenderBridgeAPI,
+} from '../../../shared/bridge-api.js';
 
 /**
  * 006-payments-tender S1 + S3d T152 — PaymentSurface.
@@ -39,7 +43,8 @@ export interface PaymentSurfaceProps {
   /**
    * Test seam: injects payments + tender bridge in place of `window.api`.
    * Mirrors the `_testBridge` pattern from CartPane (cart-pane-live-lines).
-   * When omitted, the surface degrades to Slice-1 behaviour.
+   * When omitted in production, the surface reads from `window.api.payments`
+   * + `window.api.tender` (the typed preload bridge from S3c).
    */
   _testBridge?: {
     payments: PaymentsBridgeAPI;
@@ -48,6 +53,31 @@ export interface PaymentSurfaceProps {
 }
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
+
+interface PaymentsAndTenderBridge {
+  payments: PaymentsBridgeAPI;
+  tender: TenderBridgeAPI;
+}
+
+/**
+ * Resolve the payments + tender bridge. In tests the bridge is supplied via
+ * the `_testBridge` prop; in production we read it from the typed preload
+ * `window.api`. Returns null only when both are absent (e.g. happy-dom with
+ * no prop injection — Slice-1 fall-back) so the surface can degrade gracefully.
+ */
+function resolveBridge(
+  testBridge: PaymentsAndTenderBridge | undefined,
+): PaymentsAndTenderBridge | null {
+  if (testBridge !== undefined) {
+    return testBridge;
+  }
+  /* v8 ignore next 8 — only reachable in Electron; jsdom never sets window.api */
+  const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
+  if (api === undefined || api.payments === undefined || api.tender === undefined) {
+    return null;
+  }
+  return { payments: api.payments, tender: api.tender };
+}
 
 export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.Element | null {
   const sessionState = useOperatorSessionStore((s) => s.state);
@@ -59,7 +89,10 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
   const [bridgeRefusalCopy, setBridgeRefusalCopy] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [isStarting, setIsStarting] = useState<boolean>(false);
   const [reversalPending, setReversalPending] = useState<boolean>(false);
+
+  const bridge = resolveBridge(_testBridge);
 
   // paymentAttemptId is the source-of-truth from the paymentSlice projection
   // (set by payments.start → payments.read flow, or seeded by tests via
@@ -76,6 +109,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
     setBridgeRefusalCopy(null);
     setIsConfirming(false);
     setIsCancelling(false);
+    setIsStarting(false);
     setReversalPending(false);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
@@ -90,7 +124,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
     setSelectedTender(tender);
     setBridgeRefusalCopy(null);
 
-    if (_testBridge === undefined || envelope === null) {
+    if (bridge === null || envelope === null) {
       // Slice-1 behaviour: status banner only.
       return;
     }
@@ -104,64 +138,96 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       return;
     }
 
-    const startResponse = await _testBridge.payments.start({
-      envelope_handoff_action_id: envelope.handoff_action_id,
-      envelope_cart_id: envelope.cart_id,
-      envelope_subtotal_minor: envelope.subtotal_minor,
-      envelope_version: 'v1',
-      idempotency_key: crypto.randomUUID(),
-    });
-
-    if (startResponse.kind === 'refused') {
-      setBridgeRefusalCopy('We could not start this payment. Please try again.');
+    // CR-9 guard: rapid-double clicks before the first start/read cycle
+    // completes would otherwise fire payments.start multiple times in
+    // parallel. paymentAttemptId only updates after the read response lands.
+    if (isStarting) {
       return;
     }
 
-    setPhase('entry');
+    setIsStarting(true);
+    try {
+      const startResponse = await bridge.payments.start({
+        envelope_handoff_action_id: envelope.handoff_action_id,
+        envelope_cart_id: envelope.cart_id,
+        envelope_subtotal_minor: envelope.subtotal_minor,
+        envelope_version: 'v1',
+        idempotency_key: crypto.randomUUID(),
+      });
 
-    // Seed the paymentSlice with an initial read so the surface can react to
-    // applied lines as they land. This also populates the paymentAttemptId
-    // derivation above.
-    const readResponse = await _testBridge.payments.read({
-      payment_attempt_id: startResponse.payment_attempt_id,
-    });
-    if (readResponse.kind === 'ok') {
-      usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
+      if (startResponse.kind === 'refused') {
+        setBridgeRefusalCopy('We could not start this payment. Please try again.');
+        return;
+      }
+
+      setPhase('entry');
+
+      // Seed the paymentSlice with an initial read so the surface can react to
+      // applied lines as they land. This also populates the paymentAttemptId
+      // derivation above.
+      const readResponse = await bridge.payments.read({
+        payment_attempt_id: startResponse.payment_attempt_id,
+      });
+      if (readResponse.kind === 'ok') {
+        usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
+      }
+    } catch {
+      // Bridge rejection (network / IPC layer error). Treat as a generic
+      // refusal — no structured reason crosses into the DOM (FR-005 / FR-017).
+      setBridgeRefusalCopy('We could not start this payment. Please try again.');
+    } finally {
+      setIsStarting(false);
     }
   }
 
   async function handleLineApplied(): Promise<void> {
-    if (_testBridge === undefined || paymentAttemptId === null || envelope === null) {
+    if (bridge === null || paymentAttemptId === null || envelope === null) {
       return;
     }
-    const readResponse = await _testBridge.payments.read({
-      payment_attempt_id: paymentAttemptId,
-    });
-    if (readResponse.kind === 'ok') {
-      usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
-      // Split-tender (T154): if the running sum is still below the subtotal,
-      // return to tender selection so the cashier may add another line. When
-      // the sum equals the subtotal, the surface stays put and the confirm
-      // button becomes visible. The settlement invariant itself is enforced
-      // on the main process at payments.confirm time.
-      const sumApplied = readResponse.payment_attempt.tender_lines
-        .filter((l) => l.state === 'applied')
-        .reduce((acc, l) => acc + l.amount_applied_minor, 0);
-      if (sumApplied < envelope.subtotal_minor) {
-        setSelectedTender(null);
-        setPhase('tender_selection');
+    try {
+      const readResponse = await bridge.payments.read({
+        payment_attempt_id: paymentAttemptId,
+      });
+      if (readResponse.kind === 'ok') {
+        usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
+        // Split-tender (T154): if the running sum is still below the subtotal,
+        // return to tender selection so the cashier may add another line. When
+        // the sum equals the subtotal, the surface stays put and the confirm
+        // button becomes visible. The settlement invariant itself is enforced
+        // on the main process at payments.confirm time.
+        // CR-11: guard every accumulator step with Number.isSafeInteger
+        // (Constitution §II). A malformed minor value silently produces a
+        // float-tainted running sum without this check.
+        let sumApplied = 0;
+        for (const line of readResponse.payment_attempt.tender_lines) {
+          if (line.state !== 'applied') continue;
+          if (!Number.isSafeInteger(line.amount_applied_minor)) continue;
+          sumApplied += line.amount_applied_minor;
+          if (!Number.isSafeInteger(sumApplied)) {
+            // Running sum overflowed — bail out without changing the phase.
+            return;
+          }
+        }
+        if (sumApplied < envelope.subtotal_minor) {
+          setSelectedTender(null);
+          setPhase('tender_selection');
+        }
       }
+    } catch {
+      // Read failure after a successful apply: keep the current phase so the
+      // cashier can retry; do NOT surface a refusal here because the line
+      // itself was successfully applied on the main process.
     }
   }
 
   async function handleCancel(): Promise<void> {
-    if (_testBridge === undefined || paymentAttemptId === null) {
+    if (bridge === null || paymentAttemptId === null) {
       return;
     }
     setBridgeRefusalCopy(null);
     setIsCancelling(true);
     try {
-      const response = await _testBridge.payments.cancel({
+      const response = await bridge.payments.cancel({
         payment_attempt_id: paymentAttemptId,
         idempotency_key: crypto.randomUUID(),
       });
@@ -173,19 +239,21 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       } else {
         setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
       }
+    } catch {
+      setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
     } finally {
       setIsCancelling(false);
     }
   }
 
   async function handleConfirm(): Promise<void> {
-    if (_testBridge === undefined || paymentAttemptId === null) {
+    if (bridge === null || paymentAttemptId === null) {
       return;
     }
     setBridgeRefusalCopy(null);
     setIsConfirming(true);
     try {
-      const response = await _testBridge.payments.confirm({
+      const response = await bridge.payments.confirm({
         payment_attempt_id: paymentAttemptId,
         idempotency_key: crypto.randomUUID(),
       });
@@ -194,6 +262,8 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       } else {
         setBridgeRefusalCopy('This payment could not be settled. Please try again.');
       }
+    } catch {
+      setBridgeRefusalCopy('This payment could not be settled. Please try again.');
     } finally {
       setIsConfirming(false);
     }
@@ -204,8 +274,17 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
   // Split-tender remaining-balance derivation (T154). Pass to entry components
   // so each successive line is scoped to what's still owed, not the full
   // subtotal.
-  const sumAppliedMinor = appliedLines.reduce((acc, l) => acc + l.amount_applied_minor, 0);
-  const remainingBalanceMinor = Math.max(envelope.subtotal_minor - sumAppliedMinor, 0);
+  // CR-11: skip any line whose amount_applied_minor isn't a safe integer
+  // (Constitution §II). The main-process projection should always emit safe
+  // integers; this is the renderer-side belt to that braces.
+  let sumAppliedMinor = 0;
+  for (const line of appliedLines) {
+    if (!Number.isSafeInteger(line.amount_applied_minor)) continue;
+    sumAppliedMinor += line.amount_applied_minor;
+  }
+  const remainingBalanceMinor = Number.isSafeInteger(sumAppliedMinor)
+    ? Math.max(envelope.subtotal_minor - sumAppliedMinor, 0)
+    : 0;
 
   if (phase === 'settled') {
     return (
@@ -244,7 +323,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       </div>
 
       {/* Slice-1 mode: status banner only (no bridge wiring). */}
-      {_testBridge === undefined && selectedTender !== null && (
+      {bridge === null && selectedTender !== null && (
         <div
           className="payment-surface__tender-selected"
           data-testid="payment-surface-tender-selected"
@@ -256,13 +335,13 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       )}
 
       {/* S3d mode: entry component for the selected tender. */}
-      {_testBridge !== undefined && phase === 'entry' && paymentAttemptId !== null && (
+      {bridge !== null && phase === 'entry' && paymentAttemptId !== null && (
         <div className="payment-surface__entry" data-testid="payment-surface-entry">
           {selectedTender === 'cash' && (
             <CashEntry
               remainingBalanceMinor={remainingBalanceMinor}
               paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => _testBridge.tender.apply(req)}
+              tenderApply={(req) => bridge.tender.apply(req)}
               onApplied={() => {
                 void handleLineApplied();
               }}
@@ -272,7 +351,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
             <ExternalCardTerminalEntry
               remainingBalanceMinor={remainingBalanceMinor}
               paymentAttemptId={paymentAttemptId}
-              tenderApply={(req) => _testBridge.tender.apply(req)}
+              tenderApply={(req) => bridge.tender.apply(req)}
               onApplied={() => {
                 void handleLineApplied();
               }}
@@ -282,7 +361,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       )}
 
       {/* S3d mode: confirm button shows once any line is applied. */}
-      {_testBridge !== undefined && hasAppliedLine && (
+      {bridge !== null && hasAppliedLine && (
         <button
           type="button"
           className="payment-surface__confirm"
@@ -298,7 +377,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       )}
 
       {/* S3d mode: cancel button visible during the entry phase. */}
-      {_testBridge !== undefined && phase === 'entry' && (
+      {bridge !== null && phase === 'entry' && (
         <button
           type="button"
           className="payment-surface__cancel"
