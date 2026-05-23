@@ -17,10 +17,10 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 5
+version: 6
 base: 868c7ff
-status: S3d-AUTHORIZED
-preflight: S3d-PREFLIGHT-COMPLETED-2026-05-23
+status: SLICE-3-CLOSED
+preflight: SLICE-4-PREFLIGHT-REQUIRED
 last_updated: "2026-05-23"
 
 source_of_truth:
@@ -299,8 +299,11 @@ slices:
     title: Renderer wiring + final verification
     spec: 006-payments-tender
     type: implementation
-    status: in-progress
+    status: completed
     authorized_at: "2026-05-23"
+    merged_in_pr: TBD-S3d
+    merged_at_date: "2026-05-23"
+    head_sha: TBD-S3d
     gate:
       required:
         - §A1
@@ -326,11 +329,29 @@ slices:
         tasks.md T160 (full suite), T161 (end-to-end lifecycle integration),
         T162 (restart-survival integration), T163 (settlement-invariant property test),
         T164 (Slice 3 sign-off in coordination.md)
+      result: green
+      evidence: >
+        Full suite GREEN — 264 files / 3 341 passed / 3 skipped / 0 failed.
+        Per-module coverage: main/payments aggregate 98.94% stmt / 98.66% br /
+        100% func / 98.88% line; main/payments/fsm 97.91% stmt / 95.4% br /
+        100% func / 98.51% line; audit-emitter 98.21/97.72/100/98.11;
+        renderer/ui/payments 96.27/93.92/95.34/96.13; PaymentSurface
+        94.44/92.95/90/94.11; CashEntry 97.56/94.64/100/97.50;
+        ExternalCardTerminalEntry 97.72/94/100/97.67. PaymentAttempt FSM
+        94.11% branches accepted per S3b precedent (line 238 = Slice-4
+        reversal_pending bucket, structurally unreachable in S3).
     notes: >
-      T152, T153, T154 all modify src/renderer/ui/payments/PaymentSurface.tsx —
-      these three tasks MUST be sequentialised within S3d (file-conflict graph;
-      see wave-status.md §"File-conflict notes"). T160-T164 are the final
-      verification + sign-off tasks.
+      Wave order J → K → L per preflight. Wave-J (T150 + T151) on separate
+      files; Wave-K (T152 → T153 → T154) hard-serialised on
+      src/renderer/ui/payments/PaymentSurface.tsx; Wave-L (T163 → T161 → T162
+      → T160 → T164). Pre-Wave-L audit caught a real double-payments.start
+      bug in the split-tender flow; fix landed in commit 10c4c08 with a
+      regression test. CashEntry contract relaxed in bridged mode to accept
+      partial cash (main process owns settlement invariant). fast-check
+      ^4.8.0 added as devDependency for T163 per owner authorization
+      2026-05-23. F-008 surfaced during preflight (execution-map Wave-J
+      omission of the T150 → T151 dependency edge); documentation
+      divergence, does not modify task IDs.
 
 # ---------------------------------------------------------------------------
 # Groups (parallel-safe batches within each sub-slice)
@@ -616,3 +637,30 @@ closeout:
         S3c-GREEN — all preconditions satisfied. Do not start S3d
         implementation without the preflight. Slice 4 gates (§A4-B, §A2)
         remain held throughout.
+
+    - sub_slice: 006-S3d
+      pr: TBD-S3d
+      sha: TBD-S3d
+      head_sha: TBD-S3d
+      date: "2026-05-23"
+      report_location: >
+        This PR description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 3 closeout (T164)"
+      tasks_completed:
+        - T150
+        - T151
+        - T152
+        - T153
+        - T154
+        - T160
+        - T161
+        - T162
+        - T163
+        - T164
+      findings:
+        - F-008  # Execution-map Wave-J omission of T150 → T151 dependency edge
+      next_action: >
+        Slice 3 is closed. The next Maestro work is a fresh preflight for
+        Slice 4 (Template 1) when the owner is ready to commission §A4-B
+        (vouchers.* bridge review) + §A2 (voucher V-A backend / OpenAPI
+        commission). Until then, no further 006-payments-tender code work.

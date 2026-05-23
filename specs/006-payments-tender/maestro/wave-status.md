@@ -1,6 +1,6 @@
-# 006-payments-tender — Slice 3 — S3a ✅ · S3b ✅ · S3c ✅ · S3d next candidate (preflight required)
+# 006-payments-tender — Slice 3 — S3a ✅ · S3b ✅ · S3c ✅ · S3d ✅ · **SLICE 3 CLOSED**
 
-**Status:** S3a ✅ COMPLETED — merged via PR #207 at `e8b33d5` on 2026-05-22T14:07:11Z. S3b ✅ COMPLETED — merged via PR #209 at `862d24581173adc18c8d547b5fcd6ca69225a78d` on 2026-05-23T10:10:17Z. S3c ✅ COMPLETED — merged via PR #210 at `5f493fdc802ef70d00ad9f10e4805db5dd429edf` on 2026-05-23T12:37:41Z. S3d is the next-candidate sub-slice (§A1 cleared, S3c GREEN) but is NOT AUTHORIZED — a fresh Maestro preflight (Template 1) is required before any code is written. Slice 4 gates (§A4-B, §A2) remain held.
+**Status:** Slice 3 ✅ CLOSED via T164 sign-off in this PR. S3a (PR #207, 2026-05-22), S3b (PR #209, 2026-05-23), S3c (PR #210, 2026-05-23), and S3d (this PR, 2026-05-23) all merged. §A2 no-op for Slices 1–3 confirmed; §A3 + §A4-A signed off 2026-05-21 (Ahmed). Eight findings (F-001 through F-008) remain as documentation divergences / 004-owner follow-ups; none modifies task IDs. **Next Maestro work: a fresh Slice-4 preflight when the owner commissions §A4-B + §A2 (voucher V-A).** Until then, no further 006-payments-tender code work.
 
 > **THIS FILE DOES NOT REPLACE `tasks.md` OR `coordination.md`.**
 > **THIS FILE DOES NOT AUTHORIZE IMPLEMENTATION.**
@@ -63,8 +63,9 @@ This closeout PR (tasks.md + coordination.md + execution-map.yaml + wave-status.
 | F-005 | Low | **S3c repository surface extension** — `PaymentTenderLinesRepository.findByLineId(id)` added in S3c (T112 surface in tasks.md listed `insert / updateState / findByAttempt / settlementSumMinor` only). PK equality lookup against migration-0014's PRIMARY KEY — zero schema risk. Required by `tender.read` + `tender.reverse` whose request shapes carry only `tender_line_id`. |
 | F-006 | Low | **004 audit-category TS union pending widening** — `AUDIT_ACTION_CATEGORIES` in `src/shared/audit/event-shape.ts` does not yet include the 7 payment categories at the TypeScript-union level (migration `0017` extends the SQL CHECK only). S3c bootstrap uses a single bounded cast at the audit-emitter adapter seam. A 004-owner follow-up PR should widen the union. |
 | F-007 | Low | **004 session terminal_id pending** — `OperatorSession` from 004 has no separate `terminal_id` field. S3c bootstrap reuses `session.branch_id` as the terminal scope, matching the cart-bridge precedent. A 004-owner follow-up could plumb a real terminal id through the session record. |
+| F-008 | Low | **S3d execution-map Wave-J omission** — `execution-map.yaml §groups.006-S3d.Wave-J` describes T150 + T151 as parallel-safe on file-conflict grounds (which is correct — separate files), but does not surface the **dependency edge** `T150 → T151` recorded in tasks.md row 665. T151 reads the store API T150 introduces; effective execution remains sequential. Surfaced in the 2026-05-23 S3d preflight. Documentation divergence; does not modify task IDs. |
 
-All seven findings are documentation divergences / follow-ups; none modifies task IDs, `[P]` markers, `[US?]` labels, or gate text.
+All eight findings are documentation divergences / follow-ups; none modifies task IDs, `[P]` markers, `[US?]` labels, or gate text.
 
 ---
 
