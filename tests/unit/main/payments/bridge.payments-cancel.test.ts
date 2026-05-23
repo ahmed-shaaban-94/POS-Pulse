@@ -153,9 +153,20 @@ describe('T102 — payments.cancel bridge handler', () => {
       state: 'cancelled',
       cancelled_at: '2026-05-23T10:59:50.000Z',
     });
+    // Mixed line states — exercises BOTH the `.filter(l => state === 'reversed')`
+    // and the `.filter(l => state === 'reversal_pending')` predicate functions
+    // in the replay reconstruction path (Slice-4 voucher reversal_pending may
+    // co-occur with Slice-3 reversed lines after S4 ships; testing the mixed
+    // case here keeps the replay reconstruction honest).
     const linesRepo = makeLinesRepoDouble([
       makeLineRow({ tender_line_id: 'tl-1', state: 'reversed', apply_order: 1 }),
       makeLineRow({ tender_line_id: 'tl-2', state: 'reversed', apply_order: 2 }),
+      makeLineRow({
+        tender_line_id: 'tl-3',
+        state: 'reversal_pending',
+        apply_order: 3,
+        reversal_pending_since: '2026-05-23T10:59:50.000Z',
+      }),
     ]);
     const fsm = makePaymentAttemptFsmDouble();
     const handler = createPaymentsCancelHandler({
@@ -171,9 +182,9 @@ describe('T102 — payments.cancel bridge handler', () => {
     expect(result).toEqual({
       kind: 'ok',
       cancelled_at: '2026-05-23T10:59:50.000Z',
-      // LIFO replay — ids sorted by apply_order DESC.
+      // LIFO replay — ids sorted by apply_order DESC within each bucket.
       reversed_tender_line_ids: ['tl-2', 'tl-1'],
-      reversal_pending_tender_line_ids: [],
+      reversal_pending_tender_line_ids: ['tl-3'],
     });
     expect(fsm.cancel).not.toHaveBeenCalled();
   });
