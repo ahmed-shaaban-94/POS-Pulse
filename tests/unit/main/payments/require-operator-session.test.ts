@@ -146,6 +146,26 @@ describe('T130 — requireOperatorSession', () => {
     },
   );
 
+  it('prefers tenant_isolation over wrong_owner when both diverge (no existence side-channel)', () => {
+    // An out-of-scope probe with a guessed payment_attempt_id must NOT
+    // reveal whether the row belongs to a real operator outside the
+    // caller's scope. Isolation is checked first, so the refusal reason
+    // is the same regardless of ownership outside scope.
+    const result = requireOperatorSession({
+      session: buildSession(),
+      allowedRoles: ['cashier'],
+      attempt: {
+        operator_session_id: 'sess-OTHER',
+        tenant_id: 'tenant-OTHER',
+        branch_id: 'branch-1',
+        terminal_id: 'terminal-1',
+        state: 'started',
+      },
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('tenant_isolation');
+  });
+
   it('returns the session + attempt on a fully-valid call', () => {
     const session = buildSession();
     const attempt = {

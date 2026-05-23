@@ -369,10 +369,13 @@ describe('006 bridge-api contract — typed namespaces', () => {
   });
 
   it('PaymentsBridgeAPI does NOT declare forceFail (Slice 4)', () => {
-    // Compile-time negative: assigning a `forceFail` key to a Keys-typed
-    // value would error. The runtime assertion just records intent.
-    type Keys = keyof PaymentsBridgeAPI;
-    const sliceThreeOnly: Keys = 'start';
-    expect(sliceThreeOnly).toBe('start');
+    // Compile-time negative — if `forceFail` is ever added to
+    // PaymentsBridgeAPI, the `@ts-expect-error` directive flips from
+    // "expected error" to "no error" and tsc fails the build, blocking
+    // Slice-4 surface from leaking into Slice 3 silently.
+    // @ts-expect-error 'forceFail' is Slice 4 and must not be a key of PaymentsBridgeAPI.
+    const _forbidden: keyof PaymentsBridgeAPI = 'forceFail';
+    void _forbidden;
+    expect(true).toBe(true);
   });
 });

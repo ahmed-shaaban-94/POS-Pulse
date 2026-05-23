@@ -185,11 +185,16 @@ describe('T081 — PaymentAttempt FSM cancel + LIFO', () => {
     const { fsm, lines, outbox } = buildFsm();
     seedAttempt(fsm, 1000);
     applyLine(lines, outbox, 1);
-    fsm.cancel({
+    const first = fsm.cancel({
       payment_attempt_id: 'pa-1',
       cancelled_at: '2026-05-22T10:01:00.000Z',
       action_id: 'cancel-pa-1',
     });
+    // Assert the first cancel actually succeeded — otherwise a regression
+    // there would still leave us in `started`, and the second call would
+    // also fire `attempt_terminal` for the wrong reason.
+    expect(first.kind).toBe('ok');
+    if (first.kind !== 'ok') return;
     const second = fsm.cancel({
       payment_attempt_id: 'pa-1',
       cancelled_at: '2026-05-22T10:02:00.000Z',

@@ -96,7 +96,7 @@ describe('T083 — runtime illegal transition refusal', () => {
     const outbox = bindPaymentActionOutboxRepository(handle);
     const fsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
 
-    fsm.start({
+    const started = fsm.start({
       payment_attempt_id: 'pa-1',
       tenant_id: 'tenant-1',
       branch_id: 'branch-1',
@@ -109,11 +109,15 @@ describe('T083 — runtime illegal transition refusal', () => {
       started_at: '2026-05-22T10:00:00.000Z',
       action_id: 'start-pa-1',
     });
-    fsm.cancel({
+    expect(started.kind).toBe('ok');
+    if (started.kind !== 'ok') return;
+    const cancelled = fsm.cancel({
       payment_attempt_id: 'pa-1',
       cancelled_at: '2026-05-22T10:00:30.000Z',
       action_id: 'cancel-pa-1',
     });
+    expect(cancelled.kind).toBe('ok');
+    if (cancelled.kind !== 'ok') return;
     const result = fsm.confirm({
       payment_attempt_id: 'pa-1',
       settled_at: '2026-05-22T10:01:00.000Z',
@@ -130,7 +134,7 @@ describe('T083 — runtime illegal transition refusal', () => {
     const outbox = bindPaymentActionOutboxRepository(handle);
     const fsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
 
-    fsm.start({
+    const started = fsm.start({
       payment_attempt_id: 'pa-2',
       tenant_id: 'tenant-1',
       branch_id: 'branch-1',
@@ -143,6 +147,8 @@ describe('T083 — runtime illegal transition refusal', () => {
       started_at: '2026-05-22T10:00:00.000Z',
       action_id: 'start-pa-2',
     });
+    expect(started.kind).toBe('ok');
+    if (started.kind !== 'ok') return;
     lines.insert({
       tender_line_id: 'tl-1',
       payment_attempt_id: 'pa-2',
@@ -171,11 +177,13 @@ describe('T083 — runtime illegal transition refusal', () => {
       acting_operator_id: 'op-abc',
       created_at: '2026-05-22T10:00:01.000Z',
     });
-    fsm.confirm({
+    const settled = fsm.confirm({
       payment_attempt_id: 'pa-2',
       settled_at: '2026-05-22T10:01:00.000Z',
       action_id: 'confirm-pa-2',
     });
+    expect(settled.kind).toBe('ok');
+    if (settled.kind !== 'ok') return;
     const result = fsm.fail({
       payment_attempt_id: 'pa-2',
       failed_at: '2026-05-22T10:02:00.000Z',
@@ -239,7 +247,7 @@ describe('T083 — runtime illegal transition refusal', () => {
     const outbox = bindPaymentActionOutboxRepository(handle);
     const fsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
 
-    fsm.start({
+    const started = fsm.start({
       payment_attempt_id: 'pa-3',
       tenant_id: 'tenant-1',
       branch_id: 'branch-1',
@@ -252,11 +260,15 @@ describe('T083 — runtime illegal transition refusal', () => {
       started_at: '2026-05-22T10:00:00.000Z',
       action_id: 'start-pa-3',
     });
-    fsm.cancel({
+    expect(started.kind).toBe('ok');
+    if (started.kind !== 'ok') return;
+    const cancelled = fsm.cancel({
       payment_attempt_id: 'pa-3',
       cancelled_at: '2026-05-22T10:00:30.000Z',
       action_id: 'cancel-pa-3',
     });
+    expect(cancelled.kind).toBe('ok');
+    if (cancelled.kind !== 'ok') return;
     const result = fsm.cancel({
       payment_attempt_id: 'pa-3',
       cancelled_at: '2026-05-22T10:01:00.000Z',
@@ -273,7 +285,7 @@ describe('T083 — runtime illegal transition refusal', () => {
     const outbox = bindPaymentActionOutboxRepository(handle);
     const fsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
 
-    fsm.start({
+    const started = fsm.start({
       payment_attempt_id: 'pa-4',
       tenant_id: 'tenant-1',
       branch_id: 'branch-1',
@@ -286,12 +298,16 @@ describe('T083 — runtime illegal transition refusal', () => {
       started_at: '2026-05-22T10:00:00.000Z',
       action_id: 'start-pa-4',
     });
-    fsm.fail({
+    expect(started.kind).toBe('ok');
+    if (started.kind !== 'ok') return;
+    const failed = fsm.fail({
       payment_attempt_id: 'pa-4',
       failed_at: '2026-05-22T10:00:30.000Z',
       failure_reason: 'internal_error',
       action_id: 'fail-pa-4',
     });
+    expect(failed.kind).toBe('ok');
+    if (failed.kind !== 'ok') return;
     const result = fsm.fail({
       payment_attempt_id: 'pa-4',
       failed_at: '2026-05-22T10:01:00.000Z',
@@ -346,6 +362,64 @@ describe('T083 — defence-in-depth: impossible-state guards', () => {
     });
     expect(result.kind).toBe('refused');
     if (result.kind === 'refused') expect(result.reason).toBe('internal_error');
+  });
+});
+
+describe('T083 — start path: money invariant on envelope_subtotal_minor', () => {
+  it.each([
+    ['float', 1500.5],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
+    ['negative', -1],
+  ])('refuses start with invalid_input on a %s envelope_subtotal_minor', (_label, badValue) => {
+    const handle = makeSqlJsHandle(db);
+    const attempts = bindPaymentAttemptsRepository(handle);
+    const lines = bindPaymentTenderLinesRepository(handle);
+    const outbox = bindPaymentActionOutboxRepository(handle);
+    const fsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
+
+    const result = fsm.start({
+      payment_attempt_id: 'pa-bad-money',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-bad-money',
+      acting_operator_id: 'op-abc',
+      operator_session_id: 'sess-1',
+      envelope_handoff_action_id: 'handoff-bad-money',
+      envelope_cart_id: 'cart-bad-money',
+      envelope_subtotal_minor: badValue,
+      started_at: '2026-05-22T10:00:00.000Z',
+      action_id: 'start-bad-money',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('invalid_input');
+    // No row should have been inserted.
+    expect(attempts.findById('pa-bad-money')).toBeUndefined();
+  });
+
+  it('accepts envelope_subtotal_minor === 0 (zero-subtotal is a valid degenerate case)', () => {
+    // The money guard rejects negative/non-integer but MUST allow 0 — the
+    // settlement invariant Σ amount = envelope is still well-defined.
+    const handle = makeSqlJsHandle(db);
+    const attempts = bindPaymentAttemptsRepository(handle);
+    const lines = bindPaymentTenderLinesRepository(handle);
+    const outbox = bindPaymentActionOutboxRepository(handle);
+    const fsm = createPaymentAttemptFsm({ db: handle, attempts, lines, outbox });
+    const result = fsm.start({
+      payment_attempt_id: 'pa-zero',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-zero',
+      acting_operator_id: 'op-abc',
+      operator_session_id: 'sess-1',
+      envelope_handoff_action_id: 'handoff-zero',
+      envelope_cart_id: 'cart-zero',
+      envelope_subtotal_minor: 0,
+      started_at: '2026-05-22T10:00:00.000Z',
+      action_id: 'start-zero',
+    });
+    expect(result.kind).toBe('ok');
   });
 });
 

@@ -111,6 +111,16 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
 
   return {
     start(input: StartPaymentAttemptInput): StartOutcome {
+      // Money invariant (Constitution §"No floats for money") — envelope_subtotal_minor
+      // must be a non-negative safe integer. A malformed value would persist into
+      // the row and break the exact-equality settlement check later, while also
+      // destabilising the outbox payload hash for the same logical amount.
+      if (
+        !Number.isSafeInteger(input.envelope_subtotal_minor) ||
+        input.envelope_subtotal_minor < 0
+      ) {
+        return { kind: 'refused', reason: 'invalid_input' };
+      }
       // The partial unique index on (terminal_id) WHERE state='started' is the
       // authoritative guard (R-6) — a race between two main-process callers
       // resolves at SQL. We pre-check to surface the closed refusal reason
@@ -301,5 +311,9 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
 function isUniqueViolation(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const msg = (err as { message?: string }).message ?? '';
-  return /UNIQUE|constraint failed/i.test(msg);
+  // SQLite always includes the literal word "UNIQUE" in unique-constraint
+  // failures. CHECK / NOT NULL / FK failures contain "constraint failed"
+  // but NOT "UNIQUE" — matching only /UNIQUE/i prevents misreporting
+  // unrelated schema/data errors as attempt_already_started_on_terminal.
+  return /UNIQUE/i.test(msg);
 }

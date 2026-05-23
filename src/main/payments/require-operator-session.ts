@@ -12,9 +12,14 @@
  *
  *   no session                                   → no_session
  *   wrong role                                   → role_denied
- *   attempt's operator_session_id ≠ active       → wrong_owner
  *   tenant/branch/terminal mismatch              → tenant_isolation
+ *   attempt's operator_session_id ≠ active       → wrong_owner
  *   attempt in terminal state                    → attempt_terminal
+ *
+ * Isolation is checked BEFORE ownership so an out-of-scope probe of a
+ * guessed `payment_attempt_id` collapses to `tenant_isolation` regardless
+ * of which operator owns the row — closes the existence side-channel that
+ * `wrong_owner` would otherwise leak across tenant/branch/terminal.
  *
  * The factor-distinguishing reason lives in the bridge payload for
  * diagnostic logging only; the renderer maps each reason to a single
@@ -83,15 +88,15 @@ export function requireOperatorSession(
     return { kind: 'refused', reason: 'role_denied' };
   }
   if (attempt !== undefined) {
-    if (attempt.operator_session_id !== session.operator_session_id) {
-      return { kind: 'refused', reason: 'wrong_owner' };
-    }
     if (
       attempt.tenant_id !== session.tenant_id ||
       attempt.branch_id !== session.branch_id ||
       attempt.terminal_id !== session.terminal_id
     ) {
       return { kind: 'refused', reason: 'tenant_isolation' };
+    }
+    if (attempt.operator_session_id !== session.operator_session_id) {
+      return { kind: 'refused', reason: 'wrong_owner' };
     }
     if (attempt.state !== 'started') {
       return { kind: 'refused', reason: 'attempt_terminal' };
