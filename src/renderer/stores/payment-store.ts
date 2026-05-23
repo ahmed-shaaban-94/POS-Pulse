@@ -2,36 +2,64 @@ import { create } from 'zustand';
 
 import type { PaymentIntentEnvelope } from '../../shared/cart/handoff-envelope.js';
 import { freezeEnvelope } from '../../shared/cart/handoff-envelope.js';
+import type { PaymentAttemptRendererView } from '../../shared/payments/types.js';
 
 /**
- * 006-payments-tender S1 — payment store.
+ * 006-payments-tender — payment store.
  *
- * Holds the frozen PaymentIntentEnvelope received from CartPane after a
- * successful handoff. This store is renderer-only: no bridge calls, no FSM.
- * Main process owns all payment FSM transitions (AD-1).
+ * Two independent slices:
+ *   - **envelope** (Slice 1): the frozen `PaymentIntentEnvelope` received
+ *     from CartPane after a successful handoff.
+ *   - **paymentSlice** (S3d / T150): a read-only mirror of the
+ *     main-process `PaymentAttemptRendererView` projection returned by
+ *     `payments.read` / `payments.subscribe`. Components own the bridge
+ *     calls and dispatch into the store on each response. The store
+ *     does NOT call the bridge itself (AD-1: main owns FSM).
  *
- * SECURITY: the envelope reference is frozen on mount. No sensitive fields
- * are written to logs or exposed beyond what the renderer already received
- * from the preload bridge via CartPane.
+ * SECURITY: The envelope reference is frozen on mount. The payment
+ * attempt projection is the renderer-minimised view (FR-017) — voucher
+ * tokens, attribution_operator_id, and last_action_id are absent by
+ * construction at the main-process projection layer; nothing here can
+ * accidentally leak them.
  */
 
 export interface PaymentState {
   envelope: Readonly<PaymentIntentEnvelope> | null;
+  /**
+   * Latest snapshot returned by `payments.read` or `payments.subscribe`.
+   * Null when no attempt is active (initial state, or after `clearAttempt`).
+   */
+  paymentSlice: Readonly<PaymentAttemptRendererView> | null;
 }
 
 export interface PaymentStore extends PaymentState {
   /** Freeze and store the envelope. Idempotent: re-mounting with a new envelope replaces the old one. */
   mount(envelope: PaymentIntentEnvelope): void;
-  /** Clear the envelope (e.g. on void or new cart). */
+  /**
+   * Apply a fresh snapshot from `payments.read` or `payments.subscribe`.
+   * Re-applying with a new snapshot replaces the prior one; this is how
+   * state transitions (started → settled / cancelled / failed) reach
+   * the renderer.
+   */
+  applyAttemptSnapshot(view: PaymentAttemptRendererView): void;
+  /** Clear only the paymentSlice (leaves the Slice-1 envelope intact). */
+  clearAttempt(): void;
+  /** Clear both slices (e.g. on void or new cart). */
   reset(): void;
 }
 
-const INITIAL: PaymentState = { envelope: null };
+const INITIAL: PaymentState = { envelope: null, paymentSlice: null };
 
 export const usePaymentStore = create<PaymentStore>((set) => ({
   ...INITIAL,
   mount: (envelope) => {
     set({ envelope: freezeEnvelope(envelope) });
+  },
+  applyAttemptSnapshot: (view) => {
+    set({ paymentSlice: view });
+  },
+  clearAttempt: () => {
+    set({ paymentSlice: null });
   },
   reset: () => {
     set({ ...INITIAL });

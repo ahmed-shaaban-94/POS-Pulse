@@ -17,10 +17,10 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 4
+version: 5
 base: 868c7ff
-status: S3c-COMPLETED
-preflight: S3d-PREFLIGHT-REQUIRED
+status: S3d-AUTHORIZED
+preflight: S3d-PREFLIGHT-COMPLETED-2026-05-23
 last_updated: "2026-05-23"
 
 source_of_truth:
@@ -299,12 +299,13 @@ slices:
     title: Renderer wiring + final verification
     spec: 006-payments-tender
     type: implementation
-    status: blocked
+    status: in-progress
+    authorized_at: "2026-05-23"
     gate:
       required:
         - §A1
         - 006-S3c-GREEN
-      note: §A1 already cleared (2026-05-20). S3c must be GREEN before S3d begins.
+      note: §A1 already cleared (2026-05-20). S3c GREEN via PR #210 (5f493fd, 2026-05-23T12:37:41Z). Preflight authorized by owner 2026-05-23 (Maestro Preflight Report — Slice 3d, Template 1).
     task_ids:
       - T150
       - T151

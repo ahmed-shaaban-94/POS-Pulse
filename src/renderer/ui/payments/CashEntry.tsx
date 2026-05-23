@@ -1,29 +1,45 @@
 import { useMemo, useState, type JSX } from 'react';
 
 import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
+import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 
 /**
- * 006-payments-tender Slice 2 — <CashEntry>.
+ * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
  *
- * Display + input collection only. No bridge, no FSM, no audit emission —
- * those are Slice 3 territory. The component captures cash_received in
- * integer minor units, displays change-due (when earned) for the cashier,
- * and surfaces a generic "amount is not enough" message on under-tender.
+ * Modes:
+ *   • Slice-2 (display-only): caller passes `onConfirm`. Confirm fires with
+ *     `{ amountAppliedMinor, changeDueMinor }`.
+ *   • S3d (bridged): caller additionally passes `paymentAttemptId`,
+ *     `tenderApply`, `onApplied`. Confirm builds a `TenderApplyRequest`
+ *     with a fresh UUID v4 idempotency_key (R-10), calls the bridge, and
+ *     either fires `onApplied(response)` on success or renders generic
+ *     refusal copy on `{ kind: 'refused' }`.
  *
  * SECURITY:
  *   - No card data of any kind (this is the cash surface).
  *   - No sensitive IDs rendered.
- *   - The structured refusal name `tender_underpaid` (FR-006) never crosses
- *     into the DOM — only the generic copy from FR-005 / US1-AS3.
- *   - Money is integer minor units only (Constitution §II); the displayed
- *     change-due major-unit string is for the cashier's eye only.
+ *   - Structured `refusal.reason` strings never enter the DOM — only the
+ *     generic copy required by FR-005 / US1-AS3.
+ *   - Money is integer minor units only (Constitution §II).
  */
 
 export interface CashEntryProps {
   remainingBalanceMinor: number;
-  onConfirm: (applied: { amountAppliedMinor: number; changeDueMinor: number }) => void;
+  /**
+   * Slice-2 callback. Called with the parsed amount + computed change when
+   * the cashier confirms a sufficient cash amount. When `tenderApply` is
+   * provided, this callback is NOT invoked — the bridge response is
+   * surfaced through `onApplied` instead.
+   */
+  onConfirm?: (applied: { amountAppliedMinor: number; changeDueMinor: number }) => void;
   onBack?: () => void;
+  /** Payment attempt id from the main process (required when `tenderApply` is set). */
+  paymentAttemptId?: string;
+  /** Bridge callback. Receives a fully-formed TenderApplyRequest. */
+  tenderApply?: (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
+  /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
+  onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
 }
 
 function formatMinorUnits(minor: number): string {
@@ -52,17 +68,16 @@ export function CashEntry({
   remainingBalanceMinor,
   onConfirm,
   onBack,
+  paymentAttemptId,
+  tenderApply,
+  onApplied,
 }: CashEntryProps): JSX.Element {
   const [rawInput, setRawInput] = useState<string>('');
+  const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
+  const [isApplying, setIsApplying] = useState<boolean>(false);
 
   const amountAppliedMinor = useMemo(() => parseIntegerMinorUnits(rawInput), [rawInput]);
 
-  // Belt to the helper's braces: computeChangeDueMinor throws on a negative
-  // remainingBalanceMinor. Upstream (005's PaymentIntentEnvelope) guarantees
-  // a non-negative subtotal, but Slice 3 will subtract applied lines from it
-  // and could in principle hand us a negative value during a buggy split.
-  // Gate sufficiency/under-tender on validity first so a bad caller cannot
-  // crash the render.
   const isRemainingValid =
     Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
   const isSufficient =
@@ -70,21 +85,37 @@ export function CashEntry({
   const isUnderTender =
     isRemainingValid && amountAppliedMinor !== null && amountAppliedMinor < remainingBalanceMinor;
 
-  // Only compute change-due when sufficient (and therefore remaining is valid).
-  // Under-tender path never calls computeChangeDueMinor — that function throws
-  // on under-tender by design (the renderer's confirm-enabled predicate is the
-  // gate).
   const changeDueMinor = isSufficient
     ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
     : null;
 
-  // handleConfirm is only reachable when the Confirm button is enabled
-  // (isSufficient === true), so amountAppliedMinor and changeDueMinor are
-  // both non-null at this point. Trust the button's disabled gate.
-  function handleConfirm(): void {
-    if (isSufficient && changeDueMinor !== null) {
-      onConfirm({ amountAppliedMinor, changeDueMinor });
+  async function handleConfirm(): Promise<void> {
+    if (!isSufficient || changeDueMinor === null) {
+      return;
     }
+
+    if (tenderApply !== undefined && paymentAttemptId !== undefined) {
+      setBridgeRefusal(false);
+      setIsApplying(true);
+      try {
+        const response = await tenderApply({
+          payment_attempt_id: paymentAttemptId,
+          tender_type: 'cash',
+          amount_applied_minor: amountAppliedMinor,
+          idempotency_key: crypto.randomUUID(),
+        });
+        if (response.kind === 'ok') {
+          onApplied?.(response);
+        } else {
+          setBridgeRefusal(true);
+        }
+      } finally {
+        setIsApplying(false);
+      }
+      return;
+    }
+
+    onConfirm?.({ amountAppliedMinor, changeDueMinor });
   }
 
   return (
@@ -111,11 +142,9 @@ export function CashEntry({
         value={rawInput}
         onChange={(e) => {
           const next = e.target.value;
-          // Accept only all-digit values (and empty). Otherwise refuse the
-          // change — the value in state stays as it was, so floats / signs /
-          // alphabetic input simply don't land.
           if (next === '' || /^\d+$/.test(next)) {
             setRawInput(next);
+            setBridgeRefusal(false);
           }
         }}
       />
@@ -138,15 +167,28 @@ export function CashEntry({
         </div>
       )}
 
+      {bridgeRefusal && (
+        <div
+          className="cash-entry__bridge-refusal"
+          data-testid="cash-entry-bridge-refusal"
+          role="status"
+          aria-live="polite"
+        >
+          This payment could not be applied. Please try again.
+        </div>
+      )}
+
       <div className="cash-entry__actions">
         <button
           type="button"
           className="cash-entry__confirm"
           data-testid="cash-entry-confirm"
           style={{ minHeight: touchTarget.min }}
-          disabled={!isSufficient}
-          aria-disabled={!isSufficient ? 'true' : undefined}
-          onClick={handleConfirm}
+          disabled={!isSufficient || isApplying}
+          aria-disabled={!isSufficient || isApplying ? 'true' : undefined}
+          onClick={() => {
+            void handleConfirm();
+          }}
         >
           Confirm cash payment
         </button>

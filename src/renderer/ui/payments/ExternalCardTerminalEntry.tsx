@@ -1,38 +1,43 @@
 import { useMemo, useState, type JSX } from 'react';
 
 import { validateExternalReference } from '../../../shared/payments/external-reference-format.js';
+import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 
 /**
- * 006-payments-tender Slice 2 — <ExternalCardTerminalEntry>.
+ * 006-payments-tender Slice 2 + S3d T151 — <ExternalCardTerminalEntry>.
  *
- * Record-only entry surface for an external_card_terminal TenderLine. The
- * cashier confirms the external terminal already processed the amount; the
- * surface captures the exact amount applied and an optional non-sensitive
- * reference string. No payment gateway, no card data of any kind.
+ * Modes:
+ *   • Slice-2 (display-only): caller passes `onConfirm`. Confirm fires with
+ *     `{ amountAppliedMinor, externalReference }`.
+ *   • S3d (bridged): caller additionally passes `paymentAttemptId`,
+ *     `tenderApply`, `onApplied`. Confirm builds a `TenderApplyRequest`
+ *     with a fresh UUID v4 idempotency_key, calls the bridge, and either
+ *     fires `onApplied(response)` on success or renders generic refusal
+ *     copy on `{ kind: 'refused' }`.
  *
  * SECURITY (FR-007 / FR-008 / Constitution §P6 / §P7):
  *   - No PAN / CVV / track / cardholder / expiry / auth-payload fields.
  *   - external_reference is regex-bounded to ^[A-Z0-9]{0,6}$ which makes
  *     a PAN literally unrepresentable in this field.
  *   - Generic refusal copy at the renderer; the structured reason names
- *     (`non_cash_overpayment_refused`, `invalid_input`) never cross into
- *     the DOM — Slice 3 will surface them via audit payload only.
- *
- * NOTE on visual-direction §State 3 vs tasks.md T044/T049:
- *   The visual sketch in `specs/006-payments-tender/visual-direction/README.md`
- *   §State 3 does NOT show an editable amount field — only the instructional
- *   copy + optional reference + confirm. tasks.md T044 / T049 require the
- *   amount field. Maestro source-of-truth order
- *   (`docs/maestro/README.md §"Source of truth"`) places tasks.md above the
- *   visual direction; this implementation follows the executable layer.
- *   The mismatch is recorded as a Spec-Kit follow-up in the closeout.
+ *     never cross into the DOM.
  */
 
 export interface ExternalCardTerminalEntryProps {
   remainingBalanceMinor: number;
-  onConfirm: (applied: { amountAppliedMinor: number; externalReference: string | null }) => void;
+  /**
+   * Slice-2 callback. When `tenderApply` is provided, this is NOT invoked —
+   * the bridge response is surfaced through `onApplied` instead.
+   */
+  onConfirm?: (applied: { amountAppliedMinor: number; externalReference: string | null }) => void;
   onBack?: () => void;
+  /** Payment attempt id from the main process (required when `tenderApply` is set). */
+  paymentAttemptId?: string;
+  /** Bridge callback. Receives a fully-formed TenderApplyRequest. */
+  tenderApply?: (req: TenderApplyRequest) => Promise<TenderApplyResponse>;
+  /** Fires with the `{ kind: 'ok', ... }` response on successful apply. */
+  onApplied?: (response: Extract<TenderApplyResponse, { kind: 'ok' }>) => void;
 }
 
 function formatMinorUnits(minor: number): string {
@@ -58,15 +63,18 @@ export function ExternalCardTerminalEntry({
   remainingBalanceMinor,
   onConfirm,
   onBack,
+  paymentAttemptId,
+  tenderApply,
+  onApplied,
 }: ExternalCardTerminalEntryProps): JSX.Element {
-  // Default amount to the exact remaining balance — the cashier's expected
-  // happy-path input. FR-010: non-cash tenders MUST NOT overpay.
   const [amountInput, setAmountInput] = useState<string>(() =>
     Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0
       ? remainingBalanceMinor.toString()
       : '',
   );
   const [referenceInput, setReferenceInput] = useState<string>('');
+  const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
+  const [isApplying, setIsApplying] = useState<boolean>(false);
 
   const amountAppliedMinor = useMemo(() => parseIntegerMinorUnits(amountInput), [amountInput]);
   const isExactAmount = amountAppliedMinor === remainingBalanceMinor;
@@ -76,17 +84,40 @@ export function ExternalCardTerminalEntry({
   const isReferenceValid = validateExternalReference(referenceInput);
   const isReferenceProvided = referenceInput !== '';
 
-  const canConfirm = isExactAmount && isReferenceValid;
+  const canConfirm = isExactAmount && isReferenceValid && !isApplying;
 
-  // handleConfirm is only reachable when the Confirm button is enabled
-  // (canConfirm === true), so amountAppliedMinor is non-null at this point.
-  function handleConfirm(): void {
-    if (amountAppliedMinor !== null) {
-      onConfirm({
-        amountAppliedMinor,
-        externalReference: isReferenceProvided ? referenceInput : null,
-      });
+  async function handleConfirm(): Promise<void> {
+    if (amountAppliedMinor === null || !isExactAmount) {
+      return;
     }
+
+    if (tenderApply !== undefined && paymentAttemptId !== undefined) {
+      setBridgeRefusal(false);
+      setIsApplying(true);
+      try {
+        const request: TenderApplyRequest = {
+          payment_attempt_id: paymentAttemptId,
+          tender_type: 'external_card_terminal',
+          amount_applied_minor: amountAppliedMinor,
+          idempotency_key: crypto.randomUUID(),
+          ...(isReferenceProvided ? { external_reference: referenceInput } : {}),
+        };
+        const response = await tenderApply(request);
+        if (response.kind === 'ok') {
+          onApplied?.(response);
+        } else {
+          setBridgeRefusal(true);
+        }
+      } finally {
+        setIsApplying(false);
+      }
+      return;
+    }
+
+    onConfirm?.({
+      amountAppliedMinor,
+      externalReference: isReferenceProvided ? referenceInput : null,
+    });
   }
 
   return (
@@ -119,6 +150,7 @@ export function ExternalCardTerminalEntry({
           const next = e.target.value;
           if (next === '' || /^\d+$/.test(next)) {
             setAmountInput(next);
+            setBridgeRefusal(false);
           }
         }}
       />
@@ -163,6 +195,7 @@ export function ExternalCardTerminalEntry({
         value={referenceInput}
         onChange={(e) => {
           setReferenceInput(e.target.value);
+          setBridgeRefusal(false);
         }}
       />
 
@@ -177,6 +210,17 @@ export function ExternalCardTerminalEntry({
         </div>
       )}
 
+      {bridgeRefusal && (
+        <div
+          className="external-card-terminal-entry__bridge-refusal"
+          data-testid="external-card-bridge-refusal"
+          role="status"
+          aria-live="polite"
+        >
+          This payment could not be applied. Please try again.
+        </div>
+      )}
+
       <div className="external-card-terminal-entry__actions">
         <button
           type="button"
@@ -185,7 +229,9 @@ export function ExternalCardTerminalEntry({
           style={{ minHeight: touchTarget.min }}
           disabled={!canConfirm}
           aria-disabled={!canConfirm ? 'true' : undefined}
-          onClick={handleConfirm}
+          onClick={() => {
+            void handleConfirm();
+          }}
         >
           Confirm terminal processed payment
         </button>
