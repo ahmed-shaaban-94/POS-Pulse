@@ -58,6 +58,8 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
   const [phase, setPhase] = useState<Phase>('tender_selection');
   const [bridgeRefusalCopy, setBridgeRefusalCopy] = useState<string | null>(null);
   const [isConfirming, setIsConfirming] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [reversalPending, setReversalPending] = useState<boolean>(false);
 
   // paymentAttemptId is the source-of-truth from the paymentSlice projection
   // (set by payments.start → payments.read flow, or seeded by tests via
@@ -73,6 +75,8 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
     setPhase('tender_selection');
     setBridgeRefusalCopy(null);
     setIsConfirming(false);
+    setIsCancelling(false);
+    setReversalPending(false);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
 
@@ -126,6 +130,30 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
     });
     if (readResponse.kind === 'ok') {
       usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
+    }
+  }
+
+  async function handleCancel(): Promise<void> {
+    if (_testBridge === undefined || paymentAttemptId === null) {
+      return;
+    }
+    setBridgeRefusalCopy(null);
+    setIsCancelling(true);
+    try {
+      const response = await _testBridge.payments.cancel({
+        payment_attempt_id: paymentAttemptId,
+        idempotency_key: crypto.randomUUID(),
+      });
+      if (response.kind === 'ok') {
+        setReversalPending(response.reversal_pending_tender_line_ids.length > 0);
+        setSelectedTender(null);
+        setPhase('tender_selection');
+        usePaymentStore.getState().clearAttempt();
+      } else {
+        setBridgeRefusalCopy('This payment could not be cancelled. Please try again.');
+      }
+    } finally {
+      setIsCancelling(false);
     }
   }
 
@@ -241,6 +269,36 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
         >
           Confirm payment
         </button>
+      )}
+
+      {/* S3d mode: cancel button visible during the entry phase. */}
+      {_testBridge !== undefined && phase === 'entry' && (
+        <button
+          type="button"
+          className="payment-surface__cancel"
+          data-testid="payment-surface-cancel"
+          disabled={isCancelling}
+          aria-disabled={isCancelling ? 'true' : undefined}
+          onClick={() => {
+            void handleCancel();
+          }}
+        >
+          Cancel
+        </button>
+      )}
+
+      {/* Slice-4 voucher path: hint shown when reversal_pending_tender_line_ids
+          was non-empty in the most recent cancel response. Copy is fixed (no
+          id interpolation) per FR-017 / token minimisation. */}
+      {reversalPending && (
+        <div
+          className="payment-surface__reversal-pending-hint"
+          data-testid="payment-surface-reversal-pending-hint"
+          role="status"
+          aria-live="polite"
+        >
+          Some reversals are pending and will be processed shortly.
+        </div>
       )}
 
       {bridgeRefusalCopy !== null && (
