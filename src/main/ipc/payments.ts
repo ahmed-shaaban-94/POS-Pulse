@@ -66,13 +66,25 @@ function refuseInvalid(): PaymentRefusal {
 
 // ── Payload validators ─────────────────────────────────────────────────────
 
+/**
+ * Money invariant guard (Constitution §II) — minor-unit values MUST be
+ * safe non-negative integers at the IPC trust boundary. The handlers
+ * themselves also validate (defence-in-depth), but admitting a float or
+ * unsafe integer here would let the FSM see a corrupted value before
+ * the handler's own check fires; the audit trail's deterministic
+ * payload hash also depends on integer canonicalisation.
+ */
+function isValidMinorUnit(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
 function asPaymentsStartReq(value: unknown): PaymentsStartRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (
     typeof v['envelope_handoff_action_id'] !== 'string' ||
     typeof v['envelope_cart_id'] !== 'string' ||
-    typeof v['envelope_subtotal_minor'] !== 'number' ||
+    !isValidMinorUnit(v['envelope_subtotal_minor']) ||
     v['envelope_version'] !== 'v1' ||
     typeof v['idempotency_key'] !== 'string'
   ) {
@@ -141,7 +153,7 @@ function asTenderApplyReq(value: unknown): TenderApplyRequest | null {
   if (
     typeof v['payment_attempt_id'] !== 'string' ||
     !isTenderType(v['tender_type']) ||
-    typeof v['amount_applied_minor'] !== 'number' ||
+    !isValidMinorUnit(v['amount_applied_minor']) ||
     typeof v['idempotency_key'] !== 'string'
   ) {
     return null;

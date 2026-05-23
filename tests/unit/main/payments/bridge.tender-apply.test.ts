@@ -338,6 +338,8 @@ describe('T105 — tender.apply bridge handler', () => {
       makeLineRow({ tender_line_id: 'tl-existing', last_action_id: 'idem-apply-1' }),
     ]);
     const auditEmitter = makeAuditEmitterDouble();
+
+    // Replay branch — same idempotency_key, identical payload → no audit.
     const replayHandler = createTenderApplyHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
@@ -349,6 +351,20 @@ describe('T105 — tender.apply bridge handler', () => {
       clock: () => new Date('2026-05-23T11:00:01.000Z'),
     });
     await replayHandler(validRequest());
+    expect(auditEmitter.captured).toHaveLength(0);
+
+    // Mismatch branch — same idempotency_key, divergent payload → no audit.
+    const mismatchHandler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
+      linesRepo: makeLinesRepoDouble(),
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble({ kind: 'mismatch' }),
+      auditEmitter,
+      uuid: () => 'tl-NEW-2',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    await mismatchHandler(validRequest({ idempotency_key: 'idem-apply-2' }));
     expect(auditEmitter.captured).toHaveLength(0);
   });
 

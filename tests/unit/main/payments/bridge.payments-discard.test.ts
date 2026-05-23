@@ -125,11 +125,22 @@ describe('T104 — payments.discardOnSessionEnd (internal)', () => {
     const { handler, tenderFsm } = setup();
     await handler({ payment_attempt_id: 'pa-1' });
     // Two applied lines (tl-1 apply_order 1, tl-2 apply_order 2) → LIFO is tl-2, tl-1.
-    const reverseCalls = tenderFsm.reverse.mock.calls.concat(
-      tenderFsm.reverseInTransaction.mock.calls,
-    );
-    expect(reverseCalls.length).toBeGreaterThanOrEqual(2);
-    const reversedIds = reverseCalls.map((c) => c[0].tender_line_id);
+    // Merge both reverse-variant call histories by true invocation order
+    // (vi's invocationCallOrder is a monotonically-increasing global counter),
+    // not by array-concat position — the handler may pick either variant per
+    // call, and concat order would lie about cross-variant sequencing.
+    const reverseCalls = tenderFsm.reverse.mock.calls.map((args, i) => ({
+      tender_line_id: args[0].tender_line_id,
+      order: tenderFsm.reverse.mock.invocationCallOrder[i] ?? 0,
+    }));
+    const reverseInTxCalls = tenderFsm.reverseInTransaction.mock.calls.map((args, i) => ({
+      tender_line_id: args[0].tender_line_id,
+      order: tenderFsm.reverseInTransaction.mock.invocationCallOrder[i] ?? 0,
+    }));
+    const reversedIds = [...reverseCalls, ...reverseInTxCalls]
+      .sort((a, b) => a.order - b.order)
+      .map((c) => c.tender_line_id);
+    expect(reversedIds.length).toBeGreaterThanOrEqual(2);
     // LIFO assertion — tl-2 reversed before tl-1.
     const firstIdx = reversedIds.indexOf('tl-2');
     const secondIdx = reversedIds.indexOf('tl-1');
@@ -168,5 +179,80 @@ describe('T104 — payments.discardOnSessionEnd (internal)', () => {
     });
     const result = await handler({ payment_attempt_id: 'pa-1' });
     expect(result.kind).toBe('ok');
+  });
+
+  // ── Defence-in-depth coverage ────────────────────────────────────────────
+
+  it('returns noop when the FSM refuses the fail transition (race defence)', async () => {
+    // The row-state guard (line.state !== 'started' → noop) makes this
+    // unreachable in single-writer flow, but a concurrent writer could
+    // settle/cancel the attempt between findById and fsm.fail. In that
+    // case the FSM refuses and the handler returns noop — the already-
+    // reversed lines stay reversed (safe, no double-charge).
+    const attemptsRepo = makeAttemptsRepoDouble([makeAttemptRow()]);
+    const linesRepo = makeLinesRepoDouble();
+    const paymentFsm = makePaymentAttemptFsmDouble();
+    paymentFsm.fail.mockReturnValueOnce({ kind: 'refused', reason: 'attempt_terminal' });
+    const auditEmitter = makeAuditEmitterDouble();
+    const handler = createPaymentsDiscardOnSessionEndHandler({
+      attemptsRepo,
+      linesRepo,
+      paymentAttemptFsm: paymentFsm,
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      auditEmitter,
+      uuid: () => 'discard-action-1',
+      clock: () => new Date('2026-05-23T11:00:10.000Z'),
+    });
+    expect(await handler({ payment_attempt_id: 'pa-1' })).toEqual({ kind: 'noop' });
+    // No payment.failed audit emitted on the noop race path.
+    expect(
+      auditEmitter.captured.filter((e) => e.action_category === 'payment.failed'),
+    ).toHaveLength(0);
+  });
+
+  it('skips voucher lines (tender_not_yet_supported) without emitting tender.reversed', async () => {
+    // Slice 3 cannot reverse voucher lines synchronously. The handler
+    // gets a refused outcome from the TenderLine FSM for the voucher,
+    // skips it, and continues reversing the other lines. The voucher
+    // line is picked up by the Slice-4 deferred-reversal resolver later.
+    const attemptsRepo = makeAttemptsRepoDouble([makeAttemptRow()]);
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({ tender_line_id: 'tl-cash', tender_type: 'cash', apply_order: 1 }),
+      makeLineRow({
+        tender_line_id: 'tl-voucher',
+        tender_type: 'internal_voucher',
+        apply_order: 2,
+      }),
+    ]);
+    const tenderFsm = makeTenderLineFsmDouble();
+    // cash reverse: ok; voucher reverse: tender_not_yet_supported.
+    tenderFsm.reverse.mockImplementation((input) => {
+      if (input.tender_line_id === 'tl-voucher') {
+        return { kind: 'refused', reason: 'tender_not_yet_supported' };
+      }
+      return {
+        kind: 'ok',
+        reversed_at: input.reversed_at,
+        state: 'reversed',
+        tender_type: 'cash',
+        manual_void_required: false,
+      };
+    });
+    const auditEmitter = makeAuditEmitterDouble();
+    const handler = createPaymentsDiscardOnSessionEndHandler({
+      attemptsRepo,
+      linesRepo,
+      paymentAttemptFsm: makePaymentAttemptFsmDouble(),
+      tenderLineFsm: tenderFsm,
+      auditEmitter,
+      uuid: () => 'discard-action-1',
+      clock: () => new Date('2026-05-23T11:00:10.000Z'),
+    });
+    const result = await handler({ payment_attempt_id: 'pa-1' });
+    expect(result.kind).toBe('ok');
+    // One tender.reversed for tl-cash; tl-voucher is silently skipped.
+    const reversed = auditEmitter.captured.filter((e) => e.action_category === 'tender.reversed');
+    expect(reversed).toHaveLength(1);
+    expect(reversed[0]?.payload).toMatchObject({ tender_line_id: 'tl-cash' });
   });
 });

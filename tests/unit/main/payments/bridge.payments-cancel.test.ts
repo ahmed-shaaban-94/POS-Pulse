@@ -269,4 +269,64 @@ describe('T102 — payments.cancel bridge handler', () => {
     expect(reversed).toHaveLength(1);
     expect(reversed[0]?.payload).toMatchObject({ tender_line_id: 'tl-2' });
   });
+
+  // ── Defence-in-depth coverage ────────────────────────────────────────────
+
+  it('replay on a non-cancelled attempt refuses with internal_error (race defence)', async () => {
+    // The idempotency helper says "replay" but the row state is `started`
+    // — an inconsistency that can only occur via concurrent-writer race in
+    // production. The handler refuses generically rather than fabricate
+    // a cancelled_at value.
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ state: 'started', cancelled_at: null });
+    const handler = createPaymentsCancelHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo: makeLinesRepoDouble(),
+      paymentAttemptFsm: makePaymentAttemptFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      auditEmitter: makeAuditEmitterDouble(),
+      clock: () => new Date('2026-05-23T11:00:05.000Z'),
+    });
+    expect(await handler(validRequest())).toEqual({
+      kind: 'refused',
+      reason: 'internal_error',
+    });
+  });
+
+  it('skips audit emission when the FSM reports a reversed id with no matching line row', async () => {
+    // Defence path inside the per-line loop: the FSM returned an id the
+    // lines repo cannot resolve (impossible under atomic-tx guarantees,
+    // but the handler must not throw or emit a phantom audit for it).
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow();
+    const linesRepo = makeLinesRepoDouble([
+      // Only tl-1 exists in the post-FSM line state.
+      makeLineRow({ tender_line_id: 'tl-1', tender_type: 'cash', apply_order: 1 }),
+    ]);
+    const fsm = makePaymentAttemptFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const handler = createPaymentsCancelHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo,
+      paymentAttemptFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter,
+      clock: () => new Date('2026-05-23T11:00:05.000Z'),
+    });
+    fsm.cancel.mockReturnValueOnce({
+      kind: 'ok',
+      cancelled_at: '2026-05-23T11:00:05.000Z',
+      reversed_tender_line_ids: ['tl-1', 'tl-PHANTOM'],
+      reversal_pending_tender_line_ids: [],
+    });
+    const result = await handler(validRequest());
+    expect(result.kind).toBe('ok');
+    // tl-1 emits an audit; tl-PHANTOM is silently skipped via the
+    // `if (line === undefined) continue` defence.
+    const reversed = auditEmitter.captured.filter((e) => e.action_category === 'tender.reversed');
+    expect(reversed).toHaveLength(1);
+    expect(reversed[0]?.payload).toMatchObject({ tender_line_id: 'tl-1' });
+  });
 });
