@@ -17,10 +17,10 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 3
+version: 4
 base: 868c7ff
-status: S3b-COMPLETED
-preflight: S3c-PREFLIGHT-REQUIRED
+status: S3c-COMPLETED
+preflight: S3d-PREFLIGHT-REQUIRED
 last_updated: "2026-05-23"
 
 source_of_truth:
@@ -238,11 +238,17 @@ slices:
     title: Bridge handlers + preload registration
     spec: 006-payments-tender
     type: implementation
-    status: blocked
+    status: completed
+    authorized_at: "2026-05-23"
+    merged_in_pr: 210
+    merged_at_commit: 5f493fdc802ef70d00ad9f10e4805db5dd429edf
+    merged_at_date: "2026-05-23"
+    head_sha: 7d09cbe4ab70f364b0eab18b35c21aa5b874795c
+    merged_at_iso: "2026-05-23T12:37:41Z"
     gate:
       required:
         - §A4-A
-      note: §A4-A must clear AND S3b must be GREEN before S3c begins.
+        - 006-S3b-GREEN
     task_ids:
       - T100
       - T101
@@ -271,11 +277,23 @@ slices:
     # boundary crossing. Process-boundary rule applies.
     validation:
       reference: tasks.md T160 (full suite; >=95% on all bridge handlers)
+      result: green
+      evidence: >
+        PR #210 head 7d09cbe — typecheck clean, lint clean, vitest 3 284 passed /
+        3 skipped / 0 failed, codegen:verify clean. All per-file coverage
+        thresholds pass (initial 12 violations resolved across two review-cycle
+        commits 06343a5 + 7d09cbe).
     notes: >
-      Contains a 9-wide parallel-safe bridge handler antichain (Wave G, see
-      groups below) but single-agent is forced by the process-boundary rule.
-      T100-T106 are the TDD test tasks (GREEN required before T133-T141 impl).
-      T142 (preload registration) is the final step and depends on all handlers.
+      Wave order G → H → I followed (TDD RED → GREEN → preload registration).
+      Single-agent per process-boundary rule (Bridge handlers span main / preload
+      / shared simultaneously). Zero [P] downgrades, zero forbidden-scope fires.
+      CodeRabbit review absorbed in commit 06343a5 (CR-1 money safe-integer
+      guard at the IPC boundary; CR-2 invocationCallOrder LIFO test fix;
+      CR-3 mismatch branch in tender-apply replay test). Coverage tail in 7d09cbe
+      (reversal_pending bucket seed for payments-cancel replay test). F-002
+      through F-007 surfaced as documentation divergences / follow-ups during
+      execution (preflight-named F-002 plus four owner-authorized fold-ins under
+      Option A) — none modifies task IDs.
 
   - id: 006-S3d
     title: Renderer wiring + final verification
@@ -554,4 +572,46 @@ closeout:
         T133–T142 implementation + T142 preload registration). Gates §A4-A
         cleared, §A3 cleared, S3b GREEN — all preconditions satisfied.
         S3d remains blocked on S3c-GREEN; Slice 4 gates (§A4-B, §A2)
+        remain held throughout.
+
+    - sub_slice: 006-S3c
+      pr: 210
+      sha: 5f493fdc802ef70d00ad9f10e4805db5dd429edf
+      head_sha: 7d09cbe4ab70f364b0eab18b35c21aa5b874795c
+      date: "2026-05-23"
+      merged_at_iso: "2026-05-23T12:37:41Z"
+      report_location: >
+        PR #210 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Maestro closeout — S3c (PR #210)"
+      tasks_completed:
+        - T100
+        - T101
+        - T102
+        - T103
+        - T104
+        - T105
+        - T106
+        - T133
+        - T134
+        - T135
+        - T136
+        - T137
+        - T138
+        - T139
+        - T140
+        - T141
+        - T142
+      findings:
+        - F-002  # src/preload/index.ts wire-up not in tasks.md (preflight-named)
+        - F-003  # src/shared/payments/channels.ts not in tasks.md
+        - F-004  # src/main/ipc/payments.ts + src/main/index.ts bootstrap not in tasks.md
+        - F-005  # PaymentTenderLinesRepository.findByLineId added (T112 surface extension)
+        - F-006  # AUDIT_ACTION_CATEGORIES TS union does not yet include payment categories (004-owner follow-up)
+        - F-007  # OperatorSession lacks terminal_id; payments adapter reuses branch_id per cart precedent (004-owner follow-up)
+      next_action: >
+        Run a fresh Maestro preflight for S3d (Template 1). S3d introduces
+        the renderer wiring (T150–T154) + final verification + Slice-3
+        sign-off tasks (T160–T164). Gates §A1 cleared (2026-05-20),
+        S3c-GREEN — all preconditions satisfied. Do not start S3d
+        implementation without the preflight. Slice 4 gates (§A4-B, §A2)
         remain held throughout.

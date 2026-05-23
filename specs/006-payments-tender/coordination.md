@@ -1526,6 +1526,153 @@ Run a **fresh Maestro preflight for S3c** (Template 1). S3c introduces the `paym
 
 ---
 
+## Maestro closeout — S3c (PR #210)
+
+> Concise mirror of the PR #210 description (the canonical home of the
+> full closeout). Records the durable facts only; the full diff,
+> validation logs, and CodeRabbit thread live on GitHub. Schema:
+> [`../../docs/maestro/report-schema.md`](../../docs/maestro/report-schema.md).
+
+### Identification
+
+| Field | Value |
+|:--|:--|
+| Feature | `006-payments-tender` |
+| Sub-slice | S3c — Bridge handlers + preload registration |
+| Branch | `feat/006-s3c-bridge-handlers-preload` |
+| Head SHA | `7d09cbe4ab70f364b0eab18b35c21aa5b874795c` (post-CodeRabbit + post-coverage fix commit) |
+| Merge commit | `5f493fdc802ef70d00ad9f10e4805db5dd429edf` on `main` |
+| Merged at | 2026-05-23T12:37:41Z |
+| Constitution version pinned | v1.5.1 |
+
+### Gate verdict
+
+| Gate | Status entering | Status leaving |
+|:--|:--:|:--:|
+| §A0 — Upstream readiness | ✅ | ✅ (unchanged) |
+| §A1 — Visual direction Slice 0 | ✅ | ✅ (unchanged) |
+| §A2 — Backend / OpenAPI | no-op (Slices 1–3) | no-op (unchanged; gates Slice 4 voucher endpoints only) |
+| §A3 — Migrations | ✅ (signed off 2026-05-21) | ✅ (unchanged; S3a delivered migrations; S3c consumed read-only via S3a repositories) |
+| §A4-A — Bridge-API security review (`payments.*` + `tender.*`) | ✅ (signed off 2026-05-21) | ✅ (unchanged; S3c implements under this clearance) |
+| §A4-B — Bridge-API review (`vouchers.*`, Slice 4) | ⛔ Held | ⛔ Held (unchanged) |
+| §A5 — Production readiness | ⛔ Held (rollout-only) | ⛔ Held (rollout-only) |
+
+No gate was opened or cleared by this sub-slice. S3c operated entirely under the §A4-A + §A3 clearance recorded 2026-05-21 and the S3b-GREEN precondition satisfied by PR #209.
+
+### Tasks completed
+
+T100 · T101 · T102 · T103 · T104 · T105 · T106 (bridge handler tests — Wave G, TDD RED)
+T133 · T134 · T135 · T136 · T137 · T138 · T139 · T140 · T141 (bridge handler implementation — Wave H, GREEN)
+T142 (preload registration — Wave I)
+
+All 17 ticked in `tasks.md` with original task IDs, `[P]` markers, `[US?]` labels, descriptions, and file-path proposals preserved verbatim. Maestro task-marking §"What Maestro never changes" honoured.
+
+### Files touched (per PR description; 20 files in initial commit, +8 from review-cycle commits)
+
+**New source (12; from initial commit `747a6c4`):**
+
+- `src/main/payments/handlers/payments-start.ts` (T133) — Session gate, envelope-version + safe-integer validation, idempotency replay via partial-unique-index probe, FSM call. No audit emission (FR-025; payment.* audit categories fire on terminal transitions only).
+- `src/main/payments/handlers/payments-confirm.ts` (T134) — Isolation/ownership gate, replay reconstructs `settled_at` from row state, FSM refusal pass-through, `payment.settled` audit with full tender breakdown (AD-9 / R-8).
+- `src/main/payments/handlers/payments-cancel.ts` (T135) — LIFO replay reconstruction, per-line `tender.reversed` audits (`manual_void_required: true` on `external_card_terminal`; `false` on cash), attempt-level `payment.cancelled`.
+- `src/main/payments/handlers/payments-subscribe.ts` (T136) — Renderer-minimised projection (Slice-3 ≡ `payments.read`; push-stream deferred).
+- `src/main/payments/handlers/payments-read.ts` (T137) — One-shot projection; reads NOT terminal-state gated (settled attempts still readable for receipt-handoff).
+- `src/main/payments/handlers/payments-discard-on-session-end.ts` (T138) — Internal handler, no session source, LIFO reverse + `fail` with `operator_session_terminated`, idempotency by row state.
+- `src/main/payments/handlers/tender-apply.ts` (T139) — Tender-type routing, cash overpay → `change_due_minor`, voucher → `tender_not_yet_supported`, audit `tender.applied`/`tender.refused`.
+- `src/main/payments/handlers/tender-reverse.ts` (T140) — Line→attempt gating resolution via `findByLineId`, audit `tender.reversed` with `manual_void_required` flag.
+- `src/main/payments/handlers/tender-read.ts` (T141) — Single-line projection, same FR-017 minimisation rules.
+- `src/main/payments/handlers/projection.ts` — Shared renderer-projection helpers (used by all three read paths).
+- `src/shared/payments/channels.ts` (F-003) — IPC channel constants (`PAYMENTS_IPC_CHANNELS` + `TENDER_IPC_CHANNELS`).
+- `src/main/ipc/payments.ts` (F-004) — `registerPaymentsHandlers` main-side `ipcMain.handle` wire-up + payload validators. Defence-in-depth `Number.isSafeInteger` guard on money fields (added in CodeRabbit fix commit `06343a5`).
+- `src/preload/payments.ts` (T142) — `contextBridge`-exposed `payments` + `tender` namespaces; `payments.discardOnSessionEnd` intentionally absent (internal-only).
+
+**Modified source (3):**
+
+- `src/main/index.ts` (F-004 bootstrap) — instantiates the three S3a repositories, both FSMs, idempotency helper, audit emitter (adapter to 004's `auditEventsStore.insertIgnore`), session adapter (`OperatorSession → OperatorSessionForPayments`), 8 handler factories, and calls `registerPaymentsHandlers`.
+- `src/preload/index.ts` (F-002) — wires the new `payments` + `tender` namespaces into the `PreloadBridgeAPI` instance exposed via `contextBridge`.
+- `src/main/payments/repositories/payment-tender-lines.repository.ts` (F-005) — added `findByLineId(tender_line_id): PaymentTenderLineRow | undefined` (PK equality lookup against migration-0014's PRIMARY KEY); required by `tender.read` + `tender.reverse` whose request shapes carry only `tender_line_id`.
+
+**New tests (8; including 2 from the review-cycle commit):**
+
+- `tests/unit/main/payments/bridge.payments-{start, confirm, cancel, subscribe-read, discard, tender-apply, tender-reverse}.test.ts` (T100–T106; Wave G TDD RED → GREEN once Wave H landed)
+- `tests/unit/main/payments/__fixtures__/bridge-handler-deps.ts` — shared test-double factories (sessions, repos, FSMs, audit emitter, idempotency, row builders). Exclusive read-only by every Wave-G test file.
+- `tests/unit/main/ipc/payments.test.ts` (33 cases; review-cycle commit `06343a5`) — covers `registerPaymentsHandlers` channel registration, malformed-payload refusal, the CR-1 money-invariant guard, and valid-payload forwarding for all 8 channels. Mirrors `tests/unit/main/ipc/cart.test.ts`.
+- `tests/unit/main/payments/handlers/projection.test.ts` (16 cases; review-cycle commit `06343a5`) — per-branch coverage of `projectTenderLineRendererView` (each optional field + RefusalReason narrowing) and `projectPaymentAttemptRendererView` (each terminal-state field). Lifts `projection.ts` from ~62 % to 100 % branch coverage.
+
+**Configuration touched (1):**
+
+- `vitest.config.ts` — added `src/preload/payments.ts` to coverage excludes; matches the existing posture for `src/preload/index.ts` (thin `ipcRenderer.invoke` wire-up; correctness proven by the bridge-api contract test + manual Electron smoke).
+
+**Confirmed untouched (forbidden scope walls held):** S3d renderer wiring + final verification (T150–T164); `src/renderer/**`; `migrations/**` (S3a complete — consumed read-only); `src/shared/api-types.ts` (codegen); OpenAPI / codegen; CI workflows; `package.json` / `package-lock.json`; `_reference/Data-Pulse/`; `smart-data-pulse-2/**`; `AGENTS.md`; `CLAUDE.md`. The Slice 4 `payments.forceFail` + `vouchers.*` namespaces are deliberately absent from `channels.ts`, `preload/payments.ts`, and `main/ipc/payments.ts`.
+
+### Validation evidence (PR #210 head `7d09cbe`)
+
+| Check | Result | Notes |
+|:--|:--:|:--|
+| `npm run typecheck` (renderer + main + preload tsconfigs) | ✅ clean | — |
+| `npm run lint` (`eslint .` + `prettier --check .`) | ✅ clean | — |
+| `npx vitest run` (full) | ✅ 3 284 passed / 3 skipped / 0 failed | +54 over S3b baseline of 3 230 (Wave G alone: 79 new bridge handler cases; review cycle: 49 new IPC + projection cases + 4 defence-path cases on cancel/discard) |
+| `npm run codegen:verify` | ✅ no-op | `api-types.ts` up to date (no OpenAPI changes in S3c) |
+| Per-file coverage thresholds (80 % global; 95 % money/FSM/audit/idempotency/bridge) | ✅ all pass | Initial CI run reported 12 violations across 5 files; review-cycle commits `06343a5` + `7d09cbe` added the missing tests + the `payments-cancel.ts` `reversal_pending` bucket coverage seed, resolving all 12. |
+
+Manual smoke deferred to S3d per PR test-plan checklist (no renderer wiring lands in S3c).
+
+### Security / scope boundaries honoured
+
+- **Money invariant (Constitution §II)** — every IPC validator (`asPaymentsStartReq`, `asTenderApplyReq`) refuses money fields that are not safe non-negative integers via the `isValidMinorUnit` guard (added in review-cycle commit `06343a5` per CodeRabbit CR-1). Defence-in-depth — the handlers themselves also re-validate, and the FSM layer's `Number.isSafeInteger` guards remain in force.
+- **Generic refusal posture (NFR-003 / PR-2)** — every malformed bridge payload collapses to `{ kind: 'refused', reason: 'invalid_input' }`. No field-name leakage; the IPC validator short-circuits before handler invocation so a malformed `null` payload never reaches the FSM.
+- **`payments.discardOnSessionEnd` is internal-only** — instantiated in the main-process bootstrap, called by the operator-session-end signal; **not** exposed via `contextBridge`. T142 channels list explicitly omits it.
+- **Slice 4 boundaries respected** — `payments.forceFail` and `vouchers.*` namespaces are absent from `src/shared/payments/channels.ts`, `src/preload/payments.ts`, and `src/main/ipc/payments.ts`. The closed RefusalReason enum carries voucher-related reasons for forward-typing only; the Slice-3 surface refuses voucher tender_type with `tender_not_yet_supported` at the FSM seam.
+- **FR-017 minimisation** — renderer projections (`payments.read`, `payments.subscribe`, `tender.read`) NEVER cross `voucher_redemption_intent_token`, `voucher_code`, `attribution_operator_id`, or `last_action_id`. The closed allow-list lives in `src/main/payments/handlers/projection.ts` and is asserted by `projection.test.ts`.
+- **Audit attribution (Constitution §VIII)** — `attribution_operator_id` sourced from the persisted attempt row's `acting_operator_id` (which 005's handoff bridge stamped from the Clerk-backed session), never from `req.*` fields.
+- **No bridge response leaks `idempotency_payload_mismatch` payload diff** — the refusal is generic; the mismatch detail is logged main-side via the idempotency helper.
+- **Cart precedent honoured for IPC trust boundary** — `tests/unit/main/ipc/payments.test.ts` mirrors `tests/unit/main/ipc/cart.test.ts` channel-registration + refusal-posture pattern.
+
+### Scope exclusions
+
+- **No S3d work** — T150–T164 not started (renderer store + entry wiring + PaymentSurface wiring + final verification).
+- **No Slice 4 work** — T200+ not started (voucher / force-fail / Contract V-A).
+- **No `src/renderer/**` touches.**
+- **No `migrations/**` changes** (S3a delivered the schema; S3c consumed read-only via the S3a repositories).
+- **No `package.json` / `package-lock.json` changes.**
+- **No CI workflow changes** — `.github/workflows/` untouched.
+- **No `_reference/Data-Pulse/` touches; no `smart-data-pulse-2/**` touches.**
+- **No `git add -A` / `git add .`** — every staged file was on the S3c allow-list (initial commit) or the explicit review-cycle add list (review commits).
+
+### Findings (Maestro task-marking; none modify task IDs)
+
+| ID | Severity | Summary |
+|:--|:--|:--|
+| F-002 | Low | T142 also modifies `src/preload/index.ts` (tasks.md names only `src/preload/payments.ts`). Documentation divergence; flagged for `/speckit-analyze` follow-up. |
+| F-003 | Low | `src/shared/payments/channels.ts` (IPC channel constants) not named in tasks.md but required by both preload + main-side ipc. Same flavour as F-001. |
+| F-004 | Low | `src/main/ipc/payments.ts` (`registerPaymentsHandlers`) + `src/main/index.ts` bootstrap wire-up not named in tasks.md. Same flavour as F-001 / F-003. |
+| F-005 | Low | `PaymentTenderLinesRepository.findByLineId(id)` added to support `tender.read` + `tender.reverse` (request shape carries only `tender_line_id`). PK equality lookup against migration-0014's PRIMARY KEY — zero schema risk. Documentation divergence; the repository surface in tasks.md T112 listed `insert / updateState / findByAttempt / settlementSumMinor` only. |
+| F-006 | Low | `AUDIT_ACTION_CATEGORIES` in `src/shared/audit/event-shape.ts` does not yet include the 7 payment categories at the TypeScript-union level (migration `0017` extends the SQL CHECK only). S3c bootstrap uses a single bounded cast at the audit-emitter adapter seam in `src/main/index.ts`. A 004-owner follow-up PR should widen the union. |
+| F-007 | Low | `OperatorSession` from 004 has no separate `terminal_id` field. S3c bootstrap reuses `session.branch_id` as the terminal scope, matching the cart-bridge precedent (`src/main/cart/cart-bridge.ts` line 215). A 004-owner follow-up could plumb a real terminal id through the session record. |
+
+All six findings are **documentation divergences / follow-ups**. None modifies task IDs, `[P]` markers, `[US?]` labels, or gate text. Flagged for the next `/speckit-analyze` cycle.
+
+### Deferred / follow-up
+
+- **F-006 (004 audit-category union widening)** — out of S3c's allowed-paths set. A 004-owner PR can widen `AUDIT_ACTION_CATEGORIES` to drop the bounded cast at the audit-emitter adapter; no behaviour change.
+- **F-007 (terminal_id on `OperatorSession`)** — same as F-006: belongs to 004's owner. Branch_id-as-terminal_id is the current convention across 005/006 and is not S3c-introduced.
+- **Manual smoke** — deferred to S3d, when the renderer wiring lands. The bridge surface itself is contract-test + unit-test verified.
+- **Finding F-001** (migration-naming divergence) remains open for the next `/speckit-analyze` cycle. Unchanged from S3a / S3b closeouts.
+
+### Next step (single concrete action)
+
+Run a **fresh Maestro preflight for S3d** (Template 1). S3d introduces the renderer wiring (T150–T154) + final verification + Slice-3 sign-off tasks (T160–T164). S3d gates (§A1 ✅ cleared 2026-05-20, S3c-GREEN ✅ as of this PR) are all satisfied. **Do not start S3d implementation without the preflight.** Slice 4 gates (§A4-B, §A2) remain held throughout.
+
+### Run notes
+
+- Single-agent execution end-to-end per `docs/maestro/graph-rules.md §"Process-boundary edges"` — S3c spans main-process handlers, the IPC trust boundary, the preload `contextBridge`, and main-process bootstrap simultaneously.
+- Wave order followed: G → H → I (TDD RED → GREEN → preload registration).
+- Zero `[P]` downgrades fired — every Wave-G test file and every Wave-H handler file lived in separate paths.
+- Zero `forbidden-scope` fires.
+- F-003 / F-004 / F-005 / F-006 / F-007 each surfaced during execution under the same posture as F-002 (the preflight-named documentation divergence); owner authorized Option A (fold into S3c) before any work began on the affected files.
+- Two review-cycle commits: `06343a5` ("fix(006): address CodeRabbit review + coverage on PR #210 (S3c)") added the CR-1 money guard + the IPC test + the projection test + targeted handler defence tests + the preload coverage exclusion; `7d09cbe` ("fix(006): cover payments-cancel replay reversal_pending bucket") added a single seed line to the cancel replay test to lift `payments-cancel.ts` per-file function coverage above the 80 % threshold (v8 counts `.filter / .sort / .map` arrow lambdas, and the empty-input bucket was the residual gap). All three actionable CodeRabbit comments received inline replies on the PR.
+
+---
+
 ## Cross-references
 
 - 004 coordination model: [`../004-operator-session/coordination.md`](../004-operator-session/coordination.md)
