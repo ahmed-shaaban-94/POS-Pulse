@@ -291,4 +291,31 @@ describe('T112 — payment_tender_lines repository', () => {
     const repo = bindPaymentTenderLinesRepository(stub);
     expect(() => repo.settlementSumMinor('attempt-x')).toThrow(TypeError);
   });
+
+  // ── F-005 — findByLineId(tender_line_id) ──────────────────────────────────
+  //
+  // Added in S3c to support tender.read + tender.reverse bridge handlers,
+  // whose request shapes carry only `tender_line_id`. PK equality lookup
+  // against the migration-0014 primary key; both the hit + miss branches
+  // are exercised here for full coverage.
+
+  it('findByLineId returns the row when the id exists', () => {
+    const handle = makeSqlJsHandle(db);
+    seedAttempt(handle);
+    const repo = bindPaymentTenderLinesRepository(handle);
+    repo.insert(baseLine());
+    const row = repo.findByLineId('line-1');
+    expect(row).toBeDefined();
+    expect(row?.tender_line_id).toBe('line-1');
+    expect(row?.tender_type).toBe('cash');
+    expect(row?.amount_applied_minor).toBe(1500);
+  });
+
+  it('findByLineId returns undefined when the id is unknown', () => {
+    const handle = makeSqlJsHandle(db);
+    seedAttempt(handle);
+    const repo = bindPaymentTenderLinesRepository(handle);
+    repo.insert(baseLine());
+    expect(repo.findByLineId('line-NOT-EXIST')).toBeUndefined();
+  });
 });

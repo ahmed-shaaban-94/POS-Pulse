@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { cart } from './cart.js';
+import { payments, tender } from './payments.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -124,6 +125,11 @@ const api: PreloadBridgeAPI = {
   pairing,
   operator,
   cart,
+  // 006-payments-tender Slice 3 (T142 + F-002) — payments.* + tender.*
+  // namespaces. payments.discardOnSessionEnd, payments.forceFail, and
+  // vouchers.* are intentionally NOT exposed (internal / Slice 4).
+  payments,
+  tender,
 };
 
 contextBridge.exposeInMainWorld('api', api);

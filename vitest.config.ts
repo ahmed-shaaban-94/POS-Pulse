@@ -32,6 +32,11 @@ export default defineConfig({
         // bridge-typing test and the manual Electron smoke. Same posture
         // as src/main/index.ts.
         'src/preload/index.ts',
+        // 006 S3c: payments-specific preload entry — same shape as
+        // src/preload/index.ts (thin ipcRenderer.invoke wire-up; no
+        // branchable logic). Covered by the bridge-api contract test
+        // (compile-time) and the manual Electron smoke.
+        'src/preload/payments.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',
