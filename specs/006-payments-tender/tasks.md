@@ -15,12 +15,12 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 **Visual direction:** `specs/006-payments-tender/visual-direction/README.md` (to be produced in Slice 0 under §A1)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-23 (S3b complete via PR #209 merge `862d245`; T070–T073, T080–T088, T090–T094, T120–T121, T130–T132 ticked. Shared types + PaymentAttempt FSM + TenderLine FSM + requireOperatorSession wrapper + idempotency replay helper + audit emitter shipped. S3c remains BLOCKED on S3b-GREEN confirmed; S3d blocked on S3c; §A2 no-op for Slice 3; §A4-B + §A5 held.)
-**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · S3a ✅ (PR #207, 2026-05-22) · S3b ✅ (PR #209, 2026-05-23) · S3c/S3d/Slices 4–5 not started**
+**Last updated:** 2026-05-23 (S3c complete via PR #210 merge `5f493fd`; T100–T106 + T133–T142 ticked. Bridge handlers (`payments.*` + `tender.*`) + main-side IPC registration + preload contextBridge exposure shipped. S3d remains BLOCKED on S3c-GREEN confirmed (preflight required before implementation); §A2 no-op for Slice 3; §A4-B + §A5 held.)
+**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · S3a ✅ (PR #207, 2026-05-22) · S3b ✅ (PR #209, 2026-05-23) · S3c ✅ (PR #210, 2026-05-23) · S3d/Slices 4–5 not started**
 
 ---
 
-> ## STATUS: S3b complete — S3c next candidate (preflight required before implementation)
+> ## STATUS: S3c complete — S3d next candidate (preflight required before implementation)
 >
 > Slice 0 ✅ (PR #189 / PR #190, 2026-05-20). Slice 1 ✅ — renderer-only
 > tender selection + envelope ingest merged via **PR #192** (head
@@ -33,15 +33,18 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 > PaymentAttempt FSM + TenderLine FSM + requireOperatorSession +
 > idempotency replay + audit emitter merged via **PR #209** (merge
 > commit `862d245`, 2026-05-23). T070–T073, T080–T088, T090–T094,
-> T120–T121, T130–T132 complete.
+> T120–T121, T130–T132 complete. S3c ✅ — bridge handlers
+> (`payments.*` + `tender.*`) + main-side IPC registration + preload
+> contextBridge exposure merged via **PR #210** (merge commit
+> `5f493fd`, 2026-05-23). T100–T106 + T133–T142 complete.
 >
-> **S3c remains BLOCKED** on S3b-GREEN + preflight (Template 1). S3d
-> blocked on S3c-GREEN. Slice 4 needs §A4-B `vouchers.*` review + §A2
-> voucher endpoints; §A5 is rollout-only.
+> **S3d remains BLOCKED** on S3c-GREEN + preflight (Template 1). Slice 4
+> needs §A4-B `vouchers.*` review + §A2 voucher endpoints; §A5 is
+> rollout-only.
 >
 > See [./coordination.md](./coordination.md) §"Gate ledger" for the
-> live gate-state table and §"Maestro closeout — S3b (PR #209)"
-> for the durable record of the S3b ship.
+> live gate-state table and §"Maestro closeout — S3c (PR #210)"
+> for the durable record of the S3c ship.
 
 ---
 
@@ -291,13 +294,13 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### TDD test tasks — bridge handlers (Slice 3 subset)
 
-- [ ] **T100** [P] [US1] Test (failing): `payments.start` requires session + matches envelope tenant/branch/terminal; partial-unique-index refusal becomes `attempt_already_started_on_terminal`; idempotency replay verified — `tests/unit/main/payments/bridge.payments-start.test.ts`
-- [ ] **T101** [P] [US1] Test (failing): `payments.confirm` evaluates the canonical settlement invariant; refuses `tender_underpaid` when sum is short; transitions to `settled` and emits `payment.settled`; idempotency replay verified — `tests/unit/main/payments/bridge.payments-confirm.test.ts`
-- [ ] **T102** [P] [US2] Test (failing): `payments.cancel` LIFO-reverses applied tender lines; emits `payment.cancelled` + `tender.reversed` events; idempotency replay verified — `tests/unit/main/payments/bridge.payments-cancel.test.ts`
-- [ ] **T103** [P] [US1] Test (failing): `payments.subscribe` streams the renderer view (minimised per FR-017; no voucher tokens, no raw refs); `payments.read` returns identical projection — `tests/unit/main/payments/bridge.payments-subscribe-read.test.ts`
-- [ ] **T104** [P] [US3] Test (failing): `payments.discardOnSessionEnd` (internal) reverses applied lines and transitions to `failed` with `operator_session_terminated`; not callable from renderer — `tests/unit/main/payments/bridge.payments-discard.test.ts`
-- [ ] **T105** [P] [US1] Test (failing): `tender.apply` for cash + external_card_terminal writes line + outbox row in one transaction; `internal_voucher` returns `tender_not_yet_supported` until Slice 4 — `tests/unit/main/payments/bridge.tender-apply.test.ts`
-- [ ] **T106** [P] [US6] Test (failing): `tender.reverse` for cash + external_card_terminal transitions to `reversed`; refuses on non-applied state with `line_not_applied`; idempotent — `tests/unit/main/payments/bridge.tender-reverse.test.ts`
+- [x] **T100** [P] [US1] Test (failing): `payments.start` requires session + matches envelope tenant/branch/terminal; partial-unique-index refusal becomes `attempt_already_started_on_terminal`; idempotency replay verified — `tests/unit/main/payments/bridge.payments-start.test.ts`
+- [x] **T101** [P] [US1] Test (failing): `payments.confirm` evaluates the canonical settlement invariant; refuses `tender_underpaid` when sum is short; transitions to `settled` and emits `payment.settled`; idempotency replay verified — `tests/unit/main/payments/bridge.payments-confirm.test.ts`
+- [x] **T102** [P] [US2] Test (failing): `payments.cancel` LIFO-reverses applied tender lines; emits `payment.cancelled` + `tender.reversed` events; idempotency replay verified — `tests/unit/main/payments/bridge.payments-cancel.test.ts`
+- [x] **T103** [P] [US1] Test (failing): `payments.subscribe` streams the renderer view (minimised per FR-017; no voucher tokens, no raw refs); `payments.read` returns identical projection — `tests/unit/main/payments/bridge.payments-subscribe-read.test.ts`
+- [x] **T104** [P] [US3] Test (failing): `payments.discardOnSessionEnd` (internal) reverses applied lines and transitions to `failed` with `operator_session_terminated`; not callable from renderer — `tests/unit/main/payments/bridge.payments-discard.test.ts`
+- [x] **T105** [P] [US1] Test (failing): `tender.apply` for cash + external_card_terminal writes line + outbox row in one transaction; `internal_voucher` returns `tender_not_yet_supported` until Slice 4 — `tests/unit/main/payments/bridge.tender-apply.test.ts`
+- [x] **T106** [P] [US6] Test (failing): `tender.reverse` for cash + external_card_terminal transitions to `reversed`; refuses on non-applied state with `line_not_applied`; idempotent — `tests/unit/main/payments/bridge.tender-reverse.test.ts`
 
 ### Implementation — persistence layer
 
@@ -316,16 +319,16 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 - [x] **T130** [US1] Implement `requireOperatorSession` payments wrapper delegating to 004's `role-enforcement.ts`; closed-set refusal mapping — `src/main/payments/require-operator-session.ts`
 - [x] **T131** [US1] [P] Implement idempotency replay helper: outbox lookup → identical-payload no-op vs `idempotency_payload_mismatch` refusal — `src/main/payments/idempotency.ts`
 - [x] **T132** [US1] [P] Implement audit emitter for `payment.*` + `tender.*` categories: payload validators (no PII / no card data / no voucher tokens; `external_reference` redaction in log sinks) — `src/main/payments/audit-emitter.ts`
-- [ ] **T133** [US1] Implement `payments.start` bridge handler — `src/main/payments/handlers/payments-start.ts`
-- [ ] **T134** [US1] Implement `payments.confirm` bridge handler (settlement invariant evaluated in the confirm transaction) — `src/main/payments/handlers/payments-confirm.ts`
-- [ ] **T135** [P] [US2] Implement `payments.cancel` bridge handler (LIFO reversal of cash + external_card_terminal lines) — `src/main/payments/handlers/payments-cancel.ts`
-- [ ] **T136** [P] [US1] Implement `payments.subscribe` bridge handler + main-side EventEmitter; serialises the minimised renderer view (FR-017) — `src/main/payments/handlers/payments-subscribe.ts`
-- [ ] **T137** [US1] [P] Implement `payments.read` bridge handler — `src/main/payments/handlers/payments-read.ts`
-- [ ] **T138** [P] [US3] Implement `payments.discardOnSessionEnd` (internal; main-process-only; subscribes to 004's operator-session-ended signal) — `src/main/payments/handlers/payments-discard-on-session-end.ts`
-- [ ] **T139** [P] [US1/US4] Implement `tender.apply` bridge handler (cash + external_card_terminal in Slice 3; voucher returns `tender_not_yet_supported`) — `src/main/payments/handlers/tender-apply.ts`
-- [ ] **T140** [P] [US6] Implement `tender.reverse` bridge handler (cash + external_card_terminal in Slice 3; voucher reverse → Slice 4) — `src/main/payments/handlers/tender-reverse.ts`
-- [ ] **T141** [US1] [P] Implement `tender.read` bridge handler — `src/main/payments/handlers/tender-read.ts`
-- [ ] **T142** [US1] Register all Slice-3 `payments.*` + `tender.*` handlers in the preload bridge — `src/preload/payments.ts`
+- [x] **T133** [US1] Implement `payments.start` bridge handler — `src/main/payments/handlers/payments-start.ts`
+- [x] **T134** [US1] Implement `payments.confirm` bridge handler (settlement invariant evaluated in the confirm transaction) — `src/main/payments/handlers/payments-confirm.ts`
+- [x] **T135** [P] [US2] Implement `payments.cancel` bridge handler (LIFO reversal of cash + external_card_terminal lines) — `src/main/payments/handlers/payments-cancel.ts`
+- [x] **T136** [P] [US1] Implement `payments.subscribe` bridge handler + main-side EventEmitter; serialises the minimised renderer view (FR-017) — `src/main/payments/handlers/payments-subscribe.ts`
+- [x] **T137** [US1] [P] Implement `payments.read` bridge handler — `src/main/payments/handlers/payments-read.ts`
+- [x] **T138** [P] [US3] Implement `payments.discardOnSessionEnd` (internal; main-process-only; subscribes to 004's operator-session-ended signal) — `src/main/payments/handlers/payments-discard-on-session-end.ts`
+- [x] **T139** [P] [US1/US4] Implement `tender.apply` bridge handler (cash + external_card_terminal in Slice 3; voucher returns `tender_not_yet_supported`) — `src/main/payments/handlers/tender-apply.ts`
+- [x] **T140** [P] [US6] Implement `tender.reverse` bridge handler (cash + external_card_terminal in Slice 3; voucher reverse → Slice 4) — `src/main/payments/handlers/tender-reverse.ts`
+- [x] **T141** [US1] [P] Implement `tender.read` bridge handler — `src/main/payments/handlers/tender-read.ts`
+- [x] **T142** [US1] Register all Slice-3 `payments.*` + `tender.*` handlers in the preload bridge — `src/preload/payments.ts`
 
 ### Implementation — renderer wiring
 
