@@ -1,16 +1,17 @@
-> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a ✅ · S3b ✅ · S3c next candidate (preflight required)
+> ## STATUS: SLICE 3 CLOSED — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a ✅ · S3b ✅ · S3c ✅ · S3d ✅
 >
-> **006-payments-tender is partially implemented.** Slice 0 (visual
+> **Slice 3 of 006-payments-tender is closed.** Slice 0 (visual
 > direction), Slice 1 (renderer-only tender selection + envelope
 > ingest), Slice 2 (per-tender entry surfaces — cash +
 > external_card_terminal), S3a (migrations + persistence repositories),
-> and S3b (shared types + FSMs + audit emitter + idempotency helper)
-> shipped via PR #189/#190, PR #192, PR #198, PR #207, and PR #209.
-> **S3b merged via PR #209 (merge commit `862d245`, 2026-05-23).
-> S3c is the next candidate but requires a fresh Maestro preflight
-> (Template 1) before any implementation begins.** S3d remains blocked
-> on S3c-GREEN. §A4-B (Slice 4 voucher bridge review) remains held.
-> §A2 is no-op for Slices 1–3 (plan AD-8). §A5 is rollout-only. This
+> S3b (shared types + FSMs + audit emitter + idempotency helper),
+> S3c (bridge handlers + preload registration), and S3d (renderer
+> wiring + verification) all shipped — PR #189/#190, PR #192, PR #198,
+> PR #207, PR #209, PR #210, and this PR. T164 sign-off recorded in
+> §"Slice 3 closeout (T164)". **Next Maestro work:** a fresh Slice-4
+> preflight (Template 1) when the owner commissions §A4-B
+> (vouchers.* bridge review) + §A2 (voucher V-A backend / OpenAPI).
+> §A2 was no-op for Slices 1–3 (plan AD-8). §A5 is rollout-only. This
 > file is the canonical record of those gates.
 
 # Coordination — 006-payments-tender
@@ -42,7 +43,7 @@ and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), Slice 2 (per-tender entry surfaces — cash + external_card_terminal), S3a (migrations + persistence repositories), and S3b (shared types + FSMs + audit emitter + idempotency helper) are complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), PR #198 (Slice 2 closeout), PR #207 (S3a), and PR #209 (S3b). **S3c is the next candidate sub-slice.** Gates §A4-A + §A3 remain cleared; S3b is GREEN. A fresh Maestro preflight (Template 1) is required before any S3c code is written. S3d begins when S3c is GREEN. §A4-B (voucher bridge review) remains held — it gates Slice 4, not Slice 3. §A2 is no-op for Slices 1–3 (plan AD-8); it will commission before Slice 4 begins. §A5 is rollout-only.
+**Phase: SLICE 3 CLOSED.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), Slice 2 (per-tender entry surfaces — cash + external_card_terminal), S3a (migrations + persistence repositories), S3b (shared types + FSMs + audit emitter + idempotency helper), S3c (bridge handlers + preload registration), and S3d (renderer wiring + verification) are all complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), PR #198 (Slice 2 closeout), PR #207 (S3a), PR #209 (S3b), PR #210 (S3c), and this PR (S3d + T164). Gates §A3 + §A4-A signed off 2026-05-21 (Ahmed); §A2 no-op for Slices 1–3 (plan AD-8). **Next-up:** when the owner commissions §A4-B (vouchers.* bridge review) + §A2 (voucher V-A backend / OpenAPI), run a fresh Maestro preflight (Template 1) for Slice 4. Until then, no further 006-payments-tender code work. §A5 is rollout-only.
 
 | Item | State |
 |:--|:--|
@@ -1713,7 +1714,7 @@ Per-module coverage at the Slice-3 surface, full-suite run with `--coverage`:
 | Module | Lines | Branches | Functions | Statements | Floor |
 |:--|--:|--:|--:|--:|:--|
 | `src/main/payments/` (aggregate) | 98.88 % | 98.66 % | 100 % | 98.94 % | ≥95 % ✓ |
-| `src/main/payments/fsm/payment-attempt-fsm.ts` | 98.50 % | 94.11 % | 100 % | 98.55 % | ≥95 % (see note A) |
+| `src/main/payments/fsm/payment-attempt-fsm.ts` | 98.50 % | 94.11 % | 100 % | 98.55 % | ≥95 % on lines/funcs/stmts ✓ — branches exception accepted (note A) |
 | `src/main/payments/fsm/tender-line-fsm.ts` | 98.52 % | 96.22 % | 100 % | 97.33 % | ≥95 % ✓ |
 | `src/main/payments/audit-emitter.ts` | 98.11 % | 97.72 % | 100 % | 98.21 % | ≥95 % ✓ |
 | `src/main/payments/handlers/` | 95.23 % | 91.00 % | 97.05 % | 95.48 % | ≥90 % ✓ |
@@ -1725,7 +1726,7 @@ Per-module coverage at the Slice-3 surface, full-suite run with `--coverage`:
 | `src/renderer/stores/` (aggregate) | 100 % | 88.70 % | 100 % | 94.01 % | ≥90 % on lines/funcs/stmts ✓ |
 | `src/shared/payments/money-math.ts` (Slice 2) | unchanged from S2 baseline (≥95 %) | — | — | — | ≥95 % ✓ |
 
-**Note A — PaymentAttempt FSM branches 94.11 %:** uncovered line 238 is the Slice-4 `force_failed` / `reversal_pending` bucket, structurally unreachable in Slice 3. Accepted at the S3b closeout (execution-map.yaml §slices.006-S3b.validation.evidence line 230) and unchanged here.
+**Note A — PaymentAttempt FSM branches 94.11 % is below the ≥95 % branches floor and is recorded as an explicitly accepted exception, not a passing measurement.** The uncovered code path is the Slice-4 `force_failed` / `reversal_pending` bucket (line 238), structurally unreachable in Slice-3 FSM transitions. The acceptance precedent was established at the S3b closeout (execution-map.yaml §slices.006-S3b.validation.evidence) when the same branch was 93.33 %. Slice-4 implementation will close this gap as the bucket becomes reachable. Lines / functions / statements floor (≥95 %) is met (98.50 % / 100 % / 98.55 % respectively).
 
 ### Findings (active at Slice 3 close)
 

@@ -17,9 +17,9 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 6
+version: 7
 base: 868c7ff
-status: SLICE-3-CLOSED
+status: S3d-IN-FLIGHT-PR-212
 preflight: SLICE-4-PREFLIGHT-REQUIRED
 last_updated: "2026-05-23"
 
@@ -299,11 +299,13 @@ slices:
     title: Renderer wiring + final verification
     spec: 006-payments-tender
     type: implementation
-    status: completed
+    status: in-progress
     authorized_at: "2026-05-23"
-    merged_in_pr: TBD-S3d
-    merged_at_date: "2026-05-23"
-    head_sha: TBD-S3d
+    pr_open: 212
+    # merged_in_pr / merged_at_commit / merged_at_date / head_sha will be
+    # filled at post-merge closeout, mirroring the S3a / S3b / S3c posture.
+    # The status remains in-progress until the PR merges; the gate ledger
+    # in coordination.md is the source of truth for Slice-3 close.
     gate:
       required:
         - §A1
@@ -638,13 +640,16 @@ closeout:
         implementation without the preflight. Slice 4 gates (§A4-B, §A2)
         remain held throughout.
 
+    # 006-S3d closeout block will be appended here by the post-merge closeout
+    # PR (mirroring S3a / S3b / S3c posture). The T164 sign-off lives in
+    # coordination.md §"Slice 3 closeout (T164)" and is the canonical durable
+    # record of Slice-3 close. Below is a placeholder noting that next action.
     - sub_slice: 006-S3d
-      pr: TBD-S3d
-      sha: TBD-S3d
-      head_sha: TBD-S3d
+      pr: 212
+      status: pending-merge
       date: "2026-05-23"
       report_location: >
-        This PR description on GitHub +
+        PR #212 description on GitHub +
         specs/006-payments-tender/coordination.md §"Slice 3 closeout (T164)"
       tasks_completed:
         - T150

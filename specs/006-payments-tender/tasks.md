@@ -20,7 +20,7 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 
 ---
 
-> ## STATUS: S3c complete — S3d next candidate (preflight required before implementation)
+> ## STATUS: SLICE 3 CLOSED — all sub-slices shipped + T164 sign-off recorded
 >
 > Slice 0 ✅ (PR #189 / PR #190, 2026-05-20). Slice 1 ✅ — renderer-only
 > tender selection + envelope ingest merged via **PR #192** (head
@@ -36,15 +36,17 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 > T120–T121, T130–T132 complete. S3c ✅ — bridge handlers
 > (`payments.*` + `tender.*`) + main-side IPC registration + preload
 > contextBridge exposure merged via **PR #210** (merge commit
-> `5f493fd`, 2026-05-23). T100–T106 + T133–T142 complete.
+> `5f493fd`, 2026-05-23). T100–T106 + T133–T142 complete. **S3d ✅** —
+> renderer wiring + verification + T164 Slice-3 sign-off via this PR.
+> T150–T154 + T160–T164 complete.
 >
-> **S3d remains BLOCKED** on S3c-GREEN + preflight (Template 1). Slice 4
-> needs §A4-B `vouchers.*` review + §A2 voucher endpoints; §A5 is
-> rollout-only.
+> **Slice 3 is closed.** Next-up: Slice 4 — needs §A4-B `vouchers.*`
+> review + §A2 voucher endpoints. A fresh Maestro preflight runs once
+> those gates are commissioned. §A5 is rollout-only.
 >
 > See [./coordination.md](./coordination.md) §"Gate ledger" for the
-> live gate-state table and §"Maestro closeout — S3c (PR #210)"
-> for the durable record of the S3c ship.
+> live gate-state table and §"Slice 3 closeout (T164)" for the
+> durable record of the Slice-3 ship.
 
 ---
 

@@ -23,7 +23,7 @@
  * integration tests; no native SQLite compile required.
  */
 
-import { describe, expect, it, beforeAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, beforeEach, afterEach } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 import { readFileSync } from 'fs';
 import path from 'path';
@@ -68,6 +68,14 @@ beforeEach(() => {
   db = new SQL.Database();
   db.exec('PRAGMA foreign_keys = ON;');
   for (const sql of MIGRATIONS) db.exec(sql);
+});
+
+// CR-12: explicitly close the SqlJsDatabase after each test so its wasm
+// memory is freed deterministically. Without this, every test leaks an
+// in-memory SQLite (sql.js does not auto-finalise on GC; the JS object
+// holds the wasm handle indefinitely).
+afterEach(() => {
+  db.close();
 });
 
 function buildStack() {
@@ -256,6 +264,14 @@ describe('T161 — end-to-end attempt lifecycle', () => {
     const finalLines = lines.findByAttempt('pa-1');
     for (const line of finalLines) {
       expect(line.state).toBe('reversed');
+    }
+
+    // CR-13: assert LIFO order explicitly. The cancel outcome's
+    // reversed_tender_line_ids is recorded by the FSM in the order the
+    // tender-line FSM reverses lines, which is last-applied-first per FR-006B.
+    if (cancelResult.kind === 'ok') {
+      expect(cancelResult.reversed_tender_line_ids).toEqual(['tl-card-1', 'tl-cash-1']);
+      expect(cancelResult.reversal_pending_tender_line_ids).toEqual([]);
     }
   });
 });
