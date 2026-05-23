@@ -15,27 +15,33 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 **Visual direction:** `specs/006-payments-tender/visual-direction/README.md` (to be produced in Slice 0 under §A1)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 2 complete via PR #198 merge `9bb2af3`; T040–T051 ticked. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) + `computeChangeDueMinor` + `validateExternalReference` shipped renderer-only. Per-slice gates §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only.)
-**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · Slices 3–5 not started**
+**Last updated:** 2026-05-23 (S3b complete via PR #209 merge `862d245`; T070–T073, T080–T088, T090–T094, T120–T121, T130–T132 ticked. Shared types + PaymentAttempt FSM + TenderLine FSM + requireOperatorSession wrapper + idempotency replay helper + audit emitter shipped. S3c remains BLOCKED on S3b-GREEN confirmed; S3d blocked on S3c; §A2 no-op for Slice 3; §A4-B + §A5 held.)
+**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · S3a ✅ (PR #207, 2026-05-22) · S3b ✅ (PR #209, 2026-05-23) · S3c/S3d/Slices 4–5 not started**
 
 ---
 
-> ## STATUS: Slice 2 complete — Slices 3–5 remain BLOCKED on per-slice gates
+> ## STATUS: S3b complete — S3c next candidate (preflight required before implementation)
 >
 > Slice 0 ✅ (PR #189 / PR #190, 2026-05-20). Slice 1 ✅ — renderer-only
 > tender selection + envelope ingest merged via **PR #192** (head
 > `c48c34b`, merge commit `7d8588c`, 2026-05-21). T020–T034 complete.
 > Slice 2 ✅ — per-tender entry surfaces (cash + external_card_terminal)
 > merged via **PR #198** (head `5c56b93`, merge commit `9bb2af3`,
-> 2026-05-21). T040–T051 complete.
+> 2026-05-21). T040–T051 complete. S3a ✅ — migrations + persistence
+> repositories merged via **PR #207** (merge commit `e8b33d5`,
+> 2026-05-22). T060–T067 + T110–T113 complete. S3b ✅ — shared types +
+> PaymentAttempt FSM + TenderLine FSM + requireOperatorSession +
+> idempotency replay + audit emitter merged via **PR #209** (merge
+> commit `862d245`, 2026-05-23). T070–T073, T080–T088, T090–T094,
+> T120–T121, T130–T132 complete.
 >
-> **Slices 3–5 remain BLOCKED.** Slice 3 needs §A2 (no-op confirmation)
-> + §A3 migrations + §A4-A bridge security review; Slice 4 needs §A2
-> voucher endpoints + §A4-B `vouchers.*` review; §A5 is rollout-only.
+> **S3c remains BLOCKED** on S3b-GREEN + preflight (Template 1). S3d
+> blocked on S3c-GREEN. Slice 4 needs §A4-B `vouchers.*` review + §A2
+> voucher endpoints; §A5 is rollout-only.
 >
 > See [./coordination.md](./coordination.md) §"Gate ledger" for the
-> live gate-state table and §"Maestro closeout — Slice 2 (PR #198)"
-> for the durable record of the Slice 2 ship.
+> live gate-state table and §"Maestro closeout — S3b (PR #209)"
+> for the durable record of the S3b ship.
 
 ---
 
@@ -252,36 +258,36 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### Shared types (compile-time contract)
 
-- [ ] **T070** [P] [US1] Test (contract, failing): `src/shared/bridge-api.ts` extends `BridgeApi` interface with `payments.*` (start / confirm / cancel / subscribe / read; **NOT** forceFail / vouchers — those are Slice 4) + `tender.*` (apply / reverse / read). Compile-time assert — `tests/contract/payments/bridge-api.contract.test.ts`
-- [ ] **T071** [US1] Implement Slice-3 subset of `payments.*` + `tender.*` types in shared bridge-api.ts: Request / Response shapes per `contracts/bridge-api.md` — `src/shared/bridge-api.ts`
-- [ ] **T072** [US1] [P] Implement shared payment types module: `PaymentAttemptState`, `TenderLineState`, `TenderType`, `FailureReason` (14-value closed enum), `RefusalReason` (closed union) — `src/shared/payments/types.ts`
-- [ ] **T073** [US1] [P] Implement shared FSM-helper types: legal transitions matrix for PaymentAttempt and TenderLine FSMs (compile-time enforcement) — `src/shared/payments/fsm-types.ts`
+- [x] **T070** [P] [US1] Test (contract, failing): `src/shared/bridge-api.ts` extends `BridgeApi` interface with `payments.*` (start / confirm / cancel / subscribe / read; **NOT** forceFail / vouchers — those are Slice 4) + `tender.*` (apply / reverse / read). Compile-time assert — `tests/contract/payments/bridge-api.contract.test.ts`
+- [x] **T071** [US1] Implement Slice-3 subset of `payments.*` + `tender.*` types in shared bridge-api.ts: Request / Response shapes per `contracts/bridge-api.md` — `src/shared/bridge-api.ts`
+- [x] **T072** [US1] [P] Implement shared payment types module: `PaymentAttemptState`, `TenderLineState`, `TenderType`, `FailureReason` (14-value closed enum), `RefusalReason` (closed union) — `src/shared/payments/types.ts`
+- [x] **T073** [US1] [P] Implement shared FSM-helper types: legal transitions matrix for PaymentAttempt and TenderLine FSMs (compile-time enforcement) — `src/shared/payments/fsm-types.ts`
 
 ### TDD test tasks — PaymentAttempt FSM
 
-- [ ] **T080** [P] [US1] Test (failing): PaymentAttempt FSM accepts `started → settled` only when settlement invariant holds: `Σ (amount_applied_minor − COALESCE(change_due_minor, 0)) where state='applied' == envelope_subtotal_minor` (data-model §"Invariant 5") — `tests/unit/main/payments/payment-attempt-fsm.settlement.test.ts`
-- [ ] **T081** [P] [US2] Test (failing): PaymentAttempt FSM accepts `started → cancelled`; reverses every applied TenderLine LIFO per FR-006B (research §R-13); emits `payment.cancelled` audit + `tender.reversed` per reversed line — `tests/unit/main/payments/payment-attempt-fsm.cancel-lifo.test.ts`
-- [ ] **T082** [P] [US3] Test (failing): PaymentAttempt FSM accepts `started → failed` for each of the 13 Slice-3-applicable reason categories (all 14 except `voucher_already_redeemed`-via-confirm which is Slice 4; force-fail also Slice 4) — `tests/unit/main/payments/payment-attempt-fsm.failure-reasons.test.ts`
-- [ ] **T083** [P] Test (failing): every illegal transition is refused (e.g., `settled → started`, `cancelled → settled`, `failed → settled`, `started → started`); FSM helper rejects at compile time and at runtime — `tests/unit/main/payments/payment-attempt-fsm.illegal-transitions.test.ts`
-- [ ] **T084** [P] Test (failing): partial unique index refuses two concurrent `payments.start` attempts on the same `terminal_id` with `attempt_already_started_on_terminal` (research §R-6) — `tests/integration/payments/payment-attempt.one-started-per-terminal.test.ts`
+- [x] **T080** [P] [US1] Test (failing): PaymentAttempt FSM accepts `started → settled` only when settlement invariant holds: `Σ (amount_applied_minor − COALESCE(change_due_minor, 0)) where state='applied' == envelope_subtotal_minor` (data-model §"Invariant 5") — `tests/unit/main/payments/payment-attempt-fsm.settlement.test.ts`
+- [x] **T081** [P] [US2] Test (failing): PaymentAttempt FSM accepts `started → cancelled`; reverses every applied TenderLine LIFO per FR-006B (research §R-13); emits `payment.cancelled` audit + `tender.reversed` per reversed line — `tests/unit/main/payments/payment-attempt-fsm.cancel-lifo.test.ts`
+- [x] **T082** [P] [US3] Test (failing): PaymentAttempt FSM accepts `started → failed` for each of the 13 Slice-3-applicable reason categories (all 14 except `voucher_already_redeemed`-via-confirm which is Slice 4; force-fail also Slice 4) — `tests/unit/main/payments/payment-attempt-fsm.failure-reasons.test.ts`
+- [x] **T083** [P] Test (failing): every illegal transition is refused (e.g., `settled → started`, `cancelled → settled`, `failed → settled`, `started → started`); FSM helper rejects at compile time and at runtime — `tests/unit/main/payments/payment-attempt-fsm.illegal-transitions.test.ts`
+- [x] **T084** [P] Test (failing): partial unique index refuses two concurrent `payments.start` attempts on the same `terminal_id` with `attempt_already_started_on_terminal` (research §R-6) — `tests/integration/payments/payment-attempt.one-started-per-terminal.test.ts`
 
 ### TDD test tasks — TenderLine FSM
 
-- [ ] **T085** [P] [US1/US4/US6] Test (failing): TenderLine FSM accepts `applying → applied` for cash (with overpay → `change_due_minor`), external_card_terminal (exact amount only), and refuses `applying → applied` for voucher with `tender_not_yet_supported` (voucher path is Slice 4) — `tests/unit/main/payments/tender-line-fsm.apply.test.ts`
-- [ ] **T086** [P] [US6] Test (failing): TenderLine FSM accepts `applied → reversed` for cash and external_card_terminal; emits `tender.reversed` per line with `manual_void_required: true` audit-payload flag for external_card_terminal (contract §"payments.cancel") — `tests/unit/main/payments/tender-line-fsm.reverse.test.ts`
-- [ ] **T087** [P] Test (failing): TenderLine FSM refuses `refused → applied` (refused is terminal); refuses `reversed → applied` (no re-apply) — `tests/unit/main/payments/tender-line-fsm.illegal-transitions.test.ts`
-- [ ] **T088** [P] [US6] Test (failing): apply-order monotonic per attempt; LIFO reversal iterates lines by `apply_order DESC`; multi-line cancel produces `tender.reversed` events in reverse apply order — `tests/unit/main/payments/tender-line-fsm.lifo-order.test.ts`
+- [x] **T085** [P] [US1/US4/US6] Test (failing): TenderLine FSM accepts `applying → applied` for cash (with overpay → `change_due_minor`), external_card_terminal (exact amount only), and refuses `applying → applied` for voucher with `tender_not_yet_supported` (voucher path is Slice 4) — `tests/unit/main/payments/tender-line-fsm.apply.test.ts`
+- [x] **T086** [P] [US6] Test (failing): TenderLine FSM accepts `applied → reversed` for cash and external_card_terminal; emits `tender.reversed` per line with `manual_void_required: true` audit-payload flag for external_card_terminal (contract §"payments.cancel") — `tests/unit/main/payments/tender-line-fsm.reverse.test.ts`
+- [x] **T087** [P] Test (failing): TenderLine FSM refuses `refused → applied` (refused is terminal); refuses `reversed → applied` (no re-apply) — `tests/unit/main/payments/tender-line-fsm.illegal-transitions.test.ts`
+- [x] **T088** [P] [US6] Test (failing): apply-order monotonic per attempt; LIFO reversal iterates lines by `apply_order DESC`; multi-line cancel produces `tender.reversed` events in reverse apply order — `tests/unit/main/payments/tender-line-fsm.lifo-order.test.ts`
 
 ### TDD test tasks — idempotency replay
 
-- [ ] **T090** [P] Test (failing): idempotency replay — identical-payload retry of any mutating handler is no-op + returns original outcome (research §R-10) — `tests/unit/main/payments/idempotency-replay.identical.test.ts`
-- [ ] **T091** [P] Test (failing): idempotency replay — payload-mismatch retry refuses with `idempotency_payload_mismatch` (research §R-10) — `tests/unit/main/payments/idempotency-replay.payload-mismatch.test.ts`
+- [x] **T090** [P] Test (failing): idempotency replay — identical-payload retry of any mutating handler is no-op + returns original outcome (research §R-10) — `tests/unit/main/payments/idempotency-replay.identical.test.ts`
+- [x] **T091** [P] Test (failing): idempotency replay — payload-mismatch retry refuses with `idempotency_payload_mismatch` (research §R-10) — `tests/unit/main/payments/idempotency-replay.payload-mismatch.test.ts`
 
 ### TDD test tasks — audit emission
 
-- [ ] **T092** [P] Test (failing): `payment.settled` audit payload matches data-model §"Extension to 004's `audit_events`" shape (full `tender_lines` breakdown per AD-9) — `tests/unit/main/payments/audit-emitter.payment-settled.test.ts`
-- [ ] **T093** [P] Test (failing): `payment.cancelled` + `payment.failed` audit payloads carry operator attribution + `handoff_action_id` correlation; no PII, no card data, no voucher tokens. **Attribution source (FR-013 / FR-014):** the `attribution_operator_id` MUST be sourced from 004's Clerk-backed `OperatorSession.operator_id`; negative tests reject derivation from device token, cashier PIN record, terminal artefact, or any per-terminal local identifier (Constitution §VIII). — `tests/unit/main/payments/audit-emitter.payment-terminal.test.ts`
-- [ ] **T094** [P] Test (failing): per-line audit events (`tender.applied`, `tender.refused`, `tender.reversed`) carry operator attribution + line ID; `external_reference` redacted to `*****` in any non-payload log (research §R-5) — `tests/unit/main/payments/audit-emitter.tender-events.test.ts`
+- [x] **T092** [P] Test (failing): `payment.settled` audit payload matches data-model §"Extension to 004's `audit_events`" shape (full `tender_lines` breakdown per AD-9) — `tests/unit/main/payments/audit-emitter.payment-settled.test.ts`
+- [x] **T093** [P] Test (failing): `payment.cancelled` + `payment.failed` audit payloads carry operator attribution + `handoff_action_id` correlation; no PII, no card data, no voucher tokens. **Attribution source (FR-013 / FR-014):** the `attribution_operator_id` MUST be sourced from 004's Clerk-backed `OperatorSession.operator_id`; negative tests reject derivation from device token, cashier PIN record, terminal artefact, or any per-terminal local identifier (Constitution §VIII). — `tests/unit/main/payments/audit-emitter.payment-terminal.test.ts`
+- [x] **T094** [P] Test (failing): per-line audit events (`tender.applied`, `tender.refused`, `tender.reversed`) carry operator attribution + line ID; `external_reference` redacted to `*****` in any non-payload log (research §R-5) — `tests/unit/main/payments/audit-emitter.tender-events.test.ts`
 
 ### TDD test tasks — bridge handlers (Slice 3 subset)
 
@@ -302,14 +308,14 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### Implementation — FSMs
 
-- [ ] **T120** [US1] Implement PaymentAttempt FSM module: state-transition matrix; runtime guards for illegal transitions; integrates with the three repositories under one SQLite transaction per transition — `src/main/payments/fsm/payment-attempt-fsm.ts`
-- [ ] **T121** [US1] [P] Implement TenderLine FSM module: per-tender-type apply rules (cash overpay → `change_due_minor`; external_card_terminal exact-amount-or-refuse; voucher always `tender_not_yet_supported` in Slice 3); LIFO reversal helper — `src/main/payments/fsm/tender-line-fsm.ts`
+- [x] **T120** [US1] Implement PaymentAttempt FSM module: state-transition matrix; runtime guards for illegal transitions; integrates with the three repositories under one SQLite transaction per transition — `src/main/payments/fsm/payment-attempt-fsm.ts`
+- [x] **T121** [US1] [P] Implement TenderLine FSM module: per-tender-type apply rules (cash overpay → `change_due_minor`; external_card_terminal exact-amount-or-refuse; voucher always `tender_not_yet_supported` in Slice 3); LIFO reversal helper — `src/main/payments/fsm/tender-line-fsm.ts`
 
 ### Implementation — bridge handlers
 
-- [ ] **T130** [US1] Implement `requireOperatorSession` payments wrapper delegating to 004's `role-enforcement.ts`; closed-set refusal mapping — `src/main/payments/require-operator-session.ts`
-- [ ] **T131** [US1] [P] Implement idempotency replay helper: outbox lookup → identical-payload no-op vs `idempotency_payload_mismatch` refusal — `src/main/payments/idempotency.ts`
-- [ ] **T132** [US1] [P] Implement audit emitter for `payment.*` + `tender.*` categories: payload validators (no PII / no card data / no voucher tokens; `external_reference` redaction in log sinks) — `src/main/payments/audit-emitter.ts`
+- [x] **T130** [US1] Implement `requireOperatorSession` payments wrapper delegating to 004's `role-enforcement.ts`; closed-set refusal mapping — `src/main/payments/require-operator-session.ts`
+- [x] **T131** [US1] [P] Implement idempotency replay helper: outbox lookup → identical-payload no-op vs `idempotency_payload_mismatch` refusal — `src/main/payments/idempotency.ts`
+- [x] **T132** [US1] [P] Implement audit emitter for `payment.*` + `tender.*` categories: payload validators (no PII / no card data / no voucher tokens; `external_reference` redaction in log sinks) — `src/main/payments/audit-emitter.ts`
 - [ ] **T133** [US1] Implement `payments.start` bridge handler — `src/main/payments/handlers/payments-start.ts`
 - [ ] **T134** [US1] Implement `payments.confirm` bridge handler (settlement invariant evaluated in the confirm transaction) — `src/main/payments/handlers/payments-confirm.ts`
 - [ ] **T135** [P] [US2] Implement `payments.cancel` bridge handler (LIFO reversal of cash + external_card_terminal lines) — `src/main/payments/handlers/payments-cancel.ts`

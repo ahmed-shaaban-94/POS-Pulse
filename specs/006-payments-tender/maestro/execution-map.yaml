@@ -17,11 +17,11 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 2
+version: 3
 base: 868c7ff
-status: S3a-COMPLETED
-preflight: S3a-AUTHORIZED
-last_updated: "2026-05-22"
+status: S3b-COMPLETED
+preflight: S3c-PREFLIGHT-REQUIRED
+last_updated: "2026-05-23"
 
 source_of_truth:
   tasks: specs/006-payments-tender/tasks.md
@@ -174,21 +174,18 @@ slices:
     title: Shared types + FSMs + audit emitter + idempotency helper
     spec: 006-payments-tender
     type: implementation
-    status: next-candidate
-    authorized: false
-    preflight_required: true
+    status: completed
+    authorized_at: "2026-05-22"
+    merged_in_pr: 209
+    merged_at_commit: 862d24581173adc18c8d547b5fcd6ca69225a78d
+    merged_at_date: "2026-05-23"
+    head_sha: 6b3f2d0
+    merged_at_iso: "2026-05-23T10:10:17Z"
     gate:
       required:
         - §A4-A
         - §A3-cleared
         - 006-S3a-GREEN
-      note: >
-        §A4-A and §A3 are both cleared (signed off 2026-05-21). S3a is GREEN
-        as of PR #207 (merge commit e8b33d5, 2026-05-22). S3b is the next
-        candidate sub-slice but is NOT YET AUTHORIZED — a fresh Maestro
-        preflight (Template 1) must produce the worklist, dependency /
-        file-conflict / parallel-safe graphs, and agent-dispatch posture
-        for T070–T094 + T120–T132 before any code is written.
     task_ids:
       - T070
       - T071
@@ -224,10 +221,18 @@ slices:
     # and the shared layer simultaneously.
     validation:
       reference: tasks.md T160 (full suite; >=95% on FSMs + audit-emitter + idempotency)
+      result: green
+      evidence: >
+        PR #209 head 6b3f2d0 — typecheck clean, lint clean, vitest 246 files /
+        3144 passed / 3 skipped / 0 fail, codegen:verify clean.
+        main/payments aggregate 98.66% branch; main/payments/fsm aggregate
+        95.18% branch. All CI coverage thresholds pass. payment-attempt-fsm.ts
+        93.33% branch accepted (line 228 = Slice-4 reversal_pending bucket,
+        structurally unreachable in S3).
     notes: >
-      Contains an 18-wide parallel-safe TDD test antichain (Wave C, see groups
-      below) but single-agent is forced by the process-boundary rule.
-      T073 (fsm-types.ts) is a compile-time contract shared across main + preload.
+      Wave order C → D → E → F (TDD RED → GREEN). Single-agent per
+      process-boundary rule. No [P] downgrades fired. Zero forbidden-scope fires.
+      CodeRabbit review addressed in commit 6b3f2d0 before merge.
 
   - id: 006-S3c
     title: Bridge handlers + preload registration
@@ -509,3 +514,44 @@ closeout:
         file-conflict / parallel-safe graphs are required before any S3b
         code is written. S3c and S3d remain blocked on their predecessors;
         Slice 4 gates (§A4-B, §A2) remain held.
+
+    - sub_slice: 006-S3b
+      pr: 209
+      sha: 862d24581173adc18c8d547b5fcd6ca69225a78d
+      head_sha: 6b3f2d0
+      date: "2026-05-23"
+      merged_at_iso: "2026-05-23T10:10:17Z"
+      report_location: >
+        PR #209 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Maestro closeout — S3b (PR #209)"
+      tasks_completed:
+        - T070
+        - T071
+        - T072
+        - T073
+        - T080
+        - T081
+        - T082
+        - T083
+        - T084
+        - T085
+        - T086
+        - T087
+        - T088
+        - T090
+        - T091
+        - T092
+        - T093
+        - T094
+        - T120
+        - T121
+        - T130
+        - T131
+        - T132
+      next_action: >
+        Run a fresh Maestro preflight for S3c (Template 1). S3c introduces
+        the payments.* + tender.* bridge handlers (T100–T106 TDD tests +
+        T133–T142 implementation + T142 preload registration). Gates §A4-A
+        cleared, §A3 cleared, S3b GREEN — all preconditions satisfied.
+        S3d remains blocked on S3c-GREEN; Slice 4 gates (§A4-B, §A2)
+        remain held throughout.

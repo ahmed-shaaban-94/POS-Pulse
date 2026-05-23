@@ -1,6 +1,6 @@
-# 006-payments-tender — Slice 3 — S3a COMPLETED · S3b next candidate (preflight required)
+# 006-payments-tender — Slice 3 — S3a ✅ · S3b ✅ · S3c next candidate (preflight required)
 
-**Status:** S3a ✅ COMPLETED — merged via PR #207 at `e8b33d5` on 2026-05-22T14:07:11Z. S3b is the next-candidate sub-slice (§A4-A + §A3 both cleared, S3a GREEN) but is NOT AUTHORIZED — a fresh Maestro preflight is required. S3c and S3d remain BLOCKED on S3b-GREEN and S3c-GREEN respectively. Slice 4 gates (§A4-B, §A2) remain held.
+**Status:** S3a ✅ COMPLETED — merged via PR #207 at `e8b33d5` on 2026-05-22T14:07:11Z. S3b ✅ COMPLETED — merged via PR #209 at `862d24581173adc18c8d547b5fcd6ca69225a78d` on 2026-05-23T10:10:17Z. S3c is the next-candidate sub-slice (§A4-A + §A3 cleared, S3b GREEN) but is NOT AUTHORIZED — a fresh Maestro preflight (Template 1) is required before any code is written. S3d remains BLOCKED on S3c-GREEN. Slice 4 gates (§A4-B, §A2) remain held.
 
 > **THIS FILE DOES NOT REPLACE `tasks.md` OR `coordination.md`.**
 > **THIS FILE DOES NOT AUTHORIZE IMPLEMENTATION.**
@@ -37,6 +37,7 @@ The `execution-map.yaml` in this directory adds Maestro execution structure on t
 | PR #200 | Slice 3 owner decisions — Session 2026-05-21 | Migration naming + sub-slice scoping recorded in `coordination.md` |
 | PR #201 | Hybrid Maestro templates | `docs/maestro/slice-schema.yaml`, `docs/maestro/quick-prompts.md`, `docs/maestro/templates/` added |
 | **PR #207** | **006 Slice 3a — payment persistence** | **T060–T067 + T110–T113 complete; merge commit `e8b33d5` on 2026-05-22T14:07:11Z; head SHA `e3784c1`. Six migrations (`0012`–`0017`) + three repositories under `src/main/payments/repositories/` + 39-case migrations integration test + 33 repo unit tests. Maestro closeout recorded in `coordination.md` §"Maestro closeout — S3a (PR #207)".** |
+| **PR #209** | **006 Slice 3b — shared types + FSMs + audit emitter + idempotency helper** | **T070–T073, T080–T088, T090–T094, T120–T121, T130–T132 complete (23 tasks); merge commit `862d24581173adc18c8d547b5fcd6ca69225a78d` on 2026-05-23T10:10:17Z; head SHA `6b3f2d0`. Shared types (`bridge-api.ts` extensions, `types.ts`, `fsm-types.ts`) + PaymentAttempt FSM + TenderLine FSM + `requireOperatorSession` wrapper + idempotency replay helper + audit emitter. 24 files (8 source + 16 tests). Maestro closeout recorded in `coordination.md` §"Maestro closeout — S3b (PR #209)".** |
 
 All of the above are on `main`.
 
@@ -46,7 +47,7 @@ All of the above are on `main`.
 
 ## Local only (not yet on `main`)
 
-None. All coordination work is upstreamed.
+This closeout PR (tasks.md + coordination.md + execution-map.yaml + wave-status.md updates for S3b).
 
 ---
 
@@ -79,8 +80,7 @@ S3c and S3d remain blocked on their predecessors. §A4-B remains held (Slice 4 o
 |:--|:--|
 | **§A4-B** — Bridge-API review for `vouchers.*` (Slice 4 only) | ⛔ Held — TBD before Slice 4 |
 | **§A2** — Backend / OpenAPI (Slice 4 voucher endpoints) | ⛔ Held — TBD before Slice 4 |
-| **S3b** — Shared types + FSMs + audit emitter + idempotency helper | ⚠ Next candidate — gates (§A4-A + §A3) cleared and S3a GREEN, but a fresh Maestro preflight is required before authorisation. **Not yet authorised.** |
-| **S3c** — Bridge handlers + preload registration | ⛔ Blocked — starts when S3b is GREEN |
+| **S3c** — Bridge handlers + preload registration | ⚠ Next candidate — gates (§A4-A cleared, S3b GREEN) satisfied, but a fresh Maestro preflight (Template 1) is required before authorisation. **Not yet authorised.** |
 | **S3d** — Renderer wiring + final verification | ⛔ Blocked — starts when S3c is GREEN |
 | Slice 4 gates (force-fail + voucher Contract V-A) | ⛔ Held — TBD after Slice 3 closes (T164) |
 
@@ -90,12 +90,13 @@ S3c and S3d remain blocked on their predecessors. §A4-B remains held (Slice 4 o
 
 No sub-slice is currently authorised for implementation.
 
-**S3b** is the next candidate but requires a fresh Maestro preflight (Template 1) before any T070–T094 / T120–T132 work begins.
+**S3c** is the next candidate but requires a fresh Maestro preflight (Template 1) before any T100–T106 / T133–T142 work begins.
 
 | Sub-slice | Task range | Status |
 |:--|:--|:--|
 | **006-S3a** — Migrations + persistence repositories | T060–T067, T110–T113 | ✅ Completed (PR #207) |
-| **006-S3b** — Shared types + FSMs + audit emitter + idempotency helper | T070–T094 (tests) + T120–T132 (impl) | ⚠ Preflight required — gates cleared, S3a GREEN |
+| **006-S3b** — Shared types + FSMs + audit emitter + idempotency helper | T070–T094 (tests) + T120–T132 (impl) | ✅ Completed (PR #209) |
+| **006-S3c** — Bridge handlers + preload registration | T100–T106 (tests) + T133–T142 (impl) | ⚠ Preflight required — gates (§A4-A) cleared, S3b GREEN |
 
 ---
 
@@ -182,32 +183,33 @@ Coverage floors (checked at T160):
 1. ~~**§A3 reviewer commissioned** — Ahmed assigned 2026-05-21.~~ ✅ **Signed off 2026-05-21 — Approved.**
 2. ~~**§A4-A reviewer commissioned** — Ahmed assigned 2026-05-21.~~ ✅ **Signed off 2026-05-21 — Approved.**
 3. ~~**Implement S3a**~~ ✅ **Completed via PR #207 (merge commit `e8b33d5`, 2026-05-22T14:07:11Z).** Closeout recorded.
-4. **Run a fresh Maestro preflight for S3b** (Template 1) before any S3b code is written. The preflight must produce the worklist, dependency / file-conflict / parallel-safe graphs (the 18-wide test antichain at Wave C–E), and the agent-dispatch posture for T070–T094 + T120–T132. **S3b is NOT YET AUTHORIZED** even though its gates are cleared — the preflight is the gate.
-5. After S3b preflight completes and is owner-approved, S3b implementation may begin.
-6. S3c begins when S3b is GREEN; S3d begins when S3c is GREEN. Slice 4 gates (§A4-B, §A2) remain held throughout.
+4. ~~**Implement S3b**~~ ✅ **Completed via PR #209 (merge commit `862d24581173adc18c8d547b5fcd6ca69225a78d`, 2026-05-23T10:10:17Z).** Closeout recorded.
+5. **Run a fresh Maestro preflight for S3c** (Template 1) before any S3c code is written. The preflight must produce the worklist, dependency / file-conflict / parallel-safe graphs (the 9-wide bridge handler test antichain at Wave G, plus Wave H handler implementation and Wave I preload registration), and the agent-dispatch posture for T100–T106 + T133–T142. **S3c is NOT YET AUTHORIZED** even though its gates are cleared — the preflight is the gate.
+6. After S3c preflight completes and is owner-approved, S3c implementation may begin.
+7. S3d begins when S3c is GREEN. Slice 4 gates (§A4-B, §A2) remain held throughout.
 
 ---
 
 ## Next short Maestro prompt
 
-S3a is complete. The next Maestro work is the S3b preflight — **not** S3b implementation. Use this prompt to commission the preflight (copy-paste ready):
+S3b is complete. The next Maestro work is the S3c preflight — **not** S3c implementation. Use this prompt to commission the preflight (copy-paste ready):
 
 ```
-Run Maestro Preflight for 006-payments-tender S3b.
+Run Maestro Preflight for 006-payments-tender S3c.
 
 Spec: specs/006-payments-tender/
-Sub-slice: S3b — Shared types + FSMs + audit emitter + idempotency helper
-Task range: T070–T094 (TDD tests) + T120–T132 (impl)
-Gate status: §A4-A and §A3 cleared 2026-05-21 (Ahmed, Approved); 006-S3a GREEN as of PR #207 (e8b33d5, 2026-05-22)
+Sub-slice: S3c — Bridge handlers + preload registration
+Task range: T100–T106 (TDD tests) + T133–T142 (impl)
+Gate status: §A4-A cleared 2026-05-21 (Ahmed, Approved); 006-S3b GREEN as of PR #209 (862d245, 2026-05-23)
 Preflight authority: docs/maestro/templates/ (Template 1)
-Execution map: specs/006-payments-tender/maestro/execution-map.yaml (slices.006-S3b)
+Execution map: specs/006-payments-tender/maestro/execution-map.yaml (slices.006-S3c)
 
 Produce: worklist, dependency graph, file-conflict graph,
-         parallel-safe groups (Wave-C/D/E test antichains; Wave-F GREEN impl),
+         parallel-safe groups (Wave-G 9-wide bridge handler test antichain; Wave-H handler impl; Wave-I preload registration),
          agent-dispatch posture (expect single-agent per process-boundary rule),
          and any divergences from tasks.md flagged for /speckit-analyze.
 
-Do NOT author any S3b code. Stop after the preflight artefacts are produced
+Do NOT author any S3c code. Stop after the preflight artefacts are produced
 and the owner approves them.
 ```
 

@@ -1,16 +1,16 @@
-> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a AUTHORIZED (§A3 + §A4-A signed off) · Slices 3-rest pending S3a
+> ## STATUS: PARTIAL — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a ✅ · S3b ✅ · S3c next candidate (preflight required)
 >
 > **006-payments-tender is partially implemented.** Slice 0 (visual
 > direction), Slice 1 (renderer-only tender selection + envelope
-> ingest), and Slice 2 (per-tender entry surfaces — cash +
-> external_card_terminal) shipped via PR #189/#190, PR #192, and
-> PR #198. The Slice 1 Maestro closeout merged as PR #196; the
-> Slice 2 Maestro closeout merged with this PR. **§A3 and §A4-A
-> were signed off 2026-05-21 by Ahmed (Approved — no changes
-> requested); S3a may now begin via the next Maestro implementation
-> prompt.** S3b, S3c, and S3d remain blocked on their predecessor's
-> GREEN. §A4-B (Slice 4 voucher bridge review) remains held. §A2
-> is no-op for Slices 1–3 (plan AD-8). §A5 is rollout-only. This
+> ingest), Slice 2 (per-tender entry surfaces — cash +
+> external_card_terminal), S3a (migrations + persistence repositories),
+> and S3b (shared types + FSMs + audit emitter + idempotency helper)
+> shipped via PR #189/#190, PR #192, PR #198, PR #207, and PR #209.
+> **S3b merged via PR #209 (merge commit `862d245`, 2026-05-23).
+> S3c is the next candidate but requires a fresh Maestro preflight
+> (Template 1) before any implementation begins.** S3d remains blocked
+> on S3c-GREEN. §A4-B (Slice 4 voucher bridge review) remains held.
+> §A2 is no-op for Slices 1–3 (plan AD-8). §A5 is rollout-only. This
 > file is the canonical record of those gates.
 
 # Coordination — 006-payments-tender
@@ -21,7 +21,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-21 (Slice 2 ✅ — PR #198 merged at `9bb2af3` on 2026-05-21T12:59:38Z; T040–T051 complete. Per-tender entry surfaces (`<CashEntry>`, `<ExternalCardTerminalEntry>`) plus `computeChangeDueMinor` + `validateExternalReference` helpers delivered renderer-only. `external_reference` regex `^[A-Z0-9]{0,6}$` makes a PAN structurally unrepresentable (FR-008/FR-009). **Slices 3–5 not started** — Slice 3 requires a fresh Maestro preflight + §A3 (migrations) + §A4-A (bridge security review) before implementation begins. Per-slice §A2 / §A3 / §A4 remain held for Slices 3–4; §A5 rollout-only. See §"Maestro closeout — Slice 2 (PR #198)" below. **Slice 3 owner decisions recorded 2026-05-21** — see §"Slice 3 owner decisions — Session 2026-05-21" below. **Slice 3 reviewers commissioned 2026-05-21 (sign-off pending)** — §A3 reviewer: Ahmed; §A4-A reviewer: Ahmed; both gates remain ⛔ Held; see §"Reviewer commissioning — 2026-05-21" below. **§A3 and §A4-A signed off 2026-05-21 by Ahmed (Approved — no changes requested); S3a is now AUTHORIZED.**)
+**Last updated:** 2026-05-23 (S3b ✅ — PR #209 merged at `862d24581173adc18c8d547b5fcd6ca69225a78d` on 2026-05-23T10:10:17Z; T070–T073, T080–T088, T090–T094, T120–T121, T130–T132 complete. Shared types (`payments.*` + `tender.*` bridge-api extensions, `src/shared/payments/types.ts`, `src/shared/payments/fsm-types.ts`), PaymentAttempt FSM, TenderLine FSM, `requireOperatorSession` wrapper, idempotency replay helper, and audit emitter delivered. §A2 no-op for Slice 3 confirmed. **S3c is the next candidate** — gates §A4-A + §A3 cleared; S3b GREEN; a fresh Maestro preflight (Template 1) is required before any S3c code is written. S3d remains blocked on S3c-GREEN. §A4-B (Slice 4 voucher bridge review) and §A5 remain held. See §"Maestro closeout — S3b (PR #209)" below.)
 
 ---
 
@@ -42,7 +42,7 @@ and it is updated in place as coordination items resolve.
 
 ## Current phase / status
 
-**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), and Slice 2 (per-tender entry surfaces — cash + external_card_terminal) are complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), and PR #198 (Slice 2 closeout). **§A3 and §A4-A were signed off 2026-05-21 by Ahmed (Approved — no changes requested); S3a is now authorized and is the next implementation step.** S3b begins when S3a is GREEN; S3c begins when S3b is GREEN; S3d begins when S3c is GREEN. §A4-B (voucher bridge review) remains held — it gates Slice 4, not Slice 3. §A2 is no-op for Slices 1–3 (plan AD-8); it will commission before Slice 4 begins. §A5 is rollout-only.
+**Phase: PARTIAL IMPLEMENTATION.** Slice 0 (visual direction), Slice 1 (renderer-only tender selection + envelope ingest), Slice 2 (per-tender entry surfaces — cash + external_card_terminal), S3a (migrations + persistence repositories), and S3b (shared types + FSMs + audit emitter + idempotency helper) are complete via PR #189/#190, PR #192, PR #196 (Slice 1 closeout), PR #198 (Slice 2 closeout), PR #207 (S3a), and PR #209 (S3b). **S3c is the next candidate sub-slice.** Gates §A4-A + §A3 remain cleared; S3b is GREEN. A fresh Maestro preflight (Template 1) is required before any S3c code is written. S3d begins when S3c is GREEN. §A4-B (voucher bridge review) remains held — it gates Slice 4, not Slice 3. §A2 is no-op for Slices 1–3 (plan AD-8); it will commission before Slice 4 begins. §A5 is rollout-only.
 
 | Item | State |
 |:--|:--|
@@ -1384,6 +1384,145 @@ Run a **fresh Maestro preflight for S3b** (Template 1). S3b is the next-candidat
 - Zero `forbidden-scope` fires.
 - Zero `needs-owner-approval` raised during execution; the migration-naming divergence (F-001) was a preflight-time finding and the owner decision (PR #200) carried into execution unchanged.
 - Two CodeRabbit review rounds + a third sharpening pass were absorbed pre-merge (commits `7964e40`, `f582824`, `e3784c1`); all raised findings resolved.
+
+---
+
+## Maestro closeout — S3b (PR #209)
+
+> Concise mirror of the PR #209 description (the canonical home of the
+> full closeout). Records the durable facts only; the full diff,
+> validation logs, and CodeRabbit thread live on GitHub. Schema:
+> [`../../docs/maestro/report-schema.md`](../../docs/maestro/report-schema.md).
+
+### Identification
+
+| Field | Value |
+|:--|:--|
+| Feature | `006-payments-tender` |
+| Sub-slice | S3b — Shared types + FSMs + audit emitter + idempotency helper |
+| Branch | `feat/006-s3b-fsm-audit-idempotency` |
+| Head SHA | `6b3f2d0` (post-CodeRabbit fix commit) |
+| Merge commit | `862d24581173adc18c8d547b5fcd6ca69225a78d` on `main` |
+| Merged at | 2026-05-23T10:10:17Z |
+| Constitution version pinned | v1.5.1 |
+
+### Gate verdict
+
+| Gate | Status entering | Status leaving |
+|:--|:--:|:--:|
+| §A0 — Upstream readiness | ✅ | ✅ (unchanged) |
+| §A1 — Visual direction Slice 0 | ✅ | ✅ (unchanged) |
+| §A2 — Backend / OpenAPI | no-op (Slices 1–3) | no-op (unchanged; gates Slice 4 voucher endpoints only) |
+| §A3 — Migrations | ✅ (signed off 2026-05-21) | ✅ (unchanged; S3a delivered migrations; S3b consumed read-only) |
+| §A4-A — Bridge-API security review (`payments.*` + `tender.*`) | ✅ (signed off 2026-05-21) | ✅ (unchanged; S3b operates under this clearance) |
+| §A4-B — Bridge-API review (`vouchers.*`, Slice 4) | ⛔ Held | ⛔ Held (unchanged) |
+| §A5 — Production readiness | ⛔ Held (rollout-only) | ⛔ Held (rollout-only) |
+
+No gate was opened or cleared by this sub-slice. S3b operated entirely under the §A4-A + §A3 clearance recorded 2026-05-21 and the S3a-GREEN precondition satisfied by PR #207.
+
+### Tasks completed
+
+T070 · T071 · T072 · T073 (shared types — Wave C)
+T080 · T081 · T082 · T083 · T084 (PaymentAttempt FSM tests — Wave D, TDD RED)
+T085 · T086 · T087 · T088 · T090 · T091 · T092 · T093 · T094 (TenderLine FSM + idempotency + audit tests — Wave E, TDD RED)
+T120 · T121 · T130 · T131 · T132 (FSM + helpers implementation — Wave F, GREEN)
+
+All 23 ticked in `tasks.md` with original task IDs, `[P]` markers, `[US?]` labels, descriptions, and file-path proposals preserved verbatim. Maestro task-marking §"What Maestro never changes" honoured.
+
+No T089 — intentionally absent from `tasks.md` (skipped in the locked task list).
+
+### Files touched (per PR description; 24 files)
+
+**New source (8):**
+
+- `src/shared/bridge-api.ts` — additive Slice-3 subset: `payments.{start, confirm, cancel, subscribe, read}` + `tender.{apply, reverse, read}` (no `forceFail`, no `vouchers.*`).
+- `src/shared/payments/types.ts` — `PaymentAttemptState` (5 states), `TenderLineState` (5 states), `TenderType` (3 values), `FailureReason` (14-value closed enum), `RefusalReason` (closed union).
+- `src/shared/payments/fsm-types.ts` — compile-time + runtime legal-transition matrix for both FSMs.
+- `src/main/payments/fsm/payment-attempt-fsm.ts` — 5-state attempt FSM, settlement invariant check, LIFO cancel cascade.
+- `src/main/payments/fsm/tender-line-fsm.ts` — per-tender-type apply rules (cash overpay → `change_due_minor`; external_card_terminal exact-or-refuse; voucher → `tender_not_yet_supported` in S3).
+- `src/main/payments/require-operator-session.ts` — wrapper delegating to 004's `role-enforcement.ts` with closed RefusalReason mapping.
+- `src/main/payments/idempotency.ts` — outbox-based replay helper; redacts / strips PII + voucher tokens before hashing.
+- `src/main/payments/audit-emitter.ts` — payload validators per audit category (`payment.{settled,cancelled,failed}`, `tender.{applied,refused,reversed}`); `external_reference` redaction to `*****`; `attribution_operator_id` sourced exclusively from Clerk-backed `OperatorSession.operator_id` (T093 requirement).
+
+**New tests (16):**
+
+- `tests/contract/payments/bridge-api.contract.test.ts` (T070)
+- `tests/unit/main/payments/payment-attempt-fsm.{settlement, cancel-lifo, failure-reasons, illegal-transitions}.test.ts` (T080–T083)
+- `tests/integration/payments/payment-attempt.one-started-per-terminal.test.ts` (T084)
+- `tests/unit/main/payments/tender-line-fsm.{apply, reverse, illegal-transitions, lifo-order}.test.ts` (T085–T088)
+- `tests/unit/main/payments/idempotency-replay.{identical, payload-mismatch}.test.ts` (T090–T091)
+- `tests/unit/main/payments/audit-emitter.{payment-settled, payment-terminal, tender-events}.test.ts` (T092–T094)
+- `tests/unit/main/payments/require-operator-session.test.ts` — added by implementer to cover T130's closed RefusalReason mapping (no separate test task in `tasks.md`; covers the wrapper's contract explicitly).
+
+**Confirmed untouched (forbidden scope walls held):** S3c bridge handlers + preload registration (T100–T106, T133–T142); S3d renderer wiring + final verification (T150–T164); `src/main/payments/handlers/**`; `src/preload/**`; `src/renderer/**`; migrations and repository rewrites (S3a complete — consumed read-only); `src/main/index.ts` wiring (lands in S3c); `src/shared/api-types.ts`; OpenAPI / codegen; CI workflows; `package.json` / `package-lock.json`; `_reference/Data-Pulse/`; `smart-data-pulse-2/**`; `AGENTS.md`; `CLAUDE.md`. No `tasks.md` / `coordination.md` / `docs/maestro/**` edits in the PR itself — those are this closeout's job.
+
+### Validation evidence (PR #209 head `6b3f2d0`)
+
+| Check | Result | Notes |
+|:--|:--:|:--|
+| `npm run typecheck` (both tsconfigs) | ✅ clean | — |
+| `npm run lint` (`eslint .` + `prettier --check .`) | ✅ clean | — |
+| `npx vitest run` (full) | ✅ 3 144 passed / 3 skipped / 0 failed (246 test files) | — |
+| `npm run codegen:verify` | ✅ no-op | `api-types.ts` up to date (no OpenAPI changes in S3b) |
+| Targeted S3b coverage (per-module) | ✅ see table below | — |
+
+Per-module coverage on S3b surfaces:
+
+| Module | % Branch | Notes |
+|:--|--:|:--|
+| `src/main/payments/audit-emitter.ts` | 97.72 % | ✅ above 95 % floor |
+| `src/main/payments/fsm/tender-line-fsm.ts` | 96.22 % | ✅ above 95 % floor |
+| `src/main/payments/fsm/payment-attempt-fsm.ts` | 93.33 % | ⚠ line 228 = Slice-4 `reversal_pending` bucket; structurally unreachable in S3 (voucher reverse not wired) — accepted by owner |
+| **`main/payments` aggregate** | 98.66 % | ✅ |
+| **`main/payments/fsm` aggregate** | 95.18 % | ✅ |
+
+All configured CI coverage thresholds pass. The residual 1.7 % on `payment-attempt-fsm.ts` is the `else pending.push(...)` arm (Slice-4 path; production code comments this explicitly).
+
+Manual smoke deferred to reviewer per PR test-plan checklist.
+
+### Security / scope boundaries honoured
+
+- **T093 attribution requirement** — `attribution_operator_id` sourced exclusively from Clerk-backed `OperatorSession.operator_id`; negative tests assert rejection of device token, cashier PIN record, terminal artefact, and per-terminal local identifiers (Constitution §VIII).
+- **No card data of any kind** at the FSM / audit / idempotency layer — no PAN, CVV, track data, cardholder name, expiry, auth payload (FR-007 / FR-008 / Constitution §P6).
+- **`external_reference` redacted to `*****`** in all log sinks (FR-009 / research §R-5) by the audit emitter; redaction enforced at the `audit-emitter.ts` level before any downstream logging.
+- **No voucher authority data, no `voucher_*` fields** in S3b — voucher line handling is `tender_not_yet_supported` in Slice 3; Slice 4 Contract V-A pending.
+- **Money handled as integer minor units** throughout both FSMs and the settlement invariant check (Constitution §II); `Number.isSafeInteger` guards retained from S3a repositories.
+- **Append-only audit emission** — audit emitter writes only to the append-only outbox via S3a repositories; the DB-level append-only triggers (migration `0016`) remain in force (Constitution §P4 / §P16).
+- **No PII / cards in logs** (Constitution §VI, P6 / P7 / P11) — idempotency helper strips known PII + voucher-token field names before computing the canonical hash; audit emitter redacts the `external_reference` field.
+- **No bridge calls, no IPC, no preload registration** — those belong to S3c.
+- **No OpenAPI / codegen changes** — `api-types.ts` untouched; `codegen:verify` clean.
+- **No design tokens, no renderer touches, no `.dark` block** (007 Guard 1 / Guard 5 — no renderer files touched by S3b).
+
+### Scope exclusions
+
+- **No S3c work** — T100–T106, T133–T142 not started (bridge handlers, preload registration).
+- **No S3d work** — T150–T164 not started (renderer wiring, final verification + sign-off).
+- **No Slice 4 work** — T200+ not started (voucher / force-fail / Contract V-A).
+- **No `src/main/payments/handlers/**`, no `src/preload/**`, no `src/renderer/**`.**
+- **No `src/main/index.ts` wiring** — repositories and FSMs are file-only until S3c registers them via the preload bridge.
+- **No `package.json` / `package-lock.json` changes.**
+- **No CI workflow changes** — `.github/workflows/` untouched.
+- **No `_reference/Data-Pulse/` touches; no `smart-data-pulse-2/**` touches.**
+- **No `git add -A` / `git add .`** — every staged file was on the S3b allow-list.
+
+### Deferred / follow-up
+
+- **`payment-attempt-fsm.ts` line 228 branch** — the `else pending.push(...)` arm is the Slice-4 `reversal_pending` bucket. Structurally unreachable in S3 because the TenderLine FSM never emits `reversal_pending` until Slice 4 wires voucher reverse. Coverage resolves naturally when Slice 4 ships — no action needed here.
+- **Finding F-001** — migration-naming divergence (`tasks.md` proposals vs. bare-numeric owner decision) remains open for the next `/speckit-analyze` cycle. Not S3b-introduced; unchanged from S3a closeout.
+- **`require-operator-session.test.ts` extra test** — implementer added a unit test for the T130 `requireOperatorSession` wrapper's closed RefusalReason mapping. No task ID exists in `tasks.md` for this test; flagged for the next `/speckit-analyze` as a possible documentation-only finding (the test is correct and adds value; the question is whether to retroactively assign a task ID).
+
+### Next step (single concrete action)
+
+Run a **fresh Maestro preflight for S3c** (Template 1). S3c introduces the `payments.*` + `tender.*` bridge handlers (T100–T106 TDD tests + T133–T142 implementation + preload registration). S3c gates (§A4-A cleared, §A3 cleared, S3b GREEN) are all satisfied. **Do not start S3c implementation without the preflight.** S3d remains blocked on S3c-GREEN; Slice 4 gates (§A4-B, §A2) remain held.
+
+### Run notes
+
+- Single-agent execution end-to-end per `docs/maestro/graph-rules.md §"Process-boundary edges"` — S3b extends `src/shared/bridge-api.ts` (shared boundary) and implements FSM code that straddles the main-process / shared layer simultaneously.
+- Wave order followed: C → D → E → F (TDD RED → GREEN).
+- No `[P]` downgrades fired — all 15 implementation + test files lived in separate paths.
+- Zero `forbidden-scope` fires.
+- Zero `needs-owner-approval` raised during execution.
+- CodeRabbit review addressed (commit `6b3f2d0` — "fix(006): address CodeRabbit review on PR #209 (S3b)"); all raised findings resolved before merge.
 
 ---
 
