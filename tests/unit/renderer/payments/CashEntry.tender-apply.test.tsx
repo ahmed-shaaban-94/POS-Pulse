@@ -165,9 +165,20 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
     expect(bridgeRefusal.textContent).not.toMatch(/idempotency_payload_mismatch/);
   });
 
-  it('does not call tenderApply when under-tender', async () => {
+  it('allows a partial cash apply in bridged mode (split-tender T154)', async () => {
+    // T154: in bridged mode, the cashier may apply a partial cash line for
+    // less than the remaining balance. The surface then returns to tender
+    // selection for the remainder. The settlement invariant is enforced on
+    // the main process at payments.confirm time.
     const user = userEvent.setup();
-    const tenderApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>();
+    const tenderApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>(
+      async () =>
+        await Promise.resolve({
+          kind: 'ok',
+          tender_line_id: 'tl-1',
+          applied_at: '2026-05-23T12:00:01.000Z',
+        }),
+    );
 
     render(
       <CashEntry
@@ -180,11 +191,31 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
     );
 
     await user.type(screen.getByTestId('cash-entry-amount-input'), '400');
-    // Confirm button is disabled when under-tender; clicking is a no-op.
     const button = screen.getByTestId('cash-entry-confirm');
-    expect(button).toBeDisabled();
+    expect(button).not.toBeDisabled();
     await user.click(button);
 
+    expect(tenderApply).toHaveBeenCalledTimes(1);
+    expect(tenderApply.mock.calls[0]?.[0]?.amount_applied_minor).toBe(400);
+    // The "amount is not enough" banner does NOT show in bridged mode.
+    expect(screen.queryByTestId('cash-entry-refusal')).not.toBeInTheDocument();
+  });
+
+  it('rejects an empty / zero input in bridged mode (button disabled)', () => {
+    const tenderApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>();
+
+    render(
+      <CashEntry
+        remainingBalanceMinor={500}
+        paymentAttemptId="pa-1"
+        tenderApply={tenderApply}
+        onApplied={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+
+    // No input yet → button disabled.
+    expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
     expect(tenderApply).not.toHaveBeenCalled();
   });
 

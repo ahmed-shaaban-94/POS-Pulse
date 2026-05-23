@@ -85,12 +85,24 @@ export function CashEntry({
   const isUnderTender =
     isRemainingValid && amountAppliedMinor !== null && amountAppliedMinor < remainingBalanceMinor;
 
+  // T154 split-tender: in bridged mode (tenderApply provided) the cashier may
+  // apply a partial cash line for less than the remaining balance — the main
+  // process accepts the line and the surface returns to tender selection for
+  // the rest. The settlement invariant is enforced at payments.confirm time.
+  // In Slice-2 mode (no tenderApply) the legacy "must be >= remaining" gate
+  // stays in force.
+  const isBridged = tenderApply !== undefined && paymentAttemptId !== undefined;
+  const isPositive = amountAppliedMinor !== null && amountAppliedMinor > 0;
+  const canConfirm = isBridged ? isPositive : isSufficient;
+
+  // computeChangeDueMinor throws on under-tender; only compute it when the
+  // cash amount actually covers the remaining balance.
   const changeDueMinor = isSufficient
     ? computeChangeDueMinor(amountAppliedMinor, remainingBalanceMinor)
     : null;
 
   async function handleConfirm(): Promise<void> {
-    if (!isSufficient || changeDueMinor === null) {
+    if (!canConfirm || amountAppliedMinor === null) {
       return;
     }
 
@@ -115,7 +127,9 @@ export function CashEntry({
       return;
     }
 
-    onConfirm?.({ amountAppliedMinor, changeDueMinor });
+    if (changeDueMinor !== null) {
+      onConfirm?.({ amountAppliedMinor, changeDueMinor });
+    }
   }
 
   return (
@@ -156,7 +170,10 @@ export function CashEntry({
         </div>
       )}
 
-      {isUnderTender && (
+      {/* Slice-2 under-tender banner. In S3d bridged mode the cashier may
+          apply a partial cash line (split tender), so the banner is hidden;
+          the main process owns the settlement invariant. */}
+      {isUnderTender && !isBridged && (
         <div
           className="cash-entry__refusal"
           data-testid="cash-entry-refusal"
@@ -184,8 +201,8 @@ export function CashEntry({
           className="cash-entry__confirm"
           data-testid="cash-entry-confirm"
           style={{ minHeight: touchTarget.min }}
-          disabled={!isSufficient || isApplying}
-          aria-disabled={!isSufficient || isApplying ? 'true' : undefined}
+          disabled={!canConfirm || isApplying}
+          aria-disabled={!canConfirm || isApplying ? 'true' : undefined}
           onClick={() => {
             void handleConfirm();
           }}

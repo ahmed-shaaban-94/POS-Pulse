@@ -122,7 +122,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
   }
 
   async function handleLineApplied(): Promise<void> {
-    if (_testBridge === undefined || paymentAttemptId === null) {
+    if (_testBridge === undefined || paymentAttemptId === null || envelope === null) {
       return;
     }
     const readResponse = await _testBridge.payments.read({
@@ -130,6 +130,18 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
     });
     if (readResponse.kind === 'ok') {
       usePaymentStore.getState().applyAttemptSnapshot(readResponse.payment_attempt);
+      // Split-tender (T154): if the running sum is still below the subtotal,
+      // return to tender selection so the cashier may add another line. When
+      // the sum equals the subtotal, the surface stays put and the confirm
+      // button becomes visible. The settlement invariant itself is enforced
+      // on the main process at payments.confirm time.
+      const sumApplied = readResponse.payment_attempt.tender_lines
+        .filter((l) => l.state === 'applied')
+        .reduce((acc, l) => acc + l.amount_applied_minor, 0);
+      if (sumApplied < envelope.subtotal_minor) {
+        setSelectedTender(null);
+        setPhase('tender_selection');
+      }
     }
   }
 
@@ -180,6 +192,11 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
 
   const appliedLines = (paymentSlice?.tender_lines ?? []).filter((l) => l.state === 'applied');
   const hasAppliedLine = appliedLines.length > 0;
+  // Split-tender remaining-balance derivation (T154). Pass to entry components
+  // so each successive line is scoped to what's still owed, not the full
+  // subtotal.
+  const sumAppliedMinor = appliedLines.reduce((acc, l) => acc + l.amount_applied_minor, 0);
+  const remainingBalanceMinor = Math.max(envelope.subtotal_minor - sumAppliedMinor, 0);
 
   if (phase === 'settled') {
     return (
@@ -234,7 +251,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
         <div className="payment-surface__entry" data-testid="payment-surface-entry">
           {selectedTender === 'cash' && (
             <CashEntry
-              remainingBalanceMinor={envelope.subtotal_minor}
+              remainingBalanceMinor={remainingBalanceMinor}
               paymentAttemptId={paymentAttemptId}
               tenderApply={(req) => _testBridge.tender.apply(req)}
               onApplied={() => {
@@ -244,7 +261,7 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
           )}
           {selectedTender === 'external_card_terminal' && (
             <ExternalCardTerminalEntry
-              remainingBalanceMinor={envelope.subtotal_minor}
+              remainingBalanceMinor={remainingBalanceMinor}
               paymentAttemptId={paymentAttemptId}
               tenderApply={(req) => _testBridge.tender.apply(req)}
               onApplied={() => {
