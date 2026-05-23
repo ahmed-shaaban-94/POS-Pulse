@@ -114,6 +114,20 @@ export interface PaymentTenderLinesRepository {
   updateState(input: UpdateTenderLineStateInput): void;
   findByAttempt(payment_attempt_id: string): PaymentTenderLineRow[];
   /**
+   * S3c addition (F-005) — single-row lookup by primary key.
+   *
+   * `tender.read` and `tender.reverse` bridge handlers carry only the
+   * `tender_line_id` in their request shape (contracts/bridge-api.md
+   * §"tender.read" + §"tender.reverse"). Resolving the bound attempt
+   * for the gating projection requires a `tender_line_id → row` query
+   * the original S3a surface didn't expose. The PK index added by
+   * migration 0014 makes this an O(log n) equality lookup.
+   *
+   * Returns `undefined` when the id is unknown — callers map that to the
+   * closed `line_not_applied` refusal reason.
+   */
+  findByLineId(tender_line_id: string): PaymentTenderLineRow | undefined;
+  /**
    * Canonical settlement-invariant sum per data-model §"Invariant 5".
    * Returns 0 when the attempt has no applied lines yet. Throws
    * `TypeError` if the SUM exceeds `Number.MAX_SAFE_INTEGER` — a money
@@ -162,6 +176,10 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
        WHERE payment_attempt_id=?
        ORDER BY apply_order ASC`,
   ) as PrepareAll<PaymentTenderLineRow>;
+
+  const findByLineIdStmt = db.prepare(
+    `SELECT * FROM payment_tender_lines WHERE tender_line_id=?`,
+  ) as PrepareGet<PaymentTenderLineRow>;
 
   const settlementSumStmt = db.prepare(
     `SELECT COALESCE(
@@ -219,6 +237,10 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
 
     findByAttempt(payment_attempt_id: string): PaymentTenderLineRow[] {
       return findByAttemptStmt.all(payment_attempt_id);
+    },
+
+    findByLineId(tender_line_id: string): PaymentTenderLineRow | undefined {
+      return findByLineIdStmt.get(tender_line_id) ?? undefined;
     },
 
     settlementSumMinor(payment_attempt_id: string): number {

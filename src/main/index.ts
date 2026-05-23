@@ -10,6 +10,25 @@ import { registerPairingHandlers } from './ipc/pairing.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
 import { registerCartHandlers } from './ipc/cart.js';
 import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
+import { registerPaymentsHandlers } from './ipc/payments.js';
+import { bindPaymentAttemptsRepository } from './payments/repositories/payment-attempts.repository.js';
+import { bindPaymentTenderLinesRepository } from './payments/repositories/payment-tender-lines.repository.js';
+import { bindPaymentActionOutboxRepository } from './payments/repositories/payment-action-outbox.repository.js';
+import { createPaymentAttemptFsm } from './payments/fsm/payment-attempt-fsm.js';
+import { createTenderLineFsm } from './payments/fsm/tender-line-fsm.js';
+import { createIdempotencyHelper } from './payments/idempotency.js';
+import { createPaymentAuditEmitter, type PaymentAuditEvent } from './payments/audit-emitter.js';
+import { createPaymentsStartHandler } from './payments/handlers/payments-start.js';
+import { createPaymentsConfirmHandler } from './payments/handlers/payments-confirm.js';
+import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel.js';
+import { createPaymentsSubscribeHandler } from './payments/handlers/payments-subscribe.js';
+import { createPaymentsReadHandler } from './payments/handlers/payments-read.js';
+import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
+import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
+import { createTenderReadHandler } from './payments/handlers/tender-read.js';
+import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
+import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
+import { randomUUID } from 'node:crypto';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
 import { createSecretStore } from './secrets/index.js';
@@ -475,6 +494,152 @@ app
       isPackaged: app.isPackaged,
     });
     registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
+
+    // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
+    // payments.* + tender.* bridge surface. The 8 handler factories share
+    // the three S3a repositories, both FSMs, and a single idempotency
+    // helper + audit-emitter pair. payments.discardOnSessionEnd is
+    // instantiated but NOT registered on ipcMain — it's an internal
+    // handler called by the operator-session-end signal.
+    const paymentsAttemptsRepo = bindPaymentAttemptsRepository(dbHandle);
+    const paymentsLinesRepo = bindPaymentTenderLinesRepository(dbHandle);
+    const paymentsOutboxRepo = bindPaymentActionOutboxRepository(dbHandle);
+
+    const paymentAttemptFsm = createPaymentAttemptFsm({
+      db: dbHandle,
+      attempts: paymentsAttemptsRepo,
+      lines: paymentsLinesRepo,
+      outbox: paymentsOutboxRepo,
+    });
+    const tenderLineFsm = createTenderLineFsm({
+      db: dbHandle,
+      attempts: paymentsAttemptsRepo,
+      lines: paymentsLinesRepo,
+      outbox: paymentsOutboxRepo,
+    });
+
+    const paymentsIdempotency = createIdempotencyHelper({ outbox: paymentsOutboxRepo });
+
+    // Adapter — payments emitter writes its own `PaymentAuditEvent` shape;
+    // we forward to 004's `audit_events` table via the shared
+    // `AuditEventsStore.insertIgnore`. F-006: 004's `ActionCategory` union
+    // does not yet include the 7 payment categories at the TypeScript
+    // level (migration 0017 extends the SQL CHECK only). The cast lives
+    // at this single seam and is bounded by the migration's CHECK; a
+    // future PR by 004's owner should extend `AUDIT_ACTION_CATEGORIES`.
+    const paymentAuditEmitter = createPaymentAuditEmitter({
+      sink: {
+        write: (evt: PaymentAuditEvent): void => {
+          auditEventsStore.insertIgnore({
+            event_id: randomUUID(),
+            tenant_id: evt.tenant_id,
+            branch_id: evt.branch_id,
+            originating_terminal_id: evt.originating_terminal_id,
+            acting_operator_id: evt.attribution_operator_id,
+            session_id: evt.session_id,
+            shift_id: null,
+            action_category: evt.action_category as unknown as Audit004ActionCategory,
+            created_at: evt.created_at,
+            approving_supervisor_id: null,
+            payload: evt.payload,
+          });
+        },
+      },
+    });
+
+    const paymentsSessionAdapter = (): OperatorSessionForPayments | null => {
+      const sess = operatorSessionManager.getCurrent();
+      if (sess === null) return null;
+      // Adapter — payments require terminal_id on the session. 004's
+      // session record stores branch context but no separate terminal id;
+      // use pairing-store's terminal id, matching cart's posture
+      // (cart-bridge.ts uses session.branch_id as terminal scope).
+      // F-007: a follow-up PR can plumb the real terminal id through 004.
+      return {
+        role: sess.role,
+        operator_id: sess.operator_id,
+        operator_session_id: sess.id,
+        tenant_id: sess.tenant_id,
+        branch_id: sess.branch_id,
+        terminal_id: sess.branch_id,
+      };
+    };
+
+    const paymentsClock = (): Date => new Date();
+    const paymentsUuid = (): string => randomUUID();
+
+    const paymentsStart = createPaymentsStartHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      paymentAttemptFsm,
+      idempotency: paymentsIdempotency,
+      auditEmitter: paymentAuditEmitter,
+      uuid: paymentsUuid,
+      clock: paymentsClock,
+    });
+    const paymentsConfirm = createPaymentsConfirmHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+      paymentAttemptFsm,
+      idempotency: paymentsIdempotency,
+      auditEmitter: paymentAuditEmitter,
+      clock: paymentsClock,
+    });
+    const paymentsCancel = createPaymentsCancelHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+      paymentAttemptFsm,
+      idempotency: paymentsIdempotency,
+      auditEmitter: paymentAuditEmitter,
+      clock: paymentsClock,
+    });
+    const paymentsSubscribe = createPaymentsSubscribeHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+    });
+    const paymentsRead = createPaymentsReadHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+    });
+    const tenderApply = createTenderApplyHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+      tenderLineFsm,
+      idempotency: paymentsIdempotency,
+      auditEmitter: paymentAuditEmitter,
+      uuid: paymentsUuid,
+      clock: paymentsClock,
+    });
+    const tenderReverse = createTenderReverseHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+      tenderLineFsm,
+      idempotency: paymentsIdempotency,
+      auditEmitter: paymentAuditEmitter,
+      clock: paymentsClock,
+    });
+    const tenderRead = createTenderReadHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+    });
+
+    registerPaymentsHandlers(ipcMain, {
+      paymentsStart,
+      paymentsConfirm,
+      paymentsCancel,
+      paymentsSubscribe,
+      paymentsRead,
+      tenderApply,
+      tenderReverse,
+      tenderRead,
+    });
 
     createWindow();
     mainLogger.info('app:ready');

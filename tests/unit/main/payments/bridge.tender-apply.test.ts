@@ -1,0 +1,370 @@
+/* eslint-disable @typescript-eslint/unbound-method --
+ * See bridge.payments-start.test.ts for rationale.
+ */
+/**
+ * T105 — `tender.apply` bridge handler test (RED).
+ *
+ * Asserts (contracts/bridge-api.md §"tender.apply"):
+ *
+ *   1. Session gate (no_session / role_denied).
+ *   2. Attempt-binding gate: tenant_isolation / wrong_owner / attempt_terminal
+ *      via requireOperatorSession with the attempt projection.
+ *   3. Idempotency: identical retry returns the prior outcome reconstructed
+ *      from the persisted line row (`tender_line_id`, `applied_at`,
+ *      `change_due_minor` if cash overpay); mismatch refuses with
+ *      `idempotency_payload_mismatch`.
+ *   4. Tender-type routing:
+ *        cash → routes to TenderLine FSM apply (may return change_due_minor).
+ *        external_card_terminal → routes to FSM apply; FSM returns
+ *          non_cash_overpayment_refused on overpay (FSM owns the rule —
+ *          this test asserts the refusal passes through).
+ *        internal_voucher → FSM returns tender_not_yet_supported (Slice-3);
+ *          this passes through to the bridge response.
+ *   5. Input validation at the bridge boundary:
+ *        • `external_reference` regex `^[A-Z0-9]{0,6}$` is enforced
+ *          main-side (FSM checks; we test the pass-through).
+ *        • `amount_applied_minor` not a safe non-negative integer →
+ *          `invalid_input`.
+ *   6. Audit emission on FSM ok:
+ *        • `tender.applied` event for `kind: 'ok'`.
+ *        • `tender.refused` event for `kind: 'refused', reason:
+ *          'non_cash_overpayment_refused'` (the FSM still records the
+ *          refusal as a `refused`-state line; the audit fires regardless).
+ *   7. `voucher_code` and `voucher_redemption_intent_token` MUST NOT
+ *      appear anywhere in the bridge response (FR-017).
+ *
+ * **Wave G — TDD RED.** Forward-references the Wave H module.
+ */
+
+import { describe, expect, it, vi } from 'vitest';
+
+import { createTenderApplyHandler } from '../../../../src/main/payments/handlers/tender-apply.js';
+
+import {
+  makeAttemptRow,
+  makeAttemptsRepoDouble,
+  makeAuditEmitterDouble,
+  makeIdempotencyHelperDouble,
+  makeLineRow,
+  makeLinesRepoDouble,
+  makeSession,
+  makeSessionSource,
+  makeTenderLineFsmDouble,
+} from './__fixtures__/bridge-handler-deps.js';
+import type { TenderApplyRequest } from '../../../../src/shared/bridge-api.js';
+
+function validRequest(overrides: Partial<TenderApplyRequest> = {}): TenderApplyRequest {
+  return {
+    payment_attempt_id: 'pa-1',
+    tender_type: 'cash',
+    amount_applied_minor: 1500,
+    idempotency_key: 'idem-apply-1',
+    ...overrides,
+  };
+}
+
+function setup() {
+  const sessionSource = makeSessionSource(makeSession());
+  const row = makeAttemptRow();
+  const attemptsRepo = makeAttemptsRepoDouble([row]);
+  const linesRepo = makeLinesRepoDouble();
+  const fsm = makeTenderLineFsmDouble();
+  const idempotency = makeIdempotencyHelperDouble();
+  const auditEmitter = makeAuditEmitterDouble();
+  const uuid = vi.fn<() => string>(() => 'tl-1');
+  const clock = vi.fn<() => Date>(() => new Date('2026-05-23T11:00:01.000Z'));
+  const handler = createTenderApplyHandler({
+    getCurrentSession: sessionSource.getCurrentSession,
+    attemptsRepo,
+    linesRepo,
+    tenderLineFsm: fsm,
+    idempotency,
+    auditEmitter,
+    uuid,
+    clock,
+  });
+  return {
+    sessionSource,
+    attemptsRepo,
+    linesRepo,
+    fsm,
+    idempotency,
+    auditEmitter,
+    uuid,
+    clock,
+    handler,
+  };
+}
+
+describe('T105 — tender.apply bridge handler', () => {
+  it('refuses no_session when there is no active session', async () => {
+    const handler = createTenderApplyHandler({
+      getCurrentSession: makeSessionSource(null).getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble(),
+      linesRepo: makeLinesRepoDouble(),
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter: makeAuditEmitterDouble(),
+      uuid: () => 'tl-1',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    expect(await handler(validRequest())).toEqual({
+      kind: 'refused',
+      reason: 'no_session',
+    });
+  });
+
+  it('refuses tenant_isolation when the attempt is in another tenant scope', async () => {
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ tenant_id: 'tenant-OTHER' });
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo: makeLinesRepoDouble(),
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter: makeAuditEmitterDouble(),
+      uuid: () => 'tl-1',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    expect(await handler(validRequest())).toEqual({
+      kind: 'refused',
+      reason: 'tenant_isolation',
+    });
+  });
+
+  it('refuses attempt_terminal when the attempt is settled / cancelled / failed', async () => {
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ state: 'settled' });
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo: makeLinesRepoDouble(),
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter: makeAuditEmitterDouble(),
+      uuid: () => 'tl-1',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    expect(await handler(validRequest())).toEqual({
+      kind: 'refused',
+      reason: 'attempt_terminal',
+    });
+  });
+
+  it('refuses invalid_input when amount_applied_minor is not a safe non-negative integer', async () => {
+    const { handler } = setup();
+    for (const bad of [
+      -1,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      const result = await handler(validRequest({ amount_applied_minor: bad }));
+      expect(result).toEqual({ kind: 'refused', reason: 'invalid_input' });
+    }
+  });
+
+  it('applies a cash tender line and returns ok with applied_at', async () => {
+    const { handler, fsm } = setup();
+    fsm.apply.mockReturnValueOnce({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-23T11:00:01.000Z',
+    });
+    const result = await handler(validRequest({ tender_type: 'cash' }));
+    expect(result).toEqual({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-23T11:00:01.000Z',
+    });
+    expect(fsm.apply).toHaveBeenCalledTimes(1);
+    expect(fsm.apply.mock.calls[0]?.[0]).toMatchObject({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'cash',
+      amount_applied_minor: 1500,
+      attribution_operator_id: 'op-clerk-user-abc',
+      applied_at: '2026-05-23T11:00:01.000Z',
+      action_id: 'idem-apply-1',
+    });
+  });
+
+  it('returns change_due_minor when the FSM signals cash overpayment', async () => {
+    const { handler, fsm } = setup();
+    fsm.apply.mockReturnValueOnce({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-23T11:00:01.000Z',
+      change_due_minor: 500,
+    });
+    const result = await handler(validRequest({ tender_type: 'cash', amount_applied_minor: 2000 }));
+    expect(result).toEqual({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-23T11:00:01.000Z',
+      change_due_minor: 500,
+    });
+  });
+
+  it('passes non_cash_overpayment_refused from the FSM through unchanged for external_card_terminal', async () => {
+    const { handler, fsm } = setup();
+    fsm.apply.mockReturnValueOnce({
+      kind: 'refused',
+      reason: 'non_cash_overpayment_refused',
+    });
+    const result = await handler(
+      validRequest({
+        tender_type: 'external_card_terminal',
+        amount_applied_minor: 9999,
+        external_reference: 'AB12XY',
+      }),
+    );
+    expect(result).toEqual({
+      kind: 'refused',
+      reason: 'non_cash_overpayment_refused',
+    });
+  });
+
+  it('passes tender_not_yet_supported from the FSM for internal_voucher (Slice-3 gate)', async () => {
+    const { handler, fsm } = setup();
+    fsm.apply.mockReturnValueOnce({ kind: 'refused', reason: 'tender_not_yet_supported' });
+    const result = await handler(
+      validRequest({
+        tender_type: 'internal_voucher',
+        voucher_code: 'V-ABC-123',
+      }),
+    );
+    expect(result).toEqual({
+      kind: 'refused',
+      reason: 'tender_not_yet_supported',
+    });
+  });
+
+  it('refuses idempotency_payload_mismatch when the helper signals mismatch', async () => {
+    const sessionSource = makeSessionSource(makeSession());
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
+      linesRepo: makeLinesRepoDouble(),
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble({ kind: 'mismatch' }),
+      auditEmitter: makeAuditEmitterDouble(),
+      uuid: () => 'tl-1',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    expect(await handler(validRequest())).toEqual({
+      kind: 'refused',
+      reason: 'idempotency_payload_mismatch',
+    });
+  });
+
+  it('returns the prior outcome when the idempotency helper signals replay', async () => {
+    const sessionSource = makeSessionSource(makeSession());
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({
+        tender_line_id: 'tl-existing',
+        tender_type: 'cash',
+        amount_applied_minor: 2000,
+        change_due_minor: 500,
+        applied_at: '2026-05-23T10:59:55.000Z',
+        last_action_id: 'idem-apply-1',
+      }),
+    ]);
+    const fsm = makeTenderLineFsmDouble();
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
+      linesRepo,
+      tenderLineFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      auditEmitter: makeAuditEmitterDouble(),
+      uuid: () => 'tl-NEW',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    const result = await handler(validRequest());
+    expect(result).toEqual({
+      kind: 'ok',
+      tender_line_id: 'tl-existing',
+      applied_at: '2026-05-23T10:59:55.000Z',
+      change_due_minor: 500,
+    });
+    expect(fsm.apply).not.toHaveBeenCalled();
+  });
+
+  it('emits tender.applied on FSM ok (cash, no overpayment)', async () => {
+    const { handler, fsm, auditEmitter } = setup();
+    fsm.apply.mockReturnValueOnce({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-23T11:00:01.000Z',
+    });
+    await handler(validRequest({ tender_type: 'cash' }));
+    expect(auditEmitter.captured).toHaveLength(1);
+    expect(auditEmitter.captured[0]?.action_category).toBe('tender.applied');
+    expect(auditEmitter.captured[0]?.payload).toMatchObject({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'cash',
+      amount_applied_minor: 1500,
+    });
+  });
+
+  it('emits tender.refused on FSM refusal (non_cash_overpayment_refused)', async () => {
+    const { handler, fsm, auditEmitter } = setup();
+    fsm.apply.mockReturnValueOnce({
+      kind: 'refused',
+      reason: 'non_cash_overpayment_refused',
+    });
+    await handler(
+      validRequest({
+        tender_type: 'external_card_terminal',
+        amount_applied_minor: 9999,
+        external_reference: 'AB12XY',
+      }),
+    );
+    const refused = auditEmitter.captured.filter((e) => e.action_category === 'tender.refused');
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.payload).toMatchObject({
+      tender_type: 'external_card_terminal',
+      refusal_reason: 'non_cash_overpayment_refused',
+    });
+  });
+
+  it('does NOT emit any audit event on idempotency replay or mismatch', async () => {
+    const sessionSource = makeSessionSource(makeSession());
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({ tender_line_id: 'tl-existing', last_action_id: 'idem-apply-1' }),
+    ]);
+    const auditEmitter = makeAuditEmitterDouble();
+    const replayHandler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
+      linesRepo,
+      tenderLineFsm: makeTenderLineFsmDouble(),
+      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      auditEmitter,
+      uuid: () => 'tl-NEW',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    await replayHandler(validRequest());
+    expect(auditEmitter.captured).toHaveLength(0);
+  });
+
+  it('response never contains voucher_code or voucher_redemption_intent_token', async () => {
+    const { handler, fsm } = setup();
+    fsm.apply.mockReturnValueOnce({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-23T11:00:01.000Z',
+    });
+    const result = await handler(
+      validRequest({ tender_type: 'internal_voucher', voucher_code: 'V-SECRET' }),
+    );
+    const serialised = JSON.stringify(result);
+    expect(serialised).not.toContain('voucher_code');
+    expect(serialised).not.toContain('voucher_redemption_intent_token');
+    expect(serialised).not.toContain('V-SECRET');
+  });
+});
