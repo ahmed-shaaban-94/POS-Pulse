@@ -95,6 +95,15 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
       return;
     }
 
+    // Split-tender path: an attempt is already started (paymentSlice holds the
+    // attempt id from a prior payments.start). Calling payments.start again
+    // would be refused with `attempt_already_started_on_terminal`. Skip
+    // straight to mounting the new entry component for the remaining balance.
+    if (paymentAttemptId !== null) {
+      setPhase('entry');
+      return;
+    }
+
     const startResponse = await _testBridge.payments.start({
       envelope_handoff_action_id: envelope.handoff_action_id,
       envelope_cart_id: envelope.cart_id,

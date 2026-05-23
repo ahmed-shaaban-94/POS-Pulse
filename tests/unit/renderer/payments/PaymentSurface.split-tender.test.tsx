@@ -316,4 +316,65 @@ describe('PaymentSurface — split-tender UX (T154)', () => {
       expect(screen.getByTestId('payment-surface-confirm')).toBeInTheDocument();
     });
   });
+
+  it('does not re-call payments.start when the second tender is picked', async () => {
+    // Regression — main-process FSM refuses payments.start when an attempt is
+    // already started on the terminal (R-10). The split-tender flow must skip
+    // payments.start on the second tender selection.
+    const user = userEvent.setup();
+    const readSequence = [
+      makeAttemptView('started'),
+      makeAttemptView('started', [
+        {
+          tender_line_id: 'tl-1',
+          tender_type: 'cash',
+          amount_applied_minor: 400,
+          state: 'applied',
+          apply_order: 1,
+          applied_at: '2026-05-23T12:00:02.000Z',
+        },
+      ]),
+    ];
+    let readCall = 0;
+    const start = vi.fn<(req: PaymentsStartRequest) => Promise<PaymentsStartResponse>>(
+      async () => await Promise.resolve({ kind: 'ok', payment_attempt_id: 'pa-1' }),
+    );
+    const read = vi.fn<(req: PaymentsReadRequest) => Promise<PaymentsReadResponse>>(async () => {
+      const snap = readSequence[Math.min(readCall, readSequence.length - 1)];
+      readCall++;
+      if (snap === undefined) {
+        return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+      }
+      return await Promise.resolve({ kind: 'ok', payment_attempt: snap });
+    });
+    const apply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>(
+      async () =>
+        await Promise.resolve({
+          kind: 'ok',
+          tender_line_id: 'tl-1',
+          applied_at: '2026-05-23T12:00:02.000Z',
+        }),
+    );
+    const bridge = makeBridge({ payments: { start, read }, tender: { apply } });
+
+    render(<PaymentSurface _testBridge={bridge} />);
+
+    // First tender selection: payments.start fires once.
+    await user.click(screen.getByTestId('tender-cash'));
+    await waitFor(() => {
+      expect(start).toHaveBeenCalledTimes(1);
+    });
+    await user.type(await screen.findByTestId('cash-entry-amount-input'), '400');
+    await user.click(screen.getByTestId('cash-entry-confirm'));
+
+    // Split-tender returns to tender selection. Cashier picks the second tender.
+    await waitFor(() => {
+      expect(screen.queryByTestId('cash-entry')).not.toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('tender-external-card'));
+
+    // Second tender entry mounts WITHOUT a second payments.start call.
+    await screen.findByTestId('external-card-terminal-entry');
+    expect(start).toHaveBeenCalledTimes(1);
+  });
 });
