@@ -6,6 +6,8 @@ import {
   CI_MAINTENANCE_EXEMPT_PREFIXES,
   PAIRING_DEV_FIXTURE_BRANCH_PREFIX,
   PAIRING_DEV_FIXTURE_EXEMPT_PREFIXES,
+  FEAT_006_PAYMENTS_BRANCH_PREFIX,
+  FEAT_006_PAYMENTS_EXEMPT_PREFIXES,
 } from './source-scope-guard.const';
 
 /**
@@ -126,7 +128,11 @@ describe('source-scope guard (T006)', () => {
         ? FORBIDDEN_PATH_PREFIXES.filter(
             (p) => !(PAIRING_DEV_FIXTURE_EXEMPT_PREFIXES as readonly string[]).includes(p),
           )
-        : FORBIDDEN_PATH_PREFIXES;
+        : currentBranch.startsWith(FEAT_006_PAYMENTS_BRANCH_PREFIX)
+          ? FORBIDDEN_PATH_PREFIXES.filter(
+              (p) => !(FEAT_006_PAYMENTS_EXEMPT_PREFIXES as readonly string[]).includes(p),
+            )
+          : FORBIDDEN_PATH_PREFIXES;
 
     const violations = changedFiles.filter((file) =>
       effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)),

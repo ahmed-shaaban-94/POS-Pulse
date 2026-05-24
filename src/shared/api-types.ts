@@ -5,6 +5,71 @@
 // and commit both the new snapshot and the regenerated types.
 
 export interface paths {
+    "/api/pos/v1/vouchers/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomically consume a redemption-intent token at confirm time.
+         * @description Consume a `redemption_intent_token` issued by an earlier `posValidateVoucher` call. On success, the voucher transitions to `redeemed` (or its remaining balance is decremented atomically) and the response carries the durable `redemption_id` that POS-Pulse persists on the `payment_tender_lines` row for audit / receipt correlation. The intent token is single-use; a second call with the same token but the same Idempotency-Key returns 200 with `idempotent_replayed: true`.
+         *     **Failure-response error codes** (closed set): `intent_token_not_found`, `intent_token_expired`, `intent_token_payment_attempt_mismatch`, `voucher_already_redeemed`, `validation_failure`, `store_context_required`, `idempotency_key_required`, `idempotency_key_malformed`, `idempotency_key_conflict`.
+         */
+        post: operations["posRedeemVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pos/v1/vouchers/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse a previously-committed voucher redemption.
+         * @description Reverse a `redemption_id` issued by `posRedeemVoucher`. The voucher's balance is restored atomically and the voucher status transitions back from `redeemed` to `active` (or to its prior partially-redeemed state for forward compatibility — V-A v1 only supports single full redemption). On success, the response carries `already_reversed: false` on the first call and `already_reversed: true` on every subsequent call with the same `redemption_id`.
+         *     **Failure-response error codes** (closed set): `redemption_not_found`, `redemption_tenant_mismatch`, `redemption_branch_mismatch`, `validation_failure`, `store_context_required`, `idempotency_key_required`, `idempotency_key_malformed`, `idempotency_key_conflict`.
+         *     **Authority-unreachable handling** is a POS-Pulse-side concern: the POS bridge handler transitions the tender line to `reversal_pending` on a network error and runs a deferred resolver. The backend has no `reversal_pending` concept; from the backend's point of view a reverse either succeeded or the request was never received.
+         */
+        post: operations["posReverseVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pos/v1/vouchers/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate a voucher code for a specific payment attempt + amount.
+         * @description Resolve the submitted voucher `code` against the tenant's active voucher set. On success, return a short-lived `redemption_intent_token` bound to the supplied `payment_attempt_id` + `applied_amount_minor`. The token is the only artefact the POS terminal needs to subsequently call `posRedeemVoucher` at settlement time.
+         *     **Partial redemption rule (POS-Pulse AD-7 / OQ-PLAN-3):** if the caller-supplied `applied_amount_minor` exceeds either the authoritative voucher balance OR the caller-supplied `remaining_balance_minor`, the operation MUST refuse with `non_cash_overpayment_refused`. The backend caps authority-side; no residual voucher reconciliation in V-A.
+         *     **Failure-response error codes** (closed set, mirrors POS-Pulse bridge contract §`vouchers.validate`): `voucher_not_found`, `voucher_expired`, `voucher_cancelled`, `voucher_already_redeemed`, `voucher_tenant_mismatch`, `voucher_branch_mismatch`, `non_cash_overpayment_refused`, `validation_failure`, `store_context_required`, `idempotency_key_required`, `idempotency_key_malformed`, `idempotency_key_conflict`.
+         */
+        post: operations["posValidateVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/_metrics": {
         parameters: {
             query?: never;
@@ -8280,6 +8345,20 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** @description Canonical error envelope shared with `auth.openapi.yaml`, `outbox.openapi.yaml`, `catalog/unknown-items.yaml`, and the other backend contracts. The `error.code` enum is the closed set documented per-operation above. */
+        Error: {
+            error: {
+                /** @description Stable machine-readable error code. */
+                code: string;
+                /** @description Human-readable summary; no sensitive data. */
+                message: string;
+                /**
+                 * Format: uuid
+                 * @description Server-assigned correlation id.
+                 */
+                request_id?: string | null;
+            };
+        };
         /**
          * ExecuteRequest
          * @description Request body for individual pipeline stage execution.
@@ -10227,6 +10306,57 @@ export interface components {
             /** Unit Price */
             unit_price: number;
         };
+        PosRedeemVoucherRequest: {
+            /**
+             * Format: uuid
+             * @description Must match the `payment_attempt_id` the token was issued against. Mismatch returns `intent_token_payment_attempt_mismatch`.
+             */
+            payment_attempt_id: string;
+            /** @description Opaque token previously issued by `posValidateVoucher`. Single-use; consumed atomically with the underlying voucher-balance decrement. */
+            redemption_intent_token: string;
+        };
+        PosRedeemVoucherResponse: {
+            /** @description `false` on the first successful redeem; `true` on every subsequent identical-Idempotency-Key + identical-body replay. Lets POS distinguish a fresh commit from a retry for audit-emission purposes. */
+            idempotent_replayed: boolean;
+            /**
+             * @description Discriminator literal — voucher redeemed.
+             * @enum {string}
+             */
+            kind: "redeemed";
+            /**
+             * Format: date-time
+             * @description UTC timestamp at which the redemption committed.
+             */
+            redeemed_at: string;
+            /**
+             * Format: uuid
+             * @description Durable, opaque, tenant-scoped UUID identifying this specific redemption event. Safe to surface in receipt-handoff payloads and audit-event correlation (POS-Pulse FR-017 explicit allowlist). Does NOT carry voucher balance, voucher holder id, or any cross-attempt voucher state.
+             */
+            redemption_id: string;
+        };
+        PosReverseVoucherRequest: {
+            /**
+             * Format: uuid
+             * @description The `redemption_id` issued by an earlier `posRedeemVoucher` call. Tenant-scoped; cross-tenant addresses return 404 (non-disclosing).
+             */
+            redemption_id: string;
+        };
+        PosReverseVoucherResponse: {
+            /** @description `false` on the first reverse; `true` on every subsequent call against the same `redemption_id` (whether by the same attempt or a different attempt under the same tenant). Lets POS resolve `reversal_pending` lines deterministically. */
+            already_reversed: boolean;
+            /**
+             * @description Discriminator literal — redemption reversed.
+             * @enum {string}
+             */
+            kind: "reversed";
+            /** Format: uuid */
+            redemption_id: string;
+            /**
+             * Format: date-time
+             * @description UTC timestamp of the reverse. On idempotent replay (and on `already_reversed: true`) this is the timestamp of the ORIGINAL reverse, not the replay.
+             */
+            reversed_at: string;
+        };
         /**
          * PosStockInfo
          * @description Stock and batch information for a specific drug at a site.
@@ -10240,6 +10370,35 @@ export interface components {
             quantity_available: number;
             /** Site Code */
             site_code: string;
+        };
+        PosValidateVoucherRequest: {
+            /** @description The exact amount the cashier intends to apply, in integer minor units (Constitution §II equivalent — POS-Pulse P-II). MUST satisfy `0 <= applied_amount_minor <= remaining_balance_minor` AND `applied_amount_minor <= authoritative_voucher_balance`. V-A refuses overpayment with `non_cash_overpayment_refused` rather than capping. */
+            applied_amount_minor: number;
+            /** @description Voucher code as scanned or keyed by the cashier. Lookup is case-sensitive and tenant-scoped; cross-tenant codes return 404 (non-disclosing). */
+            code: string;
+            /**
+             * Format: uuid
+             * @description POS-Pulse-generated UUID v4 identifying the in-flight PaymentAttempt this voucher is being applied to. The issued `redemption_intent_token` is bound to this id; an attempt at `posRedeemVoucher` with a different `payment_attempt_id` returns `intent_token_payment_attempt_mismatch`.
+             */
+            payment_attempt_id: string;
+            /** @description The remaining payable balance on the PaymentAttempt at the moment of voucher application, in integer minor units. Sent by POS for authority-side enforcement of the no-overpayment rule. */
+            remaining_balance_minor: number;
+        };
+        PosValidateVoucherResponse: {
+            /** @description Authority-confirmed amount. Equal to the caller-supplied value on success (V-A refuses partial-redemption capping per AD-7). */
+            applied_amount_minor: number;
+            /**
+             * Format: date-time
+             * @description UTC timestamp after which the `redemption_intent_token` is no longer accepted by `posRedeemVoucher`. POS-Pulse SHOULD call redeem before this time; on expiry POS MUST re-call `posValidateVoucher` to obtain a fresh token.
+             */
+            intent_expires_at: string;
+            /**
+             * @description Discriminator literal — voucher is redeemable.
+             * @enum {string}
+             */
+            kind: "validated";
+            /** @description Short-lived opaque token (recommended TTL ≤ 5 minutes) bound to (`tenant_id`, `store_id`, `payment_attempt_id`, `voucher_id`, `applied_amount_minor`). Single-use at `posRedeemVoucher`. NEVER appears in audit-event payloads, logs, support bundles, or any non-payload log sink (POS-Pulse FR-017 / Constitution §XIV). */
+            redemption_intent_token: string;
         };
         /**
          * POUpdateRequest
@@ -13493,6 +13652,230 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    posRedeemVoucher: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosRedeemVoucherRequest"];
+            };
+        };
+        responses: {
+            /** @description Voucher atomically redeemed. Body carries `redemption_id` and `redeemed_at`. Replay of the same intent token + same Idempotency-Key + same body returns this response with `idempotent_replayed: true`. */
+            200: {
+                headers: {
+                    /** @description Present with value "true" when this response is an idempotent replay. */
+                    "Idempotent-Replayed"?: "true";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosRedeemVoucherResponse"];
+                };
+            };
+            /** @description Bad request. `error.code` is one of the closed-set values documented in the operation description above. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description POS principal is missing or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Intent token not found (already consumed by a different attempt, expired, or never issued). `error.code = "intent_token_not_found"`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency-Key reuse with a different logical payload, OR the voucher has already been redeemed by a different attempt. `error.code` is one of `idempotency_key_conflict`, `voucher_already_redeemed`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too Early. The original redeem with this Idempotency-Key is still being processed. Retry after `Retry-After` seconds with the same key and body. */
+            425: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    posReverseVoucher: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosReverseVoucherRequest"];
+            };
+        };
+        responses: {
+            /** @description Redemption reversed (or already reversed by a prior call — response is identical except for `already_reversed`). */
+            200: {
+                headers: {
+                    /** @description Present with value "true" when this response is an idempotent replay of an earlier successful reverse. */
+                    "Idempotent-Replayed"?: "true";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosReverseVoucherResponse"];
+                };
+            };
+            /** @description Bad request. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description POS principal is missing or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Redemption id not found for the active tenant. `error.code = "redemption_not_found"`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency-Key reuse with a different logical payload. `error.code = "idempotency_key_conflict"`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too Early. The original reverse with this Idempotency-Key is still being processed. */
+            425: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    posValidateVoucher: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Client-generated opaque token (POS-Pulse uses UUID v4) that enables safe retries. Same key + same body replays the original response with `Idempotent-Replayed: true`. Same key + different body returns 409 `idempotency_key_conflict`. */
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosValidateVoucherRequest"];
+            };
+        };
+        responses: {
+            /** @description Voucher is redeemable for the requested amount. Body carries a short-lived `redemption_intent_token` plus the authority-confirmed `applied_amount_minor` (which equals the caller-supplied value — V-A refuses overpayment rather than capping it). */
+            200: {
+                headers: {
+                    /** @description Present with value "true" when this response is an idempotent replay of an earlier successful validation. */
+                    "Idempotent-Replayed"?: "true";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosValidateVoucherResponse"];
+                };
+            };
+            /** @description Bad request. `error.code` is one of the closed-set values documented in the operation description above. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description POS principal is missing or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Voucher code not found for the active tenant. `error.code = "voucher_not_found"`. Cross-tenant probes share this non-disclosing response per Constitution §XIV. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Idempotency-Key reuse with a different logical payload. `error.code = "idempotency_key_conflict"`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Too Early. The original request with this Idempotency-Key is still being processed. Retry after `Retry-After` seconds with the same key and body. */
+            425: {
+                headers: {
+                    /** @description Seconds to wait before retrying. */
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     metrics_api_v1__metrics_get: {
         parameters: {
             query?: never;
