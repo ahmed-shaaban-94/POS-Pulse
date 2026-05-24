@@ -15,12 +15,12 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 **Visual direction:** `specs/006-payments-tender/visual-direction/README.md` (to be produced in Slice 0 under §A1)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-23 (S3c complete via PR #210 merge `5f493fd`; T100–T106 + T133–T142 ticked. Bridge handlers (`payments.*` + `tender.*`) + main-side IPC registration + preload contextBridge exposure shipped. S3d remains BLOCKED on S3c-GREEN confirmed (preflight required before implementation); §A2 no-op for Slice 3; §A4-B + §A5 held.)
-**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · S3a ✅ (PR #207, 2026-05-22) · S3b ✅ (PR #209, 2026-05-23) · S3c ✅ (PR #210, 2026-05-23) · S3d/Slices 4–5 not started**
+**Last updated:** 2026-05-23 (Slice 3 complete via this PR. T150–T154 renderer wiring + T160–T164 verification + sign-off ticked. Slice 3 closes — §A2 no-op confirmed for Slices 1–3; §A3 + §A4-A signed off 2026-05-21 (Ahmed). Eight findings (F-001 through F-008) remain as documentation divergences / 004-owner follow-ups. §A4-B + §A2 (voucher V-A) + §A5 held for Slice 4.)
+**Status:** **Slice 0 ✅ · Slice 1 ✅ (PR #192, 2026-05-21) · Slice 2 ✅ (PR #198, 2026-05-21) · S3a ✅ (PR #207, 2026-05-22) · S3b ✅ (PR #209, 2026-05-23) · S3c ✅ (PR #210, 2026-05-23) · S3d ✅ (this PR, 2026-05-23) · Slice 3 closed · Slices 4–5 not started**
 
 ---
 
-> ## STATUS: S3c complete — S3d next candidate (preflight required before implementation)
+> ## STATUS: SLICE 3 CLOSED — all sub-slices shipped + T164 sign-off recorded
 >
 > Slice 0 ✅ (PR #189 / PR #190, 2026-05-20). Slice 1 ✅ — renderer-only
 > tender selection + envelope ingest merged via **PR #192** (head
@@ -36,15 +36,17 @@ description: "Task list for 006-payments-tender — startable, file-path-bearing
 > T120–T121, T130–T132 complete. S3c ✅ — bridge handlers
 > (`payments.*` + `tender.*`) + main-side IPC registration + preload
 > contextBridge exposure merged via **PR #210** (merge commit
-> `5f493fd`, 2026-05-23). T100–T106 + T133–T142 complete.
+> `5f493fd`, 2026-05-23). T100–T106 + T133–T142 complete. **S3d ✅** —
+> renderer wiring + verification + T164 Slice-3 sign-off via this PR.
+> T150–T154 + T160–T164 complete.
 >
-> **S3d remains BLOCKED** on S3c-GREEN + preflight (Template 1). Slice 4
-> needs §A4-B `vouchers.*` review + §A2 voucher endpoints; §A5 is
-> rollout-only.
+> **Slice 3 is closed.** Next-up: Slice 4 — needs §A4-B `vouchers.*`
+> review + §A2 voucher endpoints. A fresh Maestro preflight runs once
+> those gates are commissioned. §A5 is rollout-only.
 >
 > See [./coordination.md](./coordination.md) §"Gate ledger" for the
-> live gate-state table and §"Maestro closeout — S3c (PR #210)"
-> for the durable record of the S3c ship.
+> live gate-state table and §"Slice 3 closeout (T164)" for the
+> durable record of the Slice-3 ship.
 
 ---
 
@@ -332,19 +334,19 @@ Test tasks carry the same `[US?]` label as their implementation counterpart.
 
 ### Implementation — renderer wiring
 
-- [ ] **T150** [US1] Implement `paymentSlice` FSM state in the renderer store (read-only mirror of main-side state via `payments.subscribe`) — `src/renderer/stores/payment-store.ts`
-- [ ] **T151** [US1] [P] Wire `<CashEntry>` and `<ExternalCardTerminalEntry>` to call `tender.apply` with client-generated UUID v4 `idempotency_key`; surface generic refusal copy on the closed refusal-reason enum — `src/renderer/ui/payments/`
-- [ ] **T152** [US1] Wire confirm button to call `payments.confirm`; on success transitions surface to placeholder post-settle state (FR-031); on refusal shows generic copy — `src/renderer/ui/payments/PaymentSurface.tsx`
-- [ ] **T153** [US2] Wire cancel button to call `payments.cancel`; on success returns to tender selection per AD-4; surface "Some reversals are pending" hint when `reversal_pending_tender_line_ids` is non-empty (set in Slice 4; renderer copy ready now) — `src/renderer/ui/payments/PaymentSurface.tsx`
-- [ ] **T154** [US6] Wire split-tender UX: when applied lines partial-sum < subtotal, the surface re-renders tender selection scoped to the *remaining balance*; cashier may add another line until the settlement invariant holds — `src/renderer/ui/payments/PaymentSurface.tsx`
+- [x] **T150** [US1] Implement `paymentSlice` FSM state in the renderer store (read-only mirror of main-side state via `payments.subscribe`) — `src/renderer/stores/payment-store.ts`
+- [x] **T151** [US1] [P] Wire `<CashEntry>` and `<ExternalCardTerminalEntry>` to call `tender.apply` with client-generated UUID v4 `idempotency_key`; surface generic refusal copy on the closed refusal-reason enum — `src/renderer/ui/payments/`
+- [x] **T152** [US1] Wire confirm button to call `payments.confirm`; on success transitions surface to placeholder post-settle state (FR-031); on refusal shows generic copy — `src/renderer/ui/payments/PaymentSurface.tsx`
+- [x] **T153** [US2] Wire cancel button to call `payments.cancel`; on success returns to tender selection per AD-4; surface "Some reversals are pending" hint when `reversal_pending_tender_line_ids` is non-empty (set in Slice 4; renderer copy ready now) — `src/renderer/ui/payments/PaymentSurface.tsx`
+- [x] **T154** [US6] Wire split-tender UX: when applied lines partial-sum < subtotal, the surface re-renders tender selection scoped to the *remaining balance*; cashier may add another line until the settlement invariant holds — `src/renderer/ui/payments/PaymentSurface.tsx`
 
 ### Slice 3 verification
 
-- [ ] **T160** Run full Slice-3 test suite with coverage: `npx vitest tests/unit/main/payments/ tests/unit/shared/payments/ tests/integration/payments/ tests/contract/payments/`. Assert ≥ 95 % on money-math + both FSMs + audit-emitter + idempotency-replay + all bridge handlers; ≥ 90 % on renderer wiring — `tests/`
-- [ ] **T161** Integration test: end-to-end attempt lifecycle through all three SQLite tables (start → apply two cash + external_card_terminal lines → confirm → assert `payment.settled` + `tender.applied` × 2 + outbox rows + settlement-invariant SQL evaluation) — `tests/integration/payments/end-to-end-lifecycle.test.ts`
-- [ ] **T162** Integration test: restart-survival — start an attempt + apply one line; kill the main-process worker; reboot; assert FSM rehydrates `started` attempt with applied lines intact (research §R-1 / data-model §"PaymentAttempt" Invariant 7) — `tests/integration/payments/restart-survival.test.ts`
-- [ ] **T163** [P] Property test (vitest + fast-check): settlement-invariant fuzz across random tender-line mixes (cash + external_card_terminal); `Number.isSafeInteger` guard on every running sum — `tests/unit/main/payments/settlement-invariant.property.test.ts`
-- [ ] **T164** Record Slice 3 functional sign-off + coverage numbers + §A2 no-op confirmation + §A3 + §A4 review sign-offs — `specs/006-payments-tender/coordination.md`
+- [x] **T160** Run full Slice-3 test suite with coverage: `npx vitest tests/unit/main/payments/ tests/unit/shared/payments/ tests/integration/payments/ tests/contract/payments/`. Assert ≥ 95 % on money-math + both FSMs + audit-emitter + idempotency-replay + all bridge handlers; ≥ 90 % on renderer wiring — `tests/`
+- [x] **T161** Integration test: end-to-end attempt lifecycle through all three SQLite tables (start → apply two cash + external_card_terminal lines → confirm → assert `payment.settled` + `tender.applied` × 2 + outbox rows + settlement-invariant SQL evaluation) — `tests/integration/payments/end-to-end-lifecycle.test.ts`
+- [x] **T162** Integration test: restart-survival — start an attempt + apply one line; kill the main-process worker; reboot; assert FSM rehydrates `started` attempt with applied lines intact (research §R-1 / data-model §"PaymentAttempt" Invariant 7) — `tests/integration/payments/restart-survival.test.ts`
+- [x] **T163** [P] Property test (vitest + fast-check): settlement-invariant fuzz across random tender-line mixes (cash + external_card_terminal); `Number.isSafeInteger` guard on every running sum — `tests/unit/main/payments/settlement-invariant.property.test.ts`
+- [x] **T164** Record Slice 3 functional sign-off + coverage numbers + §A2 no-op confirmation + §A3 + §A4 review sign-offs — `specs/006-payments-tender/coordination.md`
 
 ---
 

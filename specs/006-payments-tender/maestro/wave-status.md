@@ -1,6 +1,6 @@
-# 006-payments-tender — Slice 3 — S3a ✅ · S3b ✅ · S3c ✅ · S3d next candidate (preflight required)
+# 006-payments-tender — Slice 3 — S3a ✅ · S3b ✅ · S3c ✅ · S3d in-flight (PR #212) — T164 sign-off recorded
 
-**Status:** S3a ✅ COMPLETED — merged via PR #207 at `e8b33d5` on 2026-05-22T14:07:11Z. S3b ✅ COMPLETED — merged via PR #209 at `862d24581173adc18c8d547b5fcd6ca69225a78d` on 2026-05-23T10:10:17Z. S3c ✅ COMPLETED — merged via PR #210 at `5f493fdc802ef70d00ad9f10e4805db5dd429edf` on 2026-05-23T12:37:41Z. S3d is the next-candidate sub-slice (§A1 cleared, S3c GREEN) but is NOT AUTHORIZED — a fresh Maestro preflight (Template 1) is required before any code is written. Slice 4 gates (§A4-B, §A2) remain held.
+**Status:** S3a (PR #207, 2026-05-22), S3b (PR #209, 2026-05-23), and S3c (PR #210, 2026-05-23) merged. **S3d is in-flight via PR #212** — renderer wiring (T150–T154), verification (T160–T163), and T164 Slice-3 sign-off all recorded in `coordination.md §"Slice 3 closeout (T164)"`. §A2 no-op for Slices 1–3 confirmed; §A3 + §A4-A signed off 2026-05-21 (Ahmed). Eight findings (F-001 through F-008) remain as documentation divergences / 004-owner follow-ups; none modifies task IDs. **Once PR #212 merges, Slice 3 is fully closed; the next Maestro work is a fresh Slice-4 preflight when the owner commissions §A4-B + §A2 (voucher V-A).**
 
 > **THIS FILE DOES NOT REPLACE `tasks.md` OR `coordination.md`.**
 > **THIS FILE DOES NOT AUTHORIZE IMPLEMENTATION.**
@@ -48,7 +48,7 @@ All of the above are on `main`.
 
 ## Local only (not yet on `main`)
 
-This closeout PR (tasks.md + coordination.md + execution-map.yaml + wave-status.md updates for S3c).
+This S3d implementation PR (PR #212) — renderer wiring (T150–T154), verification (T160–T163), Slice-3 sign-off (T164), CodeRabbit review absorbed.
 
 ---
 
@@ -63,8 +63,9 @@ This closeout PR (tasks.md + coordination.md + execution-map.yaml + wave-status.
 | F-005 | Low | **S3c repository surface extension** — `PaymentTenderLinesRepository.findByLineId(id)` added in S3c (T112 surface in tasks.md listed `insert / updateState / findByAttempt / settlementSumMinor` only). PK equality lookup against migration-0014's PRIMARY KEY — zero schema risk. Required by `tender.read` + `tender.reverse` whose request shapes carry only `tender_line_id`. |
 | F-006 | Low | **004 audit-category TS union pending widening** — `AUDIT_ACTION_CATEGORIES` in `src/shared/audit/event-shape.ts` does not yet include the 7 payment categories at the TypeScript-union level (migration `0017` extends the SQL CHECK only). S3c bootstrap uses a single bounded cast at the audit-emitter adapter seam. A 004-owner follow-up PR should widen the union. |
 | F-007 | Low | **004 session terminal_id pending** — `OperatorSession` from 004 has no separate `terminal_id` field. S3c bootstrap reuses `session.branch_id` as the terminal scope, matching the cart-bridge precedent. A 004-owner follow-up could plumb a real terminal id through the session record. |
+| F-008 | Low | **S3d execution-map Wave-J omission** — `execution-map.yaml §groups.006-S3d.Wave-J` describes T150 + T151 as parallel-safe on file-conflict grounds (which is correct — separate files), but does not surface the **dependency edge** `T150 → T151` recorded in tasks.md row 665. T151 reads the store API T150 introduces; effective execution remains sequential. Surfaced in the 2026-05-23 S3d preflight. Documentation divergence; does not modify task IDs. |
 
-All seven findings are documentation divergences / follow-ups; none modifies task IDs, `[P]` markers, `[US?]` labels, or gate text.
+All eight findings are documentation divergences / follow-ups; none modifies task IDs, `[P]` markers, `[US?]` labels, or gate text.
 
 ---
 
@@ -83,35 +84,34 @@ All gates that gated the Slice-3 work-streams have been signed off, and S3a / S3
 
 ## Blocked
 
-S3d remains blocked on its predecessor + preflight. §A4-B remains held (Slice 4 only). S3d is the next-candidate sub-slice — §A1 cleared 2026-05-20 and S3c GREEN as of PR #210, but it requires a fresh Maestro preflight before authorisation.
+Slice 4 only — §A4-B (vouchers.* bridge review) and §A2 (voucher V-A backend / OpenAPI) remain held until the owner commissions them. The §A5 production-readiness gate is rollout-time only.
 
 | Gate / Sub-slice | Status |
 |:--|:--|
 | **§A4-B** — Bridge-API review for `vouchers.*` (Slice 4 only) | ⛔ Held — TBD before Slice 4 |
 | **§A2** — Backend / OpenAPI (Slice 4 voucher endpoints) | ⛔ Held — TBD before Slice 4 |
-| **S3d** — Renderer wiring + final verification | ⚠ Next candidate — gates (§A1 cleared, S3c GREEN) satisfied, but a fresh Maestro preflight (Template 1) is required before authorisation. **Not yet authorised.** |
-| Slice 4 gates (force-fail + voucher Contract V-A) | ⛔ Held — TBD after Slice 3 closes (T164) |
+| Slice 4 gates (force-fail + voucher Contract V-A) | ⛔ Held — Slice 3 closed; awaiting owner commission |
 
 ---
 
 ## Ready
 
-No sub-slice is currently authorised for implementation.
+Slice 3 is closed. No sub-slice is currently authorised for implementation.
 
-**S3d** is the next candidate but requires a fresh Maestro preflight (Template 1) before any T150–T164 work begins.
+**Slice 4** is the next candidate but is held behind §A4-B + §A2 commission. A fresh Maestro preflight (Template 1) runs once those gates open.
 
 | Sub-slice | Task range | Status |
 |:--|:--|:--|
 | **006-S3a** — Migrations + persistence repositories | T060–T067, T110–T113 | ✅ Completed (PR #207) |
 | **006-S3b** — Shared types + FSMs + audit emitter + idempotency helper | T070–T094 (tests) + T120–T132 (impl) | ✅ Completed (PR #209) |
 | **006-S3c** — Bridge handlers + preload registration | T100–T106 (tests) + T133–T142 (impl) | ✅ Completed (PR #210) |
-| **006-S3d** — Renderer wiring + final verification | T150–T154 (wiring) + T160–T164 (verification + Slice-3 sign-off) | ⚠ Preflight required — gates (§A1 cleared, S3c GREEN) satisfied |
+| **006-S3d** — Renderer wiring + final verification | T150–T154 (wiring) + T160–T164 (verification + Slice-3 sign-off) | ✅ Completed (this PR, T164 sign-off recorded in `coordination.md §"Slice 3 closeout (T164)"`) |
 
 ---
 
 ## Proposed execution chain
 
-```
+```text
 S3a  →  S3b  →  S3c  →  S3d
 ```
 
@@ -146,7 +146,7 @@ High-level batches (the full dependency / file-conflict / parallel-safe graphs w
 
 These three tasks MUST be sequentialised within S3d Wave K:
 
-```
+```text
 T152 (payments.confirm wire) → T153 (payments.cancel wire) → T154 (split-tender UX)
 ```
 
@@ -194,39 +194,39 @@ Coverage floors (checked at T160):
 3. ~~**Implement S3a**~~ ✅ **Completed via PR #207 (merge commit `e8b33d5`, 2026-05-22T14:07:11Z).** Closeout recorded.
 4. ~~**Implement S3b**~~ ✅ **Completed via PR #209 (merge commit `862d24581173adc18c8d547b5fcd6ca69225a78d`, 2026-05-23T10:10:17Z).** Closeout recorded.
 5. ~~**Implement S3c**~~ ✅ **Completed via PR #210 (merge commit `5f493fdc802ef70d00ad9f10e4805db5dd429edf`, 2026-05-23T12:37:41Z).** Closeout recorded.
-6. **Run a fresh Maestro preflight for S3d** (Template 1) before any S3d code is written. The preflight must produce the worklist, dependency / file-conflict graphs (Wave-K's three-task serialisation on `src/renderer/ui/payments/PaymentSurface.tsx` is the only file-conflict edge in S3d), parallel-safe groups (Wave-J's T150 + T151 antichain; Wave-L's T163 property-test antichain), and the agent-dispatch posture for T150–T164. **S3d is NOT YET AUTHORIZED** even though its gates are cleared — the preflight is the gate.
-7. After S3d preflight completes and is owner-approved, S3d implementation may begin.
-8. After S3d merges, T164 records the full Slice 3 closeout in `coordination.md` (coverage numbers + §A2 no-op confirmation + §A3 / §A4-A review sign-offs + the seven open findings F-001 through F-007).
-9. Slice 4 gates (§A4-B, §A2) remain held throughout — Slice 4 work commences only after Slice 3 closes via T164.
+6. ~~**Run a fresh Maestro preflight for S3d**~~ ✅ **Completed 2026-05-23 (owner-approved). 10 tasks (T150–T154 + T160–T164); single-agent end-to-end; Wave-K T152 → T153 → T154 file-serialised on `PaymentSurface.tsx`; F-008 surfaced (Wave-J dependency-edge omission).**
+7. ~~**Implement S3d**~~ ✅ **Completed via this PR. T164 sign-off recorded in `coordination.md §"Slice 3 closeout (T164)"`.**
+8. **Slice 3 is closed.** The next Maestro work is a fresh **Slice-4 preflight** (Template 1) when the owner commissions §A4-B (vouchers.* bridge review) + §A2 (voucher V-A backend / OpenAPI). Until then, no further 006-payments-tender code work.
 
 ---
 
 ## Next short Maestro prompt
 
-S3c is complete. The next Maestro work is the S3d preflight — **not** S3d implementation. Use this prompt to commission the preflight (copy-paste ready):
+Slice 3 is closed. The next Maestro work is a Slice-4 preflight — **not** S3d work. Use this prompt to commission Slice 4 once §A4-B + §A2 reviewers are assigned:
 
-```
-Run Maestro Preflight for 006-payments-tender S3d.
+```text
+Run Maestro Preflight for 006-payments-tender Slice 4.
 
 Spec: specs/006-payments-tender/
-Sub-slice: S3d — Renderer wiring + final verification
-Task range: T150–T154 (renderer wiring) + T160–T164 (verification + Slice-3 sign-off)
-Gate status: §A1 cleared 2026-05-20 (Ahmed, Approved); 006-S3c GREEN as of PR #210 (5f493fd, 2026-05-23)
+Slice: 4 — Voucher Contract V-A + force-fail
+Task range: T200+ (Slice 4 voucher contract + additive migration), T240+
+            (force-fail surface), and any new T-ids the spec adds for
+            Contract V-A wiring.
+Gate status: §A1 cleared 2026-05-20 (covers Slices 1-2-4 force-fail
+             surface); Slice 3 closed via this PR; §A4-B + §A2 commission
+             status: TBD (owner action required before preflight).
 Preflight authority: docs/maestro/templates/ (Template 1)
-Execution map: specs/006-payments-tender/maestro/execution-map.yaml (slices.006-S3d)
+Execution map: specs/006-payments-tender/maestro/execution-map.yaml
+               (a new slice block 006-S4 will be appended)
 
-Produce: worklist, dependency graph, file-conflict graph
-         (Wave-K's three-task serialisation on src/renderer/ui/payments/PaymentSurface.tsx —
-         T152 → T153 → T154 — is the only file-conflict edge in S3d),
-         parallel-safe groups (Wave-J T150 + T151 antichain on separate files;
-         Wave-L T163 property-test antichain),
-         agent-dispatch posture (renderer-only work; multi-agent permitted if
-         file-conflict graph honoured — but single-agent recommended for the
-         serialised Wave K),
-         and any divergences from tasks.md flagged for /speckit-analyze.
+Produce: worklist, dependency graph, file-conflict graph, parallel-safe
+         groups, agent-dispatch posture for the Slice-4 task range, and
+         any divergences from tasks.md flagged for /speckit-analyze. The
+         preflight must also fold in the eight Slice-3 findings (F-001
+         through F-008) as carry-over context.
 
-Do NOT author any S3d code. Stop after the preflight artefacts are produced
-and the owner approves them.
+Do NOT author any Slice-4 code. Stop after the preflight artefacts are
+produced and the owner approves them.
 ```
 
 ---
@@ -235,14 +235,8 @@ and the owner approves them.
 
 After each sub-slice PR merges, run the post-merge closeout prompt:
 
-```
+```text
 docs/maestro/templates/post-merge-closeout-prompt.md  (added by PR #201)
 ```
 
-After S3d merges, T164 records the full Slice 3 sign-off in `coordination.md`:
-- Coverage numbers (per-module floors as above)
-- §A2 no-op confirmation
-- §A3 migration review sign-off (reviewer + date)
-- §A4-A bridge review sign-off (reviewer + date)
-
-Recommended commit message: `docs(pos): record 006 slice 3 closeout`
+~~After S3d merges, T164 records the full Slice 3 sign-off in `coordination.md`~~ ✅ **T164 sign-off recorded in `coordination.md §"Slice 3 closeout (T164)"` as part of this PR.** Coverage numbers, §A2 no-op confirmation, §A3 + §A4-A sign-offs, and the eight findings F-001 through F-008 are all logged there.
