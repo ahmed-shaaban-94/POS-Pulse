@@ -17,11 +17,11 @@
 
 spec: 006-payments-tender
 slice: 3
-version: 7
-base: 868c7ff
-status: S3d-IN-FLIGHT-PR-212
+version: 8
+base: 0039cc5
+status: SLICE-3-CLOSED
 preflight: SLICE-4-PREFLIGHT-REQUIRED
-last_updated: "2026-05-23"
+last_updated: "2026-05-24"
 
 source_of_truth:
   tasks: specs/006-payments-tender/tasks.md
@@ -299,13 +299,13 @@ slices:
     title: Renderer wiring + final verification
     spec: 006-payments-tender
     type: implementation
-    status: in-progress
+    status: completed
     authorized_at: "2026-05-23"
-    pr_open: 212
-    # merged_in_pr / merged_at_commit / merged_at_date / head_sha will be
-    # filled at post-merge closeout, mirroring the S3a / S3b / S3c posture.
-    # The status remains in-progress until the PR merges; the gate ledger
-    # in coordination.md is the source of truth for Slice-3 close.
+    merged_in_pr: 212
+    merged_at_commit: 0039cc5e74bafc19f5f574dadd86c2cdba83fc9a
+    merged_at_date: "2026-05-24"
+    head_sha: 2a27828a642c1d0a93cf58a04b9f8498bdcfa1a3
+    merged_at_iso: "2026-05-24T16:32:55Z"
     gate:
       required:
         - §A1
@@ -472,7 +472,15 @@ groups:
         tasks:
           - T150  # paymentSlice FSM state in renderer store
           - T151  # wire CashEntry + ExternalCardTerminalEntry to tender.apply
-        note: T150 and T151 touch different files; parallel-safe.
+        graph1_dependency_edge: "T150 -> T151"
+        note: >
+          T150 and T151 touch different files (no Graph 3 file-conflict edge).
+          However, T151 calls tender.apply using the store slice that T150 creates
+          (export-then-consume per graph-rules.md Graph 1 rule 4). Graph 1 wins:
+          T150 must complete before T151. Effective execution is sequential despite
+          the [P] marker on T151 in tasks.md. The [P] marker is preserved in
+          tasks.md per Maestro task-marking §"What Maestro never changes". This
+          edge was omitted from the preflight map (finding F-008); corrected here.
       - id: Wave-K
         label: "S3d — PaymentSurface wiring (SERIALISED — file conflict)"
         tasks:
@@ -640,14 +648,12 @@ closeout:
         implementation without the preflight. Slice 4 gates (§A4-B, §A2)
         remain held throughout.
 
-    # 006-S3d closeout block will be appended here by the post-merge closeout
-    # PR (mirroring S3a / S3b / S3c posture). The T164 sign-off lives in
-    # coordination.md §"Slice 3 closeout (T164)" and is the canonical durable
-    # record of Slice-3 close. Below is a placeholder noting that next action.
     - sub_slice: 006-S3d
       pr: 212
-      status: pending-merge
-      date: "2026-05-23"
+      sha: 0039cc5e74bafc19f5f574dadd86c2cdba83fc9a
+      head_sha: 2a27828a642c1d0a93cf58a04b9f8498bdcfa1a3
+      date: "2026-05-24"
+      merged_at_iso: "2026-05-24T16:32:55Z"
       report_location: >
         PR #212 description on GitHub +
         specs/006-payments-tender/coordination.md §"Slice 3 closeout (T164)"
