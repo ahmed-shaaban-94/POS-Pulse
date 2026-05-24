@@ -60,3 +60,22 @@ export const PAIRING_DEV_FIXTURE_BRANCH_PREFIX = 'feat/002-dev-skip-pairing-fixt
 export const PAIRING_DEV_FIXTURE_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `feat/006-*` branches implement 006-payments-tender Slice 4 §A2 voucher
+ * V-A contract pin (T200–T203) and may regenerate the two codegen artefacts.
+ *
+ * Authority: §A2 voucher contract sign-off recorded in
+ * `specs/006-payments-tender/coordination.md` (Plan v1.0 — Slice 4 §A2
+ * verification subsection). Upstream contract: Data-Pulse-2 PR #316,
+ * merge commit 90261f2 (source commit aedb757).
+ *
+ * Exemption is narrow: only the two codegen artefacts. All other forbidden
+ * prefixes (`src/main/pairing/`, `src/main/secrets/`, `scripts/codegen-api.ts`,
+ * `.github/workflows/`) remain blocked on `feat/006-*` branches.
+ */
+export const FEAT_006_PAYMENTS_BRANCH_PREFIX = 'feat/006-' as const;
+export const FEAT_006_PAYMENTS_EXEMPT_PREFIXES = [
+  'src/shared/api-types.ts',
+  'scripts/openapi-snapshot.json',
+] as const satisfies readonly ForbiddenPathPrefix[];
