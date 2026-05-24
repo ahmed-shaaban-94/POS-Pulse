@@ -62,10 +62,10 @@ function collectScopedFiles(): string[] {
 
 const OUTBOUND_FETCH_PATTERN = /\bfetch\s*\(|\bnew\s+XMLHttpRequest\b|['"]axios['"]|['"]ky['"]/g;
 
-// Whitelisted bridge surface: bridge.pairing.getStatus only.
+// Whitelisted bridge surface: bridge.pairing.* (002), bridge.payments.* + bridge.tender.* (006-S3d).
 // Any other bridge.* namespace is a violation.
 const FORBIDDEN_BRIDGE_PATTERN =
-  /bridge\.(operator|session|auth|inventory|sales|cart|checkout|printer|sync|payments)\b/g;
+  /bridge\.(operator|session|auth|inventory|sales|cart|checkout|printer|sync)\b/g;
 
 const PERSISTENCE_PATTERN =
   /window\.(localStorage|sessionStorage)|new\s+IDBOpenDBRequest|indexedDB\b|caches\s*\.|navigator\.storage\b/g;
