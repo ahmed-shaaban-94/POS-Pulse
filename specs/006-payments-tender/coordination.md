@@ -22,7 +22,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-23 (Slice 3 ✅ — T164 sign-off after S3d implementation per the 2026-05-23 Maestro preflight authorization. T150–T154 renderer wiring + T160 full-suite coverage + T161 end-to-end lifecycle + T162 restart-survival + T163 settlement-invariant property test. **Slice 3 closes.** §A2 no-op (Slices 1–3) confirmed; §A3 + §A4-A signed off 2026-05-21 (Ahmed). Eight findings (F-001 through F-008) remain as documentation divergences / 004-owner follow-ups; none modifies task IDs. Slice 4 gates (§A4-B, §A2) remain held — Slice 4 work commences only after this PR merges. See §"Slice 3 closeout (T164)" below.)
+**Last updated:** 2026-05-24 (Slice 4 Wave 1 §A2 sign-off — Voucher V-A contract pinned from Data-Pulse-2 PR #316 (merge SHA `90261f2`; source commit `aedb757`). Three operationIds pinned (`posValidateVoucher`, `posRedeemVoucher`, `posReverseVoucher`); seven new schemas merged into `scripts/openapi-snapshot.json`; `src/shared/api-types.ts` regenerated via `npm run codegen:api`; `codegen:verify` clean. **§A2 ticked ✅** — see §"Plan v1.0 — Session 2026-05-24 → Slice 4 §A2 verification" below. §A4-B remains held for the upcoming `vouchers.*` bridge wave. Previous entry: 2026-05-23 — Slice 3 ✅ T164 sign-off.)
 
 ---
 
@@ -92,7 +92,7 @@ merged.
 |:--:|:--|:--:|:--|
 | **§A0 — Upstream readiness** | All of: (a) **004-operator-session** Slice 4 / Slice 5 visibility boundaries complete and approved; (b) **005-sales-cart** spec authored, clarified, and approved; (c) **005 ↔ 006 checkout-handoff contract** pinned in 005. **§A0 must clear before any other 006 gate may be opened.** | ✅ Functionally cleared 2026-05-19 · `/speckit-clarify` ✅ applied 2026-05-19 — **procedurally held** until `/speckit-plan` v1.0 merges | Ahmed (POS-Pulse) |
 | **§A1** | Visual-direction Slice 0 (FR-033 inherited from 004) — payment surface, tender selection, cash entry, change display, success / cancel / failure variants, force-fail manager surface. | ✅ Signed off 2026-05-20 — PR #189 (T010 visual direction) + PR #190 (T011 sign-off). Reviewer: Ahmed. Result: approved. Clears Slice 1, Slice 2, and the documented Slice 4 force-fail visual variant. | Ahmed |
-| **§A2** | Backend / OpenAPI: any backend dependency 006 introduces. Currently expected: none for cash-only scope; possibly some for force-fail audit propagation. | ⛔ Held — gated on §A0 | TBD (POS-Pulse + SmartDataPulse backend, mirrored from 004 §A2) |
+| **§A2** | Backend / OpenAPI: any backend dependency 006 introduces. Currently expected: none for cash-only scope; possibly some for force-fail audit propagation. **Slice 4 scope:** Voucher V-A contract (`posValidateVoucher` / `posRedeemVoucher` / `posReverseVoucher`). | ✅ Voucher V-A contract pinned 2026-05-24 — Data-Pulse-2 PR [#316](https://github.com/ahmed-shaaban-94/Data-Pulse-2/pull/316) merged 2026-05-24 17:41 UTC (merge SHA `90261f2`; source commit `aedb757`). Contract file: `packages/contracts/openapi/pos-payments/vouchers.yaml`. Three operationIds pinned into `scripts/openapi-snapshot.json` and `src/shared/api-types.ts` regenerated. Reviewer: Ahmed (pending human tick on merge). See §"Plan v1.0 — Session 2026-05-24 → Slice 4 §A2 verification" below. | Ahmed (POS-Pulse) + SmartDataPulse backend |
 | **§A3** | Migrations: any local SQLite tables 006 introduces. Three new tables required for Slice 3: `payment_attempts`, `payment_tender_lines`, `payment_action_outbox` — plus indexes, CHECK constraints, append-only trigger, and extension of 004's `audit_events.action_category` with 7 new categories. | ✅ Signed off 2026-05-21 — Reviewer: Ahmed. Approved — no changes requested. Scope reviewed: three new SQLite tables (payment_attempts, payment_tender_lines, payment_action_outbox) + indexes + CHECK constraints + append-only trigger + extension of 004's audit_events.action_category with 7 new categories. Authorizes S3a implementation. | Ahmed |
 | **§A4-A** | Bridge-API surface review for the payments.* + tender.* namespaces (11 handlers; requireOperatorSession gating; idempotency-key strategy; refusal envelope; FR-013/FR-014 Clerk-backed attribution; PII / card-data / voucher-token redaction). Required before Slice 3 ships. | ✅ Signed off 2026-05-21 — Reviewer: Ahmed. Approved — no changes requested. Authorizes S3c bridge handlers. | Ahmed |
 | **§A4-B** | Bridge-API surface review for the vouchers.* namespace (Contract V-A: vouchers.validate / vouchers.redeem / vouchers.reverse). Required before Slice 4 ships. | ⛔ Held — pending Slice 4 voucher contract | TBD before Slice 4 |
@@ -1775,6 +1775,81 @@ All eight findings are documentation divergences / 004-owner follow-ups. None mo
 - Zero `[P]` downgrades fired during S3d.
 - Zero `forbidden-scope` fires.
 - The 3-failure flake in `scripts/__tests__/codegen.test.ts` under `--coverage` (test timeout under v8 instrumentation overhead) is pre-existing on `main` and reproduces only with coverage enabled; tests pass in the no-coverage full-suite run.
+
+---
+
+## Plan v1.0 — Session 2026-05-24 → Slice 4 §A2 verification
+
+**Scope.** Slice 4 Wave 1 (T200–T203): pin the upstream Voucher V-A
+OpenAPI contract into the local snapshot, regenerate `api-types.ts`,
+and record §A2 sign-off in this file. Unblocks subsequent Slice 4
+voucher waves (T210+).
+
+**Upstream source (single source of truth).**
+
+| Item | Value |
+|:--|:--|
+| Data-Pulse-2 PR | [#316 — feat(pos-006): author Voucher V-A OpenAPI contract for POS-Pulse Slice 4](https://github.com/ahmed-shaaban-94/Data-Pulse-2/pull/316) |
+| Merge timestamp | 2026-05-24 17:41 UTC |
+| Merge SHA (on `origin/main`) | `90261f2` |
+| Source commit (pre-squash) | `aedb757` |
+| Contract file | `packages/contracts/openapi/pos-payments/vouchers.yaml` |
+| Authority profile | Contract V-A — backend-authoritative |
+
+**Operations pinned (three, as required by Slice 4).**
+
+| operationId | Method + path | Bridge handler |
+|:--|:--|:--|
+| `posValidateVoucher` | `POST /api/pos/v1/vouchers/validate` | `vouchers.validate` |
+| `posRedeemVoucher` | `POST /api/pos/v1/vouchers/redeem` | `vouchers.redeem` |
+| `posReverseVoucher` | `POST /api/pos/v1/vouchers/reverse` | `vouchers.reverse` |
+
+**Schemas pinned (seven; merged into `components.schemas`).**
+`PosValidateVoucherRequest`, `PosValidateVoucherResponse`,
+`PosRedeemVoucherRequest`, `PosRedeemVoucherResponse`,
+`PosReverseVoucherRequest`, `PosReverseVoucherResponse`, and the
+shared `Error` envelope. Every new schema carries
+`additionalProperties: false`. `clerkJwt` was added to
+`components.securitySchemes` (HTTP bearer; mirrors
+`pos-shifts.openapi.yaml`).
+
+**FR-017 sensitive-field minimisation (wire-level).** None of the
+following appear as schema property names on the new request /
+response shapes: `voucher_balance`, `voucher_holder`, `voucher_value`,
+`remaining_uses`, `max_uses`, `discount_type`, `discount_value`.
+(The substring `voucher_balance` appears once in a JSDoc description
+as part of the prose token `authoritative_voucher_balance`, which is
+not a wire field; pre-existing baseline counts for `remaining_uses`,
+`max_uses`, and `discount_type` are unchanged on the legacy
+`/api/v1/pos/*` voucher CRUD surface.)
+
+**Required response fields (per V-A) confirmed in `api-types.ts`.**
+`redemption_intent_token`, `intent_expires_at` (validate);
+`redemption_id`, `redeemed_at`, `idempotent_replayed` (redeem);
+`already_reversed`, `reversed_at` (reverse); `applied_amount_minor`
+on both validate request + response.
+
+**Verification artefacts (T203).**
+
+| Check | Result |
+|:--|:--|
+| `npm run codegen:verify` | exit 0, zero diff (post-regen). |
+| `npm run typecheck` | exit 0 — all three tsconfigs clean. |
+| `npm run lint` | exit 0 — eslint + `prettier --check .` clean. |
+| Snapshot blob SHA (`git hash-object scripts/openapi-snapshot.json`) | `3ca60ea566b7877bcc69be32eff79ceca2c9df57` |
+| Snapshot size | 512,985 bytes (was 497,339 bytes — +15,646 bytes for 3 paths + 7 schemas + 1 securityScheme). |
+| CI run number | _to be filled post-push_ |
+
+**Out of scope for this PR (T200–T203 only).**
+- Voucher bridge handlers (`vouchers.validate` / `vouchers.redeem` /
+  `vouchers.reverse`) — Wave 2+.
+- Tests under `src/main/payments/__tests__/` for the voucher surface
+  — Wave 3.
+- Renderer wiring (`paymentSlice` voucher actions) — Wave 4.
+- §A4-B (`vouchers.*` bridge review) — must clear before any voucher
+  bridge handler lands.
+
+**§A2 ledger update.** Row above ticked ✅ with evidence + PR/SHA.
 
 ---
 
