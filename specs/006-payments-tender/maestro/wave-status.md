@@ -111,7 +111,7 @@ Slice 3 is closed. No sub-slice is currently authorised for implementation.
 
 ## Proposed execution chain
 
-```
+```text
 S3a  →  S3b  →  S3c  →  S3d
 ```
 
@@ -146,7 +146,7 @@ High-level batches (the full dependency / file-conflict / parallel-safe graphs w
 
 These three tasks MUST be sequentialised within S3d Wave K:
 
-```
+```text
 T152 (payments.confirm wire) → T153 (payments.cancel wire) → T154 (split-tender UX)
 ```
 
@@ -204,7 +204,7 @@ Coverage floors (checked at T160):
 
 Slice 3 is closed. The next Maestro work is a Slice-4 preflight — **not** S3d work. Use this prompt to commission Slice 4 once §A4-B + §A2 reviewers are assigned:
 
-```
+```text
 Run Maestro Preflight for 006-payments-tender Slice 4.
 
 Spec: specs/006-payments-tender/
@@ -235,7 +235,7 @@ produced and the owner approves them.
 
 After each sub-slice PR merges, run the post-merge closeout prompt:
 
-```
+```text
 docs/maestro/templates/post-merge-closeout-prompt.md  (added by PR #201)
 ```
 
