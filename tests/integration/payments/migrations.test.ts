@@ -53,6 +53,7 @@ const S3A_MIGRATIONS = [
   '0016_payment_action_outbox_append_only_trigger.sql',
   '0017_extend_audit_event_categories.sql',
   '0018_audit_event_tender_reversal_pending.sql',
+  '0019_extend_payment_failure_reason_enum.sql',
 ];
 
 let SQL: SqlJsStatic;
@@ -446,6 +447,11 @@ describe('T066 — 006 Slice 3a migrations', () => {
         'voucher_tenant_mismatch',
         'voucher_branch_mismatch',
         'split_tender_rollback',
+        // Wave 5e — migration 0019 extends the CHECK enum with the
+        // manager-force-fail reason (FR-006). Without 0019 this entry
+        // would raise the CHECK violation that produced finding
+        // F-W5D-001.
+        'manager_force_failed',
       ];
       for (let i = 0; i < reasons.length; i += 1) {
         const idx = String(i);
@@ -895,6 +901,162 @@ describe('T066 — 006 Slice 3a migrations', () => {
           ],
         ),
       ).not.toThrow();
+      db.close();
+    });
+  });
+
+  // ── T299 — Wave 5e migration 0019 against a POPULATED database ──────────
+  //
+  // Regression for the CR-1 bug Wave 5e's first push shipped: the table-
+  // rebuild migration MUST work when `payment_attempts` already has rows
+  // AND the child tables (`payment_tender_lines`, `payment_action_outbox`)
+  // have rows referencing them, AND `PRAGMA foreign_keys = ON`. That is
+  // the production scenario — every install after Slice 3 has data.
+  //
+  // The first push asserted safety on a chain of reasoning that turned
+  // out to be empirically wrong (DROP TABLE raises FOREIGN KEY violation
+  // even when INSERT…SELECT has copied every parent row first). Caught
+  // by CodeRabbit; tests added below pin the corrected migration so the
+  // regression cannot recur.
+  describe('migration 0019 — table rebuild against populated payment_attempts', () => {
+    // freshDb() applies all migrations through 0019 in sequence; but it
+    // does so against an empty database, so the first push passed against
+    // it. To pin CR-1 we need to (a) apply migrations 0001-0018, (b)
+    // INSERT real rows into payment_attempts + child tables, then (c)
+    // apply 0019 last and observe the result. SQLite's runtime migration
+    // ordering precludes that interleave at the file level, so we simulate
+    // by reading 0019 alone and re-applying it against a snapshot built
+    // with prior migrations + seeded data.
+
+    function dbWithSeededData(): SqlJsDatabase {
+      const db = new SQL.Database();
+      db.exec('PRAGMA foreign_keys = ON;');
+      // Apply every migration EXCEPT 0019, so the parent table still has
+      // the original (14-value) CHECK enum.
+      for (const name of PREREQ_MIGRATIONS) db.exec(loadSql(name));
+      for (const name of S3A_MIGRATIONS) {
+        if (name === '0019_extend_payment_failure_reason_enum.sql') continue;
+        db.exec(loadSql(name));
+      }
+      // Seed: one started attempt + one applied cash tender line + one
+      // outbox row. Mirrors the minimal production shape after a fresh
+      // payments.start + tender.apply.
+      insertAttempt(db, {
+        payment_attempt_id: 'pa-seed',
+        terminal_id: 'terminal-seed',
+        state: 'started',
+        envelope_subtotal_minor: 1500,
+      });
+      insertLine(db, {
+        tender_line_id: 'tl-seed',
+        payment_attempt_id: 'pa-seed',
+        tender_type: 'cash',
+        amount_applied_minor: 1500,
+        state: 'applied',
+      });
+      insertOutbox(db, {
+        action_id: 'start-pa-seed',
+        payment_attempt_id: 'pa-seed',
+        action_kind: 'payment.attempt.start',
+      });
+      return db;
+    }
+
+    it('applies cleanly against a payment_attempts table with rows + child FK references', () => {
+      const db = dbWithSeededData();
+      expect(() => {
+        db.exec(loadSql('0019_extend_payment_failure_reason_enum.sql'));
+      }).not.toThrow();
+      db.close();
+    });
+
+    it('preserves every payment_attempts row across the rebuild', () => {
+      const db = dbWithSeededData();
+      db.exec(loadSql('0019_extend_payment_failure_reason_enum.sql'));
+      const result = db.exec(
+        "SELECT payment_attempt_id, state, envelope_subtotal_minor FROM payment_attempts WHERE payment_attempt_id = 'pa-seed'",
+      );
+      expect(result[0]?.values).toHaveLength(1);
+      expect(result[0]?.values[0]?.[0]).toBe('pa-seed');
+      expect(result[0]?.values[0]?.[1]).toBe('started');
+      expect(result[0]?.values[0]?.[2]).toBe(1500);
+      db.close();
+    });
+
+    it('preserves child FK linkage — payment_tender_lines row still resolves its parent', () => {
+      const db = dbWithSeededData();
+      db.exec(loadSql('0019_extend_payment_failure_reason_enum.sql'));
+      const joined = db.exec(
+        `SELECT a.payment_attempt_id, l.tender_line_id, l.state
+         FROM payment_tender_lines l
+         JOIN payment_attempts a ON a.payment_attempt_id = l.payment_attempt_id
+         WHERE l.tender_line_id = 'tl-seed'`,
+      );
+      expect(joined[0]?.values).toHaveLength(1);
+      expect(joined[0]?.values[0]?.[0]).toBe('pa-seed');
+      expect(joined[0]?.values[0]?.[1]).toBe('tl-seed');
+      expect(joined[0]?.values[0]?.[2]).toBe('applied');
+      db.close();
+    });
+
+    it('preserves child FK linkage — payment_action_outbox row still resolves its parent', () => {
+      const db = dbWithSeededData();
+      db.exec(loadSql('0019_extend_payment_failure_reason_enum.sql'));
+      const joined = db.exec(
+        `SELECT a.payment_attempt_id, o.action_id, o.action_kind
+         FROM payment_action_outbox o
+         JOIN payment_attempts a ON a.payment_attempt_id = o.payment_attempt_id
+         WHERE o.action_id = 'start-pa-seed'`,
+      );
+      expect(joined[0]?.values).toHaveLength(1);
+      db.close();
+    });
+
+    it('restores PRAGMA foreign_keys = ON after the rebuild completes', () => {
+      // CR-1 root cause was that the rebuild needs FK=OFF mid-flight, but
+      // FK enforcement MUST be re-enabled before the migration returns;
+      // otherwise the FK-protected operations of any subsequent migration
+      // (or the running app) silently lose their guard.
+      const db = dbWithSeededData();
+      db.exec(loadSql('0019_extend_payment_failure_reason_enum.sql'));
+      const pragma = db.exec('PRAGMA foreign_keys');
+      expect(pragma[0]?.values[0]?.[0]).toBe(1);
+      db.close();
+    });
+
+    it('the rebuilt table accepts the new manager_force_failed value', () => {
+      const db = dbWithSeededData();
+      db.exec(loadSql('0019_extend_payment_failure_reason_enum.sql'));
+      // Insert directly via SQL to bypass the helper's state-coupling check
+      // path; use state='force_failed' to satisfy the row-level invariants.
+      expect(() => {
+        db.run(
+          `INSERT INTO payment_attempts
+             (payment_attempt_id, tenant_id, branch_id, terminal_id,
+              acting_operator_id, operator_session_id,
+              envelope_handoff_action_id, envelope_cart_id, envelope_subtotal_minor,
+              state, started_at, force_failed_at,
+              failure_reason, force_fail_attribution_operator_id, last_action_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            'pa-mff',
+            'tenant-1',
+            'branch-1',
+            'terminal-mff',
+            'op-cashier',
+            'sess-cashier',
+            'handoff-mff',
+            'cart-mff',
+            1000,
+            'force_failed',
+            '2026-05-25T11:00:00.000Z',
+            '2026-05-25T11:45:30.000Z',
+            'manager_force_failed',
+            'op-manager',
+            'ff-pa-mff',
+          ],
+        );
+      }).not.toThrow();
       db.close();
     });
   });

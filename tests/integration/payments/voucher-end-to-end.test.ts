@@ -80,6 +80,7 @@ const MIGRATIONS = [
   '0016_payment_action_outbox_append_only_trigger.sql',
   '0017_extend_audit_event_categories.sql',
   '0018_audit_event_tender_reversal_pending.sql',
+  '0019_extend_payment_failure_reason_enum.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
