@@ -1,4 +1,4 @@
-import { useMemo, useState, type JSX } from 'react';
+import { useMemo, useRef, useState, type JSX } from 'react';
 
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
@@ -85,13 +85,32 @@ export function VoucherEntry({
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
 
+  // CR-1 (PR #226): React's `disabled` reflects state asynchronously,
+  // so two rapid clicks can dispatch two bridge calls before
+  // `isApplying` re-renders the button. Because each submission
+  // generates a FRESH UUID v4 idempotency_key, the main-process
+  // §P5 dedup would NOT collapse the duplicates — each call looks
+  // like a distinct intent. The synchronous ref-lock guards against
+  // double-fire deterministically; the render-state `disabled` stays
+  // as secondary UX feedback.
+  const submitLockRef = useRef<boolean>(false);
+
   const amountAppliedMinor = useMemo(
     () => parseIntegerMinorUnits(rawAmountInput),
     [rawAmountInput],
   );
 
   const codeIsWellFormed = voucherCode.length >= 3 && VOUCHER_CODE_PATTERN.test(voucherCode);
+  // CR-2 (PR #226): defence-in-depth — a malformed `remainingBalanceMinor`
+  // prop (NaN / Infinity / negative / non-integer) would otherwise let
+  // `amountIsWellFormed` evaluate `<=` against a non-money value. The
+  // upstream caller (PaymentSurface) already guards this, but the
+  // Constitution §P-II posture is "validate at every layer that
+  // consumes money".
+  const remainingBalanceIsValid =
+    Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
   const amountIsWellFormed =
+    remainingBalanceIsValid &&
     amountAppliedMinor !== null &&
     amountAppliedMinor > 0 &&
     amountAppliedMinor <= remainingBalanceMinor;
@@ -99,6 +118,11 @@ export function VoucherEntry({
   const canSubmit = codeIsWellFormed && amountIsWellFormed && !isApplying;
 
   const handleSubmit = (): void => {
+    // Synchronous ref-lock first — beats React's render-state lag
+    // against rapid double-clicks.
+    if (submitLockRef.current) {
+      return;
+    }
     // Use the raw `amountAppliedMinor` null-check as the guard — this
     // narrows the type cleanly. `canSubmit` is a downstream boolean
     // derived from the same value plus the upper-bound check; checking
@@ -107,6 +131,7 @@ export function VoucherEntry({
     if (amountAppliedMinor === null || !canSubmit) {
       return;
     }
+    submitLockRef.current = true;
     const amount = amountAppliedMinor;
     setBridgeRefusal(false);
     setIsApplying(true);
@@ -133,6 +158,7 @@ export function VoucherEntry({
         setBridgeRefusal(true);
       } finally {
         setIsApplying(false);
+        submitLockRef.current = false;
       }
     })();
   };

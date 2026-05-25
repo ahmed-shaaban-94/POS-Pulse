@@ -186,6 +186,61 @@ describe('T290 — VoucherEntry happy path', () => {
     expect(spy.mock.calls[0]?.[0]?.voucher_code).toBe(expected);
   });
 
+  it('CR-1: rapid double-click fires tenderApply ONCE (synchronous ref-lock beats render-state lag)', async () => {
+    // React's `disabled` flag reflects async state, so two rapid clicks
+    // can in principle dispatch two bridge calls before isApplying
+    // re-renders. Each submission generates a FRESH UUID v4
+    // idempotency_key, so the main-process §P5 dedup cannot collapse
+    // the duplicates — they look like distinct intents. The
+    // synchronous submitLockRef must absorb the second click.
+    let resolveBridge: (r: TenderApplyResponse) => void = () => {};
+    const pending = new Promise<TenderApplyResponse>((res) => {
+      resolveBridge = res;
+    });
+    const spy = vi.fn<BridgeFn>(() => pending);
+    const user = userEvent.setup();
+    render(<VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={spy} />);
+    await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    const confirm = screen.getByTestId('voucher-entry-confirm');
+    // Fire two clicks back-to-back without yielding to React.
+    await Promise.all([user.click(confirm), user.click(confirm)]);
+    // Only ONE bridge call fired, regardless of how many clicks
+    // userEvent recorded.
+    expect(spy).toHaveBeenCalledTimes(1);
+    resolveBridge({
+      kind: 'ok',
+      tender_line_id: 'tl-1',
+      applied_at: '2026-05-25T14:00:00.000Z',
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('voucher-entry-applying')).not.toBeInTheDocument();
+    });
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['negative', -100],
+    ['non-integer', 100.5],
+  ])(
+    'CR-2: refuses to enable confirm when remainingBalanceMinor is malformed (%s)',
+    async (_label, badRemaining) => {
+      const user = userEvent.setup();
+      const { bridge } = makeBridge(makeOkResponse());
+      render(
+        <VoucherEntry
+          remainingBalanceMinor={badRemaining}
+          paymentAttemptId="pa-1"
+          tenderApply={bridge}
+        />,
+      );
+      await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
+      await user.type(screen.getByTestId('voucher-entry-amount-input'), '100');
+      expect(screen.getByTestId('voucher-entry-confirm')).toBeDisabled();
+    },
+  );
+
   it('confirm button is disabled while the bridge call is in flight', async () => {
     let resolveBridge: (r: TenderApplyResponse) => void = () => {};
     const pending = new Promise<TenderApplyResponse>((res) => {
