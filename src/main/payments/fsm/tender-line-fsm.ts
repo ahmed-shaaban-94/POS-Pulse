@@ -177,12 +177,27 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
     return lines.findByAttempt(payment_attempt_id).find((l) => l.tender_line_id === tender_line_id);
   }
 
-  function writeApplyOutbox(action_kind: PaymentActionKind, input: ApplyTenderLineInput): void {
+  function writeApplyOutbox(
+    action_kind: PaymentActionKind,
+    input: ApplyTenderLineInput,
+    /**
+     * CR-1 — when the persisted `amount_applied_minor` differs from the
+     * caller's pre-call estimate (voucher V-A can cap the value
+     * authority-side, R-7), pass the persisted value here so the outbox
+     * hash matches the stored line row. A replay of the same idempotency
+     * key would otherwise re-hash `input.amount_applied_minor` and fail
+     * with `idempotency_payload_mismatch` even though the persisted state
+     * is consistent. Defaults to `input.amount_applied_minor` for cash /
+     * external_card_terminal / refused-voucher branches where the
+     * caller's value IS the persisted value.
+     */
+    effective_amount_applied_minor: number = input.amount_applied_minor,
+  ): void {
     const redactedPayload: Record<string, unknown> = {
       tender_line_id: input.tender_line_id,
       payment_attempt_id: input.payment_attempt_id,
       tender_type: input.tender_type,
-      amount_applied_minor: input.amount_applied_minor,
+      amount_applied_minor: effective_amount_applied_minor,
     };
     if (input.tender_type === 'external_card_terminal' && input.external_reference !== undefined) {
       // P-VII redaction at the hash boundary so the stored hash cannot encode
@@ -321,6 +336,39 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
             writeApplyOutbox('tender.apply', input);
             return { kind: 'refused', reason: outcome.reason };
           }
+          // CR-2 — Defence-in-depth safe-integer guard on the
+          // authority-returned monetary value (Constitution §P9 / §II).
+          // The OpenAPI schema declares `type: integer, minimum: 0` but
+          // schema validation is upstream of this path; a malformed V-A
+          // response must NOT corrupt local money state. Persist a
+          // refused row + outbox entry (mirrors the non_cash_overpayment_
+          // refused shape) so the action is recorded and replayable.
+          if (
+            !Number.isSafeInteger(outcome.applied_amount_minor) ||
+            outcome.applied_amount_minor < 0
+          ) {
+            lines.insert({
+              tender_line_id: input.tender_line_id,
+              payment_attempt_id: input.payment_attempt_id,
+              tender_type: 'internal_voucher',
+              amount_applied_minor: input.amount_applied_minor,
+              state: 'refused',
+              change_due_minor: null,
+              external_reference: null,
+              voucher_redemption_intent_token: null,
+              voucher_authority_redemption_id: null,
+              applied_at: null,
+              refused_at: input.applied_at,
+              reversed_at: null,
+              reversal_pending_since: null,
+              refusal_reason: 'internal_error',
+              attribution_operator_id: input.attribution_operator_id,
+              apply_order,
+              last_action_id: input.action_id,
+            });
+            writeApplyOutbox('tender.apply', input);
+            return { kind: 'refused', reason: 'internal_error' };
+          }
           // Voucher overpayment cap is enforced authority-side (R-7) —
           // V-A returns the authority-confirmed `applied_amount_minor`
           // which we trust over the caller's pre-call estimate.
@@ -344,7 +392,9 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
               apply_order,
               last_action_id: input.action_id,
             });
-            writeApplyOutbox('tender.apply', input);
+            // CR-1 — the persisted line carries `outcome.applied_amount_minor`,
+            // not `input.amount_applied_minor`. Outbox hash must match.
+            writeApplyOutbox('tender.apply', input, outcome.applied_amount_minor);
             return { kind: 'refused', reason: 'non_cash_overpayment_refused' };
           }
           lines.insert({
@@ -366,7 +416,9 @@ export function createTenderLineFsm(deps: TenderLineFsmDependencies): TenderLine
             apply_order,
             last_action_id: input.action_id,
           });
-          writeApplyOutbox('tender.apply', input);
+          // CR-1 — the persisted line carries `outcome.applied_amount_minor`,
+          // not `input.amount_applied_minor`. Outbox hash must match.
+          writeApplyOutbox('tender.apply', input, outcome.applied_amount_minor);
           return {
             kind: 'ok',
             tender_line_id: input.tender_line_id,

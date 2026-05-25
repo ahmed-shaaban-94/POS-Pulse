@@ -49,27 +49,39 @@ import type {
   PaymentsConfirmResponse,
 } from '../../../shared/bridge-api.js';
 import type { RedeemVoucherInput, RedeemVoucherOutcome } from '../voucher-authority/redeem.js';
+import type { ReverseVoucherInput, ReverseVoucherOutcome } from '../voucher-authority/reverse.js';
 
 export interface PaymentsConfirmHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
   attemptsRepo: Pick<PaymentAttemptsRepository, 'findById'>;
   linesRepo: Pick<PaymentTenderLinesRepository, 'findByAttempt' | 'persistAuthorityRedemptionId'>;
   paymentAttemptFsm: Pick<PaymentAttemptFsm, 'confirm' | 'fail'>;
-  /** Wave 4 — voucher reversal_pending transition on authority_unreachable.
+  /** Wave 4 — voucher reversal_pending + compensating-reverse transitions.
    *  Optional in the type so Slice-3 callers continue to work without
    *  injection; the handler refuses with `dependency_unavailable` if a
-   *  voucher line is encountered but the FSM lacks the method.
+   *  voucher line is encountered but the FSM lacks the methods.
+   *
+   *  CR-3 — `reverse` is the compensating-reverse path. When a multi-
+   *  voucher redeem sweep fails mid-way (line N redeemed ok, line N+1
+   *  returns authority_unreachable), already-redeemed lines must be
+   *  reverseVoucher'd at the authority THEN transitioned via this method
+   *  so V-A's books and local state stay consistent.
    */
-  tenderLineFsm?: Pick<TenderLineFsm, 'markReversalPending'>;
+  tenderLineFsm?: Pick<TenderLineFsm, 'markReversalPending' | 'reverse'>;
   idempotency: IdempotencyHelper;
   auditEmitter: Pick<
     PaymentAuditEmitter,
-    'emitPaymentSettled' | 'emitPaymentFailed' | 'emitTenderReversalPending'
+    'emitPaymentSettled' | 'emitPaymentFailed' | 'emitTenderReversalPending' | 'emitTenderReversed'
   >;
   /** Wave 4 — voucher V-A redeem client. Optional: when absent, the
    *  handler refuses with `dependency_unavailable` if any voucher line
    *  is present (defence-in-depth; production always provides it). */
   redeemVoucher?: (input: RedeemVoucherInput) => Promise<RedeemVoucherOutcome>;
+  /** Wave 4 (CR-3) — voucher V-A reverse client. Used to compensate
+   *  already-persisted V-A redemptions when the redeem sweep fails
+   *  mid-way over multiple voucher lines. Optional with the same
+   *  defence-in-depth refusal as `redeemVoucher`. */
+  reverseVoucher?: (input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>;
   /** UUID v4 generator used to action_id-namespace per-line redeem/reverse. */
   uuid?: () => string;
   clock: () => Date;
@@ -91,6 +103,7 @@ export function createPaymentsConfirmHandler(
     idempotency,
     auditEmitter,
     redeemVoucher,
+    reverseVoucher,
     uuid,
     clock,
   } = deps;
@@ -179,10 +192,15 @@ export function createPaymentsConfirmHandler(
         l.tender_type === 'internal_voucher' && l.state === 'applied',
     );
     if (voucherLines.length > 0) {
-      if (redeemVoucher === undefined || tenderLineFsm === undefined || uuid === undefined) {
+      if (
+        redeemVoucher === undefined ||
+        reverseVoucher === undefined ||
+        tenderLineFsm === undefined ||
+        uuid === undefined
+      ) {
         // Pre-Wave-4 deployment: voucher lines cannot settle without the
-        // V-A redeem client. Refuse with dependency_unavailable so the
-        // cashier knows the path is offline (defence-in-depth).
+        // V-A redeem + reverse clients. Refuse with dependency_unavailable
+        // so the cashier knows the path is offline (defence-in-depth).
         return await Promise.resolve({ kind: 'refused', reason: 'dependency_unavailable' });
       }
       const voucherFailure = await redeemVoucherLines({
@@ -191,6 +209,7 @@ export function createPaymentsConfirmHandler(
         session,
         idempotency_key_root: req.idempotency_key,
         redeemVoucher,
+        reverseVoucher,
         linesRepo,
         tenderLineFsm,
         paymentAttemptFsm,
@@ -264,22 +283,45 @@ interface RedeemVoucherLinesInput {
   session: OperatorSessionForPayments;
   idempotency_key_root: string;
   redeemVoucher: (input: RedeemVoucherInput) => Promise<RedeemVoucherOutcome>;
+  reverseVoucher: (input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>;
   linesRepo: Pick<PaymentTenderLinesRepository, 'persistAuthorityRedemptionId'>;
-  tenderLineFsm: Pick<TenderLineFsm, 'markReversalPending'>;
+  tenderLineFsm: Pick<TenderLineFsm, 'markReversalPending' | 'reverse'>;
   paymentAttemptFsm: Pick<PaymentAttemptFsm, 'fail'>;
-  auditEmitter: Pick<PaymentAuditEmitter, 'emitPaymentFailed' | 'emitTenderReversalPending'>;
+  auditEmitter: Pick<
+    PaymentAuditEmitter,
+    'emitPaymentFailed' | 'emitTenderReversalPending' | 'emitTenderReversed'
+  >;
   uuid: () => string;
   clock: () => Date;
+}
+
+interface PersistedRedemption {
+  tender_line_id: string;
+  redemption_id: string;
 }
 
 /**
  * Sweep every voucher-applied line, calling V-A `vouchers.redeem`. On
  * success: persist the V-A `redemption_id` on the line and continue to
- * settle. On any `authority_unreachable`: transition the attempt to
- * `failed` + transition each affected voucher line to
- * `reversal_pending` + emit the matching audit events. Returns the
- * bridge refusal envelope when the sweep fails; `null` when every
- * redeem succeeded and the caller may proceed with `fsm.confirm`.
+ * settle. On any non-success outcome mid-sweep (`authority_unreachable`
+ * or `refused`):
+ *
+ *   1. **Compensating-reverse** every line we already redeemed against
+ *      V-A (`persistedRedemptions`). Each reverse calls V-A's
+ *      `vouchers.reverse` endpoint with the persisted `redemption_id`,
+ *      then transitions the line via `fsm.reverse` on success or
+ *      `fsm.markReversalPending` on `authority_unreachable` (research
+ *      §R-13 — the deferred-reversal resolver picks up pending lines).
+ *   2. **Never-redeemed lines** (the failing line + every line we did
+ *      not yet reach) stay in their persisted `applied` state. V-A has
+ *      no redemption for them, so there is nothing to reverse. The
+ *      attempt itself transitions to `failed` immediately after — at
+ *      which point the lines' state is informational only.
+ *   3. **Fail the attempt** with `dependency_unavailable` and emit
+ *      `payment.failed`.
+ *
+ * Returns the bridge refusal envelope when the sweep fails; `null` when
+ * every redeem succeeded and the caller may proceed with `fsm.confirm`.
  */
 async function redeemVoucherLines(
   input: RedeemVoucherLinesInput,
@@ -290,6 +332,7 @@ async function redeemVoucherLines(
     session,
     idempotency_key_root,
     redeemVoucher,
+    reverseVoucher,
     linesRepo,
     tenderLineFsm,
     paymentAttemptFsm,
@@ -297,23 +340,21 @@ async function redeemVoucherLines(
     uuid,
     clock,
   } = input;
-  const persistedRedemptions: Array<{
-    tender_line_id: string;
-    redemption_id: string;
-  }> = [];
+  const persistedRedemptions: PersistedRedemption[] = [];
   for (const line of voucherLines) {
     if (line.voucher_redemption_intent_token === null) {
       // Defence-in-depth — an `applied`-state voucher line without an
       // intent token is impossible under T263 / T260, but the row's
       // column is nullable, so we refuse rather than send a malformed
       // V-A request.
-      return failAttemptAndPendVoucherLines({
-        voucherLines,
+      return await failAttemptWithCompensation({
+        persistedRedemptions,
         attemptRow,
         session,
         idempotency_key_root,
-        paymentAttemptFsm,
+        reverseVoucher,
         tenderLineFsm,
+        paymentAttemptFsm,
         auditEmitter,
         uuid,
         clock,
@@ -323,31 +364,18 @@ async function redeemVoucherLines(
       payment_attempt_id: attemptRow.payment_attempt_id,
       redemption_intent_token: line.voucher_redemption_intent_token,
     });
-    if (outcome.kind === 'authority_unreachable') {
-      return failAttemptAndPendVoucherLines({
-        voucherLines,
+    if (outcome.kind === 'authority_unreachable' || outcome.kind === 'refused') {
+      // Mid-sweep failure. The never-redeemed lines (current + any
+      // unreached successors) stay `applied`; only the already-redeemed
+      // ones need compensating-reverse against V-A.
+      return await failAttemptWithCompensation({
+        persistedRedemptions,
         attemptRow,
         session,
         idempotency_key_root,
-        paymentAttemptFsm,
+        reverseVoucher,
         tenderLineFsm,
-        auditEmitter,
-        uuid,
-        clock,
-      });
-    }
-    if (outcome.kind === 'refused') {
-      // V-A refused mid-confirm (e.g., intent_token_expired). The
-      // attempt resolves to `failed` with a closed
-      // `PaymentFailureReason` (the V-A reasons map to the voucher
-      // subset of FailureReason in `shared/payments/types.ts`).
-      return failAttemptAndPendVoucherLines({
-        voucherLines,
-        attemptRow,
-        session,
-        idempotency_key_root,
         paymentAttemptFsm,
-        tenderLineFsm,
         auditEmitter,
         uuid,
         clock,
@@ -369,18 +397,47 @@ async function redeemVoucherLines(
   return null;
 }
 
-function failAttemptAndPendVoucherLines(input: {
-  voucherLines: readonly PaymentTenderLineRow[];
+/**
+ * CR-3 — fail the attempt + compensating-reverse every line we have
+ * already redeemed against V-A. Never-redeemed lines are NOT touched
+ * (they have no V-A redemption to reverse; the failed attempt makes
+ * their `applied` state informational only).
+ *
+ * For each persisted redemption:
+ *   - Call V-A `vouchers.reverse` with the persisted `redemption_id`.
+ *   - On `reversed`: drive `fsm.reverse` (transactional applied →
+ *     reversed) and emit `tender.reversed`.
+ *   - On `authority_unreachable`: drive `fsm.markReversalPending` and
+ *     emit `tender.reversal_pending`. The Wave-5 deferred-reversal
+ *     resolver will retry.
+ *   - On `refused` (e.g., redemption_id_not_found — unlikely but
+ *     defensive): treat the same as authority_unreachable — the local
+ *     line stays alive for the resolver to re-investigate. V-A says it
+ *     does not have the redemption, but we just persisted it from a
+ *     successful redeem moments ago, so the safer posture is "treat as
+ *     pending and audit". Logging the specific refusal reason is the
+ *     responsibility of the `reverseVoucher` client itself.
+ */
+async function failAttemptWithCompensation(input: {
+  persistedRedemptions: readonly PersistedRedemption[];
   attemptRow: PaymentAttemptRow;
   session: OperatorSessionForPayments;
   idempotency_key_root: string;
+  reverseVoucher: (input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>;
+  tenderLineFsm: Pick<TenderLineFsm, 'markReversalPending' | 'reverse'>;
   paymentAttemptFsm: Pick<PaymentAttemptFsm, 'fail'>;
-  tenderLineFsm: Pick<TenderLineFsm, 'markReversalPending'>;
-  auditEmitter: Pick<PaymentAuditEmitter, 'emitPaymentFailed' | 'emitTenderReversalPending'>;
+  auditEmitter: Pick<
+    PaymentAuditEmitter,
+    'emitPaymentFailed' | 'emitTenderReversalPending' | 'emitTenderReversed'
+  >;
   uuid: () => string;
   clock: () => Date;
-}): PaymentsConfirmResponse {
+}): Promise<PaymentsConfirmResponse> {
   const now = input.clock().toISOString();
+  // 1. Fail the attempt first — the audit ordering payment.failed →
+  // tender.reversed/reversal_pending mirrors the cancel-path semantics
+  // (the attempt-level event narrates "what happened"; the per-line
+  // events narrate the compensation).
   const failAction = `${input.idempotency_key_root}:fail:${input.uuid()}`;
   const failOutcome = input.paymentAttemptFsm.fail({
     payment_attempt_id: input.attemptRow.payment_attempt_id,
@@ -402,12 +459,43 @@ function failAttemptAndPendVoucherLines(input: {
       session_id: input.session.operator_session_id,
     });
   }
-  // Mark every still-applied voucher line as `reversal_pending` and
-  // emit the audit event per line.
-  for (const line of input.voucherLines) {
-    const pendAction = `${input.idempotency_key_root}:pend:${line.tender_line_id}`;
+  // 2. Compensate each already-persisted V-A redemption. Iterate in the
+  // order they were redeemed; sequential is fine because each call is a
+  // simple HTTP POST + a local FSM transition.
+  for (const persisted of input.persistedRedemptions) {
+    const reverseOutcome = await input.reverseVoucher({
+      redemption_id: persisted.redemption_id,
+    });
+    if (reverseOutcome.kind === 'reversed') {
+      const revAction = `${input.idempotency_key_root}:rev:${persisted.tender_line_id}`;
+      const fsmOutcome = input.tenderLineFsm.reverse({
+        tender_line_id: persisted.tender_line_id,
+        payment_attempt_id: input.attemptRow.payment_attempt_id,
+        reversed_at: now,
+        attribution_operator_id: input.session.operator_id,
+        action_id: revAction,
+      });
+      if (fsmOutcome.kind === 'ok') {
+        input.auditEmitter.emitTenderReversed({
+          tender_line_id: persisted.tender_line_id,
+          payment_attempt_id: input.attemptRow.payment_attempt_id,
+          tender_type: 'internal_voucher',
+          reversed_at: now,
+          attribution_operator_id: input.session.operator_id,
+          tenant_id: input.attemptRow.tenant_id,
+          branch_id: input.attemptRow.branch_id,
+          originating_terminal_id: input.attemptRow.terminal_id,
+          session_id: input.session.operator_session_id,
+          manual_void_required: false,
+        });
+      }
+      continue;
+    }
+    // authority_unreachable OR refused → mark pending; the Wave-5
+    // deferred-reversal resolver will retry against V-A.
+    const pendAction = `${input.idempotency_key_root}:rev-pend:${persisted.tender_line_id}`;
     const pendOutcome = input.tenderLineFsm.markReversalPending({
-      tender_line_id: line.tender_line_id,
+      tender_line_id: persisted.tender_line_id,
       payment_attempt_id: input.attemptRow.payment_attempt_id,
       reversal_pending_since: now,
       attribution_operator_id: input.session.operator_id,
@@ -415,7 +503,7 @@ function failAttemptAndPendVoucherLines(input: {
     });
     if (pendOutcome.kind === 'ok') {
       input.auditEmitter.emitTenderReversalPending({
-        tender_line_id: line.tender_line_id,
+        tender_line_id: persisted.tender_line_id,
         payment_attempt_id: input.attemptRow.payment_attempt_id,
         tender_type: 'internal_voucher',
         reversal_pending_since: pendOutcome.reversal_pending_since,

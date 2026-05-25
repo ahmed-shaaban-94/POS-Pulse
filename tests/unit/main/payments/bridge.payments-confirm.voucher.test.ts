@@ -51,6 +51,10 @@ import type {
   RedeemVoucherInput,
   RedeemVoucherOutcome,
 } from '../../../../src/main/payments/voucher-authority/redeem.js';
+import type {
+  ReverseVoucherInput,
+  ReverseVoucherOutcome,
+} from '../../../../src/main/payments/voucher-authority/reverse.js';
 
 function validRequest(overrides: Partial<PaymentsConfirmRequest> = {}): PaymentsConfirmRequest {
   return {
@@ -68,6 +72,20 @@ function makeRedeemVoucherDouble(...outcomes: ReadonlyArray<RedeemVoucherOutcome
       idempotent_replayed: false,
       redeemed_at: '2026-05-25T10:00:05.000Z',
       redemption_id: 'redemption-default',
+    };
+    i += 1;
+    return Promise.resolve(slot);
+  });
+}
+
+function makeReverseVoucherDouble(...outcomes: ReadonlyArray<ReverseVoucherOutcome>) {
+  let i = 0;
+  return vi.fn<(input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>>(() => {
+    const slot = outcomes[Math.min(i, outcomes.length - 1)] ?? {
+      kind: 'reversed' as const,
+      already_reversed: false,
+      redemption_id: 'redemption-default',
+      reversed_at: '2026-05-25T10:00:06.000Z',
     };
     i += 1;
     return Promise.resolve(slot);
@@ -106,6 +124,7 @@ describe('T221 — payments.confirm voucher path', () => {
       idempotency: makeIdempotencyHelperDouble(),
       auditEmitter,
       redeemVoucher,
+      reverseVoucher: makeReverseVoucherDouble(),
       uuid: () => 'uuid-confirm-v',
       clock: () => new Date('2026-05-25T10:00:05.000Z'),
     });
@@ -142,6 +161,7 @@ describe('T221 — payments.confirm voucher path', () => {
       idempotency: makeIdempotencyHelperDouble(),
       auditEmitter: makeAuditEmitterDouble(),
       redeemVoucher,
+      reverseVoucher: makeReverseVoucherDouble(),
       uuid: () => 'uuid-confirm-v',
       clock: () => new Date('2026-05-25T10:00:05.000Z'),
     });
@@ -152,7 +172,12 @@ describe('T221 — payments.confirm voucher path', () => {
 
   // ── 2. authority_unreachable → fail + reversal_pending ────────────────────
 
-  it('fails the attempt and marks voucher lines reversal_pending on V-A authority_unreachable', async () => {
+  it('CR-3 — single voucher line + V-A authority_unreachable: line stays applied (nothing was redeemed)', async () => {
+    // CR-3 — with only ONE voucher line that fails on the very first
+    // redeem attempt, `persistedRedemptions` is empty. The line was
+    // never redeemed at V-A, so there is no V-A redemption to reverse
+    // and the line MUST NOT be marked `reversal_pending`. The attempt
+    // itself still transitions to `failed` (dependency_unavailable).
     const sessionSource = makeSessionSource(makeSession());
     const row = makeAttemptRow({ envelope_subtotal_minor: 1500 });
     const voucherLine = makeLineRow({
@@ -167,6 +192,7 @@ describe('T221 — payments.confirm voucher path', () => {
     const tenderFsm = makeTenderLineFsmDouble();
     const auditEmitter = makeAuditEmitterDouble();
     const redeemVoucher = makeRedeemVoucherDouble({ kind: 'authority_unreachable' });
+    const reverseVoucher = makeReverseVoucherDouble();
     const handler = createPaymentsConfirmHandler({
       getCurrentSession: sessionSource.getCurrentSession,
       attemptsRepo: makeAttemptsRepoDouble([row]),
@@ -176,29 +202,26 @@ describe('T221 — payments.confirm voucher path', () => {
       idempotency: makeIdempotencyHelperDouble(),
       auditEmitter,
       redeemVoucher,
+      reverseVoucher,
       uuid: () => 'uuid-confirm-v',
       clock: () => new Date('2026-05-25T10:00:05.000Z'),
     });
     const result = await handler(validRequest());
-    // Bridge response is the closed refusal envelope.
     expect(result).toEqual({ kind: 'refused', reason: 'dependency_unavailable' });
-    // Attempt FSM was driven to `failed` with the dependency reason.
     expect(fsm.fail).toHaveBeenCalledTimes(1);
     expect(fsm.fail.mock.calls[0]?.[0]).toMatchObject({
       payment_attempt_id: 'pa-1',
       failure_reason: 'dependency_unavailable',
     });
     expect(fsm.confirm).not.toHaveBeenCalled();
-    // Each affected voucher line transitioned to reversal_pending via the FSM.
-    expect(tenderFsm.markReversalPending).toHaveBeenCalledTimes(1);
-    expect(tenderFsm.markReversalPending.mock.calls[0]?.[0]).toMatchObject({
-      tender_line_id: 'tl-voucher-1',
-      payment_attempt_id: 'pa-1',
-    });
-    // Audit emits payment.failed AND tender.reversal_pending per line.
+    // Never-redeemed line — no compensating-reverse, no markReversalPending.
+    expect(reverseVoucher).not.toHaveBeenCalled();
+    expect(tenderFsm.markReversalPending).not.toHaveBeenCalled();
+    expect(tenderFsm.reverse).not.toHaveBeenCalled();
     const categories = auditEmitter.captured.map((e) => e.action_category);
     expect(categories).toContain('payment.failed');
-    expect(categories).toContain('tender.reversal_pending');
+    expect(categories).not.toContain('tender.reversal_pending');
+    expect(categories).not.toContain('tender.reversed');
   });
 
   it('does NOT emit payment.settled when redeem fails', async () => {
@@ -221,6 +244,7 @@ describe('T221 — payments.confirm voucher path', () => {
       idempotency: makeIdempotencyHelperDouble(),
       auditEmitter,
       redeemVoucher: makeRedeemVoucherDouble({ kind: 'authority_unreachable' }),
+      reverseVoucher: makeReverseVoucherDouble(),
       uuid: () => 'uuid-confirm-v',
       clock: () => new Date('2026-05-25T10:00:05.000Z'),
     });
@@ -254,6 +278,7 @@ describe('T221 — payments.confirm voucher path', () => {
         kind: 'refused',
         reason: 'intent_token_expired',
       }),
+      reverseVoucher: makeReverseVoucherDouble(),
       uuid: () => 'uuid-confirm-v',
       clock: () => new Date('2026-05-25T10:00:05.000Z'),
     });
@@ -291,6 +316,246 @@ describe('T221 — payments.confirm voucher path', () => {
     expect(fsm.confirm).not.toHaveBeenCalled();
   });
 
+  // ── CR-3 — compensating-reverse for partial-redemption rollback ──────────
+
+  it('CR-3 — multi-voucher partial sweep: redeemed line is compensating-reversed; unredeemed line stays applied', async () => {
+    // Two voucher lines. Line 1 redeems ok → V-A stamps redemption-1.
+    // Line 2 fails authority_unreachable. CR-3 requires:
+    //   • V-A reverseVoucher called for line 1 (because we already redeemed it).
+    //   • fsm.reverse driven for line 1 → tender.reversed audit emitted.
+    //   • Line 2 stays applied — no compensating-reverse, no markReversalPending.
+    //   • Attempt → failed (dependency_unavailable); payment.failed emitted.
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ envelope_subtotal_minor: 2000 });
+    const voucherLine1 = makeLineRow({
+      tender_line_id: 'tl-v-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1000,
+      voucher_redemption_intent_token: 'TOKEN-1',
+      applied_at: '2026-05-25T10:00:01.000Z',
+      apply_order: 1,
+    });
+    const voucherLine2 = makeLineRow({
+      tender_line_id: 'tl-v-2',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1000,
+      voucher_redemption_intent_token: 'TOKEN-2',
+      applied_at: '2026-05-25T10:00:02.000Z',
+      apply_order: 2,
+    });
+    const linesRepo = makeLinesRepoDouble([voucherLine1, voucherLine2]);
+    const fsm = makePaymentAttemptFsmDouble();
+    const tenderFsm = makeTenderLineFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const redeemVoucher = makeRedeemVoucherDouble(
+      {
+        kind: 'redeemed',
+        idempotent_replayed: false,
+        redeemed_at: '2026-05-25T10:00:05.000Z',
+        redemption_id: 'redemption-1',
+      },
+      { kind: 'authority_unreachable' },
+    );
+    const reverseVoucher = makeReverseVoucherDouble({
+      kind: 'reversed',
+      already_reversed: false,
+      redemption_id: 'redemption-1',
+      reversed_at: '2026-05-25T10:00:06.000Z',
+    });
+    const handler = createPaymentsConfirmHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo,
+      paymentAttemptFsm: fsm,
+      tenderLineFsm: tenderFsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter,
+      redeemVoucher,
+      reverseVoucher,
+      uuid: () => 'uuid-confirm-v',
+      clock: () => new Date('2026-05-25T10:00:05.000Z'),
+    });
+    const result = await handler(validRequest());
+    expect(result).toEqual({ kind: 'refused', reason: 'dependency_unavailable' });
+    // Attempt failed.
+    expect(fsm.fail).toHaveBeenCalledTimes(1);
+    expect(fsm.confirm).not.toHaveBeenCalled();
+    // Line 1 was redeemed at V-A (persistAuthorityRedemptionId called).
+    expect(linesRepo.persistAuthorityRedemptionId).toHaveBeenCalledTimes(1);
+    expect(linesRepo.persistAuthorityRedemptionId).toHaveBeenCalledWith({
+      tender_line_id: 'tl-v-1',
+      voucher_authority_redemption_id: 'redemption-1',
+      last_action_id: 'idem-confirm-voucher-1',
+    });
+    // Compensating-reverse called for line 1 only (line 2 was never redeemed).
+    expect(reverseVoucher).toHaveBeenCalledTimes(1);
+    expect(reverseVoucher).toHaveBeenCalledWith({ redemption_id: 'redemption-1' });
+    // V-A returned `reversed` → fsm.reverse drove the line to reversed
+    // (NOT markReversalPending).
+    expect(tenderFsm.reverse).toHaveBeenCalledTimes(1);
+    expect(tenderFsm.reverse.mock.calls[0]?.[0]).toMatchObject({
+      tender_line_id: 'tl-v-1',
+      payment_attempt_id: 'pa-1',
+    });
+    expect(tenderFsm.markReversalPending).not.toHaveBeenCalled();
+    // Audit: payment.failed + tender.reversed for line 1; nothing for line 2.
+    const categories = auditEmitter.captured.map((e) => e.action_category);
+    expect(categories).toContain('payment.failed');
+    expect(categories).toContain('tender.reversed');
+    expect(categories).not.toContain('tender.reversal_pending');
+    const reversedEvents = auditEmitter.captured.filter(
+      (e) => e.action_category === 'tender.reversed',
+    );
+    expect(reversedEvents).toHaveLength(1);
+    expect(reversedEvents[0]?.payload).toMatchObject({
+      tender_line_id: 'tl-v-1',
+      tender_type: 'internal_voucher',
+    });
+  });
+
+  it('CR-3 — multi-voucher partial sweep + compensating-reverse also unreachable → line 1 → reversal_pending', async () => {
+    // Line 1 redeems ok → redemption-1. Line 2 → authority_unreachable.
+    // Compensating-reverse on line 1 ALSO returns authority_unreachable.
+    // CR-3 then falls back to markReversalPending for line 1; the
+    // Wave-5 deferred resolver picks it up later. Line 2 still stays
+    // applied — never redeemed → no V-A redemption to reverse.
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ envelope_subtotal_minor: 2000 });
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({
+        tender_line_id: 'tl-v-1',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+        voucher_redemption_intent_token: 'TOKEN-1',
+        applied_at: '2026-05-25T10:00:01.000Z',
+        apply_order: 1,
+      }),
+      makeLineRow({
+        tender_line_id: 'tl-v-2',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+        voucher_redemption_intent_token: 'TOKEN-2',
+        applied_at: '2026-05-25T10:00:02.000Z',
+        apply_order: 2,
+      }),
+    ]);
+    const fsm = makePaymentAttemptFsmDouble();
+    const tenderFsm = makeTenderLineFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const redeemVoucher = makeRedeemVoucherDouble(
+      {
+        kind: 'redeemed',
+        idempotent_replayed: false,
+        redeemed_at: '2026-05-25T10:00:05.000Z',
+        redemption_id: 'redemption-1',
+      },
+      { kind: 'authority_unreachable' },
+    );
+    const reverseVoucher = makeReverseVoucherDouble({ kind: 'authority_unreachable' });
+    const handler = createPaymentsConfirmHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo,
+      paymentAttemptFsm: fsm,
+      tenderLineFsm: tenderFsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter,
+      redeemVoucher,
+      reverseVoucher,
+      uuid: () => 'uuid-confirm-v',
+      clock: () => new Date('2026-05-25T10:00:05.000Z'),
+    });
+    const result = await handler(validRequest());
+    expect(result).toEqual({ kind: 'refused', reason: 'dependency_unavailable' });
+    // Compensating-reverse attempted on line 1.
+    expect(reverseVoucher).toHaveBeenCalledTimes(1);
+    expect(reverseVoucher).toHaveBeenCalledWith({ redemption_id: 'redemption-1' });
+    // V-A unreachable on reverse → markReversalPending on line 1.
+    expect(tenderFsm.reverse).not.toHaveBeenCalled();
+    expect(tenderFsm.markReversalPending).toHaveBeenCalledTimes(1);
+    expect(tenderFsm.markReversalPending.mock.calls[0]?.[0]).toMatchObject({
+      tender_line_id: 'tl-v-1',
+      payment_attempt_id: 'pa-1',
+    });
+    // Audit: payment.failed + tender.reversal_pending for line 1 only.
+    const categories = auditEmitter.captured.map((e) => e.action_category);
+    expect(categories).toContain('payment.failed');
+    expect(categories).toContain('tender.reversal_pending');
+    expect(categories).not.toContain('tender.reversed');
+    const pendingEvents = auditEmitter.captured.filter(
+      (e) => e.action_category === 'tender.reversal_pending',
+    );
+    expect(pendingEvents).toHaveLength(1);
+    expect(pendingEvents[0]?.payload).toMatchObject({
+      tender_line_id: 'tl-v-1',
+      tender_type: 'internal_voucher',
+    });
+  });
+
+  it('CR-3 — two voucher lines, both redeem ok → both settle, no compensation', async () => {
+    // Happy path — both vouchers redeem; attempt settles cleanly; no
+    // compensating-reverse invoked.
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ envelope_subtotal_minor: 2000 });
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({
+        tender_line_id: 'tl-v-1',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+        voucher_redemption_intent_token: 'TOKEN-1',
+        applied_at: '2026-05-25T10:00:01.000Z',
+        apply_order: 1,
+      }),
+      makeLineRow({
+        tender_line_id: 'tl-v-2',
+        tender_type: 'internal_voucher',
+        amount_applied_minor: 1000,
+        voucher_redemption_intent_token: 'TOKEN-2',
+        applied_at: '2026-05-25T10:00:02.000Z',
+        apply_order: 2,
+      }),
+    ]);
+    const fsm = makePaymentAttemptFsmDouble();
+    const tenderFsm = makeTenderLineFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const redeemVoucher = makeRedeemVoucherDouble(
+      {
+        kind: 'redeemed',
+        idempotent_replayed: false,
+        redeemed_at: '2026-05-25T10:00:05.000Z',
+        redemption_id: 'redemption-1',
+      },
+      {
+        kind: 'redeemed',
+        idempotent_replayed: false,
+        redeemed_at: '2026-05-25T10:00:05.500Z',
+        redemption_id: 'redemption-2',
+      },
+    );
+    const reverseVoucher = makeReverseVoucherDouble();
+    const handler = createPaymentsConfirmHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo,
+      paymentAttemptFsm: fsm,
+      tenderLineFsm: tenderFsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter,
+      redeemVoucher,
+      reverseVoucher,
+      uuid: () => 'uuid-confirm-v',
+      clock: () => new Date('2026-05-25T10:00:05.000Z'),
+    });
+    const result = await handler(validRequest());
+    expect(result).toEqual({ kind: 'ok', settled_at: '2026-05-25T10:00:05.000Z' });
+    expect(redeemVoucher).toHaveBeenCalledTimes(2);
+    expect(reverseVoucher).not.toHaveBeenCalled();
+    expect(fsm.confirm).toHaveBeenCalledTimes(1);
+    expect(fsm.fail).not.toHaveBeenCalled();
+    expect(tenderFsm.reverse).not.toHaveBeenCalled();
+    expect(tenderFsm.markReversalPending).not.toHaveBeenCalled();
+  });
+
   // ── 3. FR-017 guard ───────────────────────────────────────────────────────
 
   it('redemption_intent_token NEVER appears in the bridge response or audit payload', async () => {
@@ -318,6 +583,7 @@ describe('T221 — payments.confirm voucher path', () => {
         redeemed_at: '2026-05-25T10:00:05.000Z',
         redemption_id: 'redemption-ABC',
       }),
+      reverseVoucher: makeReverseVoucherDouble(),
       uuid: () => 'uuid-confirm-v',
       clock: () => new Date('2026-05-25T10:00:05.000Z'),
     });

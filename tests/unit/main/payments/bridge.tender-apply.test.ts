@@ -490,3 +490,116 @@ describe('T263 — tender.apply voucher branch (Wave 4)', () => {
     ).toEqual({ kind: 'refused', reason: 'invalid_input' });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branch-coverage backfill (CI gate — Slice 3 lines 156–166, 187–188).
+//
+// The voucher branch added in Wave 4 amplified two pre-existing Slice-3
+// branches that lacked direct unit coverage:
+//   • Replay reconstruction from a `refused`-state line row (lines 156–166).
+//     Slice 3 only exercised the `applied` replay path; the refused path
+//     is the persisted mirror for `non_cash_overpayment_refused` lines.
+//   • The `appliedNetSum` accumulator loop body inside the voucher branch
+//     (lines 187–188) — only executes when at least one prior `applied`
+//     line exists on the attempt at voucher-apply time, including the
+//     `change_due_minor ?? 0` nullish-coalesce.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('tender.apply — branch-coverage backfill', () => {
+  it('replays a prior refused tender line (idempotent replay → refusal echoed back)', async () => {
+    const sessionSource = makeSessionSource(makeSession());
+    const linesRepo = makeLinesRepoDouble([
+      makeLineRow({
+        tender_line_id: 'tl-prior-refused',
+        tender_type: 'external_card_terminal',
+        amount_applied_minor: 9999,
+        state: 'refused',
+        applied_at: null,
+        refused_at: '2026-05-23T10:59:55.000Z',
+        refusal_reason: 'non_cash_overpayment_refused',
+        last_action_id: 'idem-apply-1',
+      }),
+    ]);
+    const fsm = makeTenderLineFsmDouble();
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([makeAttemptRow()]),
+      linesRepo,
+      tenderLineFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      auditEmitter: makeAuditEmitterDouble(),
+      uuid: () => 'tl-NEW',
+      clock: () => new Date('2026-05-23T11:00:01.000Z'),
+    });
+    const result = await handler(
+      validRequest({
+        tender_type: 'external_card_terminal',
+        amount_applied_minor: 9999,
+        external_reference: 'AB12XY',
+      }),
+    );
+    expect(result).toEqual({
+      kind: 'refused',
+      reason: 'non_cash_overpayment_refused',
+    });
+    // The FSM is never re-invoked on replay — the outcome is reconstructed
+    // from the persisted row's `refusal_reason` column.
+    expect(fsm.apply).not.toHaveBeenCalled();
+  });
+
+  it('voucher branch computes remaining_balance against PRIOR applied lines on the attempt', async () => {
+    // Seed a cash line that has already consumed 1000 of the 3000 envelope
+    // subtotal (and overpaid by 100, with 100 change due → net 900) so the
+    // appliedNetSum loop body and the change_due_minor nullish-coalesce both
+    // execute. The voucher request then asks for 1500 against a remaining
+    // balance of 3000 − 900 = 2100; V-A validates and returns ok.
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ envelope_subtotal_minor: 3000 });
+    const priorCash = makeLineRow({
+      tender_line_id: 'tl-prior-cash',
+      tender_type: 'cash',
+      amount_applied_minor: 1000,
+      change_due_minor: 100,
+      applied_at: '2026-05-25T09:59:00.000Z',
+      last_action_id: 'apply-prior-cash',
+    });
+    const linesRepo = makeLinesRepoDouble([priorCash]);
+    const fsm = makeTenderLineFsmDouble();
+    const validateVoucher = vi.fn(() =>
+      Promise.resolve({
+        kind: 'validated' as const,
+        applied_amount_minor: 1500,
+        intent_expires_at: '2026-06-01T10:05:00.000Z',
+        redemption_intent_token: 'opaque-intent-token-XYZ',
+      }),
+    );
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo: makeAttemptsRepoDouble([row]),
+      linesRepo,
+      tenderLineFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter: makeAuditEmitterDouble(),
+      validateVoucher,
+      uuid: () => 'tl-v',
+      clock: () => new Date('2026-05-25T10:00:01.000Z'),
+    });
+    const result = await handler(
+      validRequest({
+        tender_type: 'internal_voucher',
+        voucher_code: 'V-CODE',
+        amount_applied_minor: 1500,
+      }),
+    );
+    expect(result).toEqual({
+      kind: 'ok',
+      tender_line_id: 'tl-v',
+      applied_at: '2026-05-25T10:00:01.000Z',
+    });
+    expect(validateVoucher).toHaveBeenCalledTimes(1);
+    expect(validateVoucher.mock.calls[0]?.[0]).toMatchObject({
+      // 3000 envelope − (1000 amount − 100 change) = 2100 remaining.
+      remaining_balance_minor: 2100,
+    });
+  });
+});
