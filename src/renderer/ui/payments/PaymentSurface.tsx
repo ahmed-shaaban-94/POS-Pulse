@@ -7,6 +7,7 @@ import { TenderSelection, type TenderKind } from './TenderSelection.js';
 import { PaymentCartSummary } from './PaymentCartSummary.js';
 import { CashEntry } from './CashEntry.js';
 import { ExternalCardTerminalEntry } from './ExternalCardTerminalEntry.js';
+import { VoucherEntry } from './VoucherEntry.js';
 import type {
   PaymentsBridgeAPI,
   PreloadBridgeAPI,
@@ -330,7 +331,11 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
           role="status"
           aria-live="polite"
         >
-          {selectedTender === 'cash' ? 'Cash selected' : 'Card terminal selected'}
+          {selectedTender === 'cash'
+            ? 'Cash selected'
+            : selectedTender === 'external_card_terminal'
+              ? 'Card terminal selected'
+              : 'Voucher selected'}
         </div>
       )}
 
@@ -349,6 +354,16 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
           )}
           {selectedTender === 'external_card_terminal' && (
             <ExternalCardTerminalEntry
+              remainingBalanceMinor={remainingBalanceMinor}
+              paymentAttemptId={paymentAttemptId}
+              tenderApply={(req) => bridge.tender.apply(req)}
+              onApplied={() => {
+                void handleLineApplied();
+              }}
+            />
+          )}
+          {selectedTender === 'internal_voucher' && (
+            <VoucherEntry
               remainingBalanceMinor={remainingBalanceMinor}
               paymentAttemptId={paymentAttemptId}
               tenderApply={(req) => bridge.tender.apply(req)}
