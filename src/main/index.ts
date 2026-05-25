@@ -21,6 +21,7 @@ import { createPaymentAuditEmitter, type PaymentAuditEvent } from './payments/au
 import { createPaymentsStartHandler } from './payments/handlers/payments-start.js';
 import { createPaymentsConfirmHandler } from './payments/handlers/payments-confirm.js';
 import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel.js';
+import { createPaymentsForceFailHandler } from './payments/handlers/payments-force-fail.js';
 import { createPaymentsSubscribeHandler } from './payments/handlers/payments-subscribe.js';
 import { createPaymentsReadHandler } from './payments/handlers/payments-read.js';
 import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
@@ -635,6 +636,14 @@ app
       attemptsRepo: paymentsAttemptsRepo,
       linesRepo: paymentsLinesRepo,
     });
+    const paymentsForceFail = createPaymentsForceFailHandler({
+      getCurrentSession: paymentsSessionAdapter,
+      attemptsRepo: paymentsAttemptsRepo,
+      paymentAttemptFsm,
+      idempotency: paymentsIdempotency,
+      auditEmitter: paymentAuditEmitter,
+      clock: paymentsClock,
+    });
 
     registerPaymentsHandlers(ipcMain, {
       paymentsStart,
@@ -645,6 +654,7 @@ app
       tenderApply,
       tenderReverse,
       tenderRead,
+      paymentsForceFail,
     });
 
     // 006 T271 — deferred-reversal resolver bootstrap.

@@ -28,6 +28,7 @@ import {
 import type { PaymentRefusal, TenderType } from '../../shared/payments/types.js';
 import type { PaymentsCancelHandler } from '../payments/handlers/payments-cancel.js';
 import type { PaymentsConfirmHandler } from '../payments/handlers/payments-confirm.js';
+import type { PaymentsForceFailHandler } from '../payments/handlers/payments-force-fail.js';
 import type { PaymentsReadHandler } from '../payments/handlers/payments-read.js';
 import type { PaymentsStartHandler } from '../payments/handlers/payments-start.js';
 import type { PaymentsSubscribeHandler } from '../payments/handlers/payments-subscribe.js';
@@ -40,6 +41,8 @@ import type {
   PaymentsCancelResponse,
   PaymentsConfirmRequest,
   PaymentsConfirmResponse,
+  PaymentsForceFailRequest,
+  PaymentsForceFailResponse,
   PaymentsReadRequest,
   PaymentsReadResponse,
   PaymentsStartRequest,
@@ -68,6 +71,9 @@ export interface PaymentsIpcDeps {
   /** Wave 4 — voucher validate. Optional so Slice-3-only test boots
    *  continue to register without it. */
   vouchersValidate?: VouchersValidateHandler;
+  /** Wave 5b — manager / admin-only force-fail. Optional so existing
+   *  test boots continue to register without it. */
+  paymentsForceFail?: PaymentsForceFailHandler;
 }
 
 function refuseInvalid(): PaymentRefusal {
@@ -122,6 +128,18 @@ function asPaymentsConfirmReq(value: unknown): PaymentsConfirmRequest | null {
 }
 
 function asPaymentsCancelReq(value: unknown): PaymentsCancelRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (typeof v['payment_attempt_id'] !== 'string' || typeof v['idempotency_key'] !== 'string') {
+    return null;
+  }
+  return {
+    payment_attempt_id: v['payment_attempt_id'],
+    idempotency_key: v['idempotency_key'],
+  };
+}
+
+function asPaymentsForceFailReq(value: unknown): PaymentsForceFailRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (typeof v['payment_attempt_id'] !== 'string' || typeof v['idempotency_key'] !== 'string') {
@@ -304,6 +322,22 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
       VOUCHERS_IPC_CHANNELS.VALIDATE,
       async (_event: IpcMainInvokeEvent, request: unknown): Promise<VouchersValidateResponse> => {
         const req = asVouchersValidateReq(request);
+        if (req === null) return refuseInvalid();
+        return handler(req);
+      },
+    );
+  }
+
+  // Wave 5b — payments.forceFail (manager / admin-only). The handler
+  // itself runs the role gate; this IPC layer only does shape
+  // validation. Registration is optional so existing tests can boot
+  // a Slice-3-only ipcMain.
+  if (deps.paymentsForceFail !== undefined) {
+    const handler = deps.paymentsForceFail;
+    ipcMain.handle(
+      PAYMENTS_IPC_CHANNELS.FORCE_FAIL,
+      async (_event: IpcMainInvokeEvent, request: unknown): Promise<PaymentsForceFailResponse> => {
+        const req = asPaymentsForceFailReq(request);
         if (req === null) return refuseInvalid();
         return handler(req);
       },

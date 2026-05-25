@@ -200,6 +200,22 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
             </OperatorRouteGuard>
           ),
         },
+        {
+          // T282 — Wave 5b-renderer manager-only force-fail surface
+          // (FR-021 / plan AD-5). Secondary UX defence; the load-
+          // bearing role check lives in the main-process bridge
+          // handler. The placeholder is rendered without props when
+          // `props.payments` isn't injected — production wires
+          // `window.api.payments` upstream; future "list of stuck
+          // attempts" feature will navigate users here with the
+          // payment_attempt_id in route state.
+          path: 'manager/force-fail',
+          element: (
+            <OperatorRouteGuard allow={['manager', 'admin']}>
+              <ManagerForceFailRoutePlaceholder />
+            </OperatorRouteGuard>
+          ),
+        },
       ],
     },
   ];
@@ -229,6 +245,31 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
   const router = createHashRouter(routes);
   return <RouterProvider router={router} />;
   /* v8 ignore stop */
+}
+
+/**
+ * T282 — Wave 5b-renderer manager-only force-fail route placeholder.
+ *
+ * The actual `<ForceFailSurface>` component takes a payment_attempt_id
+ * + idempotency_key + bridge ref. Until a "list of stuck attempts"
+ * surface lands (future Slice 5+ work), this route is a placeholder
+ * that the manager reaches by navigating with route state, or — in
+ * tests — by mounting `<ForceFailSurface>` directly with the right
+ * props. The placeholder itself simply confirms the route + the
+ * guard are wired.
+ *
+ * The COMPONENT (`<ForceFailSurface>`) lives at
+ * `src/renderer/ui/payments/ForceFailSurface.tsx` and is unit-tested
+ * via `tests/unit/renderer/payments/ForceFailSurface.manager-only.test.tsx`.
+ * The route GUARD is exercised by the existing router-level role-
+ * guard test (precedent: `manager/cashiers` + `manager/stuck-shifts`).
+ */
+function ManagerForceFailRoutePlaceholder(): JSX.Element {
+  return (
+    <main data-testid="manager-force-fail-route-placeholder">
+      Navigate here with a payment attempt to force-fail.
+    </main>
+  );
 }
 
 /**

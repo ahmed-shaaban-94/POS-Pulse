@@ -6,6 +6,8 @@ import type {
   PaymentsCancelResponse,
   PaymentsConfirmRequest,
   PaymentsConfirmResponse,
+  PaymentsForceFailRequest,
+  PaymentsForceFailResponse,
   PaymentsReadRequest,
   PaymentsReadResponse,
   PaymentsStartRequest,
@@ -62,6 +64,8 @@ export const payments: PaymentsBridgeAPI = {
     ipcRenderer.invoke(PAYMENTS_IPC_CHANNELS.SUBSCRIBE, req) as Promise<PaymentsSubscribeResponse>,
   read: (req: PaymentsReadRequest) =>
     ipcRenderer.invoke(PAYMENTS_IPC_CHANNELS.READ, req) as Promise<PaymentsReadResponse>,
+  forceFail: (req: PaymentsForceFailRequest) =>
+    ipcRenderer.invoke(PAYMENTS_IPC_CHANNELS.FORCE_FAIL, req) as Promise<PaymentsForceFailResponse>,
 };
 
 export const tender: TenderBridgeAPI = {

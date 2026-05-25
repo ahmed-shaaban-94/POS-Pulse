@@ -28,6 +28,7 @@ import {
 import type {
   PaymentsCancelResponse,
   PaymentsConfirmResponse,
+  PaymentsForceFailResponse,
   PaymentsReadResponse,
   PaymentsStartResponse,
   PaymentsSubscribeResponse,
@@ -65,6 +66,7 @@ function mkDeps() {
   const refusedApply: TenderApplyResponse = { kind: 'refused', reason: 'no_session' };
   const refusedReverse: TenderReverseResponse = { kind: 'refused', reason: 'no_session' };
   const refusedTenderRead: TenderReadResponse = { kind: 'refused', reason: 'no_session' };
+  const refusedForceFail: PaymentsForceFailResponse = { kind: 'refused', reason: 'no_session' };
   return {
     paymentsStart: vi.fn(() => Promise.resolve(refusedStart)),
     paymentsConfirm: vi.fn(() => Promise.resolve(refusedConfirm)),
@@ -74,11 +76,12 @@ function mkDeps() {
     tenderApply: vi.fn(() => Promise.resolve(refusedApply)),
     tenderReverse: vi.fn(() => Promise.resolve(refusedReverse)),
     tenderRead: vi.fn(() => Promise.resolve(refusedTenderRead)),
+    paymentsForceFail: vi.fn(() => Promise.resolve(refusedForceFail)),
   };
 }
 
 describe('registerPaymentsHandlers — channel registration', () => {
-  it('registers all 5 payments.* + 3 tender.* channels', () => {
+  it('registers all 6 payments.* + 3 tender.* channels', () => {
     const { ipcMain, handlers } = mkIpc();
     registerPaymentsHandlers(ipcMain, mkDeps());
     for (const ch of Object.values(PAYMENTS_IPC_CHANNELS)) {
@@ -131,6 +134,17 @@ describe('registerPaymentsHandlers — generic refusal on malformed payload', ()
     // tender.reverse / read — missing required fields
     [TENDER_IPC_CHANNELS.REVERSE, {}],
     [TENDER_IPC_CHANNELS.READ, {}],
+    // payments.forceFail — missing required fields (Wave 5b-renderer)
+    [PAYMENTS_IPC_CHANNELS.FORCE_FAIL, null],
+    [PAYMENTS_IPC_CHANNELS.FORCE_FAIL, 'not-an-object'],
+    [PAYMENTS_IPC_CHANNELS.FORCE_FAIL, {}],
+    [PAYMENTS_IPC_CHANNELS.FORCE_FAIL, { payment_attempt_id: 'pa-1' }], // no idempotency_key
+    [PAYMENTS_IPC_CHANNELS.FORCE_FAIL, { idempotency_key: 'k' }], // no payment_attempt_id
+    [
+      PAYMENTS_IPC_CHANNELS.FORCE_FAIL,
+      // wrong-typed payment_attempt_id (number instead of string)
+      { payment_attempt_id: 42, idempotency_key: 'k' },
+    ],
   ])('refuses %s with invalid_input on malformed payload', async (channel, payload) => {
     const { ipcMain, handlers } = mkIpc();
     const deps = mkDeps();
@@ -243,6 +257,31 @@ describe('registerPaymentsHandlers — valid payloads forward to the handler', (
     if (handler === undefined) throw new Error('missing CANCEL');
     await handler(fakeEvent(), { payment_attempt_id: 'pa-1', idempotency_key: 'k' });
     expect(deps.paymentsCancel).toHaveBeenCalled();
+  });
+
+  it('payments.forceFail forwards (Wave 5b-renderer happy path)', async () => {
+    const { ipcMain, handlers } = mkIpc();
+    const deps = mkDeps();
+    registerPaymentsHandlers(ipcMain, deps);
+    const handler = handlers.get(PAYMENTS_IPC_CHANNELS.FORCE_FAIL);
+    if (handler === undefined) throw new Error('missing FORCE_FAIL');
+    await handler(fakeEvent(), { payment_attempt_id: 'pa-1', idempotency_key: 'k' });
+    expect(deps.paymentsForceFail).toHaveBeenCalledWith({
+      payment_attempt_id: 'pa-1',
+      idempotency_key: 'k',
+    });
+  });
+
+  it('payments.forceFail channel is NOT registered when paymentsForceFail is undefined', () => {
+    // Backward-compat path for older test boots that don't supply the
+    // force-fail handler. Mirrors the same pattern used for
+    // vouchersValidate registration.
+    const { ipcMain, handlers } = mkIpc();
+    const deps = mkDeps();
+    const depsWithoutForceFail = { ...deps };
+    delete (depsWithoutForceFail as Partial<typeof deps>).paymentsForceFail;
+    registerPaymentsHandlers(ipcMain, depsWithoutForceFail);
+    expect(handlers.has(PAYMENTS_IPC_CHANNELS.FORCE_FAIL)).toBe(false);
   });
 
   it('payments.subscribe forwards', async () => {
