@@ -18,7 +18,10 @@ import { fileURLToPath } from 'url';
 
 import { bindPaymentAttemptsRepository } from '../../../../src/main/payments/repositories/payment-attempts.repository.js';
 import { bindPaymentTenderLinesRepository } from '../../../../src/main/payments/repositories/payment-tender-lines.repository.js';
-import { bindPaymentActionOutboxRepository } from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
+import {
+  bindPaymentActionOutboxRepository,
+  computeActionPayloadHash,
+} from '../../../../src/main/payments/repositories/payment-action-outbox.repository.js';
 import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
 import { createTenderLineFsm } from '../../../../src/main/payments/fsm/tender-line-fsm.js';
 
@@ -209,8 +212,12 @@ describe('T085 — TenderLine FSM apply (external_card_terminal)', () => {
   });
 });
 
-describe('T085 — TenderLine FSM apply (internal_voucher Slice 4 deferral)', () => {
-  it('voucher apply returns tender_not_yet_supported in Slice 3', () => {
+describe('T085 — TenderLine FSM apply (internal_voucher Wave 4)', () => {
+  it('voucher apply WITHOUT voucher_outcome refuses internal_error (defence-in-depth)', () => {
+    // Wave 4: the bridge handler always threads a `voucher_outcome` from
+    // V-A `vouchers.validate` before driving the FSM (HTTP cannot live in
+    // `db.transaction()`). A direct FSM call without it is a contract
+    // violation by the caller — refuse cleanly.
     const { fsm, attempts, outbox } = buildFsm();
     seedStartedAttempt(attempts, outbox, 1500);
     const result = fsm.apply({
@@ -224,7 +231,234 @@ describe('T085 — TenderLine FSM apply (internal_voucher Slice 4 deferral)', ()
       action_id: 'apply-tl-1',
     });
     expect(result.kind).toBe('refused');
-    if (result.kind === 'refused') expect(result.reason).toBe('tender_not_yet_supported');
+    if (result.kind === 'refused') expect(result.reason).toBe('internal_error');
+  });
+
+  it('voucher apply WITH validated voucher_outcome persists an applied line with intent token', () => {
+    const { fsm, attempts, lines, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        applied_amount_minor: 1500,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('ok');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('applied');
+    expect(row?.voucher_redemption_intent_token).toBe('token-X');
+  });
+
+  it('voucher apply with validated outcome but amount > remaining refuses non_cash_overpayment_refused', () => {
+    const { fsm, attempts, lines, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 5000,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-Y',
+        applied_amount_minor: 5000,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('non_cash_overpayment_refused');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('refused');
+    expect(row?.refusal_reason).toBe('non_cash_overpayment_refused');
+  });
+
+  it('voucher apply WITH refused voucher_outcome persists a refused line', () => {
+    const { fsm, attempts, lines, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: { kind: 'refused', reason: 'voucher_expired' },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('voucher_expired');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('refused');
+    expect(row?.refusal_reason).toBe('voucher_expired');
+    expect(row?.voucher_redemption_intent_token).toBeNull();
+  });
+});
+
+describe('CR-1 — voucher outbox hash reflects PERSISTED amount, not caller estimate', () => {
+  it('applied voucher branch: outbox hash matches re-hash of persisted outcome.applied_amount_minor', () => {
+    // V-A authority caps the voucher value at 800 even though the caller's
+    // pre-call estimate was 1000. The persisted line row carries 800; the
+    // outbox `action_payload_hash` MUST be the hash of the same 800, NOT
+    // the hash of the caller's 1000 — otherwise an idempotent retry of
+    // the same key would compute a different hash and refuse with
+    // `idempotency_payload_mismatch`.
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1000, // caller estimate
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        applied_amount_minor: 800, // V-A-capped value
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    const persistedLine = lines.findByLineId('tl-1');
+    expect(persistedLine?.amount_applied_minor).toBe(800);
+    const outboxRow = outbox.findByActionId('apply-tl-1');
+    expect(outboxRow).toBeDefined();
+    // Re-compute the hash against the PERSISTED amount — must match.
+    const expectedHash = computeActionPayloadHash({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 800,
+      action_kind: 'tender.apply',
+    });
+    expect(outboxRow?.action_payload_hash).toBe(expectedHash);
+    // Sanity — hashing the caller's 1000 would NOT match.
+    const wrongHash = computeActionPayloadHash({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1000,
+      action_kind: 'tender.apply',
+    });
+    expect(outboxRow?.action_payload_hash).not.toBe(wrongHash);
+  });
+
+  it('overpayment-refused voucher branch: outbox hash matches persisted outcome.applied_amount_minor', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500, // caller estimate
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        applied_amount_minor: 5000, // > remaining → overpayment-refused
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    const persistedLine = lines.findByLineId('tl-1');
+    expect(persistedLine?.amount_applied_minor).toBe(5000);
+    expect(persistedLine?.refusal_reason).toBe('non_cash_overpayment_refused');
+    const outboxRow = outbox.findByActionId('apply-tl-1');
+    const expectedHash = computeActionPayloadHash({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 5000,
+      action_kind: 'tender.apply',
+    });
+    expect(outboxRow?.action_payload_hash).toBe(expectedHash);
+  });
+});
+
+describe('CR-2 — safe-integer guard on authority-returned voucher amount', () => {
+  it('refuses internal_error when outcome.applied_amount_minor is a non-integer (1.5)', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        // Malformed authority payload — non-integer.
+        applied_amount_minor: 1.5,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('internal_error');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('refused');
+    expect(row?.refusal_reason).toBe('internal_error');
+  });
+
+  it('refuses internal_error when outcome.applied_amount_minor is negative (-100)', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        applied_amount_minor: -100,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('internal_error');
+    expect(lines.findByLineId('tl-1')?.refusal_reason).toBe('internal_error');
+  });
+
+  it('refuses internal_error when outcome.applied_amount_minor exceeds MAX_SAFE_INTEGER', () => {
+    const { fsm, attempts, outbox, lines } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        applied_amount_minor: Number.MAX_SAFE_INTEGER + 1,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('internal_error');
+    expect(lines.findByLineId('tl-1')?.refusal_reason).toBe('internal_error');
   });
 });
 

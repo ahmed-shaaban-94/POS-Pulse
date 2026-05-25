@@ -35,6 +35,12 @@ import type { PaymentAuditEmitter } from '../audit-emitter.js';
 import type { PaymentAttemptsRepository } from '../repositories/payment-attempts.repository.js';
 import type { PaymentTenderLinesRepository } from '../repositories/payment-tender-lines.repository.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
+import type {
+  ValidateVoucherInput,
+  ValidateVoucherOutcome,
+} from '../voucher-authority/validate.js';
+
+import { applyVoucherLine } from './apply-voucher-line.js';
 
 export interface TenderApplyHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
@@ -43,6 +49,11 @@ export interface TenderApplyHandlerDeps {
   tenderLineFsm: Pick<TenderLineFsm, 'apply'>;
   idempotency: IdempotencyHelper;
   auditEmitter: Pick<PaymentAuditEmitter, 'emitTenderApplied' | 'emitTenderRefused'>;
+  /** Wave 4 — voucher V-A validate client (T263). Optional so callers
+   *  that don't yet wire vouchers continue to work; in production the
+   *  IPC registration always provides it.
+   */
+  validateVoucher?: (input: ValidateVoucherInput) => Promise<ValidateVoucherOutcome>;
   uuid: () => string;
   clock: () => Date;
 }
@@ -57,6 +68,7 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
     tenderLineFsm,
     idempotency,
     auditEmitter,
+    validateVoucher,
     uuid,
     clock,
   } = deps;
@@ -152,6 +164,55 @@ export function createTenderApplyHandler(deps: TenderApplyHandlerDeps): TenderAp
         });
       }
       return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+    }
+
+    // Wave 4 — voucher branch (T263). Slice 3 returned
+    // `tender_not_yet_supported` for `internal_voucher`; Wave 4 routes
+    // to V-A `vouchers.validate` via the shared `applyVoucherLine`
+    // helper. Voucher_code MUST be present (renderer always supplies
+    // it for voucher tenders); refuse `invalid_input` otherwise.
+    if (req.tender_type === 'internal_voucher') {
+      if (validateVoucher === undefined) {
+        // Production wires this dep; refuse cleanly when it's absent
+        // (e.g., test deps yet to be updated, or pre-Wave-4 callers).
+        return { kind: 'refused', reason: 'tender_not_yet_supported' };
+      }
+      if (req.voucher_code === undefined || req.voucher_code === '') {
+        return { kind: 'refused', reason: 'invalid_input' };
+      }
+      // Compute remaining_balance_minor main-side (R-7).
+      const existing = linesRepo.findByAttempt(req.payment_attempt_id);
+      let appliedNetSum = 0;
+      for (const line of existing) {
+        if (line.state !== 'applied') continue;
+        appliedNetSum += line.amount_applied_minor - (line.change_due_minor ?? 0);
+      }
+      const remaining_balance_minor = attempt.envelope_subtotal_minor - appliedNetSum;
+      const outcome = await applyVoucherLine(
+        {
+          session,
+          attempt,
+          tender_line_id,
+          voucher_code: req.voucher_code,
+          amount_applied_minor: req.amount_applied_minor,
+          remaining_balance_minor,
+          applied_at: now,
+          action_id: req.idempotency_key,
+        },
+        {
+          validateVoucher,
+          tenderLineFsm,
+          auditEmitter,
+        },
+      );
+      if (outcome.kind === 'refused') {
+        return { kind: 'refused', reason: outcome.reason };
+      }
+      return {
+        kind: 'ok',
+        tender_line_id: outcome.tender_line_id,
+        applied_at: outcome.applied_at,
+      };
     }
 
     // Fresh path — invoke the FSM. The FSM stamps the line row + outbox row

@@ -19,8 +19,15 @@ import type {
   TenderReadResponse,
   TenderReverseRequest,
   TenderReverseResponse,
+  VouchersBridgeAPI,
+  VouchersValidateRequest,
+  VouchersValidateResponse,
 } from '../shared/bridge-api.js';
-import { PAYMENTS_IPC_CHANNELS, TENDER_IPC_CHANNELS } from '../shared/payments/channels.js';
+import {
+  PAYMENTS_IPC_CHANNELS,
+  TENDER_IPC_CHANNELS,
+  VOUCHERS_IPC_CHANNELS,
+} from '../shared/payments/channels.js';
 
 /**
  * T142 — 006-payments-tender Slice 3 preload bridge.
@@ -34,8 +41,12 @@ import { PAYMENTS_IPC_CHANNELS, TENDER_IPC_CHANNELS } from '../shared/payments/c
  *   • `payments.discardOnSessionEnd` is INTERNAL to the main process
  *     and is intentionally absent from this surface. The renderer
  *     MUST NOT be able to trigger session-end discard for an attempt.
- *   • `payments.forceFail` is Slice 4 only and is intentionally absent.
- *   • `vouchers.*` is Slice 4 only and is intentionally absent.
+ *   • `payments.forceFail` is Slice 4 (still gated) and intentionally
+ *     absent.
+ *   • `vouchers.validate` is Wave 4 (§A4-B authorisation 2026-05-25);
+ *     `vouchers.redeem` / `vouchers.reverse` are intentionally absent
+ *     — they fire ONLY from `payments.confirm` and `tender.reverse`
+ *     respectively, never directly from the renderer (AD-3 / FR-017).
  *   • No PII, voucher tokens, card data, Clerk JWTs, or device tokens
  *     cross this bridge in either direction. Refusal envelopes use the
  *     generic closed RefusalReason enum.
@@ -60,4 +71,9 @@ export const tender: TenderBridgeAPI = {
     ipcRenderer.invoke(TENDER_IPC_CHANNELS.REVERSE, req) as Promise<TenderReverseResponse>,
   read: (req: TenderReadRequest) =>
     ipcRenderer.invoke(TENDER_IPC_CHANNELS.READ, req) as Promise<TenderReadResponse>,
+};
+
+export const vouchers: VouchersBridgeAPI = {
+  validate: (req: VouchersValidateRequest) =>
+    ipcRenderer.invoke(VOUCHERS_IPC_CHANNELS.VALIDATE, req) as Promise<VouchersValidateResponse>,
 };

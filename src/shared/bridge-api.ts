@@ -503,7 +503,7 @@ export interface PreloadBridgeAPI {
   /**
    * 006-payments-tender Slice 3: `payments.*` (attempt-level) +
    * `tender.*` (per-line) namespaces. Slice 4 adds `payments.forceFail`
-   * and `vouchers.*`; those are intentionally absent here.
+   * (still pending) and `vouchers.*` (Wave 4 — voucher validate path).
    *
    * Marked optional in S3b — the namespace types are declared but the
    * preload (`src/preload/index.ts`) is wired in S3c (T142). Once S3c
@@ -514,6 +514,8 @@ export interface PreloadBridgeAPI {
    */
   payments?: PaymentsBridgeAPI;
   tender?: TenderBridgeAPI;
+  /** 006 Wave 4 — voucher validate (per §A4-B authorisation 2026-05-25). */
+  vouchers?: VouchersBridgeAPI;
 }
 
 /**
@@ -685,6 +687,37 @@ export type TenderReadResponse =
   | { kind: 'ok'; tender_line: TenderLineRendererView }
   | PaymentRefusal;
 
+// ── vouchers.validate (Slice 4 / Wave 4) ─────────────────────────────────────
+//
+// Bridge surface for the voucher-authority (V-A) `posValidateVoucher`
+// operation. The bridge persists a `payment_tender_lines` row with
+// `state='applied'` + `voucher_redemption_intent_token` on success
+// (data-model §"PaymentTenderLine" Invariant 4). On any V-A refusal the
+// row is persisted with `state='refused'` + `refusal_reason`. The
+// `voucher_redemption_intent_token` is **main-side only** and MUST NOT
+// appear in the response (FR-017 / F-A4B brief §3.4).
+//
+// `applied_amount_minor` is the cashier-supplied amount; V-A caps refuse
+// rather than truncate (research §R-7). `remaining_balance_minor` is
+// computed main-side from `payment_attempts.envelope_subtotal_minor` and
+// the current line breakdown — the renderer does NOT compute or send it.
+
+export interface VouchersValidateRequest {
+  payment_attempt_id: string;
+  voucher_code: string;
+  amount_applied_minor: number;
+  idempotency_key: string;
+}
+
+export type VouchersValidateResponse =
+  | {
+      kind: 'ok';
+      tender_line_id: string;
+      applied_amount_minor: number;
+      applied_at: string;
+    }
+  | PaymentRefusal;
+
 // ── Namespace surfaces ───────────────────────────────────────────────────────
 
 export interface PaymentsBridgeAPI {
@@ -707,4 +740,16 @@ export interface TenderBridgeAPI {
   reverse(req: TenderReverseRequest): Promise<TenderReverseResponse>;
   /** One-shot read of a single line — same projection as `payments.subscribe`. */
   read(req: TenderReadRequest): Promise<TenderReadResponse>;
+}
+
+/**
+ * 006 Wave 4 — voucher bridge namespace (Contract V-A). Only `validate`
+ * is renderer-facing; `redeem` is invoked inside `payments.confirm` and
+ * `reverse` inside `tender.reverse`. Both server-side flows are
+ * intentionally absent from this surface so the renderer cannot
+ * unilaterally redeem or reverse a voucher (FR-017 + AD-3).
+ */
+export interface VouchersBridgeAPI {
+  /** Validates a voucher code with V-A and persists the resulting line. */
+  validate(req: VouchersValidateRequest): Promise<VouchersValidateResponse>;
 }

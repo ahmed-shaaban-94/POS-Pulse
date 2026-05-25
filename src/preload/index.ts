@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { cart } from './cart.js';
-import { payments, tender } from './payments.js';
+import { payments, tender, vouchers } from './payments.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -125,11 +125,13 @@ const api: PreloadBridgeAPI = {
   pairing,
   operator,
   cart,
-  // 006-payments-tender Slice 3 (T142 + F-002) — payments.* + tender.*
-  // namespaces. payments.discardOnSessionEnd, payments.forceFail, and
-  // vouchers.* are intentionally NOT exposed (internal / Slice 4).
+  // 006-payments-tender — payments.* + tender.* (Slice 3 / T142) +
+  // vouchers.* (Wave 4 / §A4-B authorisation 2026-05-25).
+  // payments.discardOnSessionEnd is internal; payments.forceFail is
+  // still gated and intentionally NOT exposed.
   payments,
   tender,
+  vouchers,
 };
 
 contextBridge.exposeInMainWorld('api', api);
