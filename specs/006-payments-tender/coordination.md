@@ -22,7 +22,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-25 (Slice 4 Wave 5d verification — T295 full coverage audit recorded (≥95% on voucher paths + force-fail handler); T296 voucher e2e integration test added (`tests/integration/payments/voucher-end-to-end.test.ts`, 3/3 passing); T297 force-fail e2e integration test added (`tests/integration/payments/force-fail.test.ts`, 1/3 passing — 2/3 `it.todo()` blocked on F-W5D-001); T298 Slice 4 sign-off **DEFERRED** pending Wave 5e migration that adds `'manager_force_failed'` to the `payment_attempts.failure_reason` CHECK enum (see §"Slice 4 sign-off (T298 — Wave 5d)" §Findings). Previous entry: 2026-05-24 — Slice 4 Wave 1 §A2 sign-off.)
+**Last updated:** 2026-05-25 (Slice 4 Wave 5d verification — T295 full coverage audit recorded (voucher V-A clients + handlers + FSMs ≥95% line on every voucher-only path; force-fail handler at **92.86% line / 90.91% branch**, partially gated by F-W5D-001 — see §"Slice 4 sign-off (T298 — Wave 5d)" §"Coverage gate"); T296 voucher e2e integration test added (`tests/integration/payments/voucher-end-to-end.test.ts`, 3/3 passing); T297 force-fail e2e integration test added (`tests/integration/payments/force-fail.test.ts`, 1/3 passing — 2/3 `it.todo()` blocked on F-W5D-001); T298 Slice 4 sign-off **DEFERRED** pending Wave 5e migration that adds `'manager_force_failed'` to the `payment_attempts.failure_reason` CHECK enum (see §"Slice 4 sign-off (T298 — Wave 5d)" §Findings). Previous entry: 2026-05-24 — Slice 4 Wave 1 §A2 sign-off.)
 
 ---
 
@@ -1863,7 +1863,7 @@ on both validate request + response.
 |:--|:--|
 | Date | 2026-05-25 |
 | Task | T298 — Slice 4 functional sign-off |
-| Status | ⚠ **DEFERRED** — Wave 5d verification surfaced a production-blocking schema/code mismatch (see Findings) |
+| Status | ⚠ **DEFERRED** — Wave 5d verification surfaced a production-blocking schema/code mismatch that also gates the T295 force-fail coverage threshold (see Findings + Coverage gate) |
 | §A1 | ✅ Cleared 2026-05-20 (FR-021 manager force-fail) |
 | §A2 | ✅ Cleared 2026-05-25 (Voucher V-A contract pinned; PR #215) |
 | §A3 | ✅ Cleared 2026-05-25 (audit category `tender.reversal_pending`; PRs #218 + #219) |
@@ -1888,6 +1888,8 @@ on both validate request + response.
 ### Coverage gate (T295 result)
 
 Full Slice 4 surface (per `tasks.md` T295 requirement: ≥95% on voucher paths + force-fail handler). Numbers from `npx vitest run --coverage --testTimeout=30000` on this branch (commit reflected in the PR head SHA).
+
+**Gate state — partial:** every **voucher-only** path meets the ≥95% line threshold (voucher V-A clients all 100%; `apply-voucher-line.ts`, `vouchers-validate.ts`, `deferred-reversal-resolver.ts` all ≥97% line). The **force-fail handler** is at **92.86% line / 90.91% branch** — short of ≥95% line. Root cause: the `it.todo()` blocks in `force-fail.test.ts` (the only tests that drive the FSM-success branch end-to-end) are gated behind F-W5D-001. Once Wave 5e merges and those `it.todo()` blocks are promoted to `it()`, the handler's coverage will close to ≥95%. **Final Slice 4 sign-off therefore requires Wave 5e + a re-run of T295.**
 
 | File | Line | Func | Branch |
 |:--|:--|:--|:--|
@@ -1953,7 +1955,7 @@ All Wave-1–Wave-5c tasks complete and merged. Wave 5d tasks below.
 
 | Task | Description | Status |
 |:--|:--|:--|
-| T295 | Full Slice 4 coverage audit (≥95% on voucher paths + force-fail handler) | ✅ (table above) |
+| T295 | Full Slice 4 coverage audit (≥95% on voucher paths + force-fail handler) | ⚠ Partial — voucher paths ✅; force-fail handler 92.86% line (gated by F-W5D-001 — see §"Coverage gate" above) |
 | T296 | Voucher end-to-end integration test (happy + failure + resolver hand-off) | ✅ `tests/integration/payments/voucher-end-to-end.test.ts` (3/3 passing) |
 | T297 | Force-fail end-to-end integration test (dual attribution + FR-021 DOM check) | ⚠ Partial — 1/3 passing, 2/3 `it.todo()` blocked on F-W5D-001 |
 | T298 | Slice 4 sign-off ledger entry | ⚠ DEFERRED (this section) |

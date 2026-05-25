@@ -114,11 +114,25 @@ function buildStack() {
   return { handle, attempts, lines, outbox, attemptFsm, lineFsm };
 }
 
+// Constitution §P-II — every fixture that touches money MUST guard
+// minor-unit values at its boundary. The FSMs already validate, but a
+// raw-number test helper accepting a float / NaN / negative would let
+// drift slip in silently. These guards make any future fixture mistake
+// loud at write-time, not at audit-time.
+function assertMinorUnits(label: string, value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(
+      `${label} must be a non-negative safe integer (minor units); got ${String(value)}`,
+    );
+  }
+}
+
 function startAttempt(
   attemptFsm: ReturnType<typeof buildStack>['attemptFsm'],
   payment_attempt_id: string,
   envelope_subtotal_minor: number,
 ): void {
+  assertMinorUnits('envelope_subtotal_minor', envelope_subtotal_minor);
   const result = attemptFsm.start({
     payment_attempt_id,
     tenant_id: TENANT,
@@ -146,6 +160,7 @@ function applyVoucher(
     action_id?: string;
   },
 ): void {
+  assertMinorUnits('args.amount', args.amount);
   // The bridge handler resolves V-A `vouchers.validate` BEFORE this call
   // and threads the outcome through. We simulate the `validated`
   // outcome — the field that matters end-to-end is the intent token,
