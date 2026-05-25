@@ -4,21 +4,26 @@ import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelop
 import { touchTarget } from '../tokens/touch.js';
 
 /**
- * 006-payments-tender S1 — TenderSelection.
+ * 006-payments-tender S1 + Wave 5c T291 — TenderSelection.
  *
  * Renders the three tender options:
  *   - cash: enabled and selectable.
  *   - external_card_terminal: enabled and selectable.
- *   - internal_voucher: reserved — always visible, always disabled,
- *     with a "(not available)" sub-label per visual-direction spec.
+ *   - internal_voucher: ENABLED as of Wave 5c (§A4-B cleared 2026-05-25).
+ *     The voucher entry surface (`<VoucherEntry>`) calls
+ *     `tender.apply` with `tender_type: 'internal_voucher'`; the Slice 4
+ *     bridge handler routes to the V-A client (Contract V-A).
  *
  * Returns null when no envelope is provided (route guard — caller must
  * not mount this component without a valid handoff envelope).
  *
  * SECURITY: no card data, no PAN, no CVV. No sensitive IDs in the DOM.
+ * No voucher tokens or balance crosses TenderSelection — that's
+ * VoucherEntry's surface and the bridge contract enforces minimisation
+ * (FR-017).
  */
 
-export type TenderKind = 'cash' | 'external_card_terminal';
+export type TenderKind = 'cash' | 'external_card_terminal' | 'internal_voucher';
 
 export interface TenderSelectionProps {
   envelope: Readonly<PaymentIntentEnvelope> | null;
@@ -68,22 +73,20 @@ export function TenderSelection({
           <span className="tender-selection__option-label">Card terminal</span>
         </button>
 
-        {/* Voucher slot — always visible, always reserved for Contract V-A */}
+        {/* Wave 5c T291 — voucher slot now ENABLED (§A4-B cleared
+            2026-05-25). The reserved-disabled state from Slice 1 is
+            removed; clicking routes the cashier to <VoucherEntry>. */}
         <button
           type="button"
-          className="tender-selection__option tender-selection__option--reserved"
+          className="tender-selection__option"
           data-testid="tender-voucher"
-          aria-label="Voucher (not available)"
-          aria-disabled="true"
-          style={{ minHeight: touchTarget.min, opacity: 0.5 }}
-          onClick={(e) => {
-            e.preventDefault();
+          aria-label="Voucher"
+          style={{ minHeight: touchTarget.min }}
+          onClick={() => {
+            onTenderSelect('internal_voucher');
           }}
         >
           <span className="tender-selection__option-label">Voucher</span>
-          <span className="tender-selection__option-hint" data-testid="tender-voucher-hint">
-            (not available)
-          </span>
         </button>
       </div>
     </section>

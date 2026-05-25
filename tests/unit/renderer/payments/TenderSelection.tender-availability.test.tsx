@@ -83,31 +83,32 @@ describe('TenderSelection — external_card_terminal', () => {
   });
 });
 
-describe('TenderSelection — internal_voucher reserved', () => {
-  it('renders the voucher slot as always visible', () => {
+describe('TenderSelection — internal_voucher (Wave 5c T291 — now enabled)', () => {
+  // Wave 5c T291 — voucher slot is no longer reserved-disabled. §A4-B
+  // cleared 2026-05-25; the slot now routes to <VoucherEntry> via
+  // onTenderSelect('internal_voucher').
+
+  it('renders the voucher slot as visible and enabled', () => {
     render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
-    expect(screen.getByTestId('tender-voucher')).toBeInTheDocument();
+    const btn = screen.getByTestId('tender-voucher');
+    expect(btn).toBeInTheDocument();
+    expect(btn).not.toBeDisabled();
+    expect(btn).not.toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('marks voucher slot aria-disabled', () => {
+  it('does NOT render the legacy "(not available)" sub-label', () => {
     render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
-    expect(screen.getByTestId('tender-voucher')).toHaveAttribute('aria-disabled', 'true');
+    // The Slice-1 reserved-disabled hint element is gone.
+    expect(screen.queryByTestId('tender-voucher-hint')).not.toBeInTheDocument();
   });
 
-  it('shows "(not available)" sub-label on voucher slot', () => {
-    render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={() => {}} />);
-    expect(screen.getByTestId('tender-voucher-hint')).toHaveTextContent('(not available)');
-  });
-
-  it('does not call onTenderSelect when voucher slot is clicked', async () => {
+  it('calls onTenderSelect with "internal_voucher" when clicked', async () => {
     const user = userEvent.setup();
     const handler = vi.fn();
     render(<TenderSelection envelope={makeEnvelope()} onTenderSelect={handler} />);
-    // Click the button directly — since it's aria-disabled, userEvent won't
-    // fire the click handler by default. Use pointer event.
-    const voucherBtn = screen.getByTestId('tender-voucher');
-    await user.pointer({ keys: '[MouseLeft]', target: voucherBtn });
-    expect(handler).not.toHaveBeenCalled();
+    await user.click(screen.getByTestId('tender-voucher'));
+    expect(handler).toHaveBeenCalledWith('internal_voucher');
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });
 
