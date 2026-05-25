@@ -54,7 +54,12 @@ import type { PaymentTenderLineRow } from '../../../../src/main/payments/reposit
 
 function makeReverseVoucherDouble(...outcomes: ReadonlyArray<ReverseVoucherOutcome>) {
   let i = 0;
-  return vi.fn<(input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>>(() => {
+  return vi.fn<
+    (
+      input: ReverseVoucherInput,
+      options: { idempotencyKey: string },
+    ) => Promise<ReverseVoucherOutcome>
+  >(() => {
     const slot = outcomes[Math.min(i, outcomes.length - 1)] ?? {
       kind: 'reversed' as const,
       already_reversed: false,
@@ -147,7 +152,10 @@ describe('T230 — deferred-reversal resolver', () => {
     await resolver.start();
     expect(linesRepo.findReversalPendingLines).toHaveBeenCalledTimes(1);
     expect(reverseVoucher).toHaveBeenCalledTimes(1);
-    expect(reverseVoucher).toHaveBeenCalledWith({ redemption_id: 'redemption-ABC' });
+    expect(reverseVoucher).toHaveBeenCalledWith(
+      { redemption_id: 'redemption-ABC' },
+      { idempotencyKey: 'tl-pending-1:resolver:retry' },
+    );
     expect(tenderLineFsm.confirmReversed).toHaveBeenCalledTimes(1);
     expect(tenderLineFsm.confirmReversed.mock.calls[0]?.[0]).toMatchObject({
       tender_line_id: 'tl-pending-1',
@@ -504,7 +512,12 @@ describe('T230 — deferred-reversal resolver', () => {
     const pendingPromise = new Promise<ReverseVoucherOutcome>((res) => {
       resolveOutcome = res;
     });
-    const reverseVoucher = vi.fn(() => pendingPromise);
+    const reverseVoucher = vi.fn<
+      (
+        input: ReverseVoucherInput,
+        options: { idempotencyKey: string },
+      ) => Promise<ReverseVoucherOutcome>
+    >(() => pendingPromise);
     const resolver = createDeferredReversalResolver({
       linesRepo,
       attemptsRepo,
@@ -602,5 +615,71 @@ describe('T230 — deferred-reversal resolver', () => {
     const callsBefore = linesRepo.findReversalPendingLines.mock.calls.length;
     await networkRestoreSignal.fire();
     expect(linesRepo.findReversalPendingLines.mock.calls.length).toBe(callsBefore);
+  });
+
+  // ── CR-2: per-line throw isolation ───────────────────────────────────────
+
+  it('per-line throw does NOT abort the sweep — remaining lines still retry', async () => {
+    // Two pending lines. The first reverseVoucher call throws (e.g.,
+    // V-A transport rejection). The resolver MUST log the failure, NOT
+    // propagate, and continue to retry the second line in the same
+    // pass. The first line stays in `reversal_pending` (no FSM
+    // transition) for the next sweep.
+    const lineA = PENDING_LINE({
+      tender_line_id: 'tl-A',
+      voucher_authority_redemption_id: 'redemption-A',
+    });
+    const lineB = PENDING_LINE({
+      tender_line_id: 'tl-B',
+      voucher_authority_redemption_id: 'redemption-B',
+    });
+    const linesRepo = makeLinesRepoForResolver([lineA, lineB]);
+    const attemptsRepo = makeAttemptsRepoDouble([makeAttemptRow()]);
+    const tenderLineFsm = makeTenderLineFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const reverseVoucher = vi
+      .fn<
+        (
+          input: ReverseVoucherInput,
+          options: { idempotencyKey: string },
+        ) => Promise<ReverseVoucherOutcome>
+      >()
+      .mockImplementationOnce(() => {
+        throw new Error('transport blew up');
+      })
+      .mockImplementationOnce(() =>
+        Promise.resolve({
+          kind: 'reversed' as const,
+          already_reversed: false,
+          redemption_id: 'redemption-B',
+          reversed_at: '2026-05-25T10:05:06.000Z',
+        }),
+      );
+    const logger = makeLogger();
+    const resolver = createDeferredReversalResolver({
+      linesRepo,
+      attemptsRepo,
+      tenderLineFsm,
+      auditEmitter,
+      reverseVoucher,
+      logger,
+      clock: () => new Date('2026-05-25T10:05:00.000Z'),
+    });
+    await resolver.runOnce();
+    // Both lines were attempted.
+    expect(reverseVoucher).toHaveBeenCalledTimes(2);
+    // Line A threw → logged at error level; no FSM transition.
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tender_line_id: 'tl-A',
+        error: 'transport blew up',
+      }),
+      'deferred_reversal_resolver:line_threw',
+    );
+    // Line B succeeded → FSM transition driven; tender.reversed emitted.
+    expect(tenderLineFsm.confirmReversed).toHaveBeenCalledTimes(1);
+    expect(tenderLineFsm.confirmReversed.mock.calls[0]?.[0]).toMatchObject({
+      tender_line_id: 'tl-B',
+    });
   });
 });

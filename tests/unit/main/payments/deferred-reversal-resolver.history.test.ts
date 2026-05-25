@@ -53,7 +53,12 @@ import type { PaymentTenderLineRow } from '../../../../src/main/payments/reposit
 
 function makeReverseVoucherDouble(...outcomes: ReadonlyArray<ReverseVoucherOutcome>) {
   let i = 0;
-  return vi.fn<(input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>>(() => {
+  return vi.fn<
+    (
+      input: ReverseVoucherInput,
+      options: { idempotencyKey: string },
+    ) => Promise<ReverseVoucherOutcome>
+  >(() => {
     const slot = outcomes[Math.min(i, outcomes.length - 1)] ?? {
       kind: 'reversed' as const,
       already_reversed: false,

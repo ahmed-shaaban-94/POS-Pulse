@@ -27,9 +27,10 @@ import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
 import { createDeferredReversalResolver } from './payments/deferred-reversal-resolver.js';
-import type {
-  ReverseVoucherInput,
-  ReverseVoucherOutcome,
+import {
+  reverseVoucher,
+  type ReverseVoucherInput,
+  type ReverseVoucherOutcome,
 } from './payments/voucher-authority/reverse.js';
 import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
 import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
@@ -653,38 +654,42 @@ app
     // on (a) app start, (b) future 003 network-restore signal, (c)
     // explicit cashier retry (no bridge surface yet).
     //
-    // **Production wiring posture.** The V-A reverse client itself
-    // (`src/main/payments/voucher-authority/reverse.ts`) is not yet
-    // wired into production bootstrap (voucher surface ships in a
-    // future Wave; today the V-A clients exist as modules but no
-    // production caller injects them). Until that wiring lands, the
-    // resolver uses a defensive stub that returns
-    // `authority_unreachable` for every call — every pending line
-    // simply stays pending until the real client arrives, which is
-    // the correct behaviour (no state corruption, full audit trail
-    // preserved). When the real client is wired (next Wave), this
-    // stub is replaced with the production V-A reverse client and the
-    // resolver immediately starts resolving on the next sweep.
+    // **Production wiring (PR #222 fixup — CR-1).** The V-A reverse
+    // client is wired here using the same `apiBaseUrl` + `fetch` seam
+    // the operator backend already uses. The resolver supplies the
+    // per-line `idempotencyKey` (derived from `tender_line_id`); the
+    // closure bakes in baseUrl / fetch / logger.
     //
-    // The 003 network-restore signal is also TBD (no network module
-    // yet). The resolver runs without it via (a) app-start and (c)
+    // The 003 network-restore signal is still TBD (no network module
+    // yet); the resolver runs without it via (a) app-start and (c)
     // the manual-retry entry point.
-    const reverseVoucherStub = async (
+    const reverseVoucherForResolver = async (
       input: ReverseVoucherInput,
+      options: { idempotencyKey: string },
     ): Promise<ReverseVoucherOutcome> => {
-      void input;
-      mainLogger.info(
-        { resolver: 'deferred_reversal_resolver' },
-        'voucher_reverse_stub:authority_unreachable',
-      );
-      return await Promise.resolve({ kind: 'authority_unreachable' });
+      return await reverseVoucher(input, {
+        baseUrl: apiBaseUrl,
+        fetch: globalThis.fetch.bind(globalThis),
+        logger: {
+          info: (payload, msg): void => {
+            mainLogger.info(payload, msg);
+          },
+          warn: (payload, msg): void => {
+            mainLogger.warn(payload, msg);
+          },
+          error: (payload, msg): void => {
+            mainLogger.error(payload, msg);
+          },
+        },
+        idempotencyKey: options.idempotencyKey,
+      });
     };
     const deferredReversalResolver = createDeferredReversalResolver({
       linesRepo: paymentsLinesRepo,
       attemptsRepo: paymentsAttemptsRepo,
       tenderLineFsm,
       auditEmitter: paymentAuditEmitter,
-      reverseVoucher: reverseVoucherStub,
+      reverseVoucher: reverseVoucherForResolver,
       logger: {
         info: (payload, msg): void => {
           mainLogger.info(payload, msg);

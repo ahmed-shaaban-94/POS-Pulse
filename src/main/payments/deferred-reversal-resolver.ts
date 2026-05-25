@@ -76,7 +76,17 @@ export interface DeferredReversalResolverDeps {
   attemptsRepo: Pick<PaymentAttemptsRepository, 'findById'>;
   tenderLineFsm: Pick<TenderLineFsm, 'confirmReversed'>;
   auditEmitter: Pick<PaymentAuditEmitter, 'emitTenderReversed'>;
-  reverseVoucher: (input: ReverseVoucherInput) => Promise<ReverseVoucherOutcome>;
+  /**
+   * V-A `vouchers.reverse` call adapter. The resolver supplies a
+   * per-line `idempotencyKey` (derived from `tender_line_id`) so the
+   * authority and any local outbox can treat repeated retries as a
+   * single logical operation. The bootstrap is responsible for closing
+   * over baseUrl / fetch / logger before injection.
+   */
+  reverseVoucher: (
+    input: ReverseVoucherInput,
+    options: { idempotencyKey: string },
+  ) => Promise<ReverseVoucherOutcome>;
   networkRestoreSignal?: NetworkRestoreSignal;
   logger: ResolverLogger;
   clock: () => Date;
@@ -153,9 +163,10 @@ export function createDeferredReversalResolver(
       return;
     }
     const action_id = `${line.tender_line_id}:resolver:retry`;
-    const outcome = await reverseVoucher({
-      redemption_id: line.voucher_authority_redemption_id,
-    });
+    const outcome = await reverseVoucher(
+      { redemption_id: line.voucher_authority_redemption_id },
+      { idempotencyKey: action_id },
+    );
     if (outcome.kind === 'authority_unreachable') {
       logger.warn(
         {
@@ -248,7 +259,25 @@ export function createDeferredReversalResolver(
     try {
       const pending = linesRepo.findReversalPendingLines();
       for (const line of pending) {
-        await processLine(line);
+        // Per-line try/catch (CR-2): a thrown error from one line — e.g., a
+        // V-A transport rejection in `reverseVoucher` or an unexpected FSM
+        // throw — must NOT abort the sweep. Other pending lines in the
+        // same pass still deserve their retry. The error is logged with
+        // the line id for triage; the line stays in `reversal_pending`
+        // and will be picked up on the next sweep (app-restart / network-
+        // restore signal / cashier retry).
+        try {
+          await processLine(line);
+        } catch (err: unknown) {
+          logger.error(
+            {
+              tender_line_id: line.tender_line_id,
+              payment_attempt_id: line.payment_attempt_id,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            'deferred_reversal_resolver:line_threw',
+          );
+        }
       }
     } finally {
       running = false;
