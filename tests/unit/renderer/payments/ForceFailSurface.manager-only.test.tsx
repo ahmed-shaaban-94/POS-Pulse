@@ -158,6 +158,34 @@ describe('T242 — ForceFailSurface manager-only renderer', () => {
     expect(text).not.toMatch(/original_cashier_operator_id/i);
   });
 
+  it('CR-1: rejected bridge call collapses to GENERIC refusal (no stuck-submitting state)', async () => {
+    // If the bridge call rejects (IPC error, main-process crash, timeout),
+    // the surface MUST NOT remain stuck in `submitting`. It collapses to
+    // the same generic refusal copy as a structured refusal.
+    const forceFail = vi.fn<(req: PaymentsForceFailRequest) => Promise<PaymentsForceFailResponse>>(
+      () => Promise.reject(new Error('IPC channel closed')),
+    );
+    const bridge: Pick<PaymentsBridgeAPI, 'forceFail'> = { forceFail };
+    const user = userEvent.setup();
+    render(
+      <ForceFailSurface
+        payment_attempt_id="pa-stuck-1"
+        idempotency_key="idem-ff-render-rej"
+        payments={bridge}
+      />,
+    );
+    await user.click(screen.getByTestId('ffs-confirm'));
+    await waitFor(() => {
+      expect(screen.queryByTestId('ffs-refused')).toBeInTheDocument();
+    });
+    // Generic refusal copy — no error message text leaks.
+    const refusedNode = screen.getByTestId('ffs-refused');
+    expect(refusedNode).toHaveTextContent(/could not be force-failed/i);
+    expect(refusedNode).not.toHaveTextContent(/IPC channel closed/i);
+    // The submitting state is gone.
+    expect(screen.queryByTestId('ffs-submitting')).not.toBeInTheDocument();
+  });
+
   it('confirm button is disabled while submitting AND after success (prevents double-fire)', async () => {
     let resolveResp: (r: PaymentsForceFailResponse) => void = () => {};
     const pending = new Promise<PaymentsForceFailResponse>((res) => {

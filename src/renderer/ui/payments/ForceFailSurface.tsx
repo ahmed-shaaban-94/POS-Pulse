@@ -83,16 +83,26 @@ export function ForceFailSurface({
   const handleClick = useCallback(() => {
     void (async (): Promise<void> => {
       setState({ kind: 'submitting' });
-      const response: PaymentsForceFailResponse = await payments.forceFail({
-        payment_attempt_id,
-        idempotency_key,
-      });
-      if (response.kind === 'ok') {
-        setState({ kind: 'success', force_failed_at: response.force_failed_at });
-        onForceFailed?.({ force_failed_at: response.force_failed_at });
-        return;
+      try {
+        const response: PaymentsForceFailResponse = await payments.forceFail({
+          payment_attempt_id,
+          idempotency_key,
+        });
+        if (response.kind === 'ok') {
+          setState({ kind: 'success', force_failed_at: response.force_failed_at });
+          onForceFailed?.({ force_failed_at: response.force_failed_at });
+          return;
+        }
+        setState({ kind: 'refused' });
+      } catch {
+        // CR-1 (PR #224): a rejected bridge call (IPC error, main-process
+        // crash, timeout) must NOT leave the surface stuck in
+        // `submitting`. Collapse to the same generic refusal copy — the
+        // structured error stays on the renderer-process logger
+        // upstream of this layer. No factor-distinguishing leak to the
+        // operator (FR-022 / NFR-003 / PR-2 inherited).
+        setState({ kind: 'refused' });
       }
-      setState({ kind: 'refused' });
     })();
   }, [payments, payment_attempt_id, idempotency_key, onForceFailed]);
 

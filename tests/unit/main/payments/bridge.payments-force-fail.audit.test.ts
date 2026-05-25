@@ -126,6 +126,93 @@ describe('T241 — payments.forceFail audit dual-attribution', () => {
     expect(idempotency.commitCalls).toBe(1);
   });
 
+  it('idempotency_payload_mismatch: refused; no FSM transition; no audit', async () => {
+    const row = makeAttemptRow({
+      acting_operator_id: CASHIER_ID,
+      operator_session_id: 'sess-cashier-1',
+    });
+    const attemptsRepo = makeAttemptsRepoDouble([row]);
+    const fsm = makePaymentAttemptFsmDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const session = makeSession({
+      role: 'manager',
+      operator_id: MANAGER_ID,
+      operator_session_id: MANAGER_SESSION,
+    });
+    const handler = createPaymentsForceFailHandler({
+      getCurrentSession: () => session,
+      attemptsRepo,
+      paymentAttemptFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble({ kind: 'mismatch' }),
+      auditEmitter,
+      clock: () => new Date('2026-05-25T12:00:00.000Z'),
+    });
+    const result = await handler(req());
+    expect(result).toEqual({ kind: 'refused', reason: 'idempotency_payload_mismatch' });
+    expect(fsm.forceFail).not.toHaveBeenCalled();
+    expect(auditEmitter.captured).toHaveLength(0);
+  });
+
+  it('replay with row in non-force_failed state: refused with internal_error (defence-in-depth)', async () => {
+    // Pathological branch: the idempotency store says "replay" but the
+    // row state does not match what a replay should look like. The
+    // handler refuses defensively with `internal_error` (a closed
+    // refusal value) rather than fabricating a success.
+    const row = makeAttemptRow({
+      state: 'started', // inconsistent with `kind: 'replay'`
+      acting_operator_id: CASHIER_ID,
+      operator_session_id: 'sess-cashier-1',
+    });
+    const attemptsRepo = makeAttemptsRepoDouble([row]);
+    const fsm = makePaymentAttemptFsmDouble();
+    const session = makeSession({
+      role: 'manager',
+      operator_id: MANAGER_ID,
+      operator_session_id: MANAGER_SESSION,
+    });
+    const handler = createPaymentsForceFailHandler({
+      getCurrentSession: () => session,
+      attemptsRepo,
+      paymentAttemptFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble({ kind: 'replay' }),
+      auditEmitter: makeAuditEmitterDouble(),
+      clock: () => new Date('2026-05-25T12:00:00.000Z'),
+    });
+    const result = await handler(req());
+    expect(result).toEqual({ kind: 'refused', reason: 'internal_error' });
+    expect(fsm.forceFail).not.toHaveBeenCalled();
+  });
+
+  it('FSM refuses transition (race): handler forwards the FSM refusal reason', async () => {
+    // The handler reaches the FSM call, but the FSM refuses (e.g.,
+    // attempt_terminal raced in between findById and the FSM call).
+    // The handler MUST forward the FSM refusal as the bridge response.
+    const row = makeAttemptRow({
+      acting_operator_id: CASHIER_ID,
+      operator_session_id: 'sess-cashier-1',
+    });
+    const attemptsRepo = makeAttemptsRepoDouble([row]);
+    const fsm = makePaymentAttemptFsmDouble();
+    fsm.forceFail.mockReturnValueOnce({ kind: 'refused', reason: 'attempt_terminal' });
+    const auditEmitter = makeAuditEmitterDouble();
+    const session = makeSession({
+      role: 'manager',
+      operator_id: MANAGER_ID,
+      operator_session_id: MANAGER_SESSION,
+    });
+    const handler = createPaymentsForceFailHandler({
+      getCurrentSession: () => session,
+      attemptsRepo,
+      paymentAttemptFsm: fsm,
+      idempotency: makeIdempotencyHelperDouble(),
+      auditEmitter,
+      clock: () => new Date('2026-05-25T12:00:00.000Z'),
+    });
+    const result = await handler(req());
+    expect(result).toEqual({ kind: 'refused', reason: 'attempt_terminal' });
+    expect(auditEmitter.captured).toHaveLength(0);
+  });
+
   it('idempotent replay: returns prior force_failed_at; does NOT re-emit audit', async () => {
     // First call — proceeds normally.
     const first = setup();
