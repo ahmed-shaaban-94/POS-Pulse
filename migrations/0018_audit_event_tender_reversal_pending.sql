@@ -1,0 +1,38 @@
+-- T204 — ratify the one remaining `audit_events.action_category` value that
+-- Slice 3's T065 (migrations/0017_extend_audit_event_categories.sql)
+-- intentionally deferred: `tender.reversal_pending`. This finalises the §A3
+-- additive ratification recorded under coordination.md §"Sign-off — 2026-05-21",
+-- whose approved scope explicitly lists all 8 payment audit categories (4
+-- attempt-level + 4 per-line). Slice 3 cleared 7 of them; this migration
+-- closes the eighth in the migration timeline.
+--
+-- As with 0017, this file is INTENTIONALLY a documentation-only marker. The
+-- 004 audit_events schema (migrations/0004_audit_events.sql) declares
+-- `action_category TEXT NOT NULL` with NO CHECK constraint, so categories
+-- remain open-set at the SQL layer and are enforced at the application
+-- emitter (src/main/payments/audit-emitter.ts plus the TS-layer guard set
+-- `PAYMENT_AUDIT_CATEGORIES` in src/shared/payments/types.ts — which already
+-- includes `tender.reversal_pending` at line 118 as the eighth member).
+--
+-- Introducing a CHECK now would retroactively invalidate every audit_events
+-- row written under open-set semantics, which Constitution §P4 (append-only)
+-- forbids outright. We therefore do not execute DDL; we let schema_migrations
+-- record the ordering decision so future auditors can confirm that the
+-- §A3-additive `tender.reversal_pending` category was ratified at this
+-- ordinal in the sequence.
+--
+-- The single new audit category ratified by this migration:
+--
+--   tender.reversal_pending
+--
+-- This category is emitted by Slice 4's deferred-reversal pathways (FR-006B)
+-- whenever a voucher tender line cannot be reversed synchronously against the
+-- voucher authority — i.e. `payments.confirm` finalises the attempt as
+-- `failed` with reason `dependency_unavailable` and any `applied`
+-- `internal_voucher` line transitions to `reversal_pending` pending an
+-- authoritative `vouchers.reverse` resolution.
+--
+-- After this migration is applied, the application-enforced audit category
+-- set is complete (4 + 4 = 8) and matches `PAYMENT_AUDIT_CATEGORIES` exactly.
+
+SELECT 1;  -- no-op statement so the file is non-empty valid SQL.
