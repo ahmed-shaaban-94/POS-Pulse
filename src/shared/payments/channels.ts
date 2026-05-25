@@ -20,6 +20,12 @@ export const PAYMENTS_IPC_CHANNELS = {
   CANCEL: 'payments:cancel',
   SUBSCRIBE: 'payments:subscribe',
   READ: 'payments:read',
+  /**
+   * Wave 5b-renderer — manager / admin-only. The main-process role gate
+   * is the load-bearing security check (Constitution §III); the
+   * renderer-side OperatorRouteGuard is secondary UX defence only.
+   */
+  FORCE_FAIL: 'payments:force-fail',
 } as const;
 
 export type PaymentsIpcChannel = (typeof PAYMENTS_IPC_CHANNELS)[keyof typeof PAYMENTS_IPC_CHANNELS];

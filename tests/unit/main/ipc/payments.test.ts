@@ -28,6 +28,7 @@ import {
 import type {
   PaymentsCancelResponse,
   PaymentsConfirmResponse,
+  PaymentsForceFailResponse,
   PaymentsReadResponse,
   PaymentsStartResponse,
   PaymentsSubscribeResponse,
@@ -65,6 +66,7 @@ function mkDeps() {
   const refusedApply: TenderApplyResponse = { kind: 'refused', reason: 'no_session' };
   const refusedReverse: TenderReverseResponse = { kind: 'refused', reason: 'no_session' };
   const refusedTenderRead: TenderReadResponse = { kind: 'refused', reason: 'no_session' };
+  const refusedForceFail: PaymentsForceFailResponse = { kind: 'refused', reason: 'no_session' };
   return {
     paymentsStart: vi.fn(() => Promise.resolve(refusedStart)),
     paymentsConfirm: vi.fn(() => Promise.resolve(refusedConfirm)),
@@ -74,11 +76,12 @@ function mkDeps() {
     tenderApply: vi.fn(() => Promise.resolve(refusedApply)),
     tenderReverse: vi.fn(() => Promise.resolve(refusedReverse)),
     tenderRead: vi.fn(() => Promise.resolve(refusedTenderRead)),
+    paymentsForceFail: vi.fn(() => Promise.resolve(refusedForceFail)),
   };
 }
 
 describe('registerPaymentsHandlers — channel registration', () => {
-  it('registers all 5 payments.* + 3 tender.* channels', () => {
+  it('registers all 6 payments.* + 3 tender.* channels', () => {
     const { ipcMain, handlers } = mkIpc();
     registerPaymentsHandlers(ipcMain, mkDeps());
     for (const ch of Object.values(PAYMENTS_IPC_CHANNELS)) {

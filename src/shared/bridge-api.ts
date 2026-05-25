@@ -748,6 +748,13 @@ export interface PaymentsBridgeAPI {
   subscribe(req: PaymentsSubscribeRequest): Promise<PaymentsSubscribeResponse>;
   /** One-shot read of the same renderer projection as `subscribe`. */
   read(req: PaymentsReadRequest): Promise<PaymentsReadResponse>;
+  /**
+   * Wave 5b — manager / admin-only force-fail of a stuck `started`
+   * attempt (FR-021). The renderer's `<OperatorRouteGuard>` is
+   * secondary UX defence; the load-bearing role check lives in the
+   * main-process handler. Cashier role is refused with `role_denied`.
+   */
+  forceFail(req: PaymentsForceFailRequest): Promise<PaymentsForceFailResponse>;
 }
 
 export interface TenderBridgeAPI {
