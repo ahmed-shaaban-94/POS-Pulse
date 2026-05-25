@@ -7,59 +7,87 @@
  *           docs/assets, lockfiles, images, SVGs, binaries, generated outputs.
  */
 
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
-const ROOT = path.resolve(path.dirname(__filename), "..");
+const ROOT = path.resolve(path.dirname(__filename), '..');
 
 const EXCLUDED_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "build",
-  "coverage",
-  ".turbo",
-  ".cache",
-  ".next",
-  "out",
-  ".understand-anything",
-  ".claude",
-  "bin",
-  "externals",
-  "release",
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'coverage',
+  '.turbo',
+  '.cache',
+  '.next',
+  'out',
+  '.understand-anything',
+  '.claude',
+  'bin',
+  'externals',
+  'release',
 ]);
 
-const EXCLUDED_PATH_PREFIXES = [
-  path.join(ROOT, "docs", "assets"),
-];
+const EXCLUDED_PATH_PREFIXES = [path.join(ROOT, 'docs', 'assets')];
 
-const EXCLUDED_FILENAMES = new Set([
-  "package-lock.json",
-  "pnpm-lock.yaml",
-  "yarn.lock",
-]);
+const EXCLUDED_FILENAMES = new Set(['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock']);
 
 const BINARY_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp",
-  ".woff", ".woff2", ".ttf", ".eot", ".otf",
-  ".mp4", ".mov", ".avi", ".zip", ".tar", ".gz",
-  ".pdf", ".exe", ".bin", ".so", ".dylib", ".dll",
-  ".svg",
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.ico',
+  '.webp',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.eot',
+  '.otf',
+  '.mp4',
+  '.mov',
+  '.avi',
+  '.zip',
+  '.tar',
+  '.gz',
+  '.pdf',
+  '.exe',
+  '.bin',
+  '.so',
+  '.dylib',
+  '.dll',
+  '.svg',
 ]);
 
 const SOURCE_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".json", ".yml", ".yaml",
-  ".md", ".mdx",
-  ".sql",
-  ".sh", ".bash",
-  ".css", ".scss", ".less",
-  ".html", ".hbs", ".ejs",
-  ".toml", ".env",
-  ".graphql", ".gql",
-  ".prisma",
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.json',
+  '.yml',
+  '.yaml',
+  '.md',
+  '.mdx',
+  '.sql',
+  '.sh',
+  '.bash',
+  '.css',
+  '.scss',
+  '.less',
+  '.html',
+  '.hbs',
+  '.ejs',
+  '.toml',
+  '.env',
+  '.graphql',
+  '.gql',
+  '.prisma',
 ]);
 
 function isExcludedPath(absPath) {
@@ -68,8 +96,8 @@ function isExcludedPath(absPath) {
 
 function countLinesInFile(filePath) {
   try {
-    const content = fs.readFileSync(filePath, "utf8");
-    return content.split("\n").length;
+    const content = fs.readFileSync(filePath, 'utf8');
+    return content.split('\n').length;
   } catch {
     return 0;
   }
@@ -108,13 +136,13 @@ function walkAndCount(dir) {
 function formatLoc(n) {
   if (n >= 1000) {
     const k = (n / 1000).toFixed(1);
-    return k + "k";
+    return k + 'k';
   }
   return String(n);
 }
 
 function buildSvg(locLabel) {
-  const labelText = "lines of code";
+  const labelText = 'lines of code';
   const valueText = locLabel;
 
   const labelWidth = 96;
@@ -150,9 +178,9 @@ const loc = walkAndCount(ROOT);
 const label = formatLoc(loc);
 const svg = buildSvg(label);
 
-const outDir = path.join(ROOT, "docs", "assets", "badges");
+const outDir = path.join(ROOT, 'docs', 'assets', 'badges');
 fs.mkdirSync(outDir, { recursive: true });
-const outPath = path.join(outDir, "loc.svg");
-fs.writeFileSync(outPath, svg, "utf8");
+const outPath = path.join(outDir, 'loc.svg');
+fs.writeFileSync(outPath, svg, 'utf8');
 
-console.log(`LOC: ${loc.toLocaleString("en-US")} (${label}) -> ${outPath}`);
+console.log(`LOC: ${loc.toLocaleString('en-US')} (${label}) -> ${outPath}`);

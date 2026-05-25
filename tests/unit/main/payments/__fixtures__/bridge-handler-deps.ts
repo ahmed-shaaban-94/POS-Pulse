@@ -38,6 +38,7 @@ import type {
   ConfirmOutcome,
   CancelOutcome,
   FailOutcome,
+  ForceFailOutcome,
 } from '../../../../../src/main/payments/fsm/payment-attempt-fsm.js';
 import type {
   TenderLineFsm,
@@ -201,6 +202,7 @@ export interface PaymentAttemptFsmDouble extends PaymentAttemptFsm {
   confirm: Mock<PaymentAttemptFsm['confirm']>;
   cancel: Mock<PaymentAttemptFsm['cancel']>;
   fail: Mock<PaymentAttemptFsm['fail']>;
+  forceFail: Mock<PaymentAttemptFsm['forceFail']>;
 }
 
 export function makePaymentAttemptFsmDouble(): PaymentAttemptFsmDouble {
@@ -232,6 +234,12 @@ export function makePaymentAttemptFsmDouble(): PaymentAttemptFsmDouble {
       (input): FailOutcome => ({
         kind: 'ok',
         failed_at: input.failed_at,
+      }),
+    ),
+    forceFail: vi.fn(
+      (input): ForceFailOutcome => ({
+        kind: 'ok',
+        force_failed_at: input.force_failed_at,
       }),
     ),
   };

@@ -614,6 +614,23 @@ export type PaymentsCancelResponse =
     }
   | PaymentRefusal;
 
+// ── payments.forceFail (Wave 5b — manager-only) ──────────────────────────────
+//
+// Manager / admin incident-response action that transitions a stuck
+// `started` attempt to `force_failed` (FR-021 / plan AD-5). The audit
+// row carries dual attribution (manager actor + original cashier).
+// **Manager identity NEVER appears in cashier-visible surfaces** —
+// `force_fail_attribution_operator_id` is stripped from any renderer
+// projection of the attempt; consumers of this response see only the
+// generic timestamp.
+
+export interface PaymentsForceFailRequest {
+  payment_attempt_id: string;
+  idempotency_key: string;
+}
+
+export type PaymentsForceFailResponse = { kind: 'ok'; force_failed_at: string } | PaymentRefusal;
+
 // ── payments.read ────────────────────────────────────────────────────────────
 
 export interface PaymentsReadRequest {

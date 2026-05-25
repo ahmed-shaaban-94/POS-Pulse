@@ -6,7 +6,9 @@
  *   started → settled    (via confirm, gated on settlement invariant)
  *   started → cancelled  (via cancel; reverses applied lines LIFO)
  *   started → failed     (via fail; carries a closed FR-006 reason)
- *   started → force_failed (Slice 4 — not implemented here)
+ *   started → force_failed (via forceFail; manager-only; dual attribution
+ *                           — manager actor + original cashier — recorded
+ *                           by the bridge handler at audit time)
  *
  * Each transition writes one row to `payment_action_outbox` in the same
  * SQLite transaction as the state-row update, so a partial write is
@@ -75,6 +77,23 @@ export interface FailPaymentAttemptInput {
   action_id: string;
 }
 
+/**
+ * T280 — Wave 5b. Manager-initiated terminal transition for a stuck
+ * `started` attempt (FR-021, plan AD-5). The FSM persists the state +
+ * outbox row; the audit row's dual-attribution payload (manager actor +
+ * original cashier) is composed by the bridge handler at audit-emission
+ * time and is NOT this FSM's concern. The FSM records the manager
+ * `acting_operator_id` (the one that authorised the force-fail) on the
+ * outbox row so the action lineage is durable.
+ */
+export interface ForceFailPaymentAttemptInput {
+  payment_attempt_id: string;
+  force_failed_at: string;
+  /** Manager / admin operator id (the actor authorising the force-fail). */
+  manager_operator_id: string;
+  action_id: string;
+}
+
 export type StartOutcome =
   | { kind: 'ok'; payment_attempt_id: string }
   | { kind: 'refused'; reason: RefusalReason };
@@ -96,11 +115,16 @@ export type FailOutcome =
   | { kind: 'ok'; failed_at: string }
   | { kind: 'refused'; reason: RefusalReason };
 
+export type ForceFailOutcome =
+  | { kind: 'ok'; force_failed_at: string }
+  | { kind: 'refused'; reason: RefusalReason };
+
 export interface PaymentAttemptFsm {
   start(input: StartPaymentAttemptInput): StartOutcome;
   confirm(input: ConfirmPaymentAttemptInput): ConfirmOutcome;
   cancel(input: CancelPaymentAttemptInput): CancelOutcome;
   fail(input: FailPaymentAttemptInput): FailOutcome;
+  forceFail(input: ForceFailPaymentAttemptInput): ForceFailOutcome;
 }
 
 // ── Factory ─────────────────────────────────────────────────────────────────
@@ -302,6 +326,58 @@ export function createPaymentAttemptFsm(deps: PaymentAttemptFsmDependencies): Pa
           created_at: input.failed_at,
         });
         return { kind: 'ok', failed_at: input.failed_at };
+      });
+      return txn();
+    },
+
+    /**
+     * T280 — Wave 5b. Manager-initiated terminal transition (FR-021).
+     * Mirrors `fail()` but: (1) targets the `force_failed` state, (2)
+     * persists `force_fail_attribution_operator_id = manager_operator_id`
+     * on the row (data-model line 80), (3) records the manager's
+     * `acting_operator_id` on the outbox row so the action lineage is
+     * durable (the row's `acting_operator_id` on `payment_attempts`
+     * remains the original cashier — that's the dual-attribution
+     * design at the row layer; the audit dual-attribution is composed
+     * by the bridge handler).
+     */
+    forceFail(input: ForceFailPaymentAttemptInput): ForceFailOutcome {
+      const row = attempts.findById(input.payment_attempt_id);
+      if (row === undefined) {
+        return { kind: 'refused', reason: 'attempt_terminal' };
+      }
+      if (!isLegalPaymentAttemptTransition(row.state, 'force_failed')) {
+        return { kind: 'refused', reason: 'attempt_terminal' };
+      }
+      const txn = db.transaction((): ForceFailOutcome => {
+        attempts.updateState({
+          payment_attempt_id: input.payment_attempt_id,
+          state: 'force_failed',
+          timestamp: input.force_failed_at,
+          last_action_id: input.action_id,
+          failure_reason: 'manager_force_failed',
+          force_fail_attribution_operator_id: input.manager_operator_id,
+        });
+        const hash = computeActionPayloadHash({
+          payment_attempt_id: input.payment_attempt_id,
+          failure_reason: 'manager_force_failed',
+          action_kind: 'payment.force_fail',
+        });
+        outbox.insert({
+          action_id: input.action_id,
+          payment_attempt_id: input.payment_attempt_id,
+          tender_line_id: null,
+          action_kind: 'payment.force_fail',
+          action_payload_hash: hash,
+          // Outbox `acting_operator_id` records who AUTHORISED the
+          // action — that's the manager. The original cashier remains
+          // on `payment_attempts.acting_operator_id` (immutable since
+          // payments.start). The bridge handler composes both into the
+          // dual-attribution audit payload.
+          acting_operator_id: input.manager_operator_id,
+          created_at: input.force_failed_at,
+        });
+        return { kind: 'ok', force_failed_at: input.force_failed_at };
       });
       return txn();
     },

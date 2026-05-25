@@ -44,7 +44,16 @@ export type PaymentFailureReason =
   | 'voucher_already_redeemed'
   | 'voucher_tenant_mismatch'
   | 'voucher_branch_mismatch'
-  | 'split_tender_rollback';
+  | 'split_tender_rollback'
+  /**
+   * Wave 5b — manager-initiated terminal transition (FR-021 / plan AD-5).
+   * Used exclusively by `payments.forceFail` when a manager or admin
+   * breaks a stuck `started` attempt during incident response. The
+   * audit row carries dual attribution (manager actor + original
+   * cashier); the manager identity MUST NEVER cross the bridge to a
+   * cashier-visible surface (FR-021 last clause).
+   */
+  | 'manager_force_failed';
 
 export interface PaymentAttemptRow {
   payment_attempt_id: string;
