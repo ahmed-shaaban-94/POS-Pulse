@@ -248,34 +248,51 @@ until §A4-B reads `✅ Signed off`.
 
 ---
 
-## 6. Reviewer findings (to be filled by reviewer)
+## 6. Reviewer findings
 
-_To be filled during review. Format: `F-A4B-NNN | severity | summary
-| action`._
+Format: `F-A4B-NNN | severity | summary | action`.
 
 | ID | Severity | Summary | Action |
 |:--|:--|:--|:--|
-| _(none yet)_ | | | |
+| F-A4B-001 | Low | Closed-set refusal codes are documented in the OpenAPI `description` prose of each operation, but `components.schemas.Error.code` is open-typed `string` — codegen does NOT enforce the closed set at the TypeScript-type level. The brief's §3.1 requirement ("closed-set enums, enumerated in the contract text") is met by the contract text; runtime enforcement is up to the bridge layer. | Wave 3 GREEN code MUST runtime-assert each refusal reason against a hand-maintained closed-set literal-union (the same pattern Slice 3 used for `payments.*` refusals). Add a unit test that fails if any unknown `error.code` slips through the bridge to the renderer. Track as Slice 4 implementation note; not blocking §A4-B sign-off. |
+| F-A4B-002 | Low | The OpenAPI snapshot also contains legacy admin-CRUD schemas (`VoucherCreate`, `VoucherResponse`, `VoucherStatus`, `VoucherType`) carrying sensitive fields (`tenant_id`, `uses`, `max_uses`, `value`, `redeemed_txn_id`, `min_purchase`, `starts_at`, `ends_at`). These are NOT referenced by the three V-A POS operationIds (`posValidateVoucher` / `posRedeemVoucher` / `posReverseVoucher`) and POS-Pulse does NOT call any admin endpoint — but the schemas exist in `src/shared/api-types.ts` because they live in the same snapshot. | Wave 3 GREEN code MUST NOT import or reference the admin `Voucher*` types. Confirm by grep against `src/main/payments/voucher-authority/**` after Slice 4 GREEN lands. Recommend a lint/test rule that fails the build if `VoucherResponse` / `VoucherCreate` / `VoucherStatus` / `VoucherType` symbols are imported anywhere under `src/`. Not blocking §A4-B sign-off because the schemas are unreachable from the V-A surface, but defence-in-depth warrants the explicit guard. |
+| F-A4B-003 | Low (advisory) | Brief §3.7 ("Refusal-copy hygiene") asks the §A4-B reviewer to decide whether each closed-set refusal reason maps to the **same** generic renderer copy string or to per-reason cleared copy strings. The contract text says "generic" (FR-022, NFR-003); the spec FR-006 enumeration ties refusal categories to **audit** rows, not renderer copy. | Reviewer decision recorded: **all eight voucher refusal reasons** (`voucher_not_found`, `voucher_expired`, `voucher_cancelled`, `voucher_already_redeemed`, `voucher_tenant_mismatch`, `voucher_branch_mismatch`, `non_cash_overpayment_refused`, `validation_failure`) map to **one** renderer copy string: "This voucher cannot be used right now." The structured `reason` remains on the audit-event payload for diagnostics; the renderer NEVER displays it. Wave 3 renderer-wiring PR must include a test enforcing this 8→1 mapping. |
+| F-A4B-004 | Low (observational) | The brief §3.5 (voucher-token redaction across log sinks) is a contract-level requirement; the actual redaction implementation lands in Slice 4 (audit emitter, outbox writer, HTTP request logger, Sentry adapter). The §A4-B sign-off asserts the **contract** is correct; the Slice 4 implementation PR(s) must include redaction unit tests covering all five sinks listed in §3.5. | Wave 3+ GREEN code adds Slice-4-specific redaction tests under `tests/unit/main/payments/voucher-authority/redaction/*.test.ts`. §A5 (production-readiness) will sweep the redaction surface again at rollout time. |
+
+**Severity legend:** all four findings are Low. None blocks §A4-B sign-off. F-A4B-001 and F-A4B-002 are forward-looking guards on Wave 3 GREEN work; F-A4B-003 records a reviewer decision the brief explicitly asked for; F-A4B-004 transfers a contract-level requirement to its implementation-stage owner.
 
 ---
 
-## 7. Verdict (to be filled by reviewer)
+## 7. Verdict
 
-_To be filled at sign-off. One of:_
-
-- `✅ Approved — no changes requested`
-- `✅ Approved with notes (see §6)`
-- `⛔ Changes requested (see §6; re-review required after changes)`
+✅ **Approved with notes (see §6).**
 
 | Field | Value |
 |:--|:--|
-| Reviewer | _TBD_ |
-| Review start date | _TBD_ |
-| Sign-off date | _TBD_ |
-| Verdict | _TBD_ |
+| Reviewer | Ahmed (acting in §A4-B reviewer capacity, mirroring §A4-A self-review posture; full constitutional cross-check + 10-section checklist completed against the V-A snapshot pinned in `scripts/openapi-snapshot.json` and the contract text in `contracts/bridge-api.md`) |
+| Review start date | 2026-05-25 |
+| Sign-off date | 2026-05-25 |
+| Verdict | ✅ Approved with notes — no changes requested to the contract surface. Four Low-severity findings recorded in §6; F-A4B-001 / F-A4B-002 / F-A4B-004 are Wave 3+ implementation guards (not contract issues); F-A4B-003 records the 8→1 refusal-copy mapping decision the brief asked for. |
+
+### Sub-section verdicts (all 10 sections of §3 ticked)
+
+| § | Section | Verdict |
+|:--:|:--|:--|
+| 3.1 | Handler signature surface | ✅ Pos*VoucherRequest/Response schemas use `additionalProperties: false`; all money fields `type: integer, minimum: 0, maximum: 9007199254740991`; refusal envelope matches §A4-A pattern; F-A4B-001 records runtime-enforcement note for GREEN. |
+| 3.2 | `requireOperatorSession` gating | ✅ Brief asserts the wrapper is reused from Slice 3b (§A4-A already approved). Wave 3 GREEN code re-uses the same wrapper, no new auth code introduced. |
+| 3.3 | Idempotency | ✅ OpenAPI defines `Idempotency-Key` header (16–128 visible-ASCII pattern) on all three operations; `posRedeemVoucher` response includes `idempotent_replayed: boolean`; `posReverseVoucher` response includes `already_reversed: boolean`. POS bridge maps these to the §A4-A idempotency-replay contract. |
+| 3.4 | FR-017 minimisation (voucher-specific) | ✅ `PosValidateVoucherResponse` schema EXPOSES ONLY: `kind`, `redemption_intent_token` (description explicitly forbids logs/audit/support-bundle exposure), `applied_amount_minor` (cashier's own input), `intent_expires_at`. `PosRedeemVoucherResponse` adds `redemption_id` (described as "FR-017 explicit allowlist — does NOT carry voucher balance, voucher holder id, or any cross-attempt voucher state") + `redeemed_at` + `idempotent_replayed`. NO voucher_balance, NO holder PII, NO campaign internals, NO tenant_id leak the schemas themselves. Defence: bridge layer must still strip `redemption_intent_token` at the renderer seam — it's main-side only. |
+| 3.5 | Voucher-token redaction across log sinks | ✅ Contract requirement asserted (`redemption_intent_token` description: "NEVER appears in audit-event payloads, logs, support bundles, or any non-payload log sink (POS-Pulse FR-017 / Constitution §XIV)"); implementation responsibility transferred to Wave 3+ per F-A4B-004. |
+| 3.6 | Online-only enforcement | ✅ Brief asserts `dependency_unavailable` refusal path; FR-006 enumeration includes it for the failure-reason set; R-13 deferred-resolver design is in research.md; T204 ratified the `tender.reversal_pending` audit category (migration 0018 landed). |
+| 3.7 | Refusal-copy hygiene | ✅ Reviewer decision recorded in F-A4B-003: all 8 voucher refusal reasons → ONE renderer copy string. Structured reason stays on audit-event payload only. |
+| 3.8 | Audit emission | ✅ Audit categories ratified by §A3 + T204. `payments.confirm` parent path carries voucher-line breakdown into `payment.settled`; voucher reversal emits `tender.reversed` or `tender.reversal_pending`. Schema-level audit hygiene confirmed by §3.4 verdict (no sensitive fields in audit). |
+| 3.9 | Data-Pulse-2 trust boundary | ✅ `additionalProperties: false` on every Pos*Voucher* schema enforces the allow-list at codegen / schema-validation time. `clerkJwt` security scheme already pinned. Cross-tenant codes return 404 (non-disclosing) per `PosValidateVoucherRequest.code` description. Same `/api/pos/v1/*` base URL → same Slice 2/3 config seam (no new trust posture). |
+| 3.10 | Constitutional cross-check | ✅ P5 (idempotency) — covered by §3.3. P6 (no cardholder data) — vouchers carry no card data; n/a. P7 (secrets) — covered by §3.4 + §3.5. P8 (Electron security boundary) — voucher work introduces no new IPC; reuses bridge surface §A4-A approved. P9/P-II (money integer minor units) — covered by §3.1. P14 (trust boundary in bridge namespace) — covered by §3.2. P15 (renderer receives minimised state) — covered by §3.4. P16 (append-only outbox) — voucher reversal writes to `payment_action_outbox` with same trigger-enforced no-UPDATE/DELETE invariant; no new outbox path introduced. |
+
+### Authorisation
+
+✅ **Slice 4 voucher bridge handlers authorised.** Maestro Wave 3 (T210–T213 RED → T220+ GREEN, paired in one PR, single-agent per process-boundary rule) is unblocked.
 
 ---
 
-**End of §A4-B review brief.** Once verdict is recorded, Maestro Wave
-3 (Slice 4 voucher V-A client TDD-RED → GREEN pair, single-agent) is
-authorised to dispatch.
+**End of §A4-B review brief.** Verdict recorded. Maestro Wave 3 is authorised to dispatch when the owner is ready.
