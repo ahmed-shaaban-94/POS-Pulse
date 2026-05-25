@@ -15,8 +15,9 @@ import { fileURLToPath } from 'url';
  *   • The partial unique index `payment_attempts_one_started_per_terminal`
  *     refuses two concurrent `started` rows on the same terminal.
  *   • The append-only trigger on `payment_action_outbox` denies UPDATE + DELETE.
- *   • `audit_events.action_category` accepts the 7 new categories cleared by §A3
- *     (4 attempt-level + 3 per-line; `tender.reversal_pending` is Slice 4).
+ *   • `audit_events.action_category` accepts all 8 new categories cleared by §A3
+ *     (4 attempt-level + 4 per-line; `tender.reversal_pending` ratified by T204's
+ *     additive migration `migrations/0018_audit_event_tender_reversal_pending.sql`).
  *
  * Mirrors the existing migration-test pattern in tests/integration/main/db/.
  * Uses sql.js (pure-JS SQLite) so the native better-sqlite3 binding is not
@@ -51,6 +52,7 @@ const S3A_MIGRATIONS = [
   '0015_create_payment_action_outbox.sql',
   '0016_payment_action_outbox_append_only_trigger.sql',
   '0017_extend_audit_event_categories.sql',
+  '0018_audit_event_tender_reversal_pending.sql',
 ];
 
 let SQL: SqlJsStatic;
@@ -870,6 +872,8 @@ describe('T066 — 006 Slice 3a migrations', () => {
       'tender.applied',
       'tender.refused',
       'tender.reversed',
+      // T204 — ratified by migrations/0018_audit_event_tender_reversal_pending.sql.
+      'tender.reversal_pending',
     ];
 
     it.each(newCategories)('accepts an audit_event with action_category=%s', (category) => {
