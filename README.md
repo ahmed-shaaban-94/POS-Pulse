@@ -6,6 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-strict-3178c6.svg)](tsconfig.json)
 [![Electron](https://img.shields.io/badge/Electron-40-47848f.svg)](package.json)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](src/renderer)
+[![LOC](docs/assets/badges/loc.svg)](docs/assets/badges/loc.svg)
 
 POS Pulse is the Windows desktop point-of-sale terminal for the SmartDataPulse
 pharmacy platform. This repository owns the Electron app surface: secure main,
