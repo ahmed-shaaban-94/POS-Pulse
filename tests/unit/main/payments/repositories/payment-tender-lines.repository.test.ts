@@ -318,4 +318,55 @@ describe('T112 — payment_tender_lines repository', () => {
     repo.insert(baseLine());
     expect(repo.findByLineId('line-NOT-EXIST')).toBeUndefined();
   });
+
+  // ── T270 — findReversalPendingLines ──────────────────────────────────────
+
+  it('findReversalPendingLines returns only state=reversal_pending rows, oldest first', () => {
+    const handle = makeSqlJsHandle(db);
+    seedAttempt(handle);
+    const repo = bindPaymentTenderLinesRepository(handle);
+    // Insert: one applied (filtered out), two reversal_pending (ordered by since ASC),
+    // one reversed (filtered out).
+    repo.insert(baseLine({ tender_line_id: 'line-applied', apply_order: 1 }));
+    repo.insert(
+      baseLine({
+        tender_line_id: 'line-pending-newer',
+        state: 'reversal_pending',
+        apply_order: 2,
+        applied_at: null,
+        reversal_pending_since: '2026-05-22T11:00:00.000Z',
+      }),
+    );
+    repo.insert(
+      baseLine({
+        tender_line_id: 'line-pending-older',
+        state: 'reversal_pending',
+        apply_order: 3,
+        applied_at: null,
+        reversal_pending_since: '2026-05-22T10:30:00.000Z',
+      }),
+    );
+    repo.insert(
+      baseLine({
+        tender_line_id: 'line-reversed',
+        state: 'reversed',
+        apply_order: 4,
+        applied_at: null,
+        reversed_at: '2026-05-22T10:45:00.000Z',
+      }),
+    );
+    const pending = repo.findReversalPendingLines();
+    expect(pending.map((r) => r.tender_line_id)).toEqual([
+      'line-pending-older',
+      'line-pending-newer',
+    ]);
+  });
+
+  it('findReversalPendingLines returns an empty array when no pending lines exist', () => {
+    const handle = makeSqlJsHandle(db);
+    seedAttempt(handle);
+    const repo = bindPaymentTenderLinesRepository(handle);
+    repo.insert(baseLine());
+    expect(repo.findReversalPendingLines()).toEqual([]);
+  });
 });

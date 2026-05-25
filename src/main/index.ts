@@ -26,6 +26,12 @@ import { createPaymentsReadHandler } from './payments/handlers/payments-read.js'
 import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
+import { createDeferredReversalResolver } from './payments/deferred-reversal-resolver.js';
+import {
+  reverseVoucher,
+  type ReverseVoucherInput,
+  type ReverseVoucherOutcome,
+} from './payments/voucher-authority/reverse.js';
 import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
 import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
 import { randomUUID } from 'node:crypto';
@@ -639,6 +645,69 @@ app
       tenderApply,
       tenderReverse,
       tenderRead,
+    });
+
+    // 006 T271 — deferred-reversal resolver bootstrap.
+    //
+    // The resolver scans `payment_tender_lines` for `reversal_pending`
+    // voucher lines and retries `vouchers.reverse` against V-A. It runs
+    // on (a) app start, (b) future 003 network-restore signal, (c)
+    // explicit cashier retry (no bridge surface yet).
+    //
+    // **Production wiring (PR #222 fixup — CR-1).** The V-A reverse
+    // client is wired here using the same `apiBaseUrl` + `fetch` seam
+    // the operator backend already uses. The resolver supplies the
+    // per-line `idempotencyKey` (derived from `tender_line_id`); the
+    // closure bakes in baseUrl / fetch / logger.
+    //
+    // The 003 network-restore signal is still TBD (no network module
+    // yet); the resolver runs without it via (a) app-start and (c)
+    // the manual-retry entry point.
+    const reverseVoucherForResolver = async (
+      input: ReverseVoucherInput,
+      options: { idempotencyKey: string },
+    ): Promise<ReverseVoucherOutcome> => {
+      return await reverseVoucher(input, {
+        baseUrl: apiBaseUrl,
+        fetch: globalThis.fetch.bind(globalThis),
+        logger: {
+          info: (payload, msg): void => {
+            mainLogger.info(payload, msg);
+          },
+          warn: (payload, msg): void => {
+            mainLogger.warn(payload, msg);
+          },
+          error: (payload, msg): void => {
+            mainLogger.error(payload, msg);
+          },
+        },
+        idempotencyKey: options.idempotencyKey,
+      });
+    };
+    const deferredReversalResolver = createDeferredReversalResolver({
+      linesRepo: paymentsLinesRepo,
+      attemptsRepo: paymentsAttemptsRepo,
+      tenderLineFsm,
+      auditEmitter: paymentAuditEmitter,
+      reverseVoucher: reverseVoucherForResolver,
+      logger: {
+        info: (payload, msg): void => {
+          mainLogger.info(payload, msg);
+        },
+        warn: (payload, msg): void => {
+          mainLogger.warn(payload, msg);
+        },
+        error: (payload, msg): void => {
+          mainLogger.error(payload, msg);
+        },
+      },
+      clock: paymentsClock,
+    });
+    void deferredReversalResolver.start().catch((err: unknown) => {
+      mainLogger.error(
+        { error: err instanceof Error ? err.message : String(err) },
+        'deferred_reversal_resolver:start_failed',
+      );
     });
 
     createWindow();

@@ -23,6 +23,13 @@ export default tsEslint.config(
       // the project service". They are tooling, not production source, and
       // are out of scope for the renderer/main/preload type-check rules.
       '.claude/**',
+      // Project-local Node build/CI utility scripts (e.g., scripts/update-loc-badge.mjs
+      // from PR #221). Same rationale as `.claude/**` above — these `.mjs` files run
+      // outside any tsconfig project, and the project-service parser fails them with
+      // "was not found by the project service" on CI. They are CI tooling, not
+      // production source. `.ts` scripts under `scripts/` (e.g., `verify-codegen.ts`)
+      // remain covered by `tsconfig.json` and are NOT ignored.
+      'scripts/**/*.mjs',
     ],
   },
   tsEslint.configs.strictTypeChecked,

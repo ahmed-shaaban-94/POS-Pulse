@@ -107,6 +107,21 @@ export interface EmitTenderReversedInput extends BaseAuditContext {
   tender_type: TenderType;
   reversed_at: string;
   manual_void_required: boolean;
+  /**
+   * Wave 5 T231 — optional history preservation for incident reconstruction.
+   * The deferred-reversal resolver (and the synchronous `tender.reverse`
+   * voucher path when a previously-pending line is finally resolved)
+   * passes the original `reversal_pending_since` timestamp here so the
+   * `tender.reversed` audit payload preserves the full timeline. The
+   * row state's `reversal_pending_since` column is cleared on the
+   * `reversal_pending → reversed` transition (data-model.md §"PaymentTenderLine"
+   * line 156); the audit_events row keeps it (append-only).
+   *
+   * Omit on the synchronous `applied → reversed` happy path (cashier
+   * undo on a still-`applied` line) where there was never a pending
+   * outage to preserve.
+   */
+  reversal_pending_since?: string;
 }
 
 /**
@@ -402,6 +417,21 @@ export function createPaymentAuditEmitter(
     },
 
     emitTenderReversed(input: EmitTenderReversedInput): void {
+      const payload: Record<string, unknown> = {
+        tender_line_id: input.tender_line_id,
+        payment_attempt_id: input.payment_attempt_id,
+        tender_type: input.tender_type,
+        reversed_at: input.reversed_at,
+        attribution_operator_id: input.attribution_operator_id,
+        manual_void_required: input.manual_void_required,
+      };
+      // T231 — preserve the original reversal_pending_since for incident
+      // reconstruction when the deferred-reversal resolver (or the
+      // tender.reverse voucher path on a previously-pending line)
+      // resolves the row.
+      if (input.reversal_pending_since !== undefined) {
+        payload.reversal_pending_since = input.reversal_pending_since;
+      }
       emit({
         action_category: 'tender.reversed',
         payment_attempt_id: input.payment_attempt_id,
@@ -411,14 +441,7 @@ export function createPaymentAuditEmitter(
         originating_terminal_id: input.originating_terminal_id,
         session_id: input.session_id,
         created_at: input.reversed_at,
-        payload: {
-          tender_line_id: input.tender_line_id,
-          payment_attempt_id: input.payment_attempt_id,
-          tender_type: input.tender_type,
-          reversed_at: input.reversed_at,
-          attribution_operator_id: input.attribution_operator_id,
-          manual_void_required: input.manual_void_required,
-        },
+        payload,
       });
     },
 
