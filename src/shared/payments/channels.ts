@@ -1,15 +1,14 @@
 /**
- * F-003 — IPC channel constants for the `payments.*` + `tender.*` bridge
- * (006-payments-tender Slice 3).
+ * F-003 — IPC channel constants for the `payments.*` + `tender.*` +
+ * `vouchers.*` bridge (006-payments-tender).
  *
  * The preload (`src/preload/payments.ts`) and the main-side registration
  * (`src/main/ipc/payments.ts`) both import these constants. Channel
  * names are kebab-cased namespaces — same posture as
  * `src/shared/cart/channels.ts` (005).
  *
- * Slice-3 surface ONLY — `payments.forceFail` (Slice 4) and `vouchers.*`
- * (Slice 4) are intentionally absent. Adding either to the union
- * before §A4-B clears is a contract violation.
+ * Wave 4 adds `vouchers:validate` under §A4-B clearance (2026-05-25).
+ * `payments.forceFail` is still gated and intentionally absent.
  *
  * Note: `payments.discardOnSessionEnd` is internal to the main process
  * and NEVER exposed via contextBridge. It does not appear here.
@@ -32,3 +31,9 @@ export const TENDER_IPC_CHANNELS = {
 } as const;
 
 export type TenderIpcChannel = (typeof TENDER_IPC_CHANNELS)[keyof typeof TENDER_IPC_CHANNELS];
+
+export const VOUCHERS_IPC_CHANNELS = {
+  VALIDATE: 'vouchers:validate',
+} as const;
+
+export type VouchersIpcChannel = (typeof VOUCHERS_IPC_CHANNELS)[keyof typeof VOUCHERS_IPC_CHANNELS];

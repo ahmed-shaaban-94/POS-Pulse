@@ -109,6 +109,22 @@ export interface EmitTenderReversedInput extends BaseAuditContext {
   manual_void_required: boolean;
 }
 
+/**
+ * Slice 4 voucher path — emitted when a voucher tender line cannot be
+ * reversed synchronously (Data-Pulse-2 unreachable on `vouchers.reverse`,
+ * or `vouchers.redeem` failed authority_unreachable on `payments.confirm`).
+ * The line transitions to `reversal_pending` and the deferred-reversal
+ * resolver (Wave 5, T270) retries until success.
+ *
+ * Category ratified by T204 / migration 0018; F-A4B brief §3.6 + §3.8.
+ */
+export interface EmitTenderReversalPendingInput extends BaseAuditContext {
+  tender_line_id: string;
+  payment_attempt_id: string;
+  tender_type: TenderType;
+  reversal_pending_since: string;
+}
+
 // ── Emitter event shape (sink-facing) ───────────────────────────────────────
 
 /**
@@ -202,6 +218,13 @@ export interface PaymentAuditEmitter {
   emitTenderApplied(input: EmitTenderAppliedInput): void;
   emitTenderRefused(input: EmitTenderRefusedInput): void;
   emitTenderReversed(input: EmitTenderReversedInput): void;
+  /**
+   * Slice 4 voucher path. Emits `tender.reversal_pending` when the
+   * deferred-reversal resolver still owes a successful reverse to V-A
+   * (research §R-13). Wired by `payments.confirm` (T261) and
+   * `tender.reverse` (T262) when V-A returns `authority_unreachable`.
+   */
+  emitTenderReversalPending(input: EmitTenderReversalPendingInput): void;
   /**
    * Escape hatch for the bridge handlers that need to forward custom
    * payloads (e.g., `payment.force_failed` in Slice 4). Refuses any
@@ -395,6 +418,26 @@ export function createPaymentAuditEmitter(
           reversed_at: input.reversed_at,
           attribution_operator_id: input.attribution_operator_id,
           manual_void_required: input.manual_void_required,
+        },
+      });
+    },
+
+    emitTenderReversalPending(input: EmitTenderReversalPendingInput): void {
+      emit({
+        action_category: 'tender.reversal_pending',
+        payment_attempt_id: input.payment_attempt_id,
+        attribution_operator_id: input.attribution_operator_id,
+        tenant_id: input.tenant_id,
+        branch_id: input.branch_id,
+        originating_terminal_id: input.originating_terminal_id,
+        session_id: input.session_id,
+        created_at: input.reversal_pending_since,
+        payload: {
+          tender_line_id: input.tender_line_id,
+          payment_attempt_id: input.payment_attempt_id,
+          tender_type: input.tender_type,
+          reversal_pending_since: input.reversal_pending_since,
+          attribution_operator_id: input.attribution_operator_id,
         },
       });
     },

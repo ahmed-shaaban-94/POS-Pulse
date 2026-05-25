@@ -209,8 +209,12 @@ describe('T085 — TenderLine FSM apply (external_card_terminal)', () => {
   });
 });
 
-describe('T085 — TenderLine FSM apply (internal_voucher Slice 4 deferral)', () => {
-  it('voucher apply returns tender_not_yet_supported in Slice 3', () => {
+describe('T085 — TenderLine FSM apply (internal_voucher Wave 4)', () => {
+  it('voucher apply WITHOUT voucher_outcome refuses internal_error (defence-in-depth)', () => {
+    // Wave 4: the bridge handler always threads a `voucher_outcome` from
+    // V-A `vouchers.validate` before driving the FSM (HTTP cannot live in
+    // `db.transaction()`). A direct FSM call without it is a contract
+    // violation by the caller — refuse cleanly.
     const { fsm, attempts, outbox } = buildFsm();
     seedStartedAttempt(attempts, outbox, 1500);
     const result = fsm.apply({
@@ -224,7 +228,78 @@ describe('T085 — TenderLine FSM apply (internal_voucher Slice 4 deferral)', ()
       action_id: 'apply-tl-1',
     });
     expect(result.kind).toBe('refused');
-    if (result.kind === 'refused') expect(result.reason).toBe('tender_not_yet_supported');
+    if (result.kind === 'refused') expect(result.reason).toBe('internal_error');
+  });
+
+  it('voucher apply WITH validated voucher_outcome persists an applied line with intent token', () => {
+    const { fsm, attempts, lines, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-X',
+        applied_amount_minor: 1500,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('ok');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('applied');
+    expect(row?.voucher_redemption_intent_token).toBe('token-X');
+  });
+
+  it('voucher apply with validated outcome but amount > remaining refuses non_cash_overpayment_refused', () => {
+    const { fsm, attempts, lines, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 5000,
+      voucher_code: 'V-CODE',
+      voucher_outcome: {
+        kind: 'validated',
+        redemption_intent_token: 'token-Y',
+        applied_amount_minor: 5000,
+      },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('non_cash_overpayment_refused');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('refused');
+    expect(row?.refusal_reason).toBe('non_cash_overpayment_refused');
+  });
+
+  it('voucher apply WITH refused voucher_outcome persists a refused line', () => {
+    const { fsm, attempts, lines, outbox } = buildFsm();
+    seedStartedAttempt(attempts, outbox, 1500);
+    const result = fsm.apply({
+      tender_line_id: 'tl-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      amount_applied_minor: 1500,
+      voucher_code: 'V-CODE',
+      voucher_outcome: { kind: 'refused', reason: 'voucher_expired' },
+      attribution_operator_id: 'op-abc',
+      applied_at: '2026-05-22T10:00:01.000Z',
+      action_id: 'apply-tl-1',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('voucher_expired');
+    const row = lines.findByLineId('tl-1');
+    expect(row?.state).toBe('refused');
+    expect(row?.refusal_reason).toBe('voucher_expired');
+    expect(row?.voucher_redemption_intent_token).toBeNull();
   });
 });
 

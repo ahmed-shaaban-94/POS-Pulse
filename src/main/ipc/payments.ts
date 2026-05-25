@@ -20,7 +20,11 @@
 
 import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
-import { PAYMENTS_IPC_CHANNELS, TENDER_IPC_CHANNELS } from '../../shared/payments/channels.js';
+import {
+  PAYMENTS_IPC_CHANNELS,
+  TENDER_IPC_CHANNELS,
+  VOUCHERS_IPC_CHANNELS,
+} from '../../shared/payments/channels.js';
 import type { PaymentRefusal, TenderType } from '../../shared/payments/types.js';
 import type { PaymentsCancelHandler } from '../payments/handlers/payments-cancel.js';
 import type { PaymentsConfirmHandler } from '../payments/handlers/payments-confirm.js';
@@ -30,6 +34,7 @@ import type { PaymentsSubscribeHandler } from '../payments/handlers/payments-sub
 import type { TenderApplyHandler } from '../payments/handlers/tender-apply.js';
 import type { TenderReadHandler } from '../payments/handlers/tender-read.js';
 import type { TenderReverseHandler } from '../payments/handlers/tender-reverse.js';
+import type { VouchersValidateHandler } from '../payments/handlers/vouchers-validate.js';
 import type {
   PaymentsCancelRequest,
   PaymentsCancelResponse,
@@ -47,6 +52,8 @@ import type {
   TenderReadResponse,
   TenderReverseRequest,
   TenderReverseResponse,
+  VouchersValidateRequest,
+  VouchersValidateResponse,
 } from '../../shared/bridge-api.js';
 
 export interface PaymentsIpcDeps {
@@ -58,6 +65,9 @@ export interface PaymentsIpcDeps {
   tenderApply: TenderApplyHandler;
   tenderReverse: TenderReverseHandler;
   tenderRead: TenderReadHandler;
+  /** Wave 4 — voucher validate. Optional so Slice-3-only test boots
+   *  continue to register without it. */
+  vouchersValidate?: VouchersValidateHandler;
 }
 
 function refuseInvalid(): PaymentRefusal {
@@ -193,6 +203,25 @@ function asTenderReadReq(value: unknown): TenderReadRequest | null {
   return { tender_line_id: v['tender_line_id'] };
 }
 
+function asVouchersValidateReq(value: unknown): VouchersValidateRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v['payment_attempt_id'] !== 'string' ||
+    typeof v['voucher_code'] !== 'string' ||
+    !isValidMinorUnit(v['amount_applied_minor']) ||
+    typeof v['idempotency_key'] !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    payment_attempt_id: v['payment_attempt_id'],
+    voucher_code: v['voucher_code'],
+    amount_applied_minor: v['amount_applied_minor'],
+    idempotency_key: v['idempotency_key'],
+  };
+}
+
 // ── Registration ───────────────────────────────────────────────────────────
 
 export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps): void {
@@ -267,4 +296,17 @@ export function registerPaymentsHandlers(ipcMain: IpcMain, deps: PaymentsIpcDeps
       return deps.tenderRead(req);
     },
   );
+
+  // Wave 4 — vouchers.validate (§A4-B authorisation 2026-05-25).
+  if (deps.vouchersValidate !== undefined) {
+    const handler = deps.vouchersValidate;
+    ipcMain.handle(
+      VOUCHERS_IPC_CHANNELS.VALIDATE,
+      async (_event: IpcMainInvokeEvent, request: unknown): Promise<VouchersValidateResponse> => {
+        const req = asVouchersValidateReq(request);
+        if (req === null) return refuseInvalid();
+        return handler(req);
+      },
+    );
+  }
 }

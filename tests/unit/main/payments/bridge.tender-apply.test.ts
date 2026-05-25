@@ -384,3 +384,109 @@ describe('T105 — tender.apply bridge handler', () => {
     expect(serialised).not.toContain('V-SECRET');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// T263 — Wave 4 voucher branch of tender.apply
+// ─────────────────────────────────────────────────────────────────────────────
+
+type T263ValidateOutcome =
+  | {
+      kind: 'validated';
+      applied_amount_minor: number;
+      intent_expires_at: string;
+      redemption_intent_token: string;
+    }
+  | { kind: 'refused'; reason: 'voucher_not_found' | 'voucher_expired' }
+  | { kind: 'authority_unreachable' };
+
+describe('T263 — tender.apply voucher branch (Wave 4)', () => {
+  function setupVoucher(opts: { validateOutcome?: T263ValidateOutcome } = {}) {
+    const sessionSource = makeSessionSource(makeSession());
+    const row = makeAttemptRow({ envelope_subtotal_minor: 3000 });
+    const attemptsRepo = makeAttemptsRepoDouble([row]);
+    const linesRepo = makeLinesRepoDouble();
+    const fsm = makeTenderLineFsmDouble();
+    const idempotency = makeIdempotencyHelperDouble();
+    const auditEmitter = makeAuditEmitterDouble();
+    const validateVoucher = vi.fn(() =>
+      Promise.resolve(
+        opts.validateOutcome ?? {
+          kind: 'validated' as const,
+          applied_amount_minor: 1500,
+          intent_expires_at: '2026-06-01T10:05:00.000Z',
+          redemption_intent_token: 'opaque-intent-token-XYZ',
+        },
+      ),
+    );
+    const uuid = vi.fn(() => 'tl-v');
+    const clock = vi.fn(() => new Date('2026-05-25T10:00:01.000Z'));
+    const handler = createTenderApplyHandler({
+      getCurrentSession: sessionSource.getCurrentSession,
+      attemptsRepo,
+      linesRepo,
+      tenderLineFsm: fsm,
+      idempotency,
+      auditEmitter,
+      validateVoucher,
+      uuid,
+      clock,
+    });
+    return { handler, fsm, validateVoucher, auditEmitter, idempotency };
+  }
+
+  it('routes voucher tender_type through V-A validate and returns ok on validated', async () => {
+    const { handler, validateVoucher } = setupVoucher();
+    const result = await handler(
+      validRequest({
+        tender_type: 'internal_voucher',
+        voucher_code: 'V-CODE',
+        amount_applied_minor: 1500,
+      }),
+    );
+    expect(validateVoucher).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      kind: 'ok',
+      tender_line_id: 'tl-v',
+      applied_at: '2026-05-25T10:00:01.000Z',
+    });
+  });
+
+  it('refuses with the closed-set voucher reason on V-A refused', async () => {
+    const { handler } = setupVoucher({
+      validateOutcome: { kind: 'refused', reason: 'voucher_expired' },
+    });
+    expect(
+      await handler(
+        validRequest({
+          tender_type: 'internal_voucher',
+          voucher_code: 'V-CODE',
+          amount_applied_minor: 1500,
+        }),
+      ),
+    ).toEqual({ kind: 'refused', reason: 'voucher_expired' });
+  });
+
+  it('refuses dependency_unavailable on V-A authority_unreachable', async () => {
+    const { handler } = setupVoucher({ validateOutcome: { kind: 'authority_unreachable' } });
+    expect(
+      await handler(
+        validRequest({
+          tender_type: 'internal_voucher',
+          voucher_code: 'V-CODE',
+          amount_applied_minor: 1500,
+        }),
+      ),
+    ).toEqual({ kind: 'refused', reason: 'dependency_unavailable' });
+  });
+
+  it('refuses invalid_input when voucher_code is missing or empty', async () => {
+    const { handler } = setupVoucher();
+    expect(await handler(validRequest({ tender_type: 'internal_voucher' }))).toEqual({
+      kind: 'refused',
+      reason: 'invalid_input',
+    });
+    expect(
+      await handler(validRequest({ tender_type: 'internal_voucher', voucher_code: '' })),
+    ).toEqual({ kind: 'refused', reason: 'invalid_input' });
+  });
+});

@@ -43,6 +43,8 @@ import type {
   TenderLineFsm,
   ApplyOutcome,
   ReverseOutcome,
+  MarkReversalPendingOutcome,
+  ConfirmReversedOutcome,
 } from '../../../../../src/main/payments/fsm/tender-line-fsm.js';
 import type {
   IdempotencyHelper,
@@ -157,6 +159,7 @@ export interface LinesRepoDouble {
   findByLineId: Mock<(tender_line_id: string) => PaymentTenderLineRow | undefined>;
   insert: Mock;
   updateState: Mock;
+  persistAuthorityRedemptionId: Mock;
   settlementSumMinor: Mock<(payment_attempt_id: string) => number>;
 }
 
@@ -178,6 +181,7 @@ export function makeLinesRepoDouble(rows: readonly PaymentTenderLineRow[] = []):
     ),
     insert: vi.fn(),
     updateState: vi.fn(),
+    persistAuthorityRedemptionId: vi.fn(),
     settlementSumMinor: vi.fn((payment_attempt_id: string): number => {
       const lines = byAttempt.get(payment_attempt_id) ?? [];
       let sum = 0;
@@ -237,6 +241,8 @@ export interface TenderLineFsmDouble extends TenderLineFsm {
   apply: Mock<TenderLineFsm['apply']>;
   reverse: Mock<TenderLineFsm['reverse']>;
   reverseInTransaction: Mock<TenderLineFsm['reverseInTransaction']>;
+  markReversalPending: Mock<TenderLineFsm['markReversalPending']>;
+  confirmReversed: Mock<TenderLineFsm['confirmReversed']>;
   listAppliedLifoIds: Mock<TenderLineFsm['listAppliedLifoIds']>;
 }
 
@@ -266,6 +272,20 @@ export function makeTenderLineFsmDouble(): TenderLineFsmDouble {
         state: 'reversed',
         tender_type: 'cash',
         manual_void_required: false,
+      }),
+    ),
+    markReversalPending: vi.fn(
+      (input): MarkReversalPendingOutcome => ({
+        kind: 'ok',
+        reversal_pending_since: input.reversal_pending_since,
+        tender_type: 'internal_voucher',
+      }),
+    ),
+    confirmReversed: vi.fn(
+      (input): ConfirmReversedOutcome => ({
+        kind: 'ok',
+        reversed_at: input.reversed_at,
+        tender_type: 'internal_voucher',
       }),
     ),
     listAppliedLifoIds: vi.fn(() => [] as readonly string[]),
@@ -398,6 +418,21 @@ export function makeAuditEmitterDouble(): AuditEmitterDouble {
         payload: { ...input },
       });
     }),
+    emitTenderReversalPending: vi.fn<PaymentAuditEmitter['emitTenderReversalPending']>(
+      (input): void => {
+        captured.push({
+          action_category: 'tender.reversal_pending',
+          payment_attempt_id: input.payment_attempt_id,
+          attribution_operator_id: input.attribution_operator_id,
+          tenant_id: input.tenant_id,
+          branch_id: input.branch_id,
+          originating_terminal_id: input.originating_terminal_id,
+          session_id: input.session_id,
+          created_at: input.reversal_pending_since,
+          payload: { ...input },
+        });
+      },
+    ),
     emitRaw: vi.fn<PaymentAuditEmitter['emitRaw']>((event): void => {
       captured.push(event);
     }),

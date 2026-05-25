@@ -134,6 +134,23 @@ export interface PaymentTenderLinesRepository {
    * defence-in-depth check at the aggregate boundary.
    */
   settlementSumMinor(payment_attempt_id: string): number;
+  /**
+   * Wave 4 voucher-redeem persistence. Stamps the V-A
+   * `redemption_id` returned by `posRedeemVoucher` onto the existing
+   * `payment_tender_lines` row inside the caller's outer transaction.
+   * The line MUST already be in `applied` state — the FSM owns state
+   * transitions; this setter only fills in the durable correlation id.
+   *
+   * Returns silently when the row is absent (caller checks state via
+   * `findByLineId`/`findByAttempt` first). `last_action_id` is updated
+   * to the redeem action_id so the outbox row hash chain stays
+   * consistent.
+   */
+  persistAuthorityRedemptionId(input: {
+    tender_line_id: string;
+    voucher_authority_redemption_id: string;
+    last_action_id: string;
+  }): void;
 }
 
 export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTenderLinesRepository {
@@ -180,6 +197,12 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
   const findByLineIdStmt = db.prepare(
     `SELECT * FROM payment_tender_lines WHERE tender_line_id=?`,
   ) as PrepareGet<PaymentTenderLineRow>;
+
+  const persistRedemptionIdStmt = db.prepare(
+    `UPDATE payment_tender_lines
+        SET voucher_authority_redemption_id=?, last_action_id=?
+      WHERE tender_line_id=?`,
+  ) as PrepareRun;
 
   const settlementSumStmt = db.prepare(
     `SELECT COALESCE(
@@ -241,6 +264,18 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
 
     findByLineId(tender_line_id: string): PaymentTenderLineRow | undefined {
       return findByLineIdStmt.get(tender_line_id) ?? undefined;
+    },
+
+    persistAuthorityRedemptionId(input: {
+      tender_line_id: string;
+      voucher_authority_redemption_id: string;
+      last_action_id: string;
+    }): void {
+      persistRedemptionIdStmt.run(
+        input.voucher_authority_redemption_id,
+        input.last_action_id,
+        input.tender_line_id,
+      );
     },
 
     settlementSumMinor(payment_attempt_id: string): number {

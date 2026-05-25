@@ -225,14 +225,11 @@ describe('T106 — tender.reverse bridge handler', () => {
     });
   });
 
-  it('passes FSM tender_not_yet_supported through for voucher reverse (Slice-3 gate)', async () => {
-    const { handler, fsm } = setup({ lineTenderType: 'internal_voucher' });
-    fsm.reverse.mockReturnValueOnce({ kind: 'refused', reason: 'tender_not_yet_supported' });
-    expect(await handler(validRequest())).toEqual({
-      kind: 'refused',
-      reason: 'tender_not_yet_supported',
-    });
-  });
+  // Removed in Wave 4: the voucher reverse pass-through is no longer
+  // an FSM `tender_not_yet_supported` refusal — the handler now routes
+  // through V-A `vouchers.reverse` (T262). Voucher reverse paths are
+  // covered exhaustively by `bridge.tender-reverse.voucher.test.ts`
+  // (T222).
 
   it('returns the prior outcome on idempotency replay', async () => {
     const sessionSource = makeSessionSource(makeSession());
