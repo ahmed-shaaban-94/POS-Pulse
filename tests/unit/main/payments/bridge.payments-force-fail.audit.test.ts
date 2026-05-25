@@ -113,6 +113,19 @@ describe('T241 — payments.forceFail audit dual-attribution', () => {
     });
   });
 
+  it('CR-1: idempotency reservation is committed exactly once on the success path', async () => {
+    // Regression for the CodeRabbit finding on PR #223: the handler
+    // reserves an idempotency slot via `checkOrReserve` but must call
+    // the returned `commit()` callback so the outbox row is durably
+    // written. Without commit, a same-key retry would observe
+    // `kind: 'fresh'` again and try a second FSM transition.
+    const { idempotency, handler } = setup();
+    expect(idempotency.commitCalls).toBe(0);
+    const result = await handler(req());
+    expect(result.kind).toBe('ok');
+    expect(idempotency.commitCalls).toBe(1);
+  });
+
   it('idempotent replay: returns prior force_failed_at; does NOT re-emit audit', async () => {
     // First call — proceeds normally.
     const first = setup();

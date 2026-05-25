@@ -1,10 +1,10 @@
 name: Update LOC Badge
 
-'on':
+"on":
   push:
     branches: [main]
     paths-ignore:
-      - 'docs/assets/badges/**'
+      - "docs/assets/badges/**"
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Count LOC and generate badge
         run: node scripts/update-loc-badge.mjs

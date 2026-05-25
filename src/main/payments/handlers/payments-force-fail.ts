@@ -163,6 +163,13 @@ export function createPaymentsForceFailHandler(
       },
     });
 
+    // CR-1: finalize the idempotency reservation by writing the
+    // outbox row. The `commit` callback was returned by
+    // `checkOrReserve` with `kind: 'fresh'`; calling it here closes
+    // the §P5 idempotency contract so a same-key retry observes
+    // `kind: 'replay'` instead of attempting a second FSM transition.
+    reservation.commit();
+
     return await Promise.resolve({
       kind: 'ok',
       force_failed_at: fsmOutcome.force_failed_at,
