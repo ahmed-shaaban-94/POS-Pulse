@@ -128,6 +128,19 @@ export interface PaymentTenderLinesRepository {
    */
   findByLineId(tender_line_id: string): PaymentTenderLineRow | undefined;
   /**
+   * Wave 5 T270 — return every row whose state is `reversal_pending`.
+   * Used by the deferred-reversal resolver to scan for outstanding
+   * voucher reversals on (a) app start, (b) network-restore signal,
+   * (c) explicit cashier-initiated retry. Backed by the partial index
+   * `idx_payment_tender_lines_reversal_pending` declared in migration
+   * 0014, so the scan is O(pending) regardless of total table size.
+   *
+   * Results are ordered by `reversal_pending_since ASC` (oldest first)
+   * so a sweep retries the longest-outstanding lines before newer ones
+   * — desirable when the V-A authority is rate-limited.
+   */
+  findReversalPendingLines(): PaymentTenderLineRow[];
+  /**
    * Canonical settlement-invariant sum per data-model §"Invariant 5".
    * Returns 0 when the attempt has no applied lines yet. Throws
    * `TypeError` if the SUM exceeds `Number.MAX_SAFE_INTEGER` — a money
@@ -198,6 +211,12 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
     `SELECT * FROM payment_tender_lines WHERE tender_line_id=?`,
   ) as PrepareGet<PaymentTenderLineRow>;
 
+  const findReversalPendingStmt = db.prepare(
+    `SELECT * FROM payment_tender_lines
+       WHERE state = 'reversal_pending'
+       ORDER BY reversal_pending_since ASC`,
+  ) as PrepareAll<PaymentTenderLineRow>;
+
   const persistRedemptionIdStmt = db.prepare(
     `UPDATE payment_tender_lines
         SET voucher_authority_redemption_id=?, last_action_id=?
@@ -264,6 +283,10 @@ export function bindPaymentTenderLinesRepository(db: DatabaseHandle): PaymentTen
 
     findByLineId(tender_line_id: string): PaymentTenderLineRow | undefined {
       return findByLineIdStmt.get(tender_line_id) ?? undefined;
+    },
+
+    findReversalPendingLines(): PaymentTenderLineRow[] {
+      return findReversalPendingStmt.all();
     },
 
     persistAuthorityRedemptionId(input: {

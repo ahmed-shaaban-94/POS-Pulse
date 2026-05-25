@@ -406,6 +406,13 @@ export function makeAuditEmitterDouble(): AuditEmitterDouble {
       });
     }),
     emitTenderReversed: vi.fn<PaymentAuditEmitter['emitTenderReversed']>((input): void => {
+      // Mirror the production emitter — only include reversal_pending_since
+      // in the captured payload when the caller actually passed it. Keeps
+      // the audit shape identical to what production writes (T231).
+      const payload: Record<string, unknown> = { ...input };
+      if (input.reversal_pending_since === undefined) {
+        delete payload.reversal_pending_since;
+      }
       captured.push({
         action_category: 'tender.reversed',
         payment_attempt_id: input.payment_attempt_id,
@@ -415,7 +422,7 @@ export function makeAuditEmitterDouble(): AuditEmitterDouble {
         originating_terminal_id: input.originating_terminal_id,
         session_id: input.session_id,
         created_at: input.reversed_at,
-        payload: { ...input },
+        payload,
       });
     }),
     emitTenderReversalPending: vi.fn<PaymentAuditEmitter['emitTenderReversalPending']>(
