@@ -200,6 +200,108 @@ describe('runMigrations', () => {
     expect(caughtMessage).not.toBeNull();
     expect(caughtMessage).toMatch(/forced failure/);
   });
+
+  // ── `-- @no-wrap-transaction` opt-out (Wave 5e — Slice 4) ───────────────
+  //
+  // Some migrations cannot safely run inside the runner's default
+  // transaction wrap. The first concrete case is the
+  // `payment_attempts.failure_reason` enum extension (0019), which needs
+  // `PRAGMA foreign_keys = OFF` around a table rebuild; SQLite documents
+  // that PRAGMA as a no-op inside a transaction, so the migration must
+  // emit its own BEGIN/COMMIT pair and the runner must not wrap.
+  describe('-- @no-wrap-transaction opt-out', () => {
+    const MARKER_FILE: MigrationFile = {
+      name: '0099_opt_out',
+      sql:
+        '-- @no-wrap-transaction\n' +
+        '-- migration that manages its own transaction boundaries\n' +
+        'PRAGMA foreign_keys = OFF;\n' +
+        'BEGIN;\n' +
+        'CREATE TABLE rebuilt (id INTEGER PRIMARY KEY);\n' +
+        'COMMIT;\n' +
+        'PRAGMA foreign_keys = ON;\n',
+    };
+
+    it('runs the migration SQL OUTSIDE the runner transaction wrap when marker present', () => {
+      const fake = makeFakeDb();
+      runMigrations({ db: fake.db, files: [MARKER_FILE] });
+      // Exec log shows the migration SQL was executed; transaction count
+      // shows exactly ONE transaction committed — the bookkeeping-only
+      // one, NOT the migration wrap.
+      expect(fake.execLog).toContain(MARKER_FILE.sql);
+      expect(fake.transactionsCommitted).toBe(1);
+      expect(fake.applied.map((r) => r.name)).toEqual(['0099_opt_out']);
+    });
+
+    it('still records the bookkeeping row in a (separate) transaction', () => {
+      const fake = makeFakeDb();
+      runMigrations({ db: fake.db, files: [MARKER_FILE] });
+      // recordApplied was committed (one transaction) and persisted.
+      expect(fake.applied).toHaveLength(1);
+      expect(fake.applied[0]?.name).toBe('0099_opt_out');
+      expect(fake.applied[0]?.checksum).toBe(sha256(MARKER_FILE.sql));
+    });
+
+    it('default behaviour (no marker) still wraps in one transaction', () => {
+      const fake = makeFakeDb();
+      runMigrations({ db: fake.db, files: [FILE_INIT] });
+      // FILE_INIT has no marker — runner wraps SQL + bookkeeping together.
+      expect(fake.transactionsCommitted).toBe(1);
+      expect(fake.applied.map((r) => r.name)).toEqual(['0001_init']);
+    });
+
+    it('does NOT record applied row if a marker migration throws', () => {
+      const failing: MigrationFile = {
+        name: '0098_opt_out_failing',
+        sql:
+          '-- @no-wrap-transaction\n' +
+          'BEGIN;\n' +
+          'CREATE TABLE will_fail (-- forced failure marker --);\n' +
+          'COMMIT;\n',
+      };
+      const fake = makeFakeDb({ failOnSql: 'forced failure marker' });
+      let caught: unknown = null;
+      try {
+        runMigrations({ db: fake.db, files: [failing] });
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).not.toBeNull();
+      // Bookkeeping was NOT written — next boot will see this migration as
+      // still pending and retry it (migration author is responsible for
+      // idempotency in the body).
+      expect(fake.applied).toEqual([]);
+    });
+
+    it('only scans the first 10 lines for the marker (defence-in-depth)', () => {
+      // A migration that mentions `-- @no-wrap-transaction` deep in the
+      // file (past line 10) should NOT opt out — the marker is a header
+      // contract, not a free-text comment.
+      const lateMarker: MigrationFile = {
+        name: '0097_late_marker',
+        sql:
+          'CREATE TABLE a (id INTEGER);\n' +
+          'CREATE TABLE b (id INTEGER);\n' +
+          'CREATE TABLE c (id INTEGER);\n' +
+          'CREATE TABLE d (id INTEGER);\n' +
+          'CREATE TABLE e (id INTEGER);\n' +
+          'CREATE TABLE f (id INTEGER);\n' +
+          'CREATE TABLE g (id INTEGER);\n' +
+          'CREATE TABLE h (id INTEGER);\n' +
+          'CREATE TABLE i (id INTEGER);\n' +
+          'CREATE TABLE j (id INTEGER);\n' +
+          'CREATE TABLE k (id INTEGER);\n' +
+          '-- @no-wrap-transaction (too late — past line 10)\n' +
+          'CREATE TABLE l (id INTEGER);\n',
+      };
+      const fake = makeFakeDb();
+      runMigrations({ db: fake.db, files: [lateMarker] });
+      // Wrapped path: one committed transaction containing both the SQL
+      // exec and the bookkeeping insert.
+      expect(fake.transactionsCommitted).toBe(1);
+      expect(fake.applied.map((r) => r.name)).toEqual(['0097_late_marker']);
+    });
+  });
 });
 
 /**

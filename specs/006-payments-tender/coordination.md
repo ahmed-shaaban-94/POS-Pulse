@@ -1884,7 +1884,7 @@ on both validate request + response.
 | Wave 5b-renderer | #224 | T242 + T281–T282 (ForceFailSurface + manager-only IPC) | 2026-05-25 |
 | Wave 5c | #226 | T290–T291 + F-A4B-003 enforcement (VoucherEntry renderer) | 2026-05-25 |
 | Wave 5d | #227 | T295–T298 (verification + sign-off, DEFERRED) | 2026-05-25 |
-| **Wave 5e** | **THIS PR** | **T299 (F-W5D-001 migration; closes Slice 4)** | **pending** |
+| Wave 5e | #228 | T299 (F-W5D-001 migration + runner `@no-wrap-transaction` opt-out; closes Slice 4) | 2026-05-25 |
 
 ### Coverage gate (T295 result — Wave 5e re-run)
 
@@ -1950,23 +1950,49 @@ pattern (CHECK constraints are not ALTER-able). The new table is
 created with the 15-value enum, every row from the old table is
 copied in via explicit-column-list `INSERT ... SELECT`, the old table
 is dropped, the new is renamed into place, and the three indexes
-from 0012 + 0013 are re-created. FK linkage from
-`payment_tender_lines` + `payment_action_outbox` resolves by name
-after the rename, so no further action is required. The migration
-runner's `db.transaction()` wrapper is compatible because (a) all
-parent rows are continuously present from the FK enforcer's
-perspective (no orphan delete), and (b) `PRAGMA foreign_keys` is
-intentionally NOT toggled — it is a documented no-op inside a
-transaction.
+from 0012 + 0013 are re-created.
+
+Important note on FK semantics during the rebuild (CodeRabbit finding
+post Wave 5e's first push). Wave 5e's first attempt claimed the
+rebuild was safe inside the runner's default `db.transaction()`
+wrap on the basis that `INSERT...SELECT` preserves every parent row
+before `DROP TABLE`. **This was empirically wrong.** SQLite with
+`PRAGMA foreign_keys = ON` raises `FOREIGN KEY constraint failed`
+on `DROP TABLE payment_attempts` regardless of whether the child
+rows could find a new parent under a subsequent rename — verified
+in both better-sqlite3 (production runtime) and sql.js (test
+harness). The first push passed CI only because the test harness
+applies migrations against an empty database before inserting any
+fixtures.
+
+CodeRabbit suggested `PRAGMA defer_foreign_keys = ON` inside the
+transaction; empirical verification (same harness pair) showed this
+ALSO fails — `defer_foreign_keys` defers the FK *check* to COMMIT,
+but the DROP itself raises immediately. The only working primitive
+is `PRAGMA foreign_keys = OFF` *outside* any transaction. Since the
+runner's `db.transaction()` wrap makes the PRAGMA a documented no-op
+inside the transaction, the runner itself had to gain an opt-out.
+
+Runner change (Wave 5e fixup). `src/main/db/migrate.ts` now scans the
+first 10 lines of each migration file for `-- @no-wrap-transaction`.
+Files carrying that marker run directly via `db.exec()` outside any
+runner-owned transaction; the migration is then responsible for its
+own BEGIN/COMMIT and any FK toggling. Bookkeeping (the
+`schema_migrations` insert) runs in a separate, smaller transaction
+after the migration body succeeds — so a partial failure leaves the
+migration "pending" on next boot and gets retried. The runner
+default (whole-file-in-one-transaction) is unchanged for every
+existing migration. Wave 5e's `0019` is the first opt-out and the
+canonical example for any future schema-altering migration.
 
 Verification. All 80 integration tests under
-`tests/integration/payments/` pass on the migrated schema, including
-the 5 prior tests that already exercised `payment_attempts` (the
-table-rebuild preserved FK linkage); the 2 promoted-from-`it.todo`
-blocks in `force-fail.test.ts` now pass as `it()` with the full FSM
-transaction body reachable. The `payment-attempt-fsm.ts` coverage
-jumped from 89.74% → 97.44% line as the direct empirical signature
-that the load-bearing transaction body is now executed end-to-end.
+`tests/integration/payments/` pass on the migrated schema (including
+against a populated `payment_attempts` table — the regression that
+caught CR-1 ships as part of `migrations.test.ts`); the 2
+promoted-from-`it.todo` blocks in `force-fail.test.ts` now pass as
+`it()`. `payment-attempt-fsm.ts` coverage jumped from 89.74% →
+97.44% line as the direct empirical signature that the load-bearing
+transaction body is now executed end-to-end.
 
 ### S4 task completion (T200–T299)
 

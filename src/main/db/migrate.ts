@@ -68,6 +68,37 @@ export interface RunMigrationsOptions {
 }
 
 /**
+ * Pre-scan for the `-- @no-wrap-transaction` opt-out marker.
+ *
+ * Default behaviour wraps each migration in `db.transaction(...)`. SQLite
+ * documents `PRAGMA foreign_keys` as a no-op inside a transaction, and at
+ * least one Slice-4 migration (0019, the `failure_reason` enum extension)
+ * needs to disable FK enforcement around a table rebuild — DROP TABLE on a
+ * parent with child rows raises `FOREIGN KEY constraint failed` even when
+ * the rebuild preserves every parent row in advance via INSERT…SELECT.
+ *
+ * The opt-out is intentionally explicit: a migration author asks for it
+ * by placing `-- @no-wrap-transaction` in the first 10 lines of the file,
+ * AND is then responsible for emitting their own `BEGIN`/`COMMIT` pair
+ * (plus any PRAGMA toggling). Bookkeeping (`schema_migrations` insert)
+ * still happens through the runner, in a separate transaction, only if
+ * the migration succeeded — so a partial DDL still surfaces as "pending"
+ * on the next boot and gets retried.
+ *
+ * Default is OFF — every existing migration keeps its old shape.
+ */
+const NO_WRAP_TRANSACTION_MARKER = '-- @no-wrap-transaction';
+const MARKER_SCAN_LINE_LIMIT = 10;
+
+function fileOptsOutOfTransactionWrap(sql: string): boolean {
+  const lines = sql.split(/\r?\n/, MARKER_SCAN_LINE_LIMIT);
+  for (const line of lines) {
+    if (line.includes(NO_WRAP_TRANSACTION_MARKER)) return true;
+  }
+  return false;
+}
+
+/**
  * Apply every pending migration in `options.files`, sorted by name.
  * Throws on the first failure (caller decides whether to halt the app).
  */
@@ -82,20 +113,39 @@ export function runMigrations(options: RunMigrationsOptions): void {
   // Step 2: which names are already on disk?
   const applied = new Set<string>(db.listAppliedNames());
 
-  // Step 3: walk files in sorted order; apply each pending one in a transaction.
+  // Step 3: walk files in sorted order; apply each pending one. Each file is
+  // either wrapped in a single transaction (the default) or — if it carries
+  // the `-- @no-wrap-transaction` marker — executed directly, with bookkeeping
+  // recorded in a second, smaller transaction afterwards.
   const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
   for (const file of sorted) {
     if (applied.has(file.name)) continue;
 
     const checksum = sha256Hex(file.sql);
     const appliedAt = new Date().toISOString();
+    const optedOut = fileOptsOutOfTransactionWrap(file.sql);
 
-    // Transaction wraps BOTH the migration SQL and the bookkeeping insert,
-    // so rollback removes both on failure.
-    db.transaction(() => {
+    if (optedOut) {
+      // The migration runs outside the runner's transaction wrap. It MUST
+      // emit its own BEGIN/COMMIT; the runner only re-throws on failure
+      // (so bookkeeping is not recorded, the migration appears pending on
+      // the next boot, and gets retried).
       db.exec(file.sql);
-      db.recordApplied({ name: file.name, applied_at: appliedAt, checksum });
-    });
+      // Bookkeeping gets its own small transaction so a crash between the
+      // schema work and the insert leaves the next boot in a recoverable
+      // state (schema work re-applies; idempotency in the migration body
+      // is the author's responsibility).
+      db.transaction(() => {
+        db.recordApplied({ name: file.name, applied_at: appliedAt, checksum });
+      });
+    } else {
+      // Default: one transaction wraps the migration SQL AND the bookkeeping
+      // insert, so rollback removes both on failure.
+      db.transaction(() => {
+        db.exec(file.sql);
+        db.recordApplied({ name: file.name, applied_at: appliedAt, checksum });
+      });
+    }
   }
 }
 

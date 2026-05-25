@@ -1,3 +1,4 @@
+-- @no-wrap-transaction
 -- T299 — extend `payment_attempts.failure_reason` CHECK enum with
 -- `manager_force_failed` (Wave 5e closes F-W5D-001).
 --
@@ -26,24 +27,36 @@
 -- into place. Indexes follow the old table on DROP and must be
 -- re-created.
 --
--- FK safety. Two child tables reference `payment_attempts(payment_attempt_id)`:
+-- Why `-- @no-wrap-transaction` + explicit `PRAGMA foreign_keys = OFF`.
+-- Two child tables reference `payment_attempts(payment_attempt_id)`:
 --   - `payment_tender_lines` (migration 0014)
 --   - `payment_action_outbox` (migration 0015)
--- Both declare bare `REFERENCES` clauses (no ON DELETE) → SQLite default
--- is NO ACTION. Because this migration copies EVERY row from the old
--- table into the new before dropping the old, the parent rows that the
--- child tables reference are continuously present from any FK enforcer's
--- point of view; no orphan-creating delete occurs.
+-- Both declare bare `REFERENCES` clauses (SQLite default = NO ACTION).
+-- With `PRAGMA foreign_keys = ON` (set by `src/main/db/client.ts` on every
+-- connection), `DROP TABLE payment_attempts` raises
+-- `FOREIGN KEY constraint failed` even though INSERT…SELECT has already
+-- copied every parent row into the replacement table — SQLite enforces FK
+-- existence at DROP time, regardless of whether the child rows could find
+-- a new parent under the rename.
 --
--- `PRAGMA foreign_keys=OFF` is intentionally NOT used: the migration
--- runner (`src/main/db/migrate.ts:95`) wraps each migration file in
--- `db.transaction(...)`, and SQLite documents `PRAGMA foreign_keys` as a
--- no-op inside a transaction. Including it would be dead text.
+-- Empirically verified against both better-sqlite3 (production runtime)
+-- and sql.js (test harness): `PRAGMA defer_foreign_keys = ON` inside the
+-- transaction does NOT fix this — the only working primitive is
+-- `PRAGMA foreign_keys = OFF` BEFORE any transaction, and SQLite documents
+-- `PRAGMA foreign_keys` as a no-op inside a transaction. The migration
+-- runner therefore reads the `-- @no-wrap-transaction` marker above and
+-- runs this file directly without its default `db.transaction()` wrap;
+-- this file then emits its own BEGIN/COMMIT around the rebuild proper.
+-- See `src/main/db/migrate.ts` for the runner's opt-out logic.
 --
 -- App-layer schema is unchanged. `PaymentAttemptRow.failure_reason` in
 -- `src/main/payments/repositories/payment-attempts.repository.ts` already
 -- accepts the broader union via `PaymentFailureReason` from the shared
 -- types; only the storage-layer CHECK lagged.
+
+PRAGMA foreign_keys = OFF;
+
+BEGIN;
 
 -- Step 1. Create the new table with the corrected CHECK enum. The schema
 -- is byte-for-byte identical to 0012 (PK, columns, type/NOT NULL
@@ -163,7 +176,8 @@ FROM payment_attempts;
 -- with it (idx_payment_attempts_envelope_handoff_action_id +
 -- idx_payment_attempts_state_branch from 0012, and
 -- payment_attempts_one_started_per_terminal from 0013). They are
--- re-created in Step 5.
+-- re-created in Step 5. Safe because `PRAGMA foreign_keys = OFF` above
+-- defers child FK validation until after the rename in Step 4.
 DROP TABLE payment_attempts;
 
 -- Step 4. Rename the new table into the original name. Child-table FK
@@ -184,3 +198,14 @@ CREATE INDEX IF NOT EXISTS idx_payment_attempts_state_branch
 CREATE UNIQUE INDEX IF NOT EXISTS payment_attempts_one_started_per_terminal
   ON payment_attempts (terminal_id)
   WHERE state = 'started';
+
+-- Step 6. Verify the FK graph survived the rebuild. `PRAGMA
+-- foreign_key_check` returns one row per orphan; with the rename in
+-- Step 4 having restored the parent table under its original name, this
+-- should be empty. If it is not, the transaction below cannot commit and
+-- the migration aborts.
+PRAGMA foreign_key_check;
+
+COMMIT;
+
+PRAGMA foreign_keys = ON;
