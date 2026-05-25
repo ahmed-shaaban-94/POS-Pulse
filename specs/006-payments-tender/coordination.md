@@ -22,7 +22,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-24 (Slice 4 Wave 1 §A2 sign-off — Voucher V-A contract pinned from Data-Pulse-2 PR #316 (merge SHA `90261f2`; source commit `aedb757`). Three operationIds pinned (`posValidateVoucher`, `posRedeemVoucher`, `posReverseVoucher`); seven new schemas merged into `scripts/openapi-snapshot.json`; `src/shared/api-types.ts` regenerated via `npm run codegen:api`; `codegen:verify` clean. **§A2 ticked ✅** — see §"Plan v1.0 — Session 2026-05-24 → Slice 4 §A2 verification" below. §A4-B remains held for the upcoming `vouchers.*` bridge wave. Previous entry: 2026-05-23 — Slice 3 ✅ T164 sign-off.)
+**Last updated:** 2026-05-25 (Slice 4 Wave 5d verification — T295 full coverage audit recorded (voucher V-A clients + handlers + FSMs ≥95% line on every voucher-only path; force-fail handler at **92.86% line / 90.91% branch**, partially gated by F-W5D-001 — see §"Slice 4 sign-off (T298 — Wave 5d)" §"Coverage gate"); T296 voucher e2e integration test added (`tests/integration/payments/voucher-end-to-end.test.ts`, 3/3 passing); T297 force-fail e2e integration test added (`tests/integration/payments/force-fail.test.ts`, 1/3 passing — 2/3 `it.todo()` blocked on F-W5D-001); T298 Slice 4 sign-off **DEFERRED** pending Wave 5e migration that adds `'manager_force_failed'` to the `payment_attempts.failure_reason` CHECK enum (see §"Slice 4 sign-off (T298 — Wave 5d)" §Findings). Previous entry: 2026-05-24 — Slice 4 Wave 1 §A2 sign-off.)
 
 ---
 
@@ -1850,6 +1850,128 @@ on both validate request + response.
   bridge handler lands.
 
 **§A2 ledger update.** Row above ticked ✅ with evidence + PR/SHA.
+
+---
+
+## Slice 4 sign-off (T298 — Wave 5d)
+
+**Slice 4 — Voucher V-A contract + force-fail**
+
+### Sign-off summary
+
+| Field | Value |
+|:--|:--|
+| Date | 2026-05-25 |
+| Task | T298 — Slice 4 functional sign-off |
+| Status | ⚠ **DEFERRED** — Wave 5d verification surfaced a production-blocking schema/code mismatch that also gates the T295 force-fail coverage threshold (see Findings + Coverage gate) |
+| §A1 | ✅ Cleared 2026-05-20 (FR-021 manager force-fail) |
+| §A2 | ✅ Cleared 2026-05-25 (Voucher V-A contract pinned; PR #215) |
+| §A3 | ✅ Cleared 2026-05-25 (audit category `tender.reversal_pending`; PRs #218 + #219) |
+| §A4-B | ✅ Cleared 2026-05-25 (`vouchers.*` bridge surface security review; PR #217) |
+
+### Wave-by-wave ledger
+
+| Wave | PR | Tasks | Merged |
+|:--|:--|:--|:--|
+| Wave 1 | #214 | T200–T203 (Voucher V-A contract pin, regenerate api-types) | 2026-05-25 |
+| Wave 2 | #215 | T204 (idempotent voucher contract verification) | 2026-05-25 |
+| §A4-B review | #217 | §A4-B reviewer sign-off (docs-only) | 2026-05-25 |
+| Wave 3 | #218 | T210–T217 + T219–T222 (voucher V-A client + audit category) | 2026-05-25 |
+| Wave 3 fixup | #219 | Coverage fixup for PR #218 | 2026-05-25 |
+| Wave 4 | #220 | T260–T265 (vouchers.validate bridge + reversal_pending FSM + compensating reverse) | 2026-05-25 |
+| Wave 5a | #222 | T270 (deferred-reversal resolver) | 2026-05-25 |
+| Wave 5b-main | #223 | T240–T241 (payments.forceFail main + FR-006 amendment) | 2026-05-25 |
+| Wave 5b-renderer | #224 | T242 + T281–T282 (ForceFailSurface + manager-only IPC) | 2026-05-25 |
+| Wave 5c | #226 | T290–T291 + F-A4B-003 enforcement (VoucherEntry renderer) | 2026-05-25 |
+| **Wave 5d** | **THIS PR** | **T295–T298 (verification + sign-off)** | **pending** |
+
+### Coverage gate (T295 result)
+
+Full Slice 4 surface (per `tasks.md` T295 requirement: ≥95% on voucher paths + force-fail handler). Numbers from `npx vitest run --coverage --testTimeout=30000` on this branch (commit reflected in the PR head SHA).
+
+**Gate state — partial:** every **voucher-only** path meets the ≥95% line threshold (voucher V-A clients all 100%; `apply-voucher-line.ts`, `vouchers-validate.ts`, `deferred-reversal-resolver.ts` all ≥97% line). The **force-fail handler** is at **92.86% line / 90.91% branch** — short of ≥95% line. Root cause: the `it.todo()` blocks in `force-fail.test.ts` (the only tests that drive the FSM-success branch end-to-end) are gated behind F-W5D-001. Once Wave 5e merges and those `it.todo()` blocks are promoted to `it()`, the handler's coverage will close to ≥95%. **Final Slice 4 sign-off therefore requires Wave 5e + a re-run of T295.**
+
+| File | Line | Func | Branch |
+|:--|:--|:--|:--|
+| `src/main/payments/deferred-reversal-resolver.ts` | 100.00% | 100.00% | 81.82%¹ |
+| `src/main/payments/fsm/payment-attempt-fsm.ts` | 89.74%² | 91.67% | 89.47% |
+| `src/main/payments/fsm/tender-line-fsm.ts` | 98.15% | 100.00% | 95.95% |
+| `src/main/payments/handlers/apply-voucher-line.ts` | 100.00% | 100.00% | 100.00% |
+| `src/main/payments/handlers/payments-confirm.ts` | 97.22% | 100.00% | 88.46% |
+| `src/main/payments/handlers/payments-force-fail.ts` | 92.86% | 100.00% | 90.91% |
+| `src/main/payments/handlers/tender-apply.ts` | 96.30% | 100.00% | 87.93% |
+| `src/main/payments/handlers/tender-reverse.ts` | 95.83% | 100.00% | 94.29% |
+| `src/main/payments/handlers/vouchers-validate.ts` | 100.00% | 100.00% | 96.67% |
+| `src/main/payments/voucher-authority/error-body.ts` | 100.00% | 100.00% | 100.00% |
+| `src/main/payments/voucher-authority/redeem.ts` | 100.00% | 100.00% | 100.00% |
+| `src/main/payments/voucher-authority/refusal-mapping.ts` | 100.00% | 100.00% | 100.00% |
+| `src/main/payments/voucher-authority/reverse.ts` | 100.00% | 100.00% | 100.00% |
+| `src/main/payments/voucher-authority/validate.ts` | 100.00% | 100.00% | 100.00% |
+| `src/renderer/ui/payments/ForceFailSurface.tsx` | 100.00% | 100.00% | 100.00% |
+| `src/renderer/ui/payments/VoucherEntry.tsx` | 95.74% | 100.00% | 91.11% |
+
+Overall suite: **285 files / 3569 passed / 3 skipped / 2 todo / 0 failed.**
+Whole-repo line coverage: **97.18%** (statements 94.91%, branches 91.25%, functions 97.69%).
+
+¹ Resolver branch number is dominated by defence-in-depth branches that are exercised by unit tests but appear as uncovered lines in the integration sweep — see `tests/unit/main/payments/deferred-reversal-resolver.test.ts` for the full matrix.
+² `payment-attempt-fsm.ts` uncovered range (262, 347, 352–382) is the `forceFail` transaction body — currently unreachable end-to-end pending the Wave 5e migration (see Findings).
+
+### Findings (active at Slice 4 close)
+
+**F-W5D-001 (BLOCKER) — `failure_reason='manager_force_failed'` not in CHECK enum.**
+
+Wave 5b-main amended FR-006 to add `'manager_force_failed'` to the
+`PaymentFailureReason` union, and `PaymentAttemptFsm.forceFail()` writes
+that value into `payment_attempts.failure_reason`. However migration
+`0012_create_payment_attempts.sql` declares:
+
+```sql
+CHECK (failure_reason IS NULL OR failure_reason IN (
+  'cart_lost', 'operator_session_terminated', 'dependency_unavailable',
+  'internal_error', 'stale_handoff', 'tender_underpaid',
+  'non_cash_overpayment_refused', 'voucher_not_found', 'voucher_expired',
+  'voucher_cancelled', 'voucher_already_redeemed',
+  'voucher_tenant_mismatch', 'voucher_branch_mismatch',
+  'split_tender_rollback'
+))
+```
+
+`'manager_force_failed'` is missing. Every real force-fail crashes with
+a CHECK-constraint violation. Unit tests pass because they mock the
+repository layer; Wave 5d's T297 integration test caught it (the
+failing assertions are recorded as `it.todo()` in
+`tests/integration/payments/force-fail.test.ts` with a comment pointing
+here).
+
+**Required follow-up (Wave 5e):** single migration PR adding
+`'manager_force_failed'` to the CHECK enum via the SQLite
+table-rebuild pattern (CHECK constraints are not ALTER-able). After
+Wave 5e merges, promote the two `it.todo()` blocks in the force-fail
+integration test to `it()` and re-run the Slice 4 sign-off.
+
+### S4 task completion (T200–T298)
+
+All Wave-1–Wave-5c tasks complete and merged. Wave 5d tasks below.
+
+| Task | Description | Status |
+|:--|:--|:--|
+| T295 | Full Slice 4 coverage audit (≥95% on voucher paths + force-fail handler) | ⚠ Partial — voucher paths ✅; force-fail handler 92.86% line (gated by F-W5D-001 — see §"Coverage gate" above) |
+| T296 | Voucher end-to-end integration test (happy + failure + resolver hand-off) | ✅ `tests/integration/payments/voucher-end-to-end.test.ts` (3/3 passing) |
+| T297 | Force-fail end-to-end integration test (dual attribution + FR-021 DOM check) | ⚠ Partial — 1/3 passing, 2/3 `it.todo()` blocked on F-W5D-001 |
+| T298 | Slice 4 sign-off ledger entry | ⚠ DEFERRED (this section) |
+
+### Deferred / follow-up
+
+- **F-W5D-001** — `manager_force_failed` migration (Wave 5e).
+- **Slice 5 scope** — production-readiness, §A5 rollout-time gate.
+
+### Next step (single concrete action)
+
+**Dispatch Wave 5e** — single migration PR adding `'manager_force_failed'`
+to the `payment_attempts.failure_reason` CHECK enum via the SQLite
+table-rebuild pattern. After 5e merges, promote the two `it.todo()`
+blocks in `tests/integration/payments/force-fail.test.ts` to `it()`,
+re-run the full suite, and record the final Slice 4 sign-off.
 
 ---
 
