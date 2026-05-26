@@ -257,7 +257,7 @@ T290 is the second time the activation contract from `docs/impeccable-embed-pref
   - **Does not auto-dismiss** — banner stays until the printer-failure condition resolves.
   - All controls are ≥ 44 × 44 CSS pixels.
   - Banner has screen-reader landmark + focus management lands on the banner when it first mounts.
-- **Step 4 — Post-craft constitution checklist** (embed preflight §7): run the eight-item checklist:
+- **Step 4 — Post-craft constitution checklist** (embed preflight §7): run the nine-item checklist:
   - [ ] No floats for money. (Banner does not display money directly; if it surfaces a failed-print sale's `total_minor`, formatter is the only legal source.)
   - [ ] No copy-paste from `_reference/Data-Pulse/`. Re-derived only.
   - [ ] RTL default. Component works in `dir="rtl"`; the three affordance buttons mirror correctly.
@@ -361,7 +361,7 @@ Each wave's close-out updates `coordination.md`:
 | Hardware integration test (T301 / T302) fails empirically | HIGH | Stop and escalate to §A3 reviewer. Do not silently work around. Possible root causes: incompatible printer + library, regression in S3b pipeline, or wrong test expectation. Re-open S3a / S3b / re-spec as appropriate. |
 | Banner mount race when finalize and print resolve in the same tick | MEDIUM | The banner subscribes via `sales.subscribe(topic='banner_state')` — Slice 1's subscription delivers `latest_print_event` updates. The subscription is event-driven, not polling, so race is impossible by construction. T261 subscription test locks the contract. |
 | Retry-print idempotency replay drift | MEDIUM | T253 explicit test: identical-payload replay → no-op returning original outcome; payload-mismatch → `idempotency_payload_mismatch` per Constitution §P5. The handler MUST use the request's `idempotency_key` as the cache key with the request body hash as the payload check. |
-| Second `/impeccable craft` invocation drifts from the canonical §4.2 ritual | MEDIUM | §6.2 binds the ritual explicitly with slice-specific bindings (sub-item (f) for shape=pass, the four PrinterFailureBanner test files for red-bar, the eight-item post-craft checklist). Embedder follows the procedure literally; deviation is a preflight violation. |
+| Second `/impeccable craft` invocation drifts from the canonical §4.2 ritual | MEDIUM | §6.2 binds the ritual explicitly with slice-specific bindings (sub-item (f) for shape=pass, the four PrinterFailureBanner test files for red-bar, the nine-item post-craft checklist). Embedder follows the procedure literally; deviation is a preflight violation. |
 
 ---
 
@@ -372,7 +372,7 @@ Slice 3's T290 is the second `[IMPECCABLE craft]` after Slice 2's T173. Worth no
 **Same as S2 T173:**
 
 - Four-step ritual (Step 1 confirm sign-off → Step 2 red-bar → Step 3 craft → Step 4 post-craft checklist).
-- Post-craft constitution checklist has the same eight items (no floats for money / no `_reference` copy / RTL / 44×44 / no optimistic UI / no PII in logs / preload-bridge only / reduced-motion / axe-core clean — that's nine bullets counting the axe-core check, which is correct).
+- Post-craft constitution checklist has the same nine items (no floats for money / no `_reference` copy / RTL / 44×44 / no optimistic UI / no PII in logs / no bridge-API call outside the typed preload bridge / reduced-motion / axe-core clean).
 - `coordination.md` records both red-bar confirmation and post-craft checklist completion.
 
 **Slice-specific in S3 T290:**
