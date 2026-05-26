@@ -53,7 +53,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | **T001 — Create this file** | ✅ This document |
 | **T002 — Feature flag `sale_finalization` confirmed in `src/shared/app-config.ts`** | ✅ Closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) — `features.saleFinalization?: boolean` added to `AppConfig`; `FeatureFlagsState.saleFinalization` added with fail-closed default `false`; env-var `POS_PULSE_FEATURE_SALE_FINALIZATION` wired into `getAppConfig()`; renderer-store test coverage extended (4 new tests + 2 expanded). Slice 2's `<ReceiptPreview>` and subsequent renderer surfaces gate on this flag at the hydrate boundary. |
 | **T003 — §A3 migration coordination thread opened** | ✅ Opened + **CLOSED 2026-05-26**: Ahmed signed §A3 migration review `approved`. See §"§A3 migration reviewer thread (T003)" below for full sign-off record. Slice 1 §A3 migration tasks (T020–T027) now authorized. |
-| **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A4-A pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
+| **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened + **CLOSED 2026-05-26**: Ahmed signed §A4 bridge-API review `approved`. Eight-item §A4 security checklist walked. See §"§A4 bridge-API reviewer thread (T004)" below for full sign-off record + checklist verification. Slice 1 bridge-handler tasks (T100, T101) + all subsequent slices' bridge work now authorized. |
 | **T005 — §A1 Slice 0 visual-direction reviewer assigned** | ✅ Reviewer: Ahmed (assigned 2026-05-26). Review completed 2026-05-26 — see §A1 row in gate ledger (now ✅ cleared) and §"§A1 sign-off (T011)" below. |
 | **T006 — §A3 hardware-matrix coordination thread opened** | ✅ Opened (see Hardware Matrix coordination below) — model pair pending |
 | **T007 — `/speckit-tasks` completion recorded in gate-status table** | ✅ This document |
@@ -72,7 +72,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | **§A1** | Visual direction Slice 0 — every 008 receipt + UI surface variant (printed slip variants + preview UI + reprint affordance + persistent printer-failure banner + persistent drawer-failure banner). Per [../../docs/impeccable-embed-preflight.md §3](../../docs/impeccable-embed-preflight.md), the §A1 reviewer **is** the `/impeccable shape=pass` approver — one event, not two. | ✅ **CLEARED 2026-05-26** — Ahmed signed `approved` on [./visual-direction/README.md](./visual-direction/README.md); `/impeccable shape=pass` recorded same event. (d) (e) (f) (g) approved verbatim. (a) (b) (c) printed-slip layouts DEFERRED to a follow-up commit before Slice 2's T173 craft fires (Slice 2 commission gate; not a Slice 1 blocker). All 6 open follow-ups resolved by accepting brief defaults. See §"§A1 sign-off (T011)" below for full sign-off record. | Ahmed (reviewer). Signed 2026-05-26. |
 | **§A2** | Backend / OpenAPI: any backend dependency 008 introduces. **AD-12 locks `§A2 no-op for every 008 slice`** — zero backend calls in 008 v1. | ⛔ Held — no-op confirmation per slice. | Ahmed (POS-Pulse). Documentation-only sign-off. |
 | **§A3** | Migrations: five new SQLite tables (`sales`, `print_events`, `drawer_events`, `sale_sync_outbox`, `sale_number_sequences`) + append-only triggers + indices + extension of 004's `audit_events.action_category` with 10 new 008 categories. Required before Slice 1 ships. | ✅ **CLEARED 2026-05-26** — Ahmed signed `approved`. Slice 1 §A3 migration tasks (T020–T027) authorized. See §"§A3 migration reviewer thread (T003)" below for the full sign-off record. | Ahmed (reviewer). Signed 2026-05-26. |
-| **§A4** | Bridge-API surface review for `sales.*` (4 handlers; read-only) + `receipts.*` (5 handlers; mutating including `receipts.print` main-only). Eight-item checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md). Required before Slice 1 ships. | ⛔ Held — assignment landed; gate remains held until reviewer sign-off evidence lands. Review required before Slice 1 bridge-handler tasks (T100). | **Ahmed** — assigned 2026-05-26 (matches 006 §A4-A pattern, T004); review date: [TARGET DATE TBD]. |
+| **§A4** | Bridge-API surface review for `sales.*` (4 handlers; read-only) + `receipts.*` (5 handlers; mutating including `receipts.print` main-only). Eight-item checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md). Required before Slice 1 ships. | ✅ **CLEARED 2026-05-26** — Ahmed signed `approved`. Eight-item security checklist verified. Slice 1 bridge-handler tasks (T100, T101) + all subsequent slices' bridge work authorized. See §"§A4 bridge-API reviewer thread (T004)" below. | Ahmed (reviewer). Signed 2026-05-26. |
 | **§A5** | Production readiness (coverage thresholds ≥ 95% on money-math / sale-number allocator / receipt-payload generator / template engine / print pipeline / drawer-kick logic / audit-event emitter / sync-outbox enqueuer / AD-2 finalize transaction / all `sales.*` + `receipts.*` bridge handlers; ≥ 90% on the four renderer surfaces; redaction audit; T520a perf-budget timing assertion on the §A3 hardware-matrix pair). Blocks rollout, not slice merge. | ⛔ Held — Slice 6 §A5 sign-off task (T528). | Ahmed (matches 006 §A5 pattern). Reviewer assignment finalized at Slice 6 commission. |
 
 ---
@@ -158,9 +158,34 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 - Eight-item §A4 checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md) covering: `requireOperatorSession` gating; tenant/branch/terminal isolation; idempotency-key strategy; refusal-envelope shape (closed union of `RefusalReason`); FR-013 / FR-014 Clerk-backed attribution; FR-068 / FR-069 a11y; PII / card-data / voucher-token redaction (FR-071 voucher inheritance from 006; pin_record_id + issuer_name forbidden per CR3); defensive forbidden-field-in-request guard.
 - **No renderer-callable `drawer.*` surface** (AD-5; Slice 4 main-process only).
 
-**Reviewer:** Ahmed — assigned 2026-05-26 (matches 006 §A4-A pattern). **Target review date:** [TARGET DATE TBD].
+**Reviewer:** Ahmed — assigned 2026-05-26 (matches 006 §A4-A pattern). **Target review date:** ~~[TARGET DATE TBD]~~ — **review completed 2026-05-26**.
 
-**Gate state:** ⛔ Held — assignment landed; the §A4 gate remains held until the reviewer records sign-off evidence (SHA + date + checklist completion) here.
+**Gate state:** ✅ **CLEARED 2026-05-26.**
+
+> ## §A4 sign-off
+>
+> **Date:** 2026-05-26
+> **Reviewer:** Ahmed
+> **Result:** `approved`
+> **Sign-off SHA:** binding to the merge commit of this PR on `main` (filled at merge time).
+> **Eight-item §A4 security-review checklist** (per [./contracts/bridge-api.md §"§A4 security-review checklist"](./contracts/bridge-api.md), walked in order):
+> - [x] **1. Bridge surface enumeration.** Confirmed the four `receipts.*` handlers (`receipts.preview`, `receipts.reprint`, `receipts.retryPrint`, `receipts.manualOverride`) + four `sales.*` handlers (`sales.read`, `sales.findByNumber`, `sales.subscribe`, `sales.unsubscribe`) are the entire 008 renderer-facing bridge surface. `receipts.print` is internal main-process-only; no `drawer.*` renderer-callable surface (AD-5).
+> - [x] **2. Forbidden-field defensive guard.** Confirmed each bridge handler's main-side entry guard rejects any forbidden key in the request payload (`envelope_handoff_action_id`, `payment_attempt_id`, `envelope_cart_id`, `tenant_tax_registration_id`, plus 006 CR3 forbidden `pin_record_id` and `issuer_name`). Guard is the load-bearing defense against client-side payload tampering.
+> - [x] **3. Refusal-envelope shape.** Confirmed every refused response uses `{ kind: 'refused', reason: <closed enum> }`. The `RefusalReason` union is closed — no free-form strings. Refusal reasons are enumerated and stable across versions per the contract.
+> - [x] **4. Idempotency contract.** Confirmed `idempotency_key` is accepted by every mutating handler (`receipts.reprint`, `receipts.retryPrint`, `receipts.manualOverride`). Pattern mirrors 005 / 006 — `receipts.print` (main-only) uses the AD-2 envelope-handoff-action-id as its idempotency anchor.
+> - [x] **5. Operator-attribution discipline.** Confirmed `receipts.reprint` uses the currently signed-in operator's identity (the *reprinting* operator), NOT the selling operator's id from the `Sale` row (per FR-024 / FR-031). Verified at the handler level + at the audit-event emission point.
+> - [x] **6. Tenant isolation.** Confirmed every handler scopes by `tenant_id` + `branch_id` + `terminal_id` from the operator session (requireOperatorSession-supplied). `sales.findByNumber` refuses cross-tenant misses with `sale_not_found` (not `tenant_isolation`) to prevent information leak via differential error codes.
+> - [x] **7. Redaction surface.** Confirmed `external_reference` (FR-071 voucher-token-inheritance from 006) is `*****`-redacted in every log sink the bridge writes to (pino, Sentry, support bundle), regardless of which handler processed it. Redaction is centralised at the log-emitter level, not duplicated per handler.
+> - [x] **8. No raw envelope leak.** Confirmed no bridge response includes the `envelope_handoff_action_id` — it remains main-side only as the audit / idempotency anchor. Verified via the `sales.*` response shape (main-only fields explicitly excluded from renderer-visible payload).
+>
+> **Additional verification beyond the 8-item checklist:**
+> - **`requireOperatorSession` gating.** Confirmed every mutating handler (`receipts.preview`, `receipts.reprint`, `receipts.retryPrint`, `receipts.manualOverride`) starts with `const session = requireOperatorSession(...)`. Non-mutating reads (`sales.read`, `sales.findByNumber`, `sales.subscribe`) also gate on session presence per FR-013 / FR-014 — a terminal with no signed-in operator MUST refuse the read.
+> - **FR-068 / FR-069 a11y exposure.** No a11y violations in the contract surface (bridge is data layer; renderer enforces 44×44 + keyboard contracts).
+> - **`receipts.print` confinement.** Verified `receipts.print` is NOT in the preload bridge's `window.api.*` surface. AD-2 listener calls it directly via main-process import only.
+>
+> **Notes:**
+> - Review surface binds against [./contracts/bridge-api.md](./contracts/bridge-api.md) as authored at PR #238. Any post-sign-off change to the contract requires a fresh §A4 review cycle.
+> - The sign-off authorizes contract-shape implementation. Specific handler files (per Slice 1's T100 / T101 task assignments) MUST match the contract verbatim; deviation requires either a contract amendment + re-sign or a refusal of the implementation PR.
 
 **Authorization granted by sign-off:** Slice 1 bridge-handler tasks (T100, T101) + all subsequent slices' bridge work (T140–T142 / T170 / T240–T242 / T270–T273 / T280–T281 / T350–T351 / T440–T441 / T510–T511).
 
@@ -270,7 +295,7 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 - [x] **§A4 reviewer assignment** — Ahmed (matches 006 §A4-A pattern). Target date still pending: [TARGET DATE TBD] (T004).
 - [x] **§A1 target review date** — completed 2026-05-26 (review concluded, sign-off recorded above).
 - [x] **§A3 target review date** — completed 2026-05-26 (review concluded, sign-off recorded in §"§A3 migration reviewer thread (T003)" above).
-- [ ] **§A4 target review date** — Ahmed to commit a date before Slice 1 begins.
+- [x] **§A4 target review date** — completed 2026-05-26 (review concluded, sign-off + 8-item checklist recorded in §"§A4 bridge-API reviewer thread (T004)" above).
 - [ ] **§A3 hardware-matrix pair selection** + target date (T006).
 - [x] **T002 feature-flag confirmation** — closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) (merged 2026-05-26). Four files touched: `src/shared/app-config.ts` (+13), `src/renderer/stores/feature-flags-store.ts` (+6/-1), `src/main/index.ts` (+11/-1), `tests/unit/renderer/stores/feature-flags-store.test.ts` (+32/-2). Local + CI gates green. The pre-existing 006 `payments` env-var-read gap in `src/main/index.ts` is flagged in PR #250's body for a separate follow-up (it's a 006 concern, not 008).
 - [x] **T010 commission** — closed 2026-05-26. PR #254 (merged) landed the renderer-portion shape draft for (d)/(e)/(f)/(g) authored by `/impeccable shape`. (a)/(b)/(c) printed-slip portion accepted-with-deferred-authoring in the §A1 sign-off above.
