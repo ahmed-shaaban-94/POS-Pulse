@@ -7,7 +7,15 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-26 (T002 closure — PR #250 merged; status table + open follow-up flipped). Previous entry: 2026-05-27 (initial creation — closes T001; opens T003 / T004 / T005 / T006 / T007 coordination threads).
+**Last updated:** 2026-05-26 (gate-coordination assignments — Ahmed accepts §A1 reviewer + `/impeccable shape=pass` approver role; Ahmed assigned §A3 migration reviewer + §A4 bridge-API reviewer per 006 precedent; all three gates remain ⛔ held until actual sign-off evidence lands).
+
+**Change log (oldest → newest):**
+
+1. 2026-05-26 — initial creation; closes T001; opens T003 / T004 / T005 / T006 / T007 coordination threads.
+2. 2026-05-26 — T002 closure (PR #250 merged): `sale_finalization` feature flag wired end-to-end.
+3. 2026-05-26 — gate-coordination assignments (this commit; see "Last updated" line above).
+
+*Note on artifact dates:* the `/speckit-plan` v1.0 / `/speckit-tasks` / `/speckit-analyze` / CodeRabbit-pass authoring shows "2026-05-27" in the status table below because those artifacts were authored under a future-shifted machine clock during PR #238's session. The actual chronological order of file mutations on this branch is the change-log above; the "2026-05-27" labels are preserved verbatim in the status table to match the artifact frontmatter and PR records.
 
 ---
 
@@ -42,8 +50,8 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | Embed activation: `[IMPECCABLE …]` markers injected into tasks.md; `docs/DESIGN.md` in canonical Stitch format; §A1 row reframed | ✅ 2026-05-27 (PR #241) |
 | **T001 — Create this file** | ✅ This document |
 | **T002 — Feature flag `sale_finalization` confirmed in `src/shared/app-config.ts`** | ✅ Closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) — `features.saleFinalization?: boolean` added to `AppConfig`; `FeatureFlagsState.saleFinalization` added with fail-closed default `false`; env-var `POS_PULSE_FEATURE_SALE_FINALIZATION` wired into `getAppConfig()`; renderer-store test coverage extended (4 new tests + 2 expanded). Slice 2's `<ReceiptPreview>` and subsequent renderer surfaces gate on this flag at the hydrate boundary. |
-| **T003 — §A3 migration coordination thread opened** | ✅ Opened (see §A3 row + reviewer thread below) — reviewer assignment pending |
-| **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below) — reviewer assignment pending |
+| **T003 — §A3 migration coordination thread opened** | ✅ Opened (see §A3 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A3 pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
+| **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A4-A pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
 | **T005 — §A1 Slice 0 visual-direction reviewer assigned** | ✅ Reviewer: Ahmed; target date: [TARGET DATE TBD] |
 | **T006 — §A3 hardware-matrix coordination thread opened** | ✅ Opened (see Hardware Matrix coordination below) — model pair pending |
 | **T007 — `/speckit-tasks` completion recorded in gate-status table** | ✅ This document |
@@ -59,8 +67,8 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | **§A0** | Upstream readiness + `/speckit-plan` v1.0 + `/speckit-analyze`. | ✅ Cleared (PR #238 merged 2026-05-26). Procedural lift was the `/speckit-analyze` merge; §A1–§A5 are the active gates now. | Ahmed |
 | **§A1** | Visual direction Slice 0 — every 008 receipt + UI surface variant (printed slip variants + preview UI + reprint affordance + persistent printer-failure banner + persistent drawer-failure banner). Per [../../docs/impeccable-embed-preflight.md §3](../../docs/impeccable-embed-preflight.md), the §A1 reviewer **is** the `/impeccable shape=pass` approver — one event, not two. | ⛔ Held; cleared by reviewer sign-off on `visual-direction/README.md` (T010 + T011). | **Ahmed** — assigned 2026-05-27 (T005); review date: [TARGET DATE TBD]. Reviewer accepts the shape-brief-approver role per preflight §3 (acceptance below). |
 | **§A2** | Backend / OpenAPI: any backend dependency 008 introduces. **AD-12 locks `§A2 no-op for every 008 slice`** — zero backend calls in 008 v1. | ⛔ Held — no-op confirmation per slice. | Ahmed (POS-Pulse). Documentation-only sign-off. |
-| **§A3** | Migrations: five new SQLite tables (`sales`, `print_events`, `drawer_events`, `sale_sync_outbox`, `sale_number_sequences`) + append-only triggers + indices + extension of 004's `audit_events.action_category` with 10 new 008 categories. Required before Slice 1 ships. | ⛔ Held — review required before Slice 1 persistence tasks (T020–T031). | **[NEEDS ASSIGNMENT — reviewer: ?, target: [TARGET DATE TBD]]** — T003 opened this thread 2026-05-27. Likely Ahmed (matches 006 §A3 pattern); confirm before Slice 1. |
-| **§A4** | Bridge-API surface review for `sales.*` (4 handlers; read-only) + `receipts.*` (5 handlers; mutating including `receipts.print` main-only). Eight-item checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md). Required before Slice 1 ships. | ⛔ Held — review required before Slice 1 bridge-handler tasks (T100). | **[NEEDS ASSIGNMENT — reviewer: ?, target: [TARGET DATE TBD]]** — T004 opened this thread 2026-05-27. Likely Ahmed (matches 006 §A4-A pattern); confirm before Slice 1. |
+| **§A3** | Migrations: five new SQLite tables (`sales`, `print_events`, `drawer_events`, `sale_sync_outbox`, `sale_number_sequences`) + append-only triggers + indices + extension of 004's `audit_events.action_category` with 10 new 008 categories. Required before Slice 1 ships. | ⛔ Held — assignment landed; gate remains held until reviewer sign-off evidence lands. Review required before Slice 1 persistence tasks (T020–T031). | **Ahmed** — assigned 2026-05-26 (matches 006 §A3 pattern, T003); review date: [TARGET DATE TBD]. |
+| **§A4** | Bridge-API surface review for `sales.*` (4 handlers; read-only) + `receipts.*` (5 handlers; mutating including `receipts.print` main-only). Eight-item checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md). Required before Slice 1 ships. | ⛔ Held — assignment landed; gate remains held until reviewer sign-off evidence lands. Review required before Slice 1 bridge-handler tasks (T100). | **Ahmed** — assigned 2026-05-26 (matches 006 §A4-A pattern, T004); review date: [TARGET DATE TBD]. |
 | **§A5** | Production readiness (coverage thresholds ≥ 95% on money-math / sale-number allocator / receipt-payload generator / template engine / print pipeline / drawer-kick logic / audit-event emitter / sync-outbox enqueuer / AD-2 finalize transaction / all `sales.*` + `receipts.*` bridge handlers; ≥ 90% on the four renderer surfaces; redaction audit; T520a perf-budget timing assertion on the §A3 hardware-matrix pair). Blocks rollout, not slice merge. | ⛔ Held — Slice 6 §A5 sign-off task (T528). | Ahmed (matches 006 §A5 pattern). Reviewer assignment finalized at Slice 6 commission. |
 
 ---
@@ -76,7 +84,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 3. Signs off the combined `specs/008-sale-finalization-and-receipts/visual-direction/README.md` (T010 output).
 4. Records the sign-off in this file under "§A1 sign-off" (T011); §A1 gate is marked ✅ at the same moment `shape=pass` is recorded — no second sign-off.
 
-**Acceptance of role:** [ ] Ahmed accepts the §A1 reviewer + `/impeccable shape=pass` approver role. *(Tick on PR review or in a follow-up commit; this is the §9 preflight checkbox that the activation PR left unticked.)*
+**Acceptance of role:** [x] Ahmed accepts the §A1 reviewer + `/impeccable shape=pass` approver role. *(Accepted 2026-05-26 via this commit; satisfies the §9 preflight checkbox that the activation PR left unticked. The gate itself remains ⛔ held — acceptance commits Ahmed to performing the review, not to its outcome.)*
 
 **Target review date:** [TARGET DATE TBD] — to be committed by Ahmed.
 
@@ -96,7 +104,9 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 - Extension of 004's `audit_events.action_category` enum/CHECK with the 10 new 008 categories (`sale.finalized`, `sale.finalization_refused`, `sale.receipt.printed`, `sale.receipt.reprinted`, `sale.receipt.print_failed`, `sale.receipt.print_retried_success`, `sale.receipt.manual_override`, `sale.drawer.opened`, `sale.drawer.suppressed`, `sale.drawer.failed`).
 - Migration ordering per [./data-model.md §"Migration sequencing"](./data-model.md).
 
-**Reviewer:** [NEEDS ASSIGNMENT — reviewer: ?, target: [TARGET DATE TBD]] — confirm before Slice 1 begins.
+**Reviewer:** Ahmed — assigned 2026-05-26 (matches 006 §A3 pattern). **Target review date:** [TARGET DATE TBD].
+
+**Gate state:** ⛔ Held — assignment landed; the §A3 gate remains held until the reviewer records sign-off evidence (SHA + date) here.
 
 **Authorization granted by sign-off:** Slice 1 §A3 migration tasks (T020 / T021 / T022 / T023 / T024 / T025 / T026 / T027).
 
@@ -119,7 +129,9 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 - Eight-item §A4 checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md) covering: `requireOperatorSession` gating; tenant/branch/terminal isolation; idempotency-key strategy; refusal-envelope shape (closed union of `RefusalReason`); FR-013 / FR-014 Clerk-backed attribution; FR-068 / FR-069 a11y; PII / card-data / voucher-token redaction (FR-071 voucher inheritance from 006; pin_record_id + issuer_name forbidden per CR3); defensive forbidden-field-in-request guard.
 - **No renderer-callable `drawer.*` surface** (AD-5; Slice 4 main-process only).
 
-**Reviewer:** [NEEDS ASSIGNMENT — reviewer: ?, target: [TARGET DATE TBD]] — confirm before Slice 1 begins.
+**Reviewer:** Ahmed — assigned 2026-05-26 (matches 006 §A4-A pattern). **Target review date:** [TARGET DATE TBD].
+
+**Gate state:** ⛔ Held — assignment landed; the §A4 gate remains held until the reviewer records sign-off evidence (SHA + date + checklist completion) here.
 
 **Authorization granted by sign-off:** Slice 1 bridge-handler tasks (T100, T101) + all subsequent slices' bridge work (T140–T142 / T170 / T240–T242 / T270–T273 / T280–T281 / T350–T351 / T440–T441 / T510–T511).
 
@@ -212,9 +224,12 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 
 ## Open coordination follow-ups
 
-- [ ] **Ahmed explicit acceptance** of the §A1 reviewer + `/impeccable shape=pass` approver role per preflight §3. *(Tick the activation-PR §9 acceptance box; this is the §9 box left blank at activation.)*
-- [ ] **§A3 reviewer assignment** + target date (T003).
-- [ ] **§A4 reviewer assignment** + target date (T004).
+- [x] **Ahmed explicit acceptance** of the §A1 reviewer + `/impeccable shape=pass` approver role per preflight §3. *(Accepted 2026-05-26 via this commit; the activation-PR §9 acceptance box is now satisfied.)*
+- [x] **§A3 reviewer assignment** — Ahmed (matches 006 §A3 pattern). Target date still pending: [TARGET DATE TBD] (T003).
+- [x] **§A4 reviewer assignment** — Ahmed (matches 006 §A4-A pattern). Target date still pending: [TARGET DATE TBD] (T004).
+- [ ] **§A1 target review date** — Ahmed to commit a date for the Slice 0 visual-direction review.
+- [ ] **§A3 target review date** — Ahmed to commit a date before Slice 1 begins.
+- [ ] **§A4 target review date** — Ahmed to commit a date before Slice 1 begins.
 - [ ] **§A3 hardware-matrix pair selection** + target date (T006).
 - [x] **T002 feature-flag confirmation** — closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) (merged 2026-05-26). Four files touched: `src/shared/app-config.ts` (+13), `src/renderer/stores/feature-flags-store.ts` (+6/-1), `src/main/index.ts` (+11/-1), `tests/unit/renderer/stores/feature-flags-store.test.ts` (+32/-2). Local + CI gates green. The pre-existing 006 `payments` env-var-read gap in `src/main/index.ts` is flagged in PR #250's body for a separate follow-up (it's a 006 concern, not 008).
 - [ ] **T010 commission** — `/impeccable shape 008-receipt-surfaces` invocation (renderer portion) + Ahmed authors printed-slip portion.
