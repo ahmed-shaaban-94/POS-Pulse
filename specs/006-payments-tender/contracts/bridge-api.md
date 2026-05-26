@@ -261,7 +261,12 @@ Manager / admin force-fails a stuck `started` attempt.
 - Transitions `payment_attempts.state = force_failed`; sets
   `force_failed_at`; sets `force_fail_attribution_operator_id` to
   the manager's Clerk identity; sets `failure_reason =
-  'force_failed_by_manager'`.
+  'manager_force_failed'`. (Aligned 2026-05-26 with the FR-006
+  spec amendment landed in Wave 5b-main and the
+  `payment_attempts.failure_reason` CHECK enum extension in
+  `migrations/0019_extend_payment_failure_reason_enum.sql` —
+  Wave 5e. Earlier drafts of this contract used
+  `force_failed_by_manager`; the code/migration are authoritative.)
 - Emits `payment.force_failed` audit event with **dual attribution**:
   `attribution_operator_id` = the cashier who started the attempt;
   `force_fail_attribution_operator_id` = the manager. **Manager

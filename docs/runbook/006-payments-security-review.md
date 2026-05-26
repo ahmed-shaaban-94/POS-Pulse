@@ -109,7 +109,7 @@ This is the only path in the FSM that can leave a `reversal_pending` line on a `
 
 | Stage | What happens | Source location |
 |:--|:--|:--|
-| Boundary (bridge) | `external_reference` accepted as opaque uppercase alphanumeric string. Implicit length cap via `Number.isSafeInteger` checks + per-tender shape. | `src/main/payments/handlers/tender-apply.ts` (external_card_terminal branch) |
+| Boundary (FSM) | `external_reference` accepted as opaque uppercase alphanumeric string. Hard regex gate `^[A-Z0-9]{0,6}$` (length 0–6, A–Z + 0–9 only) — non-matching values cause the FSM to refuse the apply. The bridge handler forwards the raw value to the FSM without separately validating its shape (regex check lives at the FSM layer per `src/main/payments/fsm/tender-line-fsm.ts:40` `EXTERNAL_REFERENCE_REGEX`). | `src/main/payments/fsm/tender-line-fsm.ts` (`EXTERNAL_REFERENCE_REGEX` + the regex test in the external_card_terminal apply branch) |
 | Idempotency hash | Before hashing the canonical payload, `external_reference`'s VALUE is replaced with `'*****'` (REDACT). The hash therefore encodes only the presence/shape, not the plaintext. | `src/main/payments/idempotency.ts:56` `REDACT_KEYS` |
 | Outbox storage | The outbox row's `action_payload_hash` is the SHA-256 of the redacted canonical payload. Plaintext NEVER touches the column. | `src/main/payments/repositories/payment-action-outbox.repository.ts` `computeActionPayloadHash` |
 | Audit emission | The audit-emitter writes `external_reference: '*****'` literally into the payload (data-model §"Extension to 004's audit_events"). Plaintext NEVER enters `audit_events.payload`. | `src/main/payments/audit-emitter.ts` (tender.applied emit; external_reference is redacted before encode) |

@@ -66,7 +66,7 @@ The integration run's combined stdout/stderr was captured and grepped for each s
 ```bash
 $ npx vitest run tests/integration/payments/voucher-end-to-end.test.ts \
                 tests/integration/payments/end-to-end-lifecycle.test.ts \
-                --reporter=verbose 2>&1 > /tmp/slice5-audit-run.txt
+                --reporter=verbose > /tmp/slice5-audit-run.txt 2>&1
 $ grep -ciE 'TOKEN-|INTENT-|voucher_redemption_intent_token|T1A2B3' /tmp/slice5-audit-run.txt
 0
 ```
@@ -117,7 +117,7 @@ To re-audit (any maintainer, any commit):
 git checkout <commit>
 npx vitest run tests/integration/payments/voucher-end-to-end.test.ts \
               tests/integration/payments/end-to-end-lifecycle.test.ts \
-              --reporter=verbose 2>&1 > /tmp/audit.txt
+              --reporter=verbose > /tmp/audit.txt 2>&1
 grep -ciE 'TOKEN-|INTENT-|voucher_redemption_intent_token|T1A2B3' /tmp/audit.txt
 # Expected: 0. Any non-zero output requires investigation — the sentinel
 # values are bait that should never appear in runtime output.

@@ -42,7 +42,7 @@
 1. As cash flow up to step 2 (attempt in `state='started'`).
 2. Cashier taps **Card** → renderer mounts `<ExternalCardTerminalEntry>`.
 3. Cashier swipes/inserts/taps on the standalone card terminal (out of band — this codebase does NOT integrate with payment processors directly).
-4. Card terminal prints/displays a reference (e.g. `T1A2B3`). Cashier types it into the renderer (uppercase alphanumeric, max ~24 chars).
+4. Card terminal prints/displays a reference (e.g. `T1A2B3`). Cashier types it into the renderer. The TenderLine FSM enforces `^[A-Z0-9]{0,6}$` (uppercase alphanumeric, max 6 chars) — values outside that shape are refused.
 5. Cashier enters amount applied. Taps **Apply**. Renderer calls `tender.apply({ tender_type: 'external_card_terminal', amount_applied_minor: N, external_reference: 'T1A2B3', ... })`.
 6. Main process hashes the canonical payload (with `external_reference` redacted to `'*****'`) for the idempotency key. Persists the line with `state='applied'`.
 7. Cashier confirms → settled.
