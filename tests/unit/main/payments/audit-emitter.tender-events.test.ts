@@ -149,6 +149,100 @@ describe('T094 — tender.reversed per-line event', () => {
   });
 });
 
+// F-W6A-001 close — covers two previously-uncovered branches in
+// `src/main/payments/audit-emitter.ts`:
+//   • Line 433 — the `if (input.reversal_pending_since !== undefined)` branch
+//     in `emitTenderReversed` that preserves T231 incident-reconstruction
+//     context onto the payload.
+//   • Line 449 — the `emit({ ... })` body of `emitTenderReversalPending`
+//     (had no direct unit coverage at all; existing FSM tests stubbed the
+//     emitter rather than going through the real one).
+describe('F-W6A-001 — emitTenderReversed reversal_pending_since preservation (line 433)', () => {
+  it('preserves reversal_pending_since onto the payload when supplied (T231)', () => {
+    const captured: Array<Record<string, unknown>> = [];
+    const emitter = createPaymentAuditEmitter({
+      sink: {
+        write: (e) => {
+          captured.push(e);
+        },
+      },
+    });
+    emitter.emitTenderReversed({
+      ...fixedBase,
+      tender_line_id: 'tl-deferred-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      reversed_at: '2026-05-26T10:05:30.000Z',
+      attribution_operator_id: 'op-clerk-user-abc',
+      manual_void_required: false,
+      reversal_pending_since: '2026-05-26T10:00:05.000Z',
+    });
+    const payload = (captured[0] as Record<string, unknown>).payload as Record<string, unknown>;
+    expect(payload.reversal_pending_since).toBe('2026-05-26T10:00:05.000Z');
+  });
+
+  it('OMITS reversal_pending_since from payload when not supplied (negative branch)', () => {
+    // The other half of the `if (input.reversal_pending_since !== undefined)`
+    // ternary — pins that the field does NOT appear on synchronous-reverse
+    // paths (cash + external_card_terminal) where the line never went
+    // through reversal_pending.
+    const captured: Array<Record<string, unknown>> = [];
+    const emitter = createPaymentAuditEmitter({
+      sink: {
+        write: (e) => {
+          captured.push(e);
+        },
+      },
+    });
+    emitter.emitTenderReversed({
+      ...fixedBase,
+      tender_line_id: 'tl-sync-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'cash',
+      reversed_at: '2026-05-26T10:05:30.000Z',
+      attribution_operator_id: 'op-clerk-user-abc',
+      manual_void_required: false,
+      // reversal_pending_since intentionally omitted
+    });
+    const payload = (captured[0] as Record<string, unknown>).payload as Record<string, unknown>;
+    expect(payload.reversal_pending_since).toBeUndefined();
+  });
+});
+
+describe('F-W6A-001 — emitTenderReversalPending shape (line 449)', () => {
+  it('emits tender.reversal_pending with full attribution + per-line payload', () => {
+    const captured: Array<Record<string, unknown>> = [];
+    const emitter = createPaymentAuditEmitter({
+      sink: {
+        write: (e) => {
+          captured.push(e);
+        },
+      },
+    });
+    emitter.emitTenderReversalPending({
+      ...fixedBase,
+      tender_line_id: 'tl-pending-1',
+      payment_attempt_id: 'pa-1',
+      tender_type: 'internal_voucher',
+      reversal_pending_since: '2026-05-26T10:00:05.000Z',
+      attribution_operator_id: 'op-clerk-user-abc',
+    });
+    expect(captured).toHaveLength(1);
+    const evt = captured[0] as Record<string, unknown>;
+    expect(evt.action_category).toBe('tender.reversal_pending');
+    expect(evt.payment_attempt_id).toBe('pa-1');
+    expect(evt.attribution_operator_id).toBe('op-clerk-user-abc');
+    expect(evt.session_id).toBe('sess-1');
+    expect(evt.created_at).toBe('2026-05-26T10:00:05.000Z');
+    const payload = evt.payload as Record<string, unknown>;
+    expect(payload.tender_line_id).toBe('tl-pending-1');
+    expect(payload.payment_attempt_id).toBe('pa-1');
+    expect(payload.tender_type).toBe('internal_voucher');
+    expect(payload.reversal_pending_since).toBe('2026-05-26T10:00:05.000Z');
+    expect(payload.attribution_operator_id).toBe('op-clerk-user-abc');
+  });
+});
+
 describe('T094 — voucher token never crosses into payload', () => {
   it('emitter strips voucher_redemption_intent_token even if accidentally passed', () => {
     const captured: Array<Record<string, unknown>> = [];
