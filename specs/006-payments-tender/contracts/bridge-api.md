@@ -514,3 +514,81 @@ Required for §A4 sign-off:
 
 **End of contract — DRAFT.** §A4 security-review handoff required
 before Slice 3 ships. No code authored by this file.
+
+---
+
+## Appendix A — Receipt-handoff payload (T303, AD-9 / OQ-PLAN-8)
+
+**Added by Slice 5 / Wave 6b.** The `payment.settled` audit-event
+payload IS the receipt-handoff surface for the future receipts spec.
+No new bridge contract is authored here; this appendix freezes the
+field shape that already lives in production audit rows so the
+receipts spec can depend on it.
+
+### Payload shape
+
+`auditEmitter.emitPaymentSettled({ ... })` writes a row into
+`audit_events` with `action_category = 'payment.settled'`. The
+`payload` JSON column contains:
+
+| Field | Type | Provenance |
+|:--|:--|:--|
+| `payment_attempt_id` | string (UUID v4) | `payment_attempts.payment_attempt_id` |
+| `settled_at` | string (ISO-8601 UTC) | clock at `payments.confirm` |
+| `envelope_subtotal_minor` | integer (minor units) | from the bound `PaymentIntentEnvelope v1` (frozen at `payments.start`) |
+| `envelope_cart_id` | string (UUID v4) | from the bound envelope |
+| `tender_lines` | array — one entry per applied tender line | see sub-shape below |
+| `attribution_operator_id` | string | cashier who confirmed (= row's `acting_operator_id`) |
+
+### `tender_lines[]` sub-shape
+
+Per `EmitTenderLineBreakdown` in `src/main/payments/audit-emitter.ts`:
+
+| Field | Type | Notes |
+|:--|:--|:--|
+| `tender_line_id` | string (UUID v4) | |
+| `tender_type` | `'cash' \| 'external_card_terminal' \| 'internal_voucher'` | closed enum |
+| `amount_applied_minor` | integer | as-applied; V-A may have capped voucher amount, in which case this is the capped value |
+| `change_due_minor` | integer or absent | cash tender only; not present for non-cash |
+| `external_reference` | `'*****'` literal | redacted at audit emission per Constitution §P7 / FR-008 |
+| `voucher_authority_redemption_id` | string or null | populated only for `internal_voucher` lines after successful redeem |
+
+### Stability contract
+
+The receipts spec MUST treat this shape as a stable consumer-facing
+surface. The 006-payments-tender spec hereby commits to:
+
+1. **Additive evolution is allowed.** New fields may appear in the
+   payload; receipt rendering should ignore unknown fields gracefully.
+2. **No removal or rename without coordinated bump.** Any of the
+   fields enumerated above may not be removed or renamed without the
+   future receipts spec being given a deprecation window. This is the
+   contract — receipt rendering would otherwise break against
+   historical audit rows.
+3. **Order is not significant.** `tender_lines` entries are not
+   ordered by the audit emitter; receipts logic should sort by
+   `apply_order` (read from the tender-lines table) or by the
+   timestamp embedded in `audit_events.created_at` for the parent
+   `payment.settled` row.
+
+### Where the receipts spec reads it
+
+The future receipts spec consumes this audit payload (NOT a new
+bridge call). The `audit_events` table is the durable source; receipt
+rendering reads the same payload that was committed at settlement
+time, guaranteeing **receipt == settled state at the moment of
+confirmation**. No risk of later-mutation since the audit row is
+written inside the same SQLite transaction as the settlement (no
+read-after-write window).
+
+### Voucher-specific note
+
+For `internal_voucher` lines, the receipt may want to display the
+last few characters of the redemption_id (which is opaque per FR-017
+and safe to display). The `voucher_redemption_intent_token` field
+is NEVER present in this payload (forbidden per §A4-B finding
+F-A4B-004); receipts logic must not attempt to read it.
+
+---
+
+**End of Appendix A.**
