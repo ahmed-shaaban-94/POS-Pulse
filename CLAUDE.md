@@ -14,7 +14,7 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 ## Active feature
 
 <!-- SPECKIT START -->
-**Active feature:** none — all specs through 007 are closed. Awaiting next commission.
+**Active feature:** [`specs/008-sale-finalization-and-receipts`](specs/008-sale-finalization-and-receipts/) — Sale finalization & receipts. **`/speckit-specify` ✅** (2026-05-26) · **`/speckit-clarify` ✅** (2026-05-27; OQ-1/2/3 + reprint-permission resolved) · **`/speckit-plan` v1.0 ✅** (2026-05-27; see [plan.md](specs/008-sale-finalization-and-receipts/plan.md)). Implementation **blocked** pending `/speckit-tasks` + `/speckit-analyze`; gates §A1–§A5 ⛔ held.
 
 **Recently closed:**
 - `specs/007-pos-visual-system` — POS Visual System Recovery. Complete; all six slices (S0–S6) merged. Closeout: PR #118 (S6) + PR for T087 checkbox flip + this banner update.
