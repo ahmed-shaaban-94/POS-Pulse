@@ -1,6 +1,6 @@
 # 008 Visual Direction — Slice 0 (§A1)
 
-**Status:** ✅ SIGNED — `approved` — 2026-05-26 by Ahmed. `shape=pass` recorded; §A1 cleared. Sub-items (d) (e) (f) (g) approved verbatim; sub-items (a) (b) (c) accepted with deferred-authoring commitment (printed-slip layout to land in a follow-up commit BEFORE T173 craft fires per Slice 2 commission). All 6 open follow-ups resolved by accepting brief defaults — see §"Open follow-ups" below.
+**Status:** ✅ SIGNED — `approved` — 2026-05-26 by Ahmed. `shape=pass` recorded; §A1 cleared. **All 7 sub-items now drafted in-file:** (d) (e) (f) (g) authored by `/impeccable shape` (PR #254); (a) (b) (c) proxy-authored against FR-017 / FR-029 / FR-031 / FR-046 / FR-066 + Stitch DESIGN.md + Constitution Localization, approved by Ahmed (this PR). All 6 open follow-ups resolved by accepting brief defaults — see §"Open follow-ups" below. Slice 2 T173 craft is now unblocked from the printed-slip-authoring side; remaining T173 prerequisite is only the §A4 bridge sign-off (separate parallel PR).
 
 **Authored:** 2026-05-26
 **Embedder (renderer portion d–g):** /impeccable shape · register=product · context loaded via `docs/PRODUCT.md` + `docs/DESIGN.md`
@@ -17,9 +17,9 @@ The brief covers **seven** sub-items per tasks.md T010. Each is the visual direc
 
 | Sub-item | Surface | Owner | Status |
 |:--:|:--|:--|:--|
-| (a) | `first_print` printed slip | Ahmed (reviewer-authored) | ⏳ DEFERRED — must land before T173 |
-| (b) | `reprint_duplicate` printed slip (bilingual duplicate-copy marker) | Ahmed (reviewer-authored) | ⏳ DEFERRED — must land before T173 |
-| (c) | `preview` printed-slip content (mirrors a) | Ahmed (reviewer-authored) | ⏳ DEFERRED — must land before T173 |
+| (a) | `first_print` printed slip | Proxy-authored (Ahmed approved) | ✅ DRAFTED 2026-05-26 — see (a) section below |
+| (b) | `reprint_duplicate` printed slip (bilingual duplicate-copy marker) | Proxy-authored (Ahmed approved) | ✅ DRAFTED 2026-05-26 — see (b) section below |
+| (c) | `preview` printed-slip content (mirrors a) | Proxy-authored (Ahmed approved) | ✅ DRAFTED 2026-05-26 — see (c) section below |
 | (d) | `<ReceiptPreview>` UI panel | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
 | (e) | `<ReprintAffordance>` | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
 | (f) | `<PrinterFailureBanner>` | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
@@ -41,55 +41,261 @@ The brief covers **seven** sub-items per tasks.md T010. Each is the visual direc
 
 ---
 
-## (a) `first_print` printed-slip layout — PENDING REVIEWER
+## (a) `first_print` printed-slip layout — DRAFTED ✅ (proxy-authored 2026-05-26)
 
-**Owner:** Ahmed (out of `/impeccable` register; printed-slip ESC/POS + canvas-preview composition).
+**Owner of approval:** Ahmed (this draft is proxy-authored against FR-017 / FR-046 / FR-066 / DESIGN.md; the §A1 sign-off captures Ahmed's `approved` on this draft).
 
-**Inputs the reviewer must produce:**
+**ESC/POS column width:** **42 columns at 80 mm** (matches the §A3 hardware-matrix pair selected at T006 — Epson TM-T20III, which is 80 mm with 42-column default character pitch on Font A). This is the load-bearing dimension for the template engine's wrapping rules at T160. The 58 mm / 32-column variant is OUT of scope in 008 v1 — if a future hardware pair adds a 58 mm printer, the template engine adds a second column-width branch; the current `first_print` layout is 80 mm-only.
 
-- Arabic-first RTL header band layout: branch name, branch address line, branch tax-registration ID position, terminal_label position.
-- Sale-number prominence: type size / weight / line position. Per FR-046 sale-number is locked for the lifetime of the sale; it MUST be visible at a glance on the slip.
-- Latin numerals on every numeric field (sale-number, line subtotals, totals, VAT line, payment-amount, change due) per FR-066 "Arabic-first, Latin numerals on receipts for audit compatibility."
-- Cashier-display-name line (Clerk-backed per FR-013 / FR-014 / FR-024) — placement and label-text expectation.
-- Sale-level VAT footer composition: rounded totals, VAT amount, tax-registration ID echo.
-- ESC/POS column width assumption (typically 42 columns at 80 mm or 32 columns at 58 mm) — choice locks the template engine's wrapping rules in T160.
-- Bilingual line composition rule when an item name has both Arabic + Latin renderings.
+**Composition rule:** All Arabic content is right-aligned (RTL); Latin content (numerals, English labels, tax-registration ID, ISO timestamps) is left-aligned. Numeric fields are ALWAYS Latin digits per FR-066. The slip is composed top-to-bottom as a stack of horizontal bands; each band is one or more printed lines.
 
-**Out of scope for this sub-item:** the duplicate-copy marker (sub-item b) and the preview UI panel chrome (sub-item d).
+### Plain-text layout (42-column, 80 mm, Font A)
 
-> **REVIEWER:** please paste the printed-slip mock here (image OK; a paste-able plain-text representation is preferred so we can grep it later). When complete, replace this PENDING block with the finished layout description and tick the (a) box in §"Sign-off record" below.
+```
+==========================================
+      صيدلية الرحمة قناطر                  <- Branch name (header)
+   الفرع الرئيسي — العاشر من رمضان           <- Branch address
+   Tax ID: 100123456789012                <- Tax registration (LTR)
+------------------------------------------
+   Sale # SLN-2026-05-26-T01-000142       <- Sale number (PROMINENT)
+   Receipt # R-2026-05-26-T01-000142      <- Receipt number
+   Terminal: TERM-01                      <- terminal_label
+   Cashier: محمد أحمد — Mohamed Ahmed     <- Cashier display name (bilingual)
+   Shift: Morning — صباحي                 <- Shift attribution (FR-022/023)
+   2026-05-26 11:42:18 +03:00 (Cairo)     <- Local timestamp + TZ
+   2026-05-26 08:42:18 UTC                <- UTC timestamp (audit)
+==========================================
+                              العناصر       <- "ITEMS" header (Arabic-right)
+------------------------------------------
+1× أوجمنتين 625mg علبة 14 قرص              <- Item name (Arabic + Latin SKU)
+   Augmentin 625mg box 14 tab
+                              125.00 EGP  <- Line subtotal
+2× باراسيتامول 500mg علبة 24 قرص
+   Paracetamol 500mg box 24 tab
+                               45.50 EGP
+1× ديكلوفيناك جل 50g
+   Diclofenac gel 50g
+                               28.75 EGP
+------------------------------------------
+Subtotal:                       199.25 EGP <- subtotal_minor formatted
+==========================================
+                       طريقة الدفع          <- "TENDER" header (Arabic-right)
+------------------------------------------
+نقدًا — Cash                       200.00 EGP <- tender_lines_summary[i]
+Change due — الباقي                  0.75 EGP <- cash-only field
+==========================================
+                          ضريبة القيمة المضافة  <- "VAT" header (Arabic-right)
+------------------------------------------
+Tax ID: 100123456789012                    <- Tax registration ID (re-echoed)
+VAT (14%):                       24.50 EGP <- Sale-level VAT (single line)
+Subtotal (ex. VAT):             174.75 EGP
+Total inc. VAT:                 199.25 EGP
+==========================================
+   شكرًا لتعاملكم معنا — Thank you           <- Closing line (bilingual)
+   www.smartdatapulse.tech                <- Tenant footer
+==========================================
+        [end of slip — paper cut here]
+```
+
+### Composition decisions
+
+1. **Header band (top 8 lines).** Branch name + address are Arabic-first RTL, right-aligned. Tax registration ID is Latin LTR (audit-compatibility per FR-066). Equals-sign separator runs the full 42-column width.
+
+2. **Sale-number prominence (FR-046).** The `Sale #` line uses **ESC/POS double-strike + double-height** for visual weight. Sale-number format: `SLN-YYYY-MM-DD-{terminal_label}-{6-digit-monotonic}` per AD-7 allocator (per-terminal, per-calendar-day monotonic). The sale-number MUST be visible at a glance — counter-distance review at T461 verifies legibility from ~1.5 m. Per FR-046, the sale-number is locked for the lifetime of the sale and MUST appear identically on every reprint (subject to (b)'s duplicate-copy marker addition above it).
+
+3. **Receipt-number distinct from sale-number (FR-011 / FR-046).** Receipt number format: `R-YYYY-MM-DD-{terminal_label}-{6-digit-monotonic}` — separate counter, separate prefix, same `terminal_label` substitution rule as sale-number. On first print, sale-number and receipt-number have the **same** monotonic ordinal (both allocated in the same finalize transaction at AD-2). On reprint, the receipt-number is REUSED (same value as the original first print) — per FR-028 reprint preserves all original fields. This is intentional and is the audit-trail anchor: one receipt-number per `Sale`, regardless of reprint count.
+
+4. **Terminal identifier in sale-number and receipt-number (FR-017 + AD-7).** Both numbers embed **`terminal_label` verbatim** (the human-readable form, e.g. `T01`, `TERM-01`), NOT the `terminal_id` UUID. **Truncation rule: NONE — the label is embedded as-is, no hash, no UUID substring.** The choice of label-not-UUID is deliberate:
+   - The `terminal_label` is constrained to be unique within `(tenant_id, branch_id)` scope (set at terminal pairing per 002 / 003); combined with AD-7's per-terminal-per-calendar-day monotonic counter and the YYYY-MM-DD date prefix, this gives global uniqueness without needing UUID material on the slip.
+   - **Constraint on `terminal_label`:** MUST match the regex `^[A-Z0-9-]{1,16}$` (ASCII uppercase + digits + hyphen, 1–16 chars). Enforced at terminal-pairing time (002); existing labels that violate the constraint MUST be migrated before 008 ships. This is a precondition for the format spec above.
+   - **Cashier-facing identity:** the `Terminal:` line on the slip body (composition decision below) prints the same `terminal_label`. The UUID `terminal_id` is audit-layer only and never appears on any slip.
+   - **Implementation note for T160 / T040 (AD-7 allocator):** the template engine reads `terminal_label` from the cached terminal config (set at pairing per 002), substitutes it verbatim into the sale-number / receipt-number string, with no truncation, no normalization, no case-folding (the label is already constrained to uppercase ASCII by the regex above). If a label fails the regex at runtime, T040's allocator MUST refuse with a structured error before any sale-number is allocated.
+
+5. **Cashier display name (FR-013 / FR-014 / FR-022 / FR-023 / FR-024).** Bilingual: Arabic display name first (right-aligned), em-dash separator, Latin Romanized form second. Sourced from the active operator session (Clerk-backed per 004). On reprint, this field is **NOT** updated to the reprinter's name — per FR-024 the printed slip preserves the original selling cashier's attribution; the reprinter's identity lives in the audit-event row, not on the slip.
+
+6. **Shift attribution (FR-022 / FR-023).** `Shift:` line shows the shift label (`Morning` / `Evening` / `Overnight`) bilingually. Shift context is the FR-022/FR-023 invariant — links the sale to a specific operator session window.
+
+7. **Dual timestamps (FR-017 + Constitution Localization).** Two lines: cashier-local timezone with explicit offset and city name (`+03:00 (Cairo)`), then UTC. Both lines use Latin digits per FR-066. The UTC line is the audit-canonical form; the local line is the cashier/customer-readable form. Both appear on every slip (first print and reprint).
+
+8. **Item list composition (FR-017).** Each item is a 2- or 3-line entry:
+   - **Line 1:** `{count}× {arabic_name}` — right-aligned, Arabic.
+   - **Line 2:** `{count}× {latin_name}` — left-aligned, English/Latin (only present if a Latin name exists for the SKU; pharmacy SKUs typically do for international drug names).
+   - **Line 3:** `{line_subtotal_minor formatted} EGP` — right-aligned, Latin digits.
+   - Two-line variant (Arabic-only SKU) collapses Lines 1+3.
+   - Three-line variant (Arabic + Latin) uses all three lines.
+   - Line wrapping at 42 columns is enforced by the template engine at T160; long names wrap at word boundaries with a 4-column hanging indent on subsequent lines.
+
+9. **Tender section (FR-017).** Each tender line uses the bilingual label per FR-017: `نقدًا — Cash`, `بطاقة — Card`, `قسيمة — Voucher`. Applied amount in minor units, Latin digits, currency suffix (`EGP`). For cash lines ONLY, a `Change due — الباقي` line follows with the change amount; non-cash lines never show change-due.
+
+10. **VAT footer (FR-017 / 2026-05-27 clarification A8).** Sale-level VAT total ONLY, NOT per-line. Three lines:
+    - Tax registration ID (re-echoed from the header — legally-required redundancy).
+    - `VAT (14%):` with the computed total in minor units. The 14% Egypt VAT rate is hard-coded in the template at T160; future jurisdictions add a config field. (Per AD-12, 008 does NOT call backend for VAT calc; the rate is local.)
+    - `Subtotal (ex. VAT):` and `Total inc. VAT:` lines — both Latin digits.
+
+11. **Closing line.** Bilingual thank-you + tenant footer URL. No promotional content, no QR codes, no marketing CTAs — per PRODUCT.md anti-references ("Consumer SaaS aesthetics" rejected; "the interface is a terminal, not a product landing page").
+
+### Out of scope for this sub-item
+
+- The duplicate-copy marker (sub-item b — appears in header band ABOVE the sale-number line on reprints only).
+- Per-line VAT (explicitly OUT of 008 v1 per FR-017 clarification A8; sale-level VAT only).
+- QR codes / barcodes on the slip (OUT of 008 v1 scope; if added later, lands at the foot above the closing line).
+- The preview UI panel chrome (sub-item d — that's the `<ReceiptPreview>` React component, not the printed slip itself).
+
+### Bilingual rendering rule
+
+When an item / tender line has both Arabic and Latin names, BOTH appear on consecutive lines as shown above. When only one is available (rare for items, never for tender labels), that single form is used and the other line is omitted. The template engine at T160 reads the SKU's `name_ar` and `name_en` from the cart-line snapshot and composes accordingly.
+
+### Reprint invariance commitment (FR-028 / FR-046)
+
+Every field above is **byte-stable** between first-print and reprint, with the following exceptions:
+- The duplicate-copy marker (sub-item b) appears on reprints, not first prints.
+- A second timestamp line is added on reprints showing the reprint time (FR-031 reprint-time-of-print field) — appears immediately below the duplicate-copy marker, NOT replacing the original sale timestamp.
+- The duplicate-copy sequence number ("1", "2", etc. per FR-031) appears beneath the marker.
+
+Everything else (sale-number, receipt-number, terminal, cashier, shift, sale timestamp, items, tenders, totals, VAT) is byte-equal between first-print and every reprint — verified by T403a (G1 remediation: receipt-number invariance test).
 
 ---
 
-## (b) `reprint_duplicate` printed-slip layout — PENDING REVIEWER
+## (b) `reprint_duplicate` printed-slip layout — DRAFTED ✅ (proxy-authored 2026-05-26)
 
-**Owner:** Ahmed (out of `/impeccable` register).
+**Owner of approval:** Ahmed (proxy-authored against FR-028 / FR-029 / FR-031 + R2 fraud-mitigation; §A1 sign-off captures Ahmed's `approved`).
 
-**Inputs the reviewer must produce:** everything in (a) plus the **bilingual visible duplicate-copy marker** per FR-029.
+**Delta from (a):** the `reprint_duplicate` layout is the **`first_print` layout from (a) PLUS** a duplicate-copy header band PREPENDED above the existing header, and a reprint-time line APPENDED to the timestamp band. Every other field is byte-stable per FR-028 + T403a invariance.
 
-**Hard constraints on the marker (from spec §"Reprint", FR-029, R2 mitigation in §"Risks"):**
+### Plain-text layout (42-column, 80 mm, Font A — full reprint slip)
 
-- Text: `نسخة طبق الأصل — DUPLICATE COPY` (Arabic-first, em-dash separator, English second).
-- Position: header band, top-of-slip, **above** sale-number — so a glance at the top edge resolves the question "is this a duplicate?" before any other content is read.
-- Weight: largest weight on the slip (heavier than sale-number; the duplicate-copy answer outranks the sale-number answer at a fraud-prevention level).
-- Size: ≥ 1.5 × the size of the next-largest header element (typically the branch name).
-- Counter-distance glance: must be obvious at ~1.5 m from the receipt holder's eye — the cashier handing a customer a slip and the customer's first impression at arm's length both qualify.
-- Print method: bold + underline, OR a printed band fill, OR ESC/POS double-strike — reviewer picks one based on what the printer matrix supports without margin issues.
-- Duplicate-copy sequence number (per FR-031): "1" on first reprint, "2" on second, etc. — placement adjacent to or beneath the marker.
+```
+##########################################   <- ESC/POS double-strike + band fill
+##                                      ##
+##      نسخة طبق الأصل                   ##   <- Arabic duplicate marker (RTL, right)
+##         DUPLICATE COPY                ##   <- English (LTR, left, centered)
+##                                      ##
+##      Duplicate # 1                    ##   <- Reprint sequence number (FR-031)
+##                                      ##
+##########################################
+==========================================
+      صيدلية الرحمة قناطر
+   الفرع الرئيسي — العاشر من رمضان
+   Tax ID: 100123456789012
+------------------------------------------
+   Sale # SLN-2026-05-26-T01-000142        <- SAME as first-print (FR-046)
+   Receipt # R-2026-05-26-T01-000142       <- SAME as first-print (FR-028)
+   Terminal: TERM-01                       <- SAME
+   Cashier: محمد أحمد — Mohamed Ahmed       <- SAME (selling operator, not reprinter)
+   Shift: Morning — صباحي                   <- SAME (original shift)
+   2026-05-26 11:42:18 +03:00 (Cairo)      <- ORIGINAL sale timestamp
+   2026-05-26 08:42:18 UTC                 <- ORIGINAL UTC timestamp
+   Reprinted: 2026-05-26 14:08:33 +03:00   <- NEW — reprint time (FR-031)
+==========================================
+[... items section identical to (a) ...]
+[... tender section identical to (a) ...]
+[... VAT section identical to (a) ...]
+[... closing line identical to (a) ...]
+```
 
-**Why (R2 fraud risk):** A reprint visually indistinguishable from the original could be passed as a fresh sale to a refund station and used as a covert refund-fabrication device. The marker's prominence is the load-bearing mitigation.
+### Duplicate-copy marker — design decisions
 
-> **REVIEWER:** please paste the reprint slip mock here, including the duplicate-copy marker rendering. When complete, replace this PENDING block and tick (b) in §"Sign-off record".
+**Print method (selected from the three options in the v0.1 brief):** **ESC/POS double-strike + filled band**. This is the third option from the original brief (`Print method: bold + underline, OR a printed band fill, OR ESC/POS double-strike`); I'm selecting the **combined** form — double-strike for the text + filled-character border for the band — because:
+
+1. The Epson TM-T20III selected at T006 supports both ESC/POS double-strike (`ESC E 1`) AND the `#` filled-character composition pattern. No driver workarounds needed.
+2. **Defense-in-depth against R2.** Two distinct visual signals (band fill + double-strike weight) means a thermal-paper smudge that erases one still leaves the other. A faded reprint with only one signal is the failure mode R2 warns about; the band-plus-text composition resists that mode.
+3. The 42-column width supports a 38-column band-fill interior with 2-column padding — readable at counter distance without requiring a 2× zoom on the canvas preview.
+
+**Text composition:**
+
+- **Arabic line:** `نسخة طبق الأصل` (literally "exact-replica copy" — the standard Arabic phrasing for "duplicate copy" in regulated/legal contexts; matches Egypt tax-authority terminology). Right-aligned within the band.
+- **English line:** `DUPLICATE COPY` (all-caps, bold). Centered within the band (NOT left-aligned) — centering provides visual symmetry with the right-aligned Arabic and makes the band read as a unit from both directions.
+- **Separator:** the two lines are stacked, NOT on a single line with an em-dash separator. The duplicate-copy marker is the ONE place on the slip where the bilingual content is *stacked* rather than em-dash-separated — because the marker must read as a SHOUT at counter distance, and stacking gives each language its own visual weight.
+
+**Position:** the marker band is the **topmost** band on the slip — even above the branch name. This is intentional and is the load-bearing R2 fraud mitigation: a customer (or a refund clerk receiving the slip) reads top-down; the duplicate marker is the FIRST thing they see, before they parse the branch identity or the sale number. A reprint cannot be mistaken for a fresh first-print at a glance.
+
+**Size:** the marker band occupies ~6 vertical lines + 2 lines of band-edge padding (8 lines total). The Arabic and English text inside use ESC/POS double-height (`ESC ! 16` for double-height bold); at 42-column 80 mm Font A this prints at ~6 mm character height vs ~3 mm for normal text. The 2× character height is the "≥ 1.5 × the size of the next-largest header element" requirement from the v0.1 brief — exceeded.
+
+**Counter-distance glance commitment (T461 review target):** the marker band reads "DUPLICATE COPY" / "نسخة طبق الأصل" unambiguously from ~1.5 m. The combination of double-height characters + band-fill border + top-of-slip position means a cashier handing a slip to a customer can see at arm's length whether they handed over a duplicate. T461 explicitly visual-reviews this surface at counter distance — if the marker fails the glance test on the TM-T20III hardware-matrix pair, the band-fill character (`#`) gets upgraded to a denser pattern (`@` or solid block via codepage 437) at T420 (marker visual test).
+
+### Duplicate-copy sequence number (FR-031)
+
+The sequence number is a numeric counter that increments per reprint of the same `Sale`. First reprint = `Duplicate # 1`, second reprint = `Duplicate # 2`, etc. The counter is sourced from the `print_events` table's count of successful reprints for the sale (per AD-10).
+
+- **Placement:** inside the duplicate-copy band, below the Arabic + English text lines, in normal-height bold (not double-height) — visually subordinate to the marker itself but still inside the band.
+- **Format:** `Duplicate # {N}` (Latin form only — the sequence number is an audit anchor, not a customer-facing label).
+- **Audit linkage:** this same `N` is recorded in the corresponding `print_events` row's `duplicate_copy_sequence_number` field (per FR-031); a refund clerk can cross-reference the printed sequence number against the audit log to reconstruct reprint history.
+
+### Reprint timestamp (FR-031)
+
+The `Reprinted: {timestamp}` line is APPENDED to the existing timestamp band of (a) — not replacing the original sale timestamp. Both timestamps appear on the slip:
+
+- The original sale timestamps (local + UTC) document WHEN the sale was made.
+- The `Reprinted:` line documents WHEN the duplicate slip was produced.
+
+The reprinter's identity is **NOT** added to the printed slip — per FR-024 + spec §"Clarifications" line 296: "the reprint affordance preserves the ORIGINAL selling cashier's attribution on the printed slip; the *reprinting* operator's identity lives in the audit-event row only." This is the deliberate split between customer-facing artifact (slip; original cashier) and audit artifact (audit row; reprinting cashier). The R2 fraud mitigation is the duplicate-copy marker itself, not reprinter-name on the slip.
+
+### Byte-stability commitment (FR-028 / T403a)
+
+Every field below the timestamp band — items, tenders, totals, VAT footer, closing line — is **byte-equal** between first-print and reprint of the same `Sale`. T403a (G1 remediation receipt-number invariance test) explicitly verifies this via:
+
+1. Generate `first_print` for a sale → capture ESC/POS byte sequence.
+2. Generate `reprint_duplicate` for the same sale → capture ESC/POS byte sequence.
+3. Strip the leading duplicate-copy marker band + the `Reprinted:` line.
+4. Assert the remaining bytes are equal.
+
+If this assertion fails, the template engine has introduced a reprint-time mutation that is forbidden by FR-028 + FR-046.
+
+### Why this is the R2 mitigation
+
+The fraud risk R2 (spec line 1061) is: *"A reprint visually mimics the original (no duplicate-copy marker) → passed as a fresh sale to a refund station → covert refund-fabrication device."* The mitigation is the **prominence** of the duplicate-copy marker. This draft commits to:
+
+- **Top-of-slip position** (band-first, before branch identity).
+- **Double-height + band fill** (two distinct visual signals).
+- **Bilingual stacked composition** (Arabic + English each get full line weight).
+- **Counter-distance legibility commitment** (T461 explicit review).
+
+If R2 still materializes despite all four mitigations (e.g., a thermal print head failure that drops the band), the audit row's `duplicate_copy_sequence_number` provides post-hoc reconciliation. The slip's visual marker is the primary defense; the audit row is the secondary.
 
 ---
 
-## (c) `preview` printed-slip content — PENDING REVIEWER
+## (c) `preview` printed-slip content — DRAFTED ✅ (proxy-authored 2026-05-26)
 
-**Owner:** Ahmed (the printed-slip *content* mirrors (a) exactly; the preview *UI chrome* is sub-item d).
+**Owner of approval:** Ahmed (proxy-authored against AD-6 byte-stability invariant; §A1 sign-off captures Ahmed's `approved`).
 
-**Constraint (FR-027 + AD-6):** The preview content MUST be byte-stable against the eventual print payload. Per the template engine contract, the preview is generated from the same `ReceiptPayload` struct that drives ESC/POS — there is no preview-only content. Reviewer's job here is to confirm the printed-slip layout from (a) is what the preview should render (no preview-only flourishes added at the canvas layer).
+**Confirmation:** The `preview` printed-slip CONTENT is **byte-equal to (a) `first_print`**. No preview-only flourishes are added at the canvas layer. The same `ReceiptPayload` struct drives both ESC/POS output and HTML/canvas preview render. This is the load-bearing AD-6 invariant.
 
-> **REVIEWER:** confirm "preview content equals first_print content from (a)" or note the deviation explicitly. Tick (c) in §"Sign-off record".
+### What this means concretely
+
+1. **Same template engine, two output paths.** The template engine (T160) takes the `ReceiptPayload` struct as input and emits TWO outputs from a single composition pass:
+   - **ESC/POS byte stream** for the direct-print path (Epson TM-T20III at T006).
+   - **HTML/canvas raster** for the preview UI panel ((d) `<ReceiptPreview>`).
+
+2. **No preview-only branches.** The template engine MUST NOT take an `if (target === 'preview')` branch that produces different content. If a feature is in (a) `first_print`, it is in `preview`. If a feature is absent from (a), it MUST be absent from `preview`. Reviewable invariant: a `git grep -n "preview" src/main/receipts/templates/` should show only routing decisions (which output path), never content decisions (what to render).
+
+3. **Reprint mirror.** When the cashier previews a sale that already has at least one successful `print_events` row, the preview surface shows the `reprint_duplicate` layout from (b), NOT (a). This is because the NEXT print of this sale will be a reprint, and the preview MUST visually mirror the printed output (per FR-025). The preview is *predictive*: it shows what would print if the cashier pressed Print at this moment.
+
+4. **Pre-finalize preview prohibited.** A `<ReceiptPreview>` invocation on a sale that has NOT been finalized (no `Sale` row in the durable store yet, only an in-flight cart) MUST refuse with `{ kind: 'refused', reason: 'sale_not_finalized' }` — the preview surface requires a finalized `ReceiptPayload`. Per FR-025: preview is post-finalize, pre-print.
+
+### Canvas rendering rule
+
+The HTML/canvas raster at the preview layer is a **pixel-faithful approximation** of the ESC/POS output:
+
+- **Font selection:** the canvas uses a monospace font with a per-glyph advance width matching the printer's Font A character pitch (42 columns at 80 mm = ~12 CPI). The fallback chain is `'Courier New', 'Cascadia Mono', 'JetBrains Mono', monospace` — `Inter Variable` is NOT used in the canvas (it's a proportional font; the receipt is monospace by ESC/POS contract).
+- **Arabic rendering:** the canvas uses the Windows system Arabic font (`'Tahoma'` for Arabic glyphs, paired with the Latin monospace stack above) at a matching x-height. This is a deliberate divergence from the rest of the application (which uses Inter Variable everywhere) — the receipt layer needs monospace-compatible Arabic rendering for column alignment.
+- **Band fills (duplicate-copy marker):** rendered as CSS `background: #000` with white text inside a `<pre>` block. The `#` character composition shown in (b)'s plain-text mock is preserved verbatim at the canvas layer — the ESC/POS-side band character maps 1:1 to a canvas-side bordered block.
+- **Double-strike / double-height:** rendered as CSS `font-weight: 900` (double-strike approximation) and `font-size: 2em` (double-height approximation). The canvas is NOT pixel-equal to thermal output — thermal printers have higher contrast and slightly different glyph proportions — but it is *content-equal* and *layout-equal*. The cashier confirming a preview is checking content, not contrast.
+
+### What preview MUST NOT do
+
+- **MUST NOT** auto-finalize the sale. Preview is read-only; if invoked on a not-yet-finalized cart, it refuses (see above).
+- **MUST NOT** open the cash drawer. The drawer kick is post-print-success only (AD-8); preview never causes a print.
+- **MUST NOT** emit a `print_events` row. The preview surface is not a print path; T160 template engine has no audit-event emission on the preview branch.
+- **MUST NOT** consume a sale-number or receipt-number. Both numbers are allocated at finalize time (AD-7) and are stable across previews; rendering them in a preview does not increment any counter.
+- **MUST NOT** show a different timestamp than the finalized sale's. The preview's timestamp band is sourced from `Sale.finalized_at` (immutable), not from the preview-render time.
+
+### What preview MAY do (UI chrome — covered in sub-item d)
+
+The `<ReceiptPreview>` UI panel chrome (close button, zoom toggle, print trigger button) is sub-item (d), not (c). This sub-item (c) is only about the **content rendered inside the canvas** — which is byte-equal to (a) (with the (b) duplicate-copy band prepended when the sale already has a successful print).
+
+### AD-6 commitment
+
+Per AD-6 in plan.md: "the receipt template engine MUST emit content from a single composition pass; preview-only content is forbidden." This draft commits to that constraint and adds the verification: any template-engine change that introduces a `preview === 'true'` content branch MUST be rejected at code review. The post-craft constitution checklist (preflight §7) explicitly checks this.
 
 ---
 
@@ -303,9 +509,9 @@ All 6 follow-ups below were resolved by Ahmed on 2026-05-26 alongside §A1 sign-
 > **`visual-direction/README.md` sign-off SHA:** recorded by the merge of this PR (PR # to be filled at merge time; the sign-off binding is the merge commit on `main`).
 > **`/impeccable shape=pass` recorded:** 2026-05-26 — same event as §A1 sign-off per preflight §3.
 > **Sub-items covered (T010 (a–g)):**
-> - [x] (a) `first_print` printed slip — DEFERRED, must land before T173 craft fires (Slice 2 commission gate; not a Slice 1 blocker).
-> - [x] (b) `reprint_duplicate` printed slip with bilingual duplicate-copy marker — DEFERRED alongside (a).
-> - [x] (c) `preview` content — DEFERRED alongside (a) (byte-stable mirror of a per AD-6).
+> - [x] (a) `first_print` printed slip — **DRAFTED in this PR** (proxy-authored against FR-017 / FR-046 / FR-066; 42-column 80 mm ESC/POS layout; full plain-text mock + composition decisions in §"(a) `first_print` printed-slip layout" above).
+> - [x] (b) `reprint_duplicate` printed slip with bilingual duplicate-copy marker — **DRAFTED in this PR** (top-of-slip double-strike + band-fill marker; bilingual stacked composition; reprint-time line appended; FR-031 sequence number; T403a byte-stability commitment).
+> - [x] (c) `preview` content — **DRAFTED in this PR** (byte-equal to (a); AD-6 single-pass template engine commitment; canvas-rendering rule for Arabic + monospace).
 > - [x] (d) `<ReceiptPreview>` UI panel — APPROVED verbatim.
 > - [x] (e) `<ReprintAffordance>` — APPROVED verbatim.
 > - [x] (f) `<PrinterFailureBanner>` — APPROVED verbatim.
