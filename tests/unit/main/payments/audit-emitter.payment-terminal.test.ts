@@ -119,4 +119,40 @@ describe('T093 — attribution_operator_id sourcing (FR-013 / FR-014 / Constitut
     expect(() => deriveAttributionOperatorId({} as never)).toThrow();
     expect(() => deriveAttributionOperatorId(null as unknown as never)).toThrow();
   });
+
+  // F-W6A-001 close — covers line 220 of audit-emitter.ts (the
+  // `operator_id must be a non-empty string` defensive throw). The
+  // existing tests above cover kind !== 'operator_session' and the
+  // wholly-unknown-shape paths, but never exercise the case where the
+  // shape is right but `operator_id` itself is malformed.
+  describe('F-W6A-001 — operator_session with malformed operator_id', () => {
+    it('refuses an empty operator_id string', () => {
+      expect(() =>
+        deriveAttributionOperatorId({
+          kind: 'operator_session',
+          operator_id: '',
+        }),
+      ).toThrow(/non-empty string/);
+    });
+
+    it('refuses a non-string operator_id (defence-in-depth)', () => {
+      // The static type is `string`, but the function takes `unknown`
+      // at runtime via the `as never` escape hatch — every other
+      // negative test in this describe block does the same. Mirroring.
+      expect(() =>
+        deriveAttributionOperatorId({
+          kind: 'operator_session',
+          operator_id: 12345,
+        } as unknown as Parameters<typeof deriveAttributionOperatorId>[0]),
+      ).toThrow(/non-empty string/);
+    });
+
+    it('refuses an undefined operator_id (defence-in-depth)', () => {
+      expect(() =>
+        deriveAttributionOperatorId({
+          kind: 'operator_session',
+        } as unknown as Parameters<typeof deriveAttributionOperatorId>[0]),
+      ).toThrow(/non-empty string/);
+    });
+  });
 });
