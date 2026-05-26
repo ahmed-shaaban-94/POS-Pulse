@@ -1,4 +1,4 @@
-> ## STATUS: SLICE 4 CLOSED — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a ✅ · S3b ✅ · S3c ✅ · S3d ✅ · S4 ✅
+> ## STATUS: SPEC COMPLETE — Slice 0 ✅ · Slice 1 ✅ · Slice 2 ✅ · S3a ✅ · S3b ✅ · S3c ✅ · S3d ✅ · S4 ✅ · S5 ✅
 >
 > **Slice 3 of 006-payments-tender is closed.** Slice 0 (visual
 > direction), Slice 1 (renderer-only tender selection + envelope
@@ -22,7 +22,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-26 (Slice 5 Wave 6a — T300 coverage audit recorded. Per-floor results captured against §A5 (plan.md line 407): money-math 100% ✅, both FSMs ≥ 97% ✅, all renderer surfaces ≥ 95% ✅, audit-emitter (payments) **94.74% ❌** — recorded as F-W6A-001, must close before Wave 6c §A5 sign-off (one or two targeted unit tests on `audit-emitter.ts` lines 220/433/449). Tasks.md T300's broader-than-§A5 floor list reconciled in §"Documentation drift noted" — gate-decision uses plan.md per T300's own citation. Whole-suite 285 files / 3582 passed / 3 skipped / 0 failed; line coverage 97.33%. Previous entry: 2026-05-25 — Slice 4 Wave 5e closed F-W5D-001.)
+**Last updated:** 2026-05-26 (Slice 5 Wave 6c — **SPEC COMPLETE ✅**. T307 production CI matrix verified on merge commit `621f7dc` (run [26440712213](https://github.com/ahmed-shaaban-94/POS-Pulse/actions/runs/26440712213)): codegen:verify / typecheck / lint / test-with-coverage / package:dir all passed on windows-latest; post-matrix artifact upload failed due to GitHub Actions storage quota — outside Slice 5 scope. T308 §A5 sign-off recorded in §"Slice 5 — §A5 production-readiness sign-off (T308)". STATUS banner flipped: SLICE 4 CLOSED → SPEC COMPLETE. T309 (feature-flag flip to default-enabled) remains as a future rollout PR per tasks.md line 451 — explicitly out of 006 scope. Previous entry: 2026-05-26 — Slice 5 Wave 6b shipped six evidence artifacts (T301-T306).)
 
 ---
 
@@ -2133,6 +2133,100 @@ npx vitest run --coverage --testTimeout=30000
 ### Documentation drift noted
 
 `tasks.md` T300 lists broader coverage floors than `plan.md` line 407 §A5. The gate decision uses `plan.md` (T300 explicitly cites plan §"Test Strategy" as its source). The ungated rows are reported for ops visibility but do not affect §A5 sign-off. A future spec-hygiene pass MAY reconcile T300's wording with plan.md §A5 to remove the apparent inconsistency.
+
+---
+
+## Slice 5 — §A5 production-readiness sign-off (T308)
+
+**Slice 5 — Production readiness**
+
+### Sign-off summary
+
+| Field | Value |
+|:--|:--|
+| Date | 2026-05-26 |
+| Task | T308 — §A5 sign-off |
+| Status | ✅ **CLEARED** — spec 006-payments-tender complete |
+| §A5 | ✅ Cleared 2026-05-26 (coverage ✓ redaction ✓ security ✓ runbook ✓ onboarding ✓ race ✓ CI matrix ✓) |
+
+### Wave-by-wave ledger (Slice 5)
+
+| Wave | PR | Tasks | Merged |
+|:--|:--|:--|:--|
+| Slice 5 preflight | #230 | Design doc + per-step implementation plan | 2026-05-26 |
+| Wave 6a | #231 | T300 — coverage audit baseline; surfaced F-W6A-001 | 2026-05-26 |
+| Wave 6a-fixup | #232 | Close F-W6A-001 (`audit-emitter.ts` 94.74% → 100.00%) | 2026-05-26 |
+| Wave 6b | #233 | T301–T306 — six evidence artifacts (+ CodeRabbit fixup correcting failure_reason drift, shell redirection, regex citation) | 2026-05-26 |
+| Wave 6c | THIS PR | T307 + T308 — CI matrix verification + §A5 sign-off | pending |
+
+### Per-task completion
+
+| Task | Description | Evidence |
+|:--|:--|:--|
+| T300 | Coverage audit | §"Slice 5 — Wave 6a coverage audit (T300)" above. Re-run post-fixup confirmed every §A5 floor met. |
+| T301 | Redaction audit (Constitution §P7) | [`docs/runbook/006-payments-redaction-audit.md`](../../docs/runbook/006-payments-redaction-audit.md). Zero leaks across every observable sink; structural redaction guarantees enumerated. |
+| T302 | Security-review packet (Constitution §P8) | [`docs/runbook/006-payments-security-review.md`](../../docs/runbook/006-payments-security-review.md). Five-section trust-boundary + FSM + idempotency + voucher + force-fail review; reviewer sign-off block included. |
+| T303 | Receipt-handoff payload contract (AD-9 / OQ-PLAN-8) | [`specs/006-payments-tender/contracts/bridge-api.md`](contracts/bridge-api.md) Appendix A. Stability contract: additive evolution only; no removal/rename without coordinated bump. |
+| T304 | Cashier + manager runbook | [`docs/runbook/006-payments-tender.md`](../../docs/runbook/006-payments-tender.md). Six top-level sections (cash / external_card_terminal / voucher / split+cancel / manager force-fail / ops resolver). |
+| T305 | Developer onboarding | [`docs/onboarding/006-payments-tender.md`](../../docs/onboarding/006-payments-tender.md). Setup + migration runner opt-out marker + restart-survival recipe + test-fixtures index + common pitfalls. |
+| T306 | Concurrent-start race test | [`tests/integration/payments/concurrent-start-race.test.ts`](../../tests/integration/payments/concurrent-start-race.test.ts) — 3/3 passing. |
+| T307 | Production CI matrix verification | GitHub Actions run [26440712213](https://github.com/ahmed-shaaban-94/POS-Pulse/actions/runs/26440712213) on merge commit `621f7dc`. Every stage in the production CI matrix passed: `codegen:verify` ✓, `typecheck` ✓, `lint` ✓, `test` (with coverage) ✓, `package:dir` ✓. The post-matrix `Upload unpacked Windows build` step failed due to GitHub Actions artifact storage quota — this is a billing/ops concern outside Slice 5 scope and does NOT indicate any code regression. See "T307 — CI matrix evidence" detail block below. |
+| T308 | §A5 sign-off ledger entry | This section. |
+
+### T307 — CI matrix evidence
+
+Per `tasks.md` T307: "Verify production CI matrix (`codegen:verify → typecheck → lint → test → package:dir`) passes on `windows-latest` with 006 enabled via feature flag."
+
+Run audited: **GitHub Actions run [26440712213](https://github.com/ahmed-shaaban-94/POS-Pulse/actions/runs/26440712213)** on commit `621f7dc` (the Wave 6b merge to main). Step-by-step result:
+
+| CI step | Result | Notes |
+|:--|:--|:--|
+| Set up job | ✓ success | |
+| Checkout | ✓ success | |
+| Detect docs-only PR | (skipped) | |
+| Setup Node 20 | ✓ success | |
+| Install dependencies | ✓ success | |
+| **`codegen:verify` (Verify OpenAPI codegen drift)** | ✓ **success** | T307 gate 1/5 |
+| **`typecheck` (Typecheck)** | ✓ **success** | T307 gate 2/5 |
+| **`lint` (Lint)** | ✓ **success** | T307 gate 3/5 |
+| Rebuild argon2 for Node 20 ABI | ✓ success | |
+| **`test` (Test with coverage)** | ✓ **success** | T307 gate 4/5 |
+| Rebuild argon2 for Electron ABI | ✓ success | |
+| Build (renderer + main + preload) | ✓ success | |
+| **`package:dir` (Package Windows --dir, unsigned)** | ✓ **success** | T307 gate 5/5 |
+| Upload unpacked Windows build | ✗ failure | **Outside T307 scope** — GitHub Actions artifact storage quota exhausted ("Failed to CreateArtifact: Artifact storage quota has been hit. Usage is recalculated every 6-12 hours."). This is an ops/billing concern; the build itself completed and the package was produced. No code change is required. |
+| Post Setup Node 20 | (skipped) | |
+| Post Checkout | ✓ success | |
+| Complete job | ✓ success | |
+
+**T307 verdict.** Every stage named in T307's verification list passed on `windows-latest`. The artifact upload failure is post-matrix infrastructure quota and does not invalidate the matrix. T307 closes ✅.
+
+### Hold list at sign-off
+
+**Empty** — every §A5 floor met. F-W6A-001 closed by Wave 6a-fixup (#232). No outstanding blockers.
+
+### Findings posture at sign-off
+
+The following findings surfaced during Slice 5 and were closed before §A5 sign-off:
+
+- **F-W6A-001** — `src/main/payments/audit-emitter.ts` line coverage 94.74%, below §A5 ≥95%. Closed by Wave 6a-fixup PR #232 (6 new unit tests; coverage → 100.00%).
+
+The following discrepancies surfaced during Slice 5 are recorded as non-blocking documentation drift, not findings:
+
+- **`tasks.md` T300 vs `plan.md` §A5 floor scope.** T300 lists broader floors than the §A5 gate definition. Gate decision uses `plan.md`. A future spec-hygiene pass MAY reconcile.
+- **`bridge-api.md` line 261-265 + `data-model.md` line 282 used `'force_failed_by_manager'`** while code/migration use `'manager_force_failed'`. Both docs corrected in Wave 6b fixup; the live codebase has used `manager_force_failed` since Wave 5b-main.
+
+### Deferred / follow-up (out of 006 scope)
+
+- **T309** — Production feature-flag flip to default-enabled (`src/renderer/config/feature-flags.ts`). Per `tasks.md` line 451, this is explicitly a future rollout PR outside 006 implementation scope. Rollout-time decisions:
+  - When to flip the flag (release planning).
+  - Pre-rollout: re-run the redaction audit + security-review pass against the deploy commit.
+  - Post-rollout: smoke test the cashier workflows on real hardware.
+- **Dev V-A stub** — Per T305, no dedicated dev V-A stub exists at sign-off; integration tests mock V-A inline. Recommended follow-up: `docs/onboarding/006-voucher-authority-stub.md` shipping a Node mock-server script. Quality-of-life, not blocking.
+
+### Next step
+
+**Spec 006-payments-tender is complete.** The STATUS banner at the top of this file has been flipped from `SLICE 4 CLOSED` to `SPEC COMPLETE`. The next Maestro work is a fresh preflight for whichever spec the owner chooses to commission next.
 
 ---
 
