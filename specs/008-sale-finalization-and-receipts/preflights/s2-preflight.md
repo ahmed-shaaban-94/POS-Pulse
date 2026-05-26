@@ -197,7 +197,7 @@ Implementation lives at `src/renderer/ui/receipts/ReceiptPreview.tsx`. The compo
 
 #### Step 4: Post-craft constitution checklist (embed preflight §7)
 
-After T173 completes, the embedder runs the eight-item checklist against the produced code:
+After T173 completes, the embedder runs the nine-item checklist against the produced code:
 
 - [ ] No floats for money. Any displayed money value uses `src/shared/payments/money-math.ts`.
 - [ ] No copy-paste from `_reference/Data-Pulse/`. Re-derived only.
@@ -282,7 +282,7 @@ Each wave's close-out updates `coordination.md`:
 | Template engine ≤ 200 LOC budget overrun | MEDIUM | T160 spec caps the engine at ~200 LOC (R-6 no Handlebars). If the engine exceeds budget, simplify the template asset format (data + layout description) rather than pulling in a third-party engine. The single-source single-pass dual-output discipline is the constraint that keeps the engine small. |
 | Byte-stability regression between renders | MEDIUM | T121 test asserts byte-identical outputs for the same template + same payload modulo variant-controlled fields. CI enforces. Any drift surfaces as a test failure, not as a silent rendering difference. |
 | `external_reference` / `voucher_authority_redemption_id` leakage on slip | HIGH | T132 / T133 explicitly test conditional emission (present on slip only when carried in Sale row). If 006 OQ-PLAN-5 changes resolution, this test will catch the leakage immediately. |
-| First `/impeccable craft` invocation drifts from contract | MEDIUM | §4.2 ritual is binding. The post-craft constitution checklist (eight items) is the safety net. Failing any item blocks T173 completion. |
+| First `/impeccable craft` invocation drifts from contract | MEDIUM | §4.2 ritual is binding. The post-craft constitution checklist (nine items) is the safety net. Failing any item blocks T173 completion. |
 | RTL rendering regression on paired Windows terminal | MEDIUM | T122 test asserts Arabic-first RTL flow + Latin numerals on printed output. The single-font-stack (Inter Variable → Segoe UI → system-UI) avoids proprietary-font fallback drift. |
 | Payload module accidentally re-reads `cart_lines` or calls catalogue | HIGH | T164 spec is explicit: derives from `sales` row cached fields ONLY. Code review must verify; no integration test that exercises a stale `cart_lines` (since 005 closes its cart on settle, there is no test path that could regress this). Defense-in-depth via test review. |
 
