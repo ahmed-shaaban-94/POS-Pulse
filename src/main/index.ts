@@ -336,6 +336,15 @@ app
       const cartEnabled =
         typeof cartRaw === 'string' &&
         ['1', 'true', 'yes', 'on'].includes(cartRaw.trim().toLowerCase());
+      // 006-payments-tender S1 — payments feature flag (default false).
+      // The type + renderer-store binding shipped with 006; the env-var read was missed
+      // at the time. This backfill brings 006 in line with the cart pattern: same truthy-
+      // value contract; disabled-by-default is the fail-safe (PaymentSurface stays hidden
+      // and 005's cart-handoff slot falls back to its pre-006 behaviour).
+      const paymentsRaw = process.env['POS_PULSE_FEATURE_PAYMENTS'];
+      const paymentsEnabled =
+        typeof paymentsRaw === 'string' &&
+        ['1', 'true', 'yes', 'on'].includes(paymentsRaw.trim().toLowerCase());
       // 008-sale-finalization-and-receipts T002 — sale_finalization feature flag (default false).
       // Same truthy-value contract as cart. Disabled-by-default is the fail-safe: 006 still
       // settles payments but 008's finalize listener short-circuits — no receipt prints, no
@@ -345,7 +354,11 @@ app
       const saleFinalizationEnabled =
         typeof saleFinalizationRaw === 'string' &&
         ['1', 'true', 'yes', 'on'].includes(saleFinalizationRaw.trim().toLowerCase());
-      cfg.features = { cart: cartEnabled, saleFinalization: saleFinalizationEnabled };
+      cfg.features = {
+        cart: cartEnabled,
+        payments: paymentsEnabled,
+        saleFinalization: saleFinalizationEnabled,
+      };
       return cfg;
     };
     registerAppConfigHandler(ipcMain, getAppConfig);
