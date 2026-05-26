@@ -1,0 +1,40 @@
+-- T026 — 008 Slice 1a: record the 10 new `audit_events.action_category` values
+-- cleared by §A3.
+--
+-- Per data-model.md §"Audit-event category extension (per AD-9)" and the
+-- §A3 sign-off recorded in coordination.md §"§A3 migration reviewer thread
+-- (T003)" (Ahmed 2026-05-26).
+--
+-- This migration is INTENTIONALLY a documentation-only marker. 004's
+-- audit_events table (migrations/0004_audit_events.sql) declares
+-- `action_category TEXT NOT NULL` with NO CHECK constraint — categories are
+-- open-set at the SQL layer and enforced at the application emitter
+-- (008's src/main/sales/audit-emitter.ts, authored in Slice 1c).
+--
+-- Adding a CHECK constraint here would silently invalidate every existing
+-- audit_events row written against open-set semantics, which is exactly the
+-- breakage Constitution §P4 (append-only) forbids. The §A3 reviewer
+-- approved the new categories as part of the application-layer emitter
+-- contract; this file ratifies that contract in the migration timeline so
+-- schema_migrations records the ordering decision durably.
+--
+-- The 10 new 008 categories now in force at the audit emitter:
+--
+--   sale.finalized
+--   sale.finalization_refused
+--   sale.receipt.printed
+--   sale.receipt.reprinted
+--   sale.receipt.print_failed
+--   sale.receipt.print_retried_success
+--   sale.receipt.manual_override
+--   sale.drawer.opened
+--   sale.drawer.suppressed
+--   sale.drawer.failed
+--
+-- Pattern mirrors migration 0017 (006's 7 new categories).
+--
+-- No DDL is executed by this migration. The runner still records the
+-- bookkeeping row in schema_migrations so future audits can confirm §A3 was
+-- applied at the expected ordinal in the sequence.
+
+SELECT 1;  -- no-op statement so the file is non-empty valid SQL.
