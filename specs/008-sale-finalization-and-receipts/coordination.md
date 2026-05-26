@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-27 (initial creation — closes T001; opens T003 / T004 / T005 / T006 / T007 coordination threads)
+**Last updated:** 2026-05-26 (T002 closure — PR #250 merged; status table + open follow-up flipped). Previous entry: 2026-05-27 (initial creation — closes T001; opens T003 / T004 / T005 / T006 / T007 coordination threads).
 
 ---
 
@@ -41,7 +41,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | Embed preflight authored + reviewed (v0.1 → v0.4) | ✅ 2026-05-27 (PR #240) |
 | Embed activation: `[IMPECCABLE …]` markers injected into tasks.md; `docs/DESIGN.md` in canonical Stitch format; §A1 row reframed | ✅ 2026-05-27 (PR #241) |
 | **T001 — Create this file** | ✅ This document |
-| **T002 — Feature flag `sale_finalization` confirmed in `src/shared/app-config.ts`** | ⏳ Pending — code task; not closed by this PR |
+| **T002 — Feature flag `sale_finalization` confirmed in `src/shared/app-config.ts`** | ✅ Closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) — `features.saleFinalization?: boolean` added to `AppConfig`; `FeatureFlagsState.saleFinalization` added with fail-closed default `false`; env-var `POS_PULSE_FEATURE_SALE_FINALIZATION` wired into `getAppConfig()`; renderer-store test coverage extended (4 new tests + 2 expanded). Slice 2's `<ReceiptPreview>` and subsequent renderer surfaces gate on this flag at the hydrate boundary. |
 | **T003 — §A3 migration coordination thread opened** | ✅ Opened (see §A3 row + reviewer thread below) — reviewer assignment pending |
 | **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below) — reviewer assignment pending |
 | **T005 — §A1 Slice 0 visual-direction reviewer assigned** | ✅ Reviewer: Ahmed; target date: [TARGET DATE TBD] |
@@ -216,6 +216,6 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 - [ ] **§A3 reviewer assignment** + target date (T003).
 - [ ] **§A4 reviewer assignment** + target date (T004).
 - [ ] **§A3 hardware-matrix pair selection** + target date (T006).
-- [ ] **T002 feature-flag confirmation** — code task; lives in a separate PR touching `src/shared/app-config.ts` + `src/renderer/stores/feature-flags-store.ts`. Not closed by this docs-only coordination PR.
+- [x] **T002 feature-flag confirmation** — closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) (merged 2026-05-26). Four files touched: `src/shared/app-config.ts` (+13), `src/renderer/stores/feature-flags-store.ts` (+6/-1), `src/main/index.ts` (+11/-1), `tests/unit/renderer/stores/feature-flags-store.test.ts` (+32/-2). Local + CI gates green. The pre-existing 006 `payments` env-var-read gap in `src/main/index.ts` is flagged in PR #250's body for a separate follow-up (it's a 006 concern, not 008).
 - [ ] **T010 commission** — `/impeccable shape 008-receipt-surfaces` invocation (renderer portion) + Ahmed authors printed-slip portion.
 - [ ] **T011 §A1 sign-off** — recorded in this file under "§A1 sign-off" above.
