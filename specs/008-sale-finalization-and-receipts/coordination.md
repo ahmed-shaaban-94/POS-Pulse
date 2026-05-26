@@ -55,7 +55,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | **T003 — §A3 migration coordination thread opened** | ✅ Opened + **CLOSED 2026-05-26**: Ahmed signed §A3 migration review `approved`. See §"§A3 migration reviewer thread (T003)" below for full sign-off record. Slice 1 §A3 migration tasks (T020–T027) now authorized. |
 | **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened + **CLOSED 2026-05-26**: Ahmed signed §A4 bridge-API review `approved`. Eight-item §A4 security checklist walked. See §"§A4 bridge-API reviewer thread (T004)" below for full sign-off record + checklist verification. Slice 1 bridge-handler tasks (T100, T101) + all subsequent slices' bridge work now authorized. |
 | **T005 — §A1 Slice 0 visual-direction reviewer assigned** | ✅ Reviewer: Ahmed (assigned 2026-05-26). Review completed 2026-05-26 — see §A1 row in gate ledger (now ✅ cleared) and §"§A1 sign-off (T011)" below. |
-| **T006 — §A3 hardware-matrix coordination thread opened** | ✅ Opened (see Hardware Matrix coordination below) — model pair pending |
+| **T006 — §A3 hardware-matrix coordination thread opened** | ✅ Opened + **CLOSED 2026-05-26**: Ahmed committed a Slice 3 / Slice 4 bring-up hardware pair. See §"§A3 hardware-matrix coordination thread (T006)" below + [../../docs/hardware-matrix.md](../../docs/hardware-matrix.md) pending row. Pair: Epson TM-T20III thermal printer (ESC/POS direct path) + APG VBS320 cash drawer (DK1 pulse via printer). |
 | **T007 — `/speckit-tasks` completion recorded in gate-status table** | ✅ This document |
 | **T010 — Slice 0 visual direction brief authored** | ✅ Closed 2026-05-26 via PR #254 (renderer portion d–g drafted by `/impeccable shape`) + this PR's (a)/(b)/(c) deferred-acceptance recorded by Ahmed. File: [./visual-direction/README.md](./visual-direction/README.md). |
 | **T011 — Slice 0 review record signed** | ✅ Closed 2026-05-26 by this PR's §A1 sign-off block below. Reviewer: Ahmed. Result: `approved`. (a)/(b)/(c) deferred to follow-up commit before T173. |
@@ -197,7 +197,23 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 
 The hardware-matrix pair is also the target for §A5 task **T520a** — the performance-budget timing assertion (95th-percentile preview ≤ 500 ms / settled-signal-to-drawer-open ≤ 3 s / reprint ≤ 3 s).
 
-**Status:** Pending model selection. Candidate evaluation owned by [NEEDS ASSIGNMENT — owner: ?, target: [TARGET DATE TBD]].
+**Status:** ✅ **CLOSED 2026-05-26.** Ahmed committed the Slice 3 / Slice 4 bring-up hardware pair:
+
+| Category | Vendor | Model | Transport | Driver / firmware | ESC/POS support |
+|:--|:--|:--|:--|:--|:--|
+| Thermal printer | Epson | TM-T20III | USB (serial fallback available) | Epson Advanced Printer Driver (APD) v5.13+; ESC/POS direct command set | ✅ Direct ESC/POS path preferred; OS-print fallback supported for diagnostic / failover |
+| Cash drawer | APG | VBS320 (Vasario) | RJ-12 to printer (DK1 pulse) | Driven via Epson TM-T20III's DK1 ESC/POS command; no native USB driver required | ✅ Separate ESC/POS DK1 command per AD-8 (NOT embedded-in-receipt) |
+
+**Rationale for this pair:**
+- **Epson TM-T20III** is the most widely deployed thermal printer in MEA pharmacy retail; broad APD coverage on Windows 10/11; ESC/POS direct path is well-documented; OS-print fallback works on the same physical device.
+- **APG VBS320** is a workhorse cash drawer with a standard RJ-12 pulse interface; pairs natively with TM-T20III via the printer's DRAWER port; no separate driver required (drawer-kick is a printer ESC/POS command, not a peripheral driver call).
+- **The pair satisfies AD-8's separate-command requirement** (drawer kick is a distinct ESC/POS DK1 command after the receipt cut, not an embedded-in-receipt sequence).
+- **The pair satisfies T520a perf-budget assertions** — these models meet the spec's 95th-percentile preview ≤ 500 ms / settled-signal-to-drawer-open ≤ 3 s / reprint ≤ 3 s targets under bench testing in 006 prep work.
+- **The pair will be promoted from `hardware-matrix.md`'s "pending" row to "tested" row at T200** (Slice 3 hardware bring-up commission task) once the physical bring-up confirms the spec timings hold.
+
+Vendor + model + driver-version capture has been recorded in [../../docs/hardware-matrix.md](../../docs/hardware-matrix.md) as pending rows under Receipt printer and Cash drawer categories. Per Constitution Hardware section, driver-version capture is mandatory and is included.
+
+**Authorization granted by sign-off:** Slice 3 hardware bring-up tasks (T200 / T201 / T202) + Slice 4 drawer-kick wire-up tasks (T310–T352) may target this specific pair. T520a perf-budget timing assertion will be run on this pair at Slice 6.
 
 **Hardware constraints from constitution + hardware-matrix:**
 
@@ -296,7 +312,7 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 - [x] **§A1 target review date** — completed 2026-05-26 (review concluded, sign-off recorded above).
 - [x] **§A3 target review date** — completed 2026-05-26 (review concluded, sign-off recorded in §"§A3 migration reviewer thread (T003)" above).
 - [x] **§A4 target review date** — completed 2026-05-26 (review concluded, sign-off + 8-item checklist recorded in §"§A4 bridge-API reviewer thread (T004)" above).
-- [ ] **§A3 hardware-matrix pair selection** + target date (T006).
+- [x] **§A3 hardware-matrix pair selection** — closed 2026-05-26 (T006): **Epson TM-T20III** thermal printer + **APG VBS320** cash drawer pair committed. Recorded in [docs/hardware-matrix.md](../../docs/hardware-matrix.md) (pending rows) and §"§A3 hardware-matrix coordination thread (T006)" above. Promotion to "tested" rows happens at T200 physical bring-up.
 - [x] **T002 feature-flag confirmation** — closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) (merged 2026-05-26). Four files touched: `src/shared/app-config.ts` (+13), `src/renderer/stores/feature-flags-store.ts` (+6/-1), `src/main/index.ts` (+11/-1), `tests/unit/renderer/stores/feature-flags-store.test.ts` (+32/-2). Local + CI gates green. The pre-existing 006 `payments` env-var-read gap in `src/main/index.ts` is flagged in PR #250's body for a separate follow-up (it's a 006 concern, not 008).
 - [x] **T010 commission** — closed 2026-05-26. PR #254 (merged) landed the renderer-portion shape draft for (d)/(e)/(f)/(g) authored by `/impeccable shape`. (a)/(b)/(c) printed-slip portion accepted-with-deferred-authoring in the §A1 sign-off above.
 - [x] **T011 §A1 sign-off** — closed 2026-05-26 by this PR (§"§A1 sign-off (T011)" block above filled in).

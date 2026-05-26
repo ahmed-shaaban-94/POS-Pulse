@@ -54,7 +54,7 @@ same template renders on either path.
 
 | Model | Transport | Driver / firmware | Tested in feature | Known caveats |
 |:------|:----------|:------------------|:------------------|:--------------|
-| _None tested yet — first entry lands in feature 002+_ |  |  |  |  |
+| _PENDING_ — **Epson TM-T20III** | USB (serial fallback supported) | Epson Advanced Printer Driver (APD) v5.13+; ESC/POS direct command set | 008 (committed at T006 2026-05-26 in [specs/008-sale-finalization-and-receipts/coordination.md](../specs/008-sale-finalization-and-receipts/coordination.md) §"§A3 hardware-matrix coordination thread"); promotion to "tested" row at Slice 3 T200 hardware bring-up | None known; widely deployed in MEA pharmacy retail. ESC/POS direct path is preferred; OS-print fallback works on same physical device. |
 
 ### Cash drawer
 
@@ -65,7 +65,7 @@ MUST NOT block the receipt print, and it MUST NOT auto-dismiss.
 
 | Model | Transport | Driver / firmware | Tested in feature | Known caveats |
 |:------|:----------|:------------------|:------------------|:--------------|
-| _None tested yet — first entry lands in feature 002+_ |  |  |  |  |
+| _PENDING_ — **APG VBS320 (Vasario)** | RJ-12 to printer (DK1 pulse) | Driven via Epson TM-T20III's DK1 ESC/POS command; no native USB driver required | 008 (committed at T006 2026-05-26 alongside the TM-T20III printer pairing; promotion to "tested" row at Slice 4 drawer-kick bring-up) | None known. Pairs natively with TM-T20III via the printer's DRAWER port. Drawer-kick is a printer ESC/POS DK1 command, not a peripheral driver call. Satisfies AD-8 separate-command requirement (no embedded-in-receipt kick). |
 
 ## Out of Scope (MVP)
 
