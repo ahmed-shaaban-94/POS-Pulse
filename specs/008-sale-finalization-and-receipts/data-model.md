@@ -401,14 +401,17 @@ following keys appear at any level of the JSON tree:
 
 - `pan`, `card_pan`, `truncated_pan`, `cvv`, `track_data`, `track1`,
   `track2`, `cardholder_name`, `cardholder`, `holder_name`,
-  `expiry`, `expiration`, `auth_payload`, `approval_code`,
-  `cryptogram`, `terminal_receipt_text`, `receipt_text` (per FR-070)
+  `expiry`, `expiration`, `issuer_name`, `auth_payload`,
+  `approval_code`, `cryptogram`, `terminal_receipt_text`,
+  `receipt_text` (per FR-070; `issuer_name` added 2026-05-27
+  post-CodeRabbit CR3)
 - `voucher_code`, `voucher_balance`, `voucher_holder`,
   `voucher_holder_pii`, `voucher_redemption_intent_token`,
   `redemption_intent_token`, `intent_token`, `authority_payload`,
   `authority_response`, `raw_voucher_authority_response` (per FR-071)
-- `pin`, `pin_hash`, `password`, `jwt`, `device_token`, `attestation`
-  (per FR-072)
+- `pin`, `pin_hash`, `pin_record_id`, `password`, `jwt`,
+  `device_token`, `attestation` (per FR-072; `pin_record_id` added
+  2026-05-27 post-CodeRabbit CR3)
 - `envelope_payload`, `raw_envelope`, `payment_intent_envelope` (the
   envelope itself; only `envelope_handoff_action_id` is permitted —
   per FR-074)

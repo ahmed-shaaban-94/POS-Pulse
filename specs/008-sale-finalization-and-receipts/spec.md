@@ -605,10 +605,9 @@ and consumed by 006.
 
 #### Local audit events
 
-- **FR-055.** Every state-change in 008 MUST emit exactly one
+- **FR-055** *(revised 2026-05-27 post-CodeRabbit CR2 + R2 cleanup)*. Every state-change in 008 MUST emit exactly one
   canonical audit event under 004 FR-025 / FR-026 / FR-028. The
-  catalogue (the names are illustrative, not contract-binding;
-  `/speckit-plan` finalizes names):
+  catalogue is **exactly 10 categories** (finalised by `/speckit-plan` AD-9; this list is authoritative):
   - `sale.finalized` — durable sale persisted.
   - `sale.finalization_refused` — finalization refused per FR-005 /
     FR-045 / FR-046 / FR-047.
@@ -616,14 +615,24 @@ and consumed by 006.
   - `sale.receipt.reprinted` — successful reprint with
     duplicate-copy marker.
   - `sale.receipt.print_failed` — first-print or retry failed.
+  - `sale.receipt.print_retried_success` — a retry-after-failure
+    succeeded; treated as canonical first print per FR-052.
   - `sale.receipt.manual_override` — cashier invoked manual-receipt
     override after print failure.
   - `sale.drawer.opened` — successful drawer kick on first print of
     a cash-inclusive sale.
   - `sale.drawer.suppressed` — drawer not kicked because the tender
-    mix was cashless OR because the event was a reprint.
+    mix was cashless. *(Revised post-R2 — the "OR reprint" branch
+    was removed; reprints emit no DrawerEvent at all, so no
+    suppression event fires either.)*
   - `sale.drawer.failed` — drawer kick command failed.
-  - `sale.sync_handoff_staged` — outbox event enqueued (FR-060).
+
+  **The sync-outbox INSERT is silent w.r.t. `audit_events`** — the
+  `sale_sync_outbox` row IS its own audit anchor (see FR-060). No
+  separate `sale.sync_handoff_staged` audit event exists. *(Revised
+  post-CR2 — earlier drafts named such an event; it was removed
+  because the outbox row + the `sale.finalized` event together
+  already cover the audit need.)*
 - **FR-056.** Audit events MUST be append-only at the rule level
   (Constitution P4 / 004 FR-028).
 - **FR-057.** Audit events MUST NOT contain any field listed in
@@ -634,13 +643,20 @@ and consumed by 006.
 
 #### Future sync handoff event (staging only)
 
-- **FR-060.** On `sale.finalized`, a single append-only outbox-style
-  event MUST be staged locally. The staging step MUST run as part
-  of the finalization transaction (or be otherwise atomically tied
-  to the durable sale commit per Constitution P3 / P5), MUST NOT
-  call any backend endpoint, MUST NOT attempt to flush, and MUST
-  carry only the minimum reference needed for a future sync engine
-  to locate the sale (e.g. a stable sale id + `handoff_action_id`).
+- **FR-060** *(clarified post-CR2)*. On `sale.finalized`, a single
+  append-only outbox row MUST be inserted into `sale_sync_outbox`.
+  The staging step MUST run as part of the finalization
+  transaction (or be otherwise atomically tied to the durable sale
+  commit per Constitution P3 / P5), MUST NOT call any backend
+  endpoint, MUST NOT attempt to flush, and MUST carry only the
+  minimum reference needed for a future sync engine to locate the
+  sale (e.g. a stable sale id + `handoff_action_id`). **No
+  separate audit event is emitted for the staging step** — the
+  outbox row itself is the audit anchor for "this sale is queued
+  for the future sync engine"; combined with the `sale.finalized`
+  audit event (which already names the `handoff_action_id`
+  correlation key), the audit trail is complete without a
+  redundant `sale.sync_handoff_staged` category.
 - **FR-061.** The future sync engine, its retry policy, its
   conflict-resolution semantics, and its backend OpenAPI contract
   are **out of scope** for 008. 008 only guarantees that *something

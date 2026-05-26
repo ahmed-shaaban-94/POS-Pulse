@@ -63,75 +63,85 @@ UI only.
 
 ---
 
-## R-2 — 006 → 008 signal: SQLite audit-row arrival via `update_hook` *(revised 2026-05-27 post-external-review)*
+## R-2 — 006 → 008 signal: periodic scan worker on `audit_events` *(revised twice; v3 LOCKED 2026-05-27 post-CodeRabbit CR1)*
 
-> **Revision note.** This research entry originally proposed an
-> in-process EventEmitter between 006 and 008. External review
-> (finding R1) established that 006 does not publish such an event —
-> 006's only EventEmitter is `payments.subscribe`, which serialises
-> the renderer-facing view (FR-017), not a main-process broadcast
-> channel. The original mechanism would have left the primary
-> finalize path dead. This revision replaces it with a
-> SQLite-row-arrival hook that depends only on 006's already-
-> committed audit-write behaviour.
+> **Revision history.**
+>
+> - **v1 (2026-05-27 morning):** in-process EventEmitter from 006.
+>   **REJECTED post-external-review R1** — 006 does not publish
+>   such an event; would require amending a SPEC COMPLETE feature.
+> - **v2 (2026-05-27 mid-day):** better-sqlite3 `update_hook`
+>   callback. **REJECTED post-CodeRabbit CR1** — empirically
+>   verified that `better-sqlite3 ^12.9.0` does not expose
+>   `update_hook` in its public API. The method exists in upstream
+>   PR #1337 but is not in any released version. The "fix"
+>   introduced a second imaginary dependency.
+> - **v3 (this revision):** periodic scan worker. Uses only APIs
+>   that empirically exist in the installed dependency. No
+>   transaction-boundary subtlety. No new migration. The scan IS
+>   the primary mechanism — there is no separate primary-vs-fallback
+>   distinction.
 
-**Decision.** 008's main-process listener subscribes to
-**`audit_events`-table row arrivals** via better-sqlite3's
-`update_hook` callback, registered on the shared SQLite database
-connection at main-process startup. The hook filters by
-`tbl_name = 'audit_events' AND category = 'payment.settled'` and
-dispatches AD-2 finalize asynchronously. A startup recovery scan
-(per R-15) closes the durability gap for crashes / restarts.
-Idempotency is keyed on `envelope.handoff_action_id`.
+**Decision.** 008's main-process listener runs a **periodic scan worker** at startup. The worker wakes every **200 ms** (configurable; floor 100 ms, ceiling 1000 ms) and runs an indexed `SELECT` against `audit_events` filtering for `category='payment.settled' AND NOT EXISTS (sales row for this handoff_action_id)`. For each match, dispatch AD-2 finalize. The `NOT EXISTS` clause IS the idempotency anchor — Constitution §P5 by construction.
 
 **Rationale.**
 
-1. **006 does not publish an in-process event.** Grepping 006's
-   plan, research, contracts, data-model, and tasks confirmed
-   006's only EventEmitter is the renderer-facing
-   `payments.subscribe` channel (006 T136). 006's commitment to
-   `payment.settled` is **the audit-events row write** (006 AD-9
-   payload), not a runtime event. 008's mechanism must therefore
-   depend on the row write, which is durable.
-2. **`update_hook` is the right primitive.** better-sqlite3 exposes
-   SQLite's native `update_hook` callback. The callback fires
-   synchronously on every INSERT / UPDATE / DELETE to any table on
-   the connection; 008's hook filters by table + category in O(1)
-   time and dispatches finalize work asynchronously. Latency from
-   006-commit to 008-dispatch is ~milliseconds — well inside
-   NFR-006's 3-second budget.
-3. **Durability via SQLite write, not via runtime event.** If 008
-   crashes mid-finalize, the `audit_events` row is durable; the
-   startup recovery scan (R-15) re-fires AD-2 idempotently
-   (Constitution §P3). The hook itself is a *latency optimisation*,
-   not the durability guarantee.
-4. **Zero new IPC surface, zero 006 amendment.** 006 has not
-   changed. 008 attaches a hook to the shared connection from
-   inside the main process. Constitution §P8 is satisfied — no
-   new bridge call, no new cross-process channel, no expansion of
-   the renderer-trusted surface.
-5. **Idempotency.** AD-2's key on `envelope.handoff_action_id`
-   makes a duplicate fire (e.g. hook + recovery scan racing on
-   the same row) a no-op (Constitution §P5; FR-001 / SC-009).
+1. **006 does not publish an in-process event.** Grepping 006's plan, research, contracts, data-model, and tasks confirmed 006's only EventEmitter is the renderer-facing `payments.subscribe` channel (006 T136). 006's commitment to `payment.settled` is **the audit-events row write** (006 AD-9 payload), not a runtime event. 008's mechanism must therefore depend on the row write, which is durable.
+
+2. **`update_hook` does not exist in the installed better-sqlite3.** Empirical verification (2026-05-27):
+   ```
+   > const D=require('better-sqlite3'); const db=new D(':memory:');
+   > typeof db.updateHook
+   'undefined'
+   > typeof db.function
+   'function'
+   > require('better-sqlite3/package.json').version
+   '12.9.0'
+   ```
+   The method was proposed in WiseLibs/better-sqlite3#1337 (open as of 2025) but is not in any released version. Picking it for AD-2 v2 was an unverified bet. **Lesson:** when a mechanism depends on a specific dependency API, run a 10-second `typeof` check before committing it to the spec.
+
+3. **Polling beats the trigger-callback alternative on the trade-off ledger** (see "Alternatives considered" below for the full comparison).
+
+4. **The scan IS the recovery mechanism.** v1 and v2 distinguished "primary path" from "startup recovery scan." v3 collapses them: the scan runs continuously, and process restart is just "the scan starts fresh." This is structurally simpler — fewer states for the implementer, fewer test paths, no startup-order race.
+
+5. **Idempotency.** The `NOT EXISTS (sales row...)` filter is the load-bearing guarantee. A row that's already been finalized is filtered out of the scan; even on rare double-fire (e.g., two ticks of the scan running concurrently), the second tick sees the Sale row from the first and the audit-event row drops out of the result set.
 
 **Alternatives considered.**
 
-- **In-process EventEmitter from 006** *(original plan-v1.0 choice)*.
-  **REJECTED.** 006 does not publish such an event. Adding one
-  would require an 006 amendment — but 006 is SPEC COMPLETE
-  (2026-05-26, PR #234 §A5 signed off). An out-of-band 006 patch
-  to add a publisher would violate Constitution P12 (Spec Kit
-  artifacts as source of truth) and P13 (small scoped PRs). The
-  cost of forcing 008 to depend on a sibling feature's runtime
-  behaviour is structurally higher than depending on its
-  persistence behaviour, which is already committed.
-- **Polling loop on `audit_events`** (e.g. `setInterval(query, 50ms)`).
-  **REJECTED as primary**, kept as future fallback. Polling
-  consumes CPU continuously even on idle terminals (a pharmacy
-  POS at 3 a.m. between shifts). `update_hook` fires only on
-  actual writes. If a future better-sqlite3 release removes
-  `update_hook` support, polling becomes the fallback — the
-  data-model + contract are unchanged.
+| Alternative | Status | Reason |
+|:--|:--|:--|
+| In-process EventEmitter from 006 (v1 choice) | **REJECTED** | 006 does not publish such an event; would require amending a SPEC COMPLETE feature, violating Constitution P12/P13. |
+| `update_hook` callback (v2 choice) | **REJECTED** | Not in better-sqlite3 ^12.9.0's public API (empirical verification). Proposed upstream as PR #1337 but not released. |
+| **Periodic scan worker (v3, this revision)** | **LOCKED** | Uses only APIs that empirically exist. See full ledger below. |
+| `AFTER INSERT` SQLite trigger + `db.function`-registered callback | **REJECTED** (v3 runner-up) | The trigger fires **inside 006's transaction** (pre-commit). The callback must enqueue-only; the worker must re-query `audit_events` to confirm 006 actually committed (because a roll-back would invalidate the trigger fire). This is functionally identical to the polling scan but with three additional failure modes: (a) pre-commit fire on rolled-back transaction; (b) better-sqlite3's "same-connection only" trigger caveat (fine for POS-Pulse but adds documentation burden); (c) trigger creation needs its own §A3 migration row. Polling has none of these. |
+| Cross-process file-watcher on the audit table | **REJECTED** | Introduces a second source of truth (file mtime vs SQLite row); risks silent dropped notifications. |
+| HTTP callback from 006 to 008 (same process) | **REJECTED** | Ceremony without benefit; same Node runtime, function-call equivalent. |
+| Tightly couple 008's finalize into 006's settled SQLite transaction | **REJECTED** | Would break 006's ability to ship without 008; violates Constitution P13. |
+
+### Full trade-off ledger (v3 polling vs v3-runner-up triggers)
+
+| Concern | Polling (v3) | Trigger + db.function (v3 runner-up) |
+|:--|:--|:--|
+| API exists in `better-sqlite3 ^12.9.0` | ✅ `db.prepare`/`db.exec` | ✅ `db.function` + standard `CREATE TRIGGER` |
+| Transaction-boundary correctness | ✅ Sees only committed rows | ⚠ Trigger fires pre-commit; callback must enqueue-only; worker must re-query |
+| NFR-006 latency budget (3 s) | ✅ 200 ms × 1 poll = 6.6 % of budget | ✅ Effectively instant |
+| CPU cost on idle terminal | ~0.5 % CPU per poll × 5 polls/s = ~2.5 % CPU. Sub-millisecond query against an indexed table. | ~0 % when idle (no writes) |
+| Crash safety | ✅ Restart → next tick picks up unfinalized rows | ✅ Same (the worker re-query is the recovery path) |
+| New migration row required | ❌ No | ⚠ Yes — `CREATE TRIGGER` migration |
+| Same-connection caveat needs documentation | ❌ No | ⚠ Yes — better-sqlite3 trigger limitation: trigger fires only for writes via the same connection. (For POS-Pulse this is satisfied because 006 and 008 share the main-process Database handle — but it must be stated.) |
+| Test setup complexity | ✅ Stub the clock, INSERT row, assert next tick dispatches | ⚠ Mock trigger fire semantics OR use a real SQLite file with synchronous trigger evaluation |
+| Failure modes | 1: scan throws on DB error | 3: (a) trigger fires on rolled-back txn; (b) same-connection caveat; (c) trigger migration introduces schema change in Slice 1's §A3 |
+
+**Polling wins on five dimensions (transaction correctness, migration footprint, documentation burden, test simplicity, failure-mode count) and ties on the other four (API existence, latency budget, crash safety, idle CPU).** The CPU difference (~2.5 % vs ~0 %) is the polling cost but is invisible on a pharmacy-counter workstation. The five-dimension win pays for it.
+
+**Implementation note (Slice 1).** The 200 ms default is the starting value; T520a will measure actual end-to-end latency on the §A3 hardware-matrix printer and confirm or adjust the default before §A5 sign-off.
+
+**Constitution §P5 alignment.** Polling is sometimes characterised as "less elegant than event-driven." For POS-Pulse, the idempotency guarantee (the `NOT EXISTS` clause in the SQL) is the load-bearing correctness property. Event-driven mechanisms that rely on at-most-once delivery semantics from a runtime channel would require a separate idempotency layer anyway — polling collapses these into one mechanism that does both.
+
+**Alternatives considered (continued — earlier ones retained):**
+
+- **In-process EventEmitter from 006** (v1) — see ledger above; rejected.
+- **`update_hook`** (v2) — see ledger above; rejected.
 - **Cross-process file-watcher on the audit table.** Rejected:
   introduces a second source of truth (the file mtime vs the SQLite
   row); risks "we wrote the audit row but the watcher didn't fire"
@@ -722,40 +732,25 @@ identical.
 
 ---
 
-## R-15 — Process-restart recovery: what's the listener's startup contract? *(revised 2026-05-27 post-external-review R1)*
+## R-15 — Process-restart recovery: what's the listener's startup contract? *(revised twice; v3 LOCKED 2026-05-27 post-CodeRabbit CR1)*
 
-**Decision.** On main-process startup, the 008 finalize listener
-(AD-2) runs the following steps **in this strict order**:
+> **Revision note.** v1 and v2 distinguished "startup recovery scan" from "primary live mechanism." v3 collapses them — the scan IS the primary mechanism per AD-2 v3 — so this entry is now mostly about the **adjacent** print/drawer recovery sub-scans, not about the audit-events scan (which is just "the worker starts ticking").
 
-1. **First, the audit-events recovery scan** (before the `update_hook`
-   registers): scan `audit_events` for any `payment.settled` row
-   whose `handoff_action_id` does NOT have a matching `sales` row.
-   For each such row, fire AD-2 finalize once (idempotent on
-   `handoff_action_id`).
-2. **Second, register the `update_hook`** on the shared SQLite
-   connection. From this point forward, new `payment.settled` rows
-   committed by 006 trigger AD-2 finalize immediately.
-3. **In parallel with step 2, re-scan** the `sales` table for any
-   sale whose `print_events` table has no `outcome='success'` row
-   AND no `outcome='manual_override'` row — these are
-   "finalized but never printed" sales, recovered by a fresh
-   print attempt.
-4. **In parallel with step 2, re-scan** the `sales` table for any
-   cash-inclusive sale whose `drawer_events` table has no row —
-   these are "finalized + printed but never kicked drawer" sales,
-   recovered by a fresh drawer-kick attempt.
+**Decision.** On main-process startup, the 008 finalize listener (AD-2 v3) runs:
 
-**Why the strict step-1-then-step-2 ordering?** Reversing it
-creates a race window: if the hook registered first, a row
-landing between hook-registration and scan-start would be picked
-up by both paths and one would lose the UNIQUE-constraint race on
-`envelope_handoff_action_id`. Idempotency would prevent corruption
-but a noisy Sentry alert would fire on every recovery. The
-"scan-first" rule eliminates the race entirely.
+1. **The periodic audit-events scan** starts on its 200 ms interval (AD-2 v3 worker). This handles every `payment.settled` row — including those committed while 008 was offline (process crash, OS reboot, app upgrade). No special "startup recovery" branch is needed; the first tick of the worker sees them, the second tick sees the ones it didn't drain on the first tick, and so on. The `LIMIT 32` per tick is the bounded-throughput safety bound (AD-2 v3 implementation note).
 
-The print/drawer re-scans (steps 3–4) run concurrently with the
-hook because they read 008's own tables; they cannot race against
-006-writes.
+2. **Two adjacent print/drawer recovery sub-scans** run **once at startup** (not periodically — these are bounded one-shot recovery scans):
+   - **Print recovery:** scan the `sales` table for any sale whose `print_events` table has no `outcome='success'` row AND no `outcome='manual_override'` row. These are "finalized but never printed" sales (e.g., process crashed between finalize commit and print pipeline dispatch). Dispatch a fresh print attempt for each.
+   - **Drawer recovery:** scan the `sales` table for any cash-inclusive sale (per `tender_lines_summary_json`) whose `drawer_events` table has no row. These are "finalized + printed but never kicked drawer" sales. Dispatch a fresh drawer-kick attempt for each.
+
+Both recovery sub-scans complete in a single pass per startup; they do not re-poll. The audit-events scan in step 1 is the only continuous worker.
+
+**Why no special-case ordering anymore?** v1 and v2 needed a "scan first, then register hook" ordering to prevent a race between the initial scan and the live hook registering. v3 has no such race — there is no separate live mechanism. The polling worker runs every 200 ms; whether a row landed 100 ms before the worker started or 100 ms after is immaterial. The worker will see it on its first tick that runs after the row committed.
+
+**Tenant scoping.** All three scans are scoped to the currently paired terminal's `(tenant_id, branch_id, terminal_id)` triple per Constitution §P17.
+
+**Why print/drawer recovery is one-shot, not periodic.** A finalized Sale that hasn't been printed yet is in one of two states: (a) the print pipeline crashed mid-attempt and the user is staring at a frozen UI — the next *user-initiated* `receipts.retryPrint` call will pick it up; (b) the whole process crashed and we restarted — the one-shot startup recovery catches it. There's no third "the pipeline kept running but failed silently" state because print failure already emits a `print_events` failure row, which the recovery scan's "no success AND no manual_override" filter excludes. So the recovery sub-scan only needs to run once at startup; subsequent failures route through the normal banner/retry flow.
 
 **Rationale.**
 

@@ -48,7 +48,7 @@ plan and are repeated in each section they touch.
 | Money semantics | **Integer minor units only**, guarded by `Number.isSafeInteger`. Receipt formatting at the `formatters` boundary; the print stream and the preview render from the same payload. Sale-level VAT total is integer minor units. ≥ 95 % coverage on the receipt-payload module and the sale-number allocator. | Constitution §II / P1; spec NFR-001 |
 | Identity | 004 Clerk-backed operator-session identity. Selling operator is inherited from the 006 payment attempt; reprinting operator is the currently signed-in cashier at reprint time (cashier-permitted per spec FR-028). Local PIN record ids are never the attribution anchor. | Spec FR-022 / FR-023 / FR-024; Constitution Principle VIII clarification rule 6 |
 | Finalization ownership | **Main process** owns the `Sale` row commit, the receipt-payload generation, the print pipeline (ESC/POS adapter + OS-print fallback), the drawer-kick command, the audit-event emission, and the sync-handoff outbox enqueue. Renderer is preview / reprint / failure-banner UI only. | AD-1 below; Constitution §III |
-| 006 → 008 signal | 008's main-process listener subscribes to **`audit_events`-table row arrivals** via better-sqlite3's `update_hook` callback (registered on the shared SQLite connection). On every INSERT, the callback filters for `category='payment.settled'` and queues AD-2 finalize. **No new in-process EventEmitter is required from 006**; the contract is the audit row, which 006 already commits to writing (006 AD-9). A startup recovery scan re-fires AD-2 for any `payment.settled` rows the hook missed during a process restart. Idempotency via `envelope.handoff_action_id` makes a duplicate finalize a no-op (FR-001 / SC-009). | AD-2 below; Constitution §P3 / §P5; revised 2026-05-27 post-external-review (closes R1) |
+| 006 → 008 signal | 008's main-process listener runs a **periodic scan worker** (default interval 200 ms; tunable) against the shared SQLite `audit_events` table, selecting rows where `category='payment.settled'` and `envelope.handoff_action_id` has no matching `sales` row. For each match, dispatch AD-2 finalize. **No EventEmitter from 006 required**; the contract is the durable audit row (006 AD-9). Idempotency via `envelope.handoff_action_id` makes a duplicate finalize a no-op (FR-001 / SC-009). The scan IS the recovery mechanism — there is no separate primary-vs-fallback path. | AD-2 below; Constitution §P3 / §P5; revised twice — first 2026-05-27 post-external-review R1 (EventEmitter→update_hook), then 2026-05-27 post-CodeRabbit CR1 (update_hook→periodic scan; update_hook is not in better-sqlite3 ^12.9.0's public API per empirical verification). |
 | Persistence | **Four new local SQLite tables** authored under §A3 in Slice 1: `sales` (append-only at the rule level — see AD-3), `print_events` (append-only), `drawer_events` (append-only), `sale_sync_outbox` (append-only). Plus an extension of 004's `audit_events` catalogue with ten `sale.*` audit-event categories (FR-055; see AD-9). No physical mutation of any 008 row after insert. | AD-3 + AD-4 + AD-9 below; [./data-model.md](./data-model.md) |
 | Bridge surface | **DRAFT** `sales.*` (sale-level reads), `receipts.*` (preview + print + reprint + manual-override), `drawer.*` (kick — main-process only, no renderer-callable surface). §A4 review required before Slice 1 ships. Refusal envelope mirrors 005/006 `{ kind: 'refused', reason: '...' }`. | AD-5 below; [./contracts/bridge-api.md](./contracts/bridge-api.md) |
 | Receipt template asset | First-party version-controlled assets at `src/main/receipts/templates/` (path is plan-pinned; migration occurs in Slice 0 visual-direction work). Each template emits **two byte-stable outputs from one source**: an ESC/POS byte stream and an HTML/canvas equivalent for OS-print + preview. Bilingual asset with Arabic-first RTL layout and Latin numerals on printed slips. | AD-6 below; Constitution Hardware §"Receipt templates" |
@@ -143,94 +143,65 @@ DrawerEvent rows.
 
 **Resolves:** AD-1.
 
-### AD-2 — 006 → 008 signal: SQLite audit-row arrival via `update_hook` (LOCKED — revised 2026-05-27 post-external-review)
+### AD-2 — 006 → 008 signal: periodic scan worker on `audit_events` (LOCKED v3 — revised twice)
 
-> **Revision history.** Plan v1.0 (2026-05-27 morning) originally
-> specified an "in-process EventEmitter" between 006 and 008. External
-> review (finding R1) established that **006 does not publish such an
-> event** — 006's only EventEmitter is `payments.subscribe`, which
-> serialises the renderer-facing minimised view (FR-017), not a
-> main-process broadcast channel. The original AD-2 would have left
-> the primary finalize path dead (sales would only finalize on next
-> process restart via the recovery scan). This revision replaces the
-> EventEmitter mechanism with a SQLite-row-arrival hook, which
-> depends only on 006's already-committed audit-write behaviour and
-> requires zero changes to 006.
+> **Revision history (two revisions in one day):**
+>
+> - **v1 (2026-05-27 morning):** "in-process EventEmitter from 006". **REJECTED post-external-review R1** — 006 does not publish such an event. 006's only EventEmitter is `payments.subscribe` (renderer-facing). Amending 006 (SPEC COMPLETE since 2026-05-26, §A5 signed off) would violate Constitution P12+P13.
+> - **v2 (2026-05-27 mid-day):** "better-sqlite3 `update_hook` callback". **REJECTED post-CodeRabbit CR1** — empirically verified that `better-sqlite3 ^12.9.0` (the locked dependency) has `db.updateHook === undefined`. The `update_hook` method was proposed in upstream PR #1337 but is not in any released version. The fix introduced a second imaginary dependency.
+> - **v3 (this revision):** **Periodic scan worker.** Uses only APIs that empirically exist in the installed dependency. No transaction-boundary subtlety. No new migration. The scan IS the primary mechanism.
 
-**Decision.** 008's main-process listener subscribes to **`audit_events`-
-table row arrivals** via better-sqlite3's `update_hook` callback,
-registered on the shared SQLite database connection at main-process
-startup. The callback fires synchronously on every INSERT to any table;
-008's hook filters by `tbl_name = 'audit_events' AND category = 'payment.settled'`
-and dispatches AD-2 finalize asynchronously (the hook itself returns
-immediately — finalize work runs outside the hook's transactional
-context).
+**Decision.** 008's main-process listener runs a **periodic scan worker** at startup. The worker wakes every **200 ms** (configurable via terminal config; floor 100 ms, ceiling 1000 ms to keep NFR-006 happy) and runs:
 
-The listener:
+```sql
+SELECT ae.id, ae.payload_json
+FROM audit_events ae
+WHERE ae.category = 'payment.settled'
+  AND ae.terminal_id = :terminal_id
+  AND NOT EXISTS (
+    SELECT 1 FROM sales s
+    WHERE s.envelope_handoff_action_id = json_extract(ae.payload_json, '$.handoff_action_id')
+  )
+ORDER BY ae.created_at ASC
+LIMIT 32;
+```
 
-1. Receives the `audit_events` row's primary key + the
-   `payment.settled` payload shape from a small follow-up `SELECT`
-   (per 006 plan AD-9 payload: `payment_attempt_id`, `cart_id`,
-   `handoff_action_id`, `settled_at`, `attribution_operator_id`,
-   `tender_lines[]`).
-2. Checks `sales` for an existing row keyed on
-   `envelope.handoff_action_id`. If found → no-op, returns existing
-   `sale_id` (Constitution §P5; FR-001 / SC-009).
-3. Otherwise, opens a SQLite transaction that allocates the
-   sale_number (AD-7), inserts the `sales` row, inserts the
-   `sale_sync_outbox` row, and emits the `sale.finalized` audit event
-   — **all atomically** (Constitution §P3 / §P18).
-4. After commit, dispatches the receipt-payload generation +
-   render + print + drawer pipeline (each step is its own
-   transaction; the Sale row stays durable regardless of pipeline
-   success).
+For each returned row, dispatch AD-2 finalize with the row's `handoff_action_id` as the idempotency key. The `NOT EXISTS` clause is the **idempotency anchor** — once a Sale row exists for a given `handoff_action_id`, the scan stops returning that audit row, and the finalize is a no-op even on rare double-fire (Constitution §P5 / FR-001 / SC-009).
 
-**Safety net.** On main-process startup, 008's listener also runs a
-**recovery scan** (per research §R-15) before the `update_hook` is
-registered: scan `audit_events` for `category='payment.settled'` rows
-scoped to current terminal whose `handoff_action_id` has no matching
-`sales` row, and fire AD-2 for each. This recovers (a) any
-`payment.settled` rows committed by 006 while 008's listener was not
-running (e.g. process crash between 006's commit and 008's commit),
-and (b) the unlikely case where the `update_hook` itself dropped a
-notification (better-sqlite3's hook is reliable but not formally
-durable across process boundaries). Idempotency (step 2 above) makes
-the recovery scan safe to run on every startup, including happy-path
-startups.
+The finalize logic itself (unchanged from v1/v2):
 
-The renderer is notified of finalization completion via a
-subscription on `sales.*` (analogous to 006's `payments.subscribe`).
+1. Open a SQLite transaction that allocates the sale_number (AD-7), inserts the `sales` row, inserts the `sale_sync_outbox` row, and emits the `sale.finalized` audit event — **all atomically** (Constitution §P3 / §P18).
+2. After commit, dispatch the receipt-payload generation + render + print + drawer pipeline (each step is its own transaction; the Sale row stays durable regardless of pipeline success).
+3. The renderer is notified of finalization completion via a subscription on `sales.*` (analogous to 006's `payments.subscribe`).
 
-**Why this mechanism.**
+**Why polling — the full trade-off ledger:**
 
-1. **Zero new IPC surface, zero 006 dependency.** 006 already commits
-   its `audit_events` row inside its settled-state SQLite transaction
-   (006 AD-9). 008's hook depends on that commit — which is durable —
-   not on 006 publishing a runtime event. **No amendment to 006
-   required.**
-2. **Lower latency than polling.** `update_hook` fires synchronously
-   on the SQLite write; the dispatched finalize work runs ~milliseconds
-   later. NFR-006's 3-second budget has comfortable headroom.
-3. **Crash-safety by construction.** If 008 crashes mid-finalize, the
-   `audit_events` row is durable; the recovery scan re-fires AD-2 on
-   restart. Constitution §P3 satisfied.
-4. **The renderer is *not* the listener** because the renderer can
-   reload, crash, lose focus, or be navigated away from at any moment
-   — and a sale finalization must not depend on renderer liveness.
+| Concern | Polling outcome |
+|:--|:--|
+| **NFR-006 latency budget** | 3 seconds end-to-end (payment.settled → drawer-open ack). At 200 ms poll interval, worst-case latency added by the polling cadence is 200 ms (6.6 % of budget). Sale finalization + receipt render + ESC/POS write + drawer kick consume the remaining ~2.5 s. Comfortable headroom. |
+| **CPU cost on idle terminal** | At 3 a.m. with zero sales, the query against `audit_events` indexed on `(terminal_id, category, created_at)` (per data-model.md indices) is sub-millisecond. ~0.5 % CPU per poll × 5 polls per second = ~2.5 % CPU. On a pharmacy-counter workstation, this is invisible. |
+| **Transaction-boundary correctness** | Polling sees **only committed rows.** No "trigger fired but transaction rolled back" footgun. No "callback inside transaction context" footgun. |
+| **006 amendment required** | None. 006 writes its audit row; 008 reads it. Same contract as v2. |
+| **Testability** | Trivial. A vitest can stub the clock, INSERT an `audit_events` row mid-test, and assert finalize runs after the next tick. No mocked trigger fire semantics. |
+| **Crash safety** | Inherent. Restart → scan picks up unfinalized rows on the first tick. The "startup recovery scan" of v1/v2 collapses into the steady-state scan; there is no special-case startup code. |
+| **Same-connection caveat (better-sqlite3 trigger limitation)** | N/A. Polling works regardless of which connection wrote the row. |
 
-**Alternatives rejected** (see research §R-2 for the full ledger):
+**Alternatives rejected (see research §R-2 for the full ledger):**
 
-- **In-process EventEmitter from 006** (original plan-v1.0 choice) —
-  rejected because 006 does not publish such an event and amending
-  006 (SPEC COMPLETE; §A5 signed off) violates Constitution P12 + P13.
-- **Polling loop on `audit_events`** — rejected as primary because
-  short-interval polling consumes CPU continuously; viable as a
-  fallback if a future SQLite-driver change removes `update_hook`
-  support.
-- **Cross-process file-watcher** — rejected; introduces a second
-  source of truth and complicates restart semantics.
+- **In-process EventEmitter from 006** (v1) — rejected per R1.
+- **`update_hook` callback** (v2) — rejected per CR1 (API does not exist in `^12.9.0`).
+- **SQLite `AFTER INSERT` trigger calling a `db.function`-registered callback.** Considered as a v3 candidate. Rejected because the trigger fires **inside 006's transaction** (pre-commit); the callback would have to enqueue-only and a worker would then re-query `audit_events` to confirm 006 actually committed — i.e., functionally identical to the polling scan but with three more failure modes (trigger callback fires on rolled-back insert; same-connection caveat needs documentation; trigger creation needs its own migration row). Polling has none of these.
+- **Cross-process file-watcher** — rejected; introduces a second source of truth.
 
-**Resolves:** AD-2 (revised).
+**The renderer is *not* the listener** because the renderer can reload, crash, lose focus, or be navigated away from at any moment — and a sale finalization must not depend on renderer liveness.
+
+**Implementation notes for Slice 1 author:**
+
+- The scan worker registers on main-process startup, scoped to the currently paired terminal's `(tenant_id, branch_id, terminal_id)` triple (Constitution §P17).
+- The `LIMIT 32` per tick is a safety bound. Under steady-state load (one sale every ~10 s), the scan usually returns 0 or 1 row. Under recovery load (process restart after a crash with N unfinalized rows), the scan drains 32 at a time and the next tick drains the next 32; bounded throughput prevents a recovery storm.
+- The default 200 ms interval is the Slice 1 starting value. T520a (the §A5 performance-budget timing assertion) will measure actual end-to-end latency on the hardware-matrix printer and confirm or adjust this default before §A5 sign-off.
+
+**Resolves:** AD-2 (v3, LOCKED).
 
 ### AD-3 — `sales` table is append-only at the *physical* layer (LOCKED)
 
