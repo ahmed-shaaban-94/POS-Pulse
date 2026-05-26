@@ -76,7 +76,7 @@ Test floor (per tasks.md line 145): ≥ 95% on AD-2 transaction, AD-7 allocator,
 - [ ] **T024** [§A3] [P] Create `sale_sync_outbox` table + UNIQUE(sale_id) + triggers — `migrations/008-0004_create_sale_sync_outbox.sql`
 - [ ] **T025** [§A3] [P] Create `sale_number_sequences` table (mutable; no append-only trigger) — `migrations/008-0005_create_sale_number_sequences.sql`
 - [ ] **T026** [§A3] Extend 004's `audit_events.action_category` enum with 10 new 008 categories — `migrations/008-0006_extend_audit_event_categories.sql`
-- [ ] **T027** [§A3] Integration test: apply all six migrations against a fresh better-sqlite3 file; assert schemata + triggers + UNIQUE constraints — `tests/integration/sales/migrations.test.ts`
+- [ ] **T027** [§A3] Integration test: apply all six migrations against a fresh better-sqlite3 file; assert schemas + triggers + UNIQUE constraints — `tests/integration/sales/migrations.test.ts`
 - [ ] **T028** [§A3] Record §A3 migration review sign-off — `specs/008-sale-finalization-and-receipts/coordination.md`
 
 ### 3.2 Parallel-execution opportunities
@@ -337,7 +337,7 @@ These items are pre-Slice-1 work; they don't block authoring this preflight but 
 **Bridge contract:** [../contracts/bridge-api.md](../contracts/bridge-api.md)
 **Embed preflight (cross-feature, informational):** [../../../docs/impeccable-embed-preflight.md](../../../docs/impeccable-embed-preflight.md)
 **Constitution version pinned:** v1.5.1
-**Authored:** 2026-05-27
+**Authored:** 2026-05-26
 **Owner:** Slice 1 implementing agent (single agent or subagent fleet); §A3 reviewer for S1a sign-off; §A4 reviewer for S1d sign-off; Ahmed for Slice 1 functional sign-off (T113).
 
 ---
