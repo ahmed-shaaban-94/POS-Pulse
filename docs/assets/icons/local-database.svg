@@ -1,9 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
   <title id="title">Local database icon</title>
-  <desc id="desc">Local SQLite database icon.</desc>
-  <rect width="96" height="96" rx="20" fill="#ecfdf5"/>
-  <ellipse cx="48" cy="26" rx="27" ry="12" fill="#0f766e"/>
-  <path d="M21 26v34c0 7 12 12 27 12s27-5 27-12V26" fill="#115e59"/>
-  <path d="M21 43c0 7 12 12 27 12s27-5 27-12M21 60c0 7 12 12 27 12s27-5 27-12" fill="none" stroke="#ccfbf1" stroke-width="4"/>
-  <text x="48" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" font-weight="800" fill="#ffffff">SQL</text>
+  <desc id="desc">Three-dimensional stacked cylinder representing local SQLite storage.</desc>
+  <defs>
+    <linearGradient id="ld-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ecfdf5"/>
+      <stop offset="1" stop-color="#a7f3d0"/>
+    </linearGradient>
+    <linearGradient id="ld-body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#065f46"/>
+      <stop offset="0.45" stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="ld-top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="ld-hi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="ld-shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#064e3b" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="96" height="96" rx="20" fill="url(#ld-bg)"/>
+  <ellipse cx="48" cy="86" rx="24" ry="3" fill="#064e3b" opacity="0.22"/>
+  <g filter="url(#ld-shadow)">
+    <path d="M21 26v36c0 7 12 12 27 12s27-5 27-12V26" fill="url(#ld-body)"/>
+    <path d="M21 26v36c0 7 12 12 27 12s27-5 27-12V26" fill="url(#ld-hi)"/>
+    <ellipse cx="48" cy="26" rx="27" ry="11" fill="url(#ld-top)"/>
+    <ellipse cx="48" cy="26" rx="27" ry="11" fill="none" stroke="#0f766e" stroke-width="1"/>
+  </g>
+  <path d="M21 42c0 7 12 12 27 12s27-5 27-12" fill="none" stroke="#a7f3d0" stroke-width="2" opacity="0.85"/>
+  <path d="M21 56c0 7 12 12 27 12s27-5 27-12" fill="none" stroke="#a7f3d0" stroke-width="2" opacity="0.85"/>
+  <g opacity="0.9">
+    <circle cx="34" cy="20" r="1.6" fill="#5eead4">
+      <animate attributeName="cy" values="20;32;20" dur="3s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="58" cy="20" r="1.6" fill="#5eead4">
+      <animate attributeName="cy" values="20;32;20" dur="3s" begin="1s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;1;0" dur="3s" begin="1s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <text x="48" y="54" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="800" fill="#ffffff" letter-spacing="1">SQL</text>
 </svg>

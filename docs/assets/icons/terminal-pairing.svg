@@ -1,10 +1,59 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
   <title id="title">Terminal pairing icon</title>
-  <desc id="desc">Terminal pairing code and device identity icon.</desc>
-  <rect width="96" height="96" rx="20" fill="#f0fdfa"/>
-  <rect x="20" y="20" width="38" height="56" rx="8" fill="#0f766e"/>
-  <rect x="26" y="30" width="26" height="26" rx="4" fill="#ccfbf1"/>
-  <circle cx="39" cy="66" r="4" fill="#ccfbf1"/>
-  <path d="M66 36h10v10M76 36 58 54" fill="none" stroke="#2563eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M62 66h12" stroke="#f59e0b" stroke-width="5" stroke-linecap="round"/>
+  <desc id="desc">Three-dimensional terminal with pairing code linking device identity.</desc>
+  <defs>
+    <linearGradient id="tp-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f0fdfa"/>
+      <stop offset="1" stop-color="#99f6e4"/>
+    </linearGradient>
+    <linearGradient id="tp-term" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14b8a6"/>
+      <stop offset="0.5" stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#115e59"/>
+    </linearGradient>
+    <linearGradient id="tp-hi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="tp-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#134e4a" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="96" height="96" rx="20" fill="url(#tp-bg)"/>
+  <ellipse cx="48" cy="84" rx="26" ry="3" fill="#134e4a" opacity="0.18"/>
+  <g filter="url(#tp-shadow)">
+    <rect x="20" y="20" width="38" height="56" rx="8" fill="url(#tp-term)"/>
+    <rect x="20" y="20" width="38" height="56" rx="8" fill="url(#tp-hi)"/>
+  </g>
+  <rect x="26" y="30" width="26" height="26" rx="3" fill="#0f172a" opacity="0.85"/>
+  <g fill="#5eead4">
+    <rect x="29" y="33" width="4" height="4"/>
+    <rect x="35" y="33" width="3" height="4"/>
+    <rect x="40" y="33" width="4" height="4"/>
+    <rect x="45" y="33" width="4" height="4"/>
+    <rect x="29" y="39" width="3" height="3"/>
+    <rect x="34" y="39" width="4" height="3"/>
+    <rect x="40" y="39" width="3" height="3"/>
+    <rect x="45" y="39" width="4" height="3"/>
+    <rect x="29" y="44" width="4" height="4"/>
+    <rect x="36" y="44" width="3" height="4"/>
+    <rect x="41" y="44" width="4" height="4"/>
+    <rect x="46" y="44" width="3" height="4"/>
+    <rect x="29" y="50" width="3" height="3"/>
+    <rect x="35" y="50" width="4" height="3"/>
+    <rect x="41" y="50" width="3" height="3"/>
+    <rect x="46" y="50" width="3" height="3"/>
+  </g>
+  <circle cx="39" cy="66" r="3" fill="#5eead4">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <g fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M66 36h10v10"/>
+    <path d="M76 36 60 52"/>
+  </g>
+  <path d="M62 66h12" stroke="#f59e0b" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="76" cy="36" r="3" fill="#2563eb">
+    <animate attributeName="r" values="3;5;3" dur="1.8s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="1;0.4;1" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
 </svg>
