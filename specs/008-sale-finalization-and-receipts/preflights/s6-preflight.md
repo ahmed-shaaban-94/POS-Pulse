@@ -353,7 +353,7 @@ T520a is §A5-reviewer-attended on the §A3 hardware-matrix pair. T526 is §A5-r
 **Runbook (to be authored at T524):** [../../../docs/runbook/008-sale-finalization-and-receipts.md](../../../docs/runbook/008-sale-finalization-and-receipts.md)
 **Perf-budget script (to be authored at T520a):** [../../../tests/performance/sales/008-perf-budgets.bench.ts](../../../tests/performance/sales/008-perf-budgets.bench.ts)
 **Research:** [../research.md](../research.md) §R-15 (recovery scan)
-**Plan:** [../plan.md](../plan.md) §AD-9 (redaction surface table)
+**Redaction surface (AD-9):** [../plan.md](../plan.md) §AD-9 (redaction surface table)
 **Embed preflight (cross-feature):** [../../../docs/impeccable-embed-preflight.md](../../../docs/impeccable-embed-preflight.md)
 **Slice 1 preflight:** [./s1-preflight.md](./s1-preflight.md)
 **Slice 2 preflight (canonical `/impeccable craft` ritual at §4.2):** [./s2-preflight.md](./s2-preflight.md)
