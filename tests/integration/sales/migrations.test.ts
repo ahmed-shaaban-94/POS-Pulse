@@ -447,7 +447,11 @@ describe('T027 — 008 Slice 1a migrations', () => {
                  'op-abc', 'sess-1', '2026-05-27T08:42:19.000Z')`,
       );
       expect(() => {
-        db.run("UPDATE print_events SET outcome='failure' WHERE print_event_id='pe-1'");
+        // Use a trigger-neutral column so the assertion isolates the
+        // append-only trigger behavior — `outcome='failure'` would violate
+        // the failure ↔ failure_reason biconditional CHECK and pass the
+        // toThrow() expectation even if the trigger were missing.
+        db.run("UPDATE print_events SET acting_operator_id='op-def' WHERE print_event_id='pe-1'");
       }).toThrow();
       db.close();
     });
@@ -503,7 +507,9 @@ describe('T027 — 008 Slice 1a migrations', () => {
          VALUES ('de-1', 'sale-1', 'opened', 'pe-1', 'terminal-1', '2026-05-27T08:42:20.000Z')`,
       );
       expect(() => {
-        db.run("UPDATE drawer_events SET outcome='failed' WHERE drawer_event_id='de-1'");
+        // Trigger-neutral column — `outcome='failed'` would violate the
+        // failed ↔ failure_reason biconditional CHECK.
+        db.run("UPDATE drawer_events SET terminal_id='terminal-9' WHERE drawer_event_id='de-1'");
       }).toThrow();
       db.close();
     });
@@ -598,7 +604,11 @@ describe('T027 — 008 Slice 1a migrations', () => {
                  'terminal-1', 'pending', '2026-05-27T08:42:18.500Z')`,
       );
       expect(() => {
-        db.run("UPDATE sale_sync_outbox SET state='sent' WHERE outbox_row_id='ob-1'");
+        // Trigger-neutral column — `state='sent'` would violate the
+        // state='pending' CHECK.
+        db.run(
+          "UPDATE sale_sync_outbox SET enqueued_at='2026-05-27T08:42:19.000Z' WHERE outbox_row_id='ob-1'",
+        );
       }).toThrow();
       db.close();
     });

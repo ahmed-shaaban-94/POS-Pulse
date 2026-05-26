@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS sale_number_sequences (
   terminal_id           TEXT     NOT NULL,
   calendar_day_local    TEXT     NOT NULL,
-  next_sequence         INTEGER  NOT NULL CHECK (next_sequence >= 1),
+  next_sequence         INTEGER  NOT NULL DEFAULT 1 CHECK (next_sequence >= 1),
   updated_at            TEXT     NOT NULL,
 
   PRIMARY KEY (terminal_id, calendar_day_local)
