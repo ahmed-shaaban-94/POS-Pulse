@@ -185,7 +185,7 @@ The active feature is `specs/007-pos-visual-system`, which covers the visual sys
 | --- | --- |
 | **Product & operations** | [Product brief](docs/product.md) · [Hardware matrix](docs/hardware-matrix.md) · [POS shell spec](specs/003-pos-ui-shell/spec.md) |
 | **Engineering** | [Foundation quickstart](specs/001-foundation/quickstart.md) · [Pairing quickstart](specs/002-terminal-pairing/quickstart.md) · [Operator session plan](specs/004-operator-session/plan.md) |
-| **Design** | [Design system tokens](docs/design-system.md) · [Visual system spec](specs/007-pos-visual-system/spec.md) |
+| **Design** | [Design system](docs/DESIGN.md) · [Visual system spec](specs/007-pos-visual-system/spec.md) |
 | **Security** | [Constitution](.specify/memory/constitution.md) · [Operator security review](specs/004-operator-session/security-review/s1-review.md) |
 | **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [API snapshot](scripts/openapi-snapshot.json) |
 
