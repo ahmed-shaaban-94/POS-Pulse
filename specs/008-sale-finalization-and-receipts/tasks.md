@@ -1,0 +1,679 @@
+---
+description: "Task list for 008-sale-finalization-and-receipts — startable, file-path-bearing, slice-organised against plan v1.0; produced by /speckit-tasks 2026-05-27"
+---
+
+# Tasks: 008-sale-finalization-and-receipts
+
+**Feature:** 008-sale-finalization-and-receipts — Sale Finalization & Receipts
+**Spec:** [./spec.md](./spec.md)
+**Plan:** [./plan.md](./plan.md) v1.0 (AD-1..AD-12 locked 2026-05-27)
+**Research:** [./research.md](./research.md)
+**Data model:** [./data-model.md](./data-model.md)
+**Contracts:** [./contracts/bridge-api.md](./contracts/bridge-api.md) (DRAFT — §A4 review required)
+**Quickstart:** [./quickstart.md](./quickstart.md)
+**Visual direction:** `specs/008-sale-finalization-and-receipts/visual-direction/README.md` (to be produced in Slice 0 under §A1)
+**Constitution version pinned:** v1.5.1
+**Created:** 2026-05-27
+**Last updated:** 2026-05-27 (initial generation by `/speckit-tasks`; remediation pass same day by `/speckit-analyze` — added T520a perf-budget + T403a receipt-number-invariance; tightened T522 Sentry decision-tree)
+**Status:** **Slice 0 ❌ not started** · **Slices 1–6 ❌ blocked pending `/speckit-analyze` + §A1 + §A3 + §A4 commission**
+
+---
+
+## Conventions
+
+- **Format:** `- [ ] **T0NN** [P?] [USn?] [§Ag?] Description with file path — path`
+- **`[P]`** marks parallelizable tasks (different files, no dependency on incomplete tasks).
+- **`[US1]`** maps the task to the spec's single Primary User Story (008 has one primary story plus 14 acceptance scenarios; per-scenario coverage is locked into the slice phases themselves rather than into separate US labels).
+- **`[§A3]`** / **`[§A4]`** / **`[§A5]`** tag the gate that must clear before the task is startable.
+- File paths are repository-relative (e.g., `src/main/sales/finalize-listener.ts`).
+- TDD pairing: every implementation task is preceded by a failing test task referencing the same module area (Constitution §VI).
+
+---
+
+## Locked decisions (informational — do not re-open)
+
+| Decision | Locked value | Source |
+|:--|:--|:--|
+| AD-1 — Finalization ownership | Main process owns Sale row commit, receipt-payload generator, print pipeline, drawer-kick command, sync-outbox enqueue, audit emission. Renderer = preview / reprint / banner UI only. | plan §AD-1 |
+| AD-2 — 006 → 008 signal | In-process main-side listener on 006's `payment.settled`; idempotency keyed on `envelope.handoff_action_id`. Startup recovery scan re-fires AD-2 for orphaned `payment.settled` rows with no matching `sales` row. | plan §AD-2; research §R-2 / §R-15 |
+| AD-3 — Append-only at physical layer | `sales`, `print_events`, `drawer_events`, `sale_sync_outbox` all carry SQLite triggers denying UPDATE and DELETE. Stronger than spec FR-004's "rule level". | plan §AD-3; research §R-3 |
+| AD-4 — Sub-entity tables | Three append-only sub-entities (`print_events`, `drawer_events`, `sale_sync_outbox`), not polymorphic. Plus `sale_number_sequences` (mutable, AD-7 allocator). | plan §AD-4; research §R-4 |
+| AD-5 — Bridge namespaces | `sales.*` (read-only from renderer) + `receipts.*` (mutating). **No renderer-callable `drawer.*` surface.** | plan §AD-5; contracts/bridge-api.md |
+| AD-6 — Receipt template engine | First-party single-source dual-output engine at `src/main/receipts/templates/`; emits ESC/POS bytes + HTML/canvas from one bilingual template asset. Three variants: `first_print` · `reprint_duplicate` · `preview`. | plan §AD-6; research §R-6 |
+| AD-7 — Sale-number scheme | `<terminal_label>-<YYYY-MM-DD>-<NNNNNN>`, per-terminal per-calendar-day monotonic, calendar-day anchored on terminal local timezone. Allocator table `sale_number_sequences`. | plan §AD-7; clarifications 2026-05-27 |
+| AD-8 — Drawer-kick mechanism | Separate ESC/POS DK1/DK2 pulse after print-success ack. **Embedded-in-receipt kick PROHIBITED** in 008 v1. | plan §AD-8; clarifications 2026-05-27 |
+| AD-9 — Audit-event catalogue | Ten new categories under 004's existing `audit_events` table. No new audit table. | plan §AD-9; data-model.md |
+| AD-10 — Reprint permission | Cashier-permitted with full attribution; no supervisor override. Mitigation = bilingual visible duplicate-copy marker (FR-029). | plan §AD-10; clarifications 2026-05-27 |
+| AD-11 — Sync-handoff outbox | Enqueue-only, no flush. Single `sale_sync_outbox` row per finalized sale, written atomically with `sales` + audit row. | plan §AD-11 |
+| AD-12 — OpenAPI / backend | **No new OpenAPI surface.** Zero backend calls in 008. §A2 no-op every slice. | plan §AD-12 |
+| Per-line VAT | Out of scope. Sale-level VAT footer only; Sale row stores sale-level VAT total minor. | clarifications 2026-05-27 |
+
+**Canonical audit action categories** (10; extending 004's catalogue under AD-9):
+
+- **Sale-level (2):** `sale.finalized` · `sale.finalization_refused`
+- **Receipt-level (5):** `sale.receipt.printed` · `sale.receipt.reprinted` · `sale.receipt.print_failed` · `sale.receipt.print_retried_success` · `sale.receipt.manual_override`
+- **Drawer-level (3):** `sale.drawer.opened` · `sale.drawer.suppressed` · `sale.drawer.failed`
+
+**Bridge handler canonical names** (from `contracts/bridge-api.md`):
+
+- **`sales.*` (read-only; Slice 1 + 2):** `sales.read` · `sales.findByNumber` · `sales.subscribe` · `sales.unsubscribe`
+- **`receipts.*` (mutating; Slices 2 / 3 / 5 / 6):** `receipts.preview` · `receipts.print` *(internal, main-process only)* · `receipts.reprint` · `receipts.retryPrint` · `receipts.manualOverride`
+- **`drawer.*` — NO renderer-callable surface (Slice 4 main-process only).**
+
+**Five new SQLite tables** (in migration order per `data-model.md §"Migration sequencing"`):
+
+1. `sales` (header; append-only)
+2. `print_events` (append-only; FK → `sales`)
+3. `drawer_events` (append-only; FK → `sales`)
+4. `sale_sync_outbox` (append-only; FK → `sales`)
+5. `sale_number_sequences` (mutable; AD-7 allocator)
+
+---
+
+## Gate ledger
+
+| Gate | Status | Blocks |
+|:--|:--|:--|
+| **§A0** — Upstream readiness + `/speckit-plan` v1.0 | ✅ Cleared (plan PR closes §A0); procedural lift on `/speckit-analyze` merge | Phase 1 (Setup) startable now |
+| **§A1** — Visual direction Slice 0 | ⛔ Held; gated on `/speckit-analyze` | Slices 1, 2, 3, 5 renderer-touching tasks |
+| **§A2** — Backend / OpenAPI | ⛔ Held — **no-op for every 008 slice** confirmed by AD-12 | Documentation only (no-op sign-off recorded per slice) |
+| **§A3** — Migrations | ⛔ Held — five new tables + append-only triggers + indices + audit-category extension in Slice 1 | Slice 1 persistence |
+| **§A4** — Bridge-API surface | ⛔ Held — `sales.*` + `receipts.*` security review required before Slice 1 ships | Slice 1, Slice 2, Slice 3, Slice 5, Slice 6 |
+| **§A5** — Production readiness | ⛔ Held; blocks rollout, not slice merge | Production rollout only |
+
+**Bottom line:** §A0 is functionally cleared and procedurally lifts when `/speckit-analyze` merges. Per-slice gates §A1/§A3/§A4 must each open before the corresponding slice's implementation tasks become startable. §A5 is rollout-time only.
+
+---
+
+## Path conventions
+
+| Layer | Path |
+|:--|:--|
+| Main-process sales module | `src/main/sales/` |
+| Main-process receipts module | `src/main/receipts/` |
+| Main-process drawer module | `src/main/drawer/` |
+| Main-process sync-outbox module | `src/main/sync-outbox/` |
+| Receipt template assets | `src/main/receipts/templates/` |
+| Shared types + bridge API | `src/shared/bridge-api.ts` · `src/shared/sales/` · `src/shared/receipts/` |
+| Preload bridge | `src/preload/sales.ts` · `src/preload/receipts.ts` |
+| Renderer receipts surface | `src/renderer/ui/receipts/` |
+| Renderer store | `src/renderer/stores/sales-store.ts` |
+| Migrations | `migrations/` |
+| Unit tests (main) | `tests/unit/main/sales/` · `tests/unit/main/receipts/` · `tests/unit/main/drawer/` |
+| Unit tests (shared) | `tests/unit/shared/sales/` · `tests/unit/shared/receipts/` |
+| Unit tests (renderer) | `tests/unit/renderer/receipts/` |
+| Integration tests | `tests/integration/sales/` |
+| Contract tests | `tests/contract/sales/` |
+| Visual direction | `specs/008-sale-finalization-and-receipts/visual-direction/` |
+| Runbook | `docs/runbook/` |
+| Hardware matrix | `docs/hardware-matrix.md` |
+| Spec docs | `specs/008-sale-finalization-and-receipts/` |
+
+---
+
+## Phase 1 — Setup & Coordination (no source code)
+
+**Purpose:** Confirm gate ownership, feature-flag configuration, slice-0 reviewer assignment, hardware-matrix coordination thread. No code, no migrations, no packages.
+**Startable when:** `/speckit-analyze` merges (lifts §A0 procedural hold).
+
+- [ ] **T001** Create `specs/008-sale-finalization-and-receipts/coordination.md` from the 006 template; populate gate ledger, slice ownership, and current status (this PR closes §A0) — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T002** Confirm the `sale_finalization` feature flag exists in `src/shared/app-config.ts` (the per-feature flag map authored by 001 / 005 / 006) and is **disabled by default** in production; record the flag key + the renderer-store binding. If the flag does not exist yet, split into sub-tasks: (a) register `sale_finalization` in `src/shared/app-config.ts`, (b) extend `FeatureFlagsState` in the renderer store, (c) record the key — `src/shared/app-config.ts` + `src/renderer/stores/feature-flags-store.ts`
+- [ ] **T003** Open the §A3 coordination thread: confirm migration ordering for the five new tables + 004 `ActionCategory` enum extension with the 10 new categories before Slice 1 begins; identify the §A3 reviewer + expected review date — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T004** Open the §A4 coordination thread: confirm security-review owner for the `sales.*` + `receipts.*` bridge surface before Slice 1; reviewer to walk the §A4 checklist in `contracts/bridge-api.md` (eight items) — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T005** Assign the Slice 0 visual-direction reviewer; record name + expected review date — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T006** Open the §A3 hardware-matrix coordination thread: identify ≥ 1 thermal-printer + cash-drawer model pair that will be the §A3 bring-up target for Slice 3 / Slice 4; record vendor + model + driver version expectation in `docs/hardware-matrix.md`'s pending column — `docs/hardware-matrix.md`
+- [ ] **T007** Update `specs/008-sale-finalization-and-receipts/coordination.md` to reflect `/speckit-tasks` completion and the current gate-status table — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 2 — Slice 0: Visual direction (NO CODE)
+
+**Purpose:** Commission §A1 visual-direction review for every 008 receipt + UI surface variant.
+**Gates:** §A0 ✅ + §A1 commission. **Held.**
+
+- [ ] **T010** Commission Slice 0 visual-direction review covering: (a) `first_print` bilingual receipt slip (Arabic-first RTL header, Latin numerals on all numerals, sale-number prominent, sale-level VAT footer with tax-registration ID, branch + terminal_label + cashier display name); (b) `reprint_duplicate` variant with **prominently visible bilingual duplicate-copy marker** ("نسخة طبق الأصل — DUPLICATE COPY") in header band — large weight, top-of-slip, obvious at counter distance (~1.5 m glance); (c) `preview` variant matching `first_print` content; (d) preview UI panel; (e) reprint affordance; (f) **persistent printer-failure banner** (non-modal, no auto-dismiss, retry / reprint / manual-override affordances; 44×44 floor); (g) **persistent drawer-failure manual-override banner** (non-modal, no auto-dismiss, includes `last_successful_open_at` relative timestamp). Output: `specs/008-sale-finalization-and-receipts/visual-direction/README.md`. No code — `specs/008-sale-finalization-and-receipts/visual-direction/README.md`
+- [ ] **T011** Slice 0 review record signed (reviewer, date, result `approved` or `approved-with-revisions`, all seven sub-items above ticked); §A1 sign-off recorded — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 3 — Slice 1 *(load-bearing)*: Finalization listener + persistence + 006 wiring
+
+**Purpose:** Author the five new SQLite tables + append-only triggers + indices + audit-category extension; implement the AD-2 main-process in-process listener subscribing to 006's `payment.settled`; implement the AD-7 sale-number allocator; implement the atomic finalize transaction; implement `sales.*` read-only bridge handlers; implement the force-fail / reversal_pending refusal guard.
+**Gates:** §A0 ✅ + §A1 (Slice 0 sign-off) + **§A2 (no-op confirmed)** + **§A3 (table review + migration sign-off)** + **§A4 (bridge-API review)**. **All held.**
+**User stories:** US1 acceptance scenarios 1 (durable finalization), 2 (sale number), 10 (force-fail refusal), 14 (sync-handoff staging).
+**Test floor:** ≥ 95 % on AD-2 transaction, AD-7 allocator, refusal guard, `sales.*` read handlers; integration test for kill-mid-finalize recovery; idempotency replay test.
+
+### §A3 migration tasks
+
+- [ ] **T020** [§A3] Migration: create `sales` table per `data-model.md §"Entity: Sale"` with all 21 fields + UNIQUE index on `envelope_handoff_action_id` (AD-2 idempotency anchor) + UNIQUE index on `(terminal_id, sale_number)` (AD-7) + INDEX `(tenant_id, branch_id, terminal_id)` + INDEX `(terminal_id, local_calendar_day)` — `migrations/008-0001_create_sales.sql`
+- [ ] **T021** [§A3] Migration: append-only triggers on `sales` (BEFORE UPDATE → RAISE ABORT 'sales is append-only — UPDATE denied (008 AD-3)'; BEFORE DELETE → same shape) — `migrations/008-0001b_sales_append_only_trigger.sql`
+- [ ] **T022** [§A3] [P] Migration: create `print_events` table per `data-model.md §"Entity: PrintEvent"` + FK → `sales.sale_id` + INDEX `(sale_id)` + INDEX `(sale_id, purpose, outcome, printed_at DESC)` + append-only triggers — `migrations/008-0002_create_print_events.sql`
+- [ ] **T023** [§A3] [P] Migration: create `drawer_events` table per `data-model.md §"Entity: DrawerEvent"` + FK → `sales.sale_id` + **UNIQUE index on `(sale_id)`** (FR-053 double-kick suppression at schema layer) + INDEX `(terminal_id, attempted_at DESC)` + append-only triggers — `migrations/008-0003_create_drawer_events.sql`
+- [ ] **T024** [§A3] [P] Migration: create `sale_sync_outbox` table per `data-model.md §"Entity: SaleSyncOutbox"` + FK → `sales.sale_id` + **UNIQUE index on `(sale_id)`** (one outbox row per sale, FR-060) + INDEX `(tenant_id, branch_id, terminal_id, state, enqueued_at)` (future sync-engine scan path) + append-only triggers — `migrations/008-0004_create_sale_sync_outbox.sql`
+- [ ] **T025** [§A3] [P] Migration: create `sale_number_sequences` table per `data-model.md §"Entity: SaleNumberSequences"` with composite primary key `(terminal_id, calendar_day_local)` + `next_sequence INTEGER NOT NULL DEFAULT 1` + `updated_at` — **no append-only trigger** (this is the only mutable 008 table) — `migrations/008-0005_create_sale_number_sequences.sql`
+- [ ] **T026** [§A3] Migration: extend 004's `audit_events.action_category` enum / CHECK with the 10 new 008 categories (`sale.finalized`, `sale.finalization_refused`, `sale.receipt.printed`, `sale.receipt.reprinted`, `sale.receipt.print_failed`, `sale.receipt.print_retried_success`, `sale.receipt.manual_override`, `sale.drawer.opened`, `sale.drawer.suppressed`, `sale.drawer.failed`) — `migrations/008-0006_extend_audit_event_categories.sql`
+- [ ] **T027** [§A3] Test (integration): apply all six migrations against a fresh better-sqlite3 file; assert schemata match `data-model.md`; assert append-only triggers refuse UPDATE and DELETE on each of the four append-only tables; assert UNIQUE constraint on `drawer_events.sale_id` and `sale_sync_outbox.sale_id` — `tests/integration/sales/migrations.test.ts`
+- [ ] **T028** [§A3] Record §A3 migration review sign-off (reviewer, date) — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+### Shared types (compile-time contract)
+
+- [ ] **T030** [P] [US1] Test (contract, failing): `src/shared/bridge-api.ts` extends `BridgeApi` interface with `sales.read`, `sales.findByNumber`, `sales.subscribe`, `sales.unsubscribe` (read-only Slice-1 subset; mutating `receipts.*` lands Slice 2+). Compile-time assert — `tests/contract/sales/bridge-api.contract.test.ts`
+- [ ] **T031** [US1] Implement Slice-1 subset of `sales.*` types in shared bridge-api.ts: Request / Response shapes per `contracts/bridge-api.md §"Namespace: sales.*"`; refusal envelope `{ kind: 'refused', reason: ... }` with the closed reason enum (8 values per contract) — `src/shared/bridge-api.ts`
+- [ ] **T032** [P] [US1] Implement shared sale types module: `SaleId`, `SaleNumber`, `TenderLineSummary`, `PrintEventSummary`, `DrawerEventSummary`, `RefusalReason` (closed union) — `src/shared/sales/types.ts`
+- [ ] **T033** [P] [US1] Implement shared receipt-payload types module: `ReceiptPayload` (canonical FR-017 fields), `ReceiptTemplateVariant` (`'first_print' | 'reprint_duplicate' | 'preview'`) — `src/shared/receipts/types.ts`
+
+### TDD test tasks — AD-7 sale-number allocator
+
+- [ ] **T040** [P] [US1] Test (failing): `allocateSaleNumber({ terminal_id, terminal_label, local_calendar_day })` returns `<terminal_label>-<YYYY-MM-DD>-<NNNNNN>` with `<NNNNNN>` zero-padded 6-digit monotonic per `(terminal_id, calendar_day_local)`; first call returns `…-000001`, second returns `…-000002`, etc. — `tests/unit/main/sales/sale-number-allocator.format.test.ts`
+- [ ] **T041** [P] [US1] Test (failing): allocator returns `…-000001` for a *new* calendar day even when the previous day reached `…-000847`; sequence resets at the local-timezone midnight boundary (AD-7 / research §R-7) — `tests/unit/main/sales/sale-number-allocator.day-reset.test.ts`
+- [ ] **T042** [P] [US1] Test (failing): two concurrent finalize transactions on the same `(terminal_id, calendar_day_local)` produce two **different** sale numbers; SQLite transaction-level isolation + composite PK on `sale_number_sequences` makes the increment safe — `tests/integration/sales/sale-number-allocator.concurrent.test.ts`
+- [ ] **T043** [P] [US1] Test (failing): allocator runs INSIDE the atomic finalize transaction; a transaction rollback rolls back the sequence increment (gap-free not required by FR-010, but rollback-safety is — research §R-7) — `tests/integration/sales/sale-number-allocator.txn-rollback.test.ts`
+
+### TDD test tasks — AD-2 finalize transaction + listener
+
+- [ ] **T050** [P] [US1] Test (failing): AD-2 atomic finalize transaction allocates `sale_number` (via AD-7 allocator) → INSERT `sales` row → INSERT `sale_sync_outbox` row (state='pending') → emit `sale.finalized` audit event → all four rows present and commit atomically — `tests/integration/sales/finalize-transaction.atomicity.test.ts`
+- [ ] **T051** [P] [US1] Test (failing): duplicate finalize on the same `envelope.handoff_action_id` is a no-op returning the existing `sale_id` (Constitution §P5 / FR-001 / SC-009); no second `sales` row created, no second `sale_sync_outbox` row, no second `sale.finalized` audit event — `tests/unit/main/sales/finalize-transaction.idempotent.test.ts`
+- [ ] **T052** [P] [US1] *(revised 2026-05-27 post-external-review R1 — was "subscribes to 006's in-process event channel"; corrected to SQLite update_hook)* Test (failing): AD-2 listener registers a better-sqlite3 `update_hook` on the shared SQLite connection; when an `audit_events` INSERT with `category='payment.settled'` arrives, the listener reads the 006-shaped payload (per 006 plan AD-9), and calls AD-2 finalize with `envelope.handoff_action_id` as idempotency key. The hook MUST filter by `tbl_name='audit_events' AND category='payment.settled'` to avoid firing on unrelated writes — `tests/unit/main/sales/finalize-listener.update-hook.test.ts`
+- [ ] **T053** [P] [US1] Test (failing): kill-mid-finalize integration — start an AD-2 transaction, inject a panic between the `sales` INSERT and the COMMIT; restart the listener; assert no partial state (no orphan `print_events` / `drawer_events` / `sale_sync_outbox` for this `handoff_action_id`); the recovery scan (R-15) re-fires AD-2 on next start and produces a complete sale — `tests/integration/sales/finalize-transaction.kill-mid-flight.test.ts`
+- [ ] **T054** [P] [US1] Test (failing): AD-2 startup recovery scan — on listener startup, scan `audit_events` for `category='payment.settled'` rows whose `handoff_action_id` has no matching `sales` row; for each, fire AD-2 finalize once. Idempotent on `handoff_action_id` per T051. Scan bounded by current terminal's tenant/branch/terminal — `tests/integration/sales/finalize-listener.startup-recovery.test.ts`
+
+### TDD test tasks — force-fail / reversal_pending refusal guard
+
+- [ ] **T055** [P] [US1] Test (failing): AD-2 listener refuses to finalize when the source 006 attempt is in `force_failed` state (FR-005 / FR-045); emits `sale.finalization_refused` with `refusal_reason='force_failed_attempt'`; no `sales` row created — `tests/unit/main/sales/finalize-listener.refuse-force-failed.test.ts`
+- [ ] **T056** [P] [US1] Test (failing): AD-2 listener refuses to finalize when any of the attempt's `payment_tender_lines` is in `reversal_pending` state (FR-005 / FR-046); emits `sale.finalization_refused` with `refusal_reason='reversal_pending_line'`; no `sales` row created — `tests/unit/main/sales/finalize-listener.refuse-reversal-pending.test.ts`
+- [ ] **T057** [P] [US1] Test (failing): AD-2 listener refuses to finalize when the listener is fed a payload claiming `state != 'settled'` (defensive guard per FR-047 / Path F in quickstart); emits `sale.finalization_refused` with `refusal_reason='source_attempt_not_settled'`; Sentry high-severity event captured — `tests/unit/main/sales/finalize-listener.refuse-not-settled.test.ts`
+
+### TDD test tasks — forbidden-field validation (data-model defensive guard)
+
+- [ ] **T060** [P] [US1] Test (failing): AD-2 finalize validates `tender_lines_summary_json` against the forbidden-field key list (PAN / CVV / track / cardholder / expiry / auth_payload / cryptogram per FR-070); INSERT refused with `sale.finalization_refused` + `refusal_reason='forbidden_field_in_tender_summary'` if any forbidden key is detected at any tree depth — `tests/unit/main/sales/finalize-transaction.forbidden-card-fields.test.ts`
+- [ ] **T061** [P] [US1] Test (failing): AD-2 finalize refuses on voucher forbidden keys (voucher_code / voucher_balance / voucher_redemption_intent_token / authority_payload per FR-071); same `forbidden_field_in_tender_summary` refusal — `tests/unit/main/sales/finalize-transaction.forbidden-voucher-fields.test.ts`
+- [ ] **T062** [P] [US1] Test (failing): AD-2 finalize refuses on secret-credential keys (pin / jwt / device_token per FR-072) and raw-envelope keys (envelope_payload / raw_envelope per FR-074) — `tests/unit/main/sales/finalize-transaction.forbidden-secret-fields.test.ts`
+
+### TDD test tasks — `sales.*` bridge handlers (Slice 1 subset)
+
+- [ ] **T070** [P] [US1] Test (failing): `sales.read` requires active session; tenant/branch/terminal isolation enforced; sale-not-found refuses with `sale_not_found`; success returns the `sales.read` payload shape per `contracts/bridge-api.md` (excludes `envelope_handoff_action_id`, `payment_attempt_id`, `envelope_cart_id`, `tenant_tax_registration_id` — main-only fields) — `tests/unit/main/sales/bridge.sales-read.test.ts`
+- [ ] **T071** [P] [US1] Test (failing): `sales.findByNumber` is tenant-isolation scoped — cross-tenant misses refuse with `sale_not_found` (NOT `tenant_isolation`, to avoid information leak; §A4 checklist item 6) — `tests/unit/main/sales/bridge.sales-find-by-number.test.ts`
+- [ ] **T072** [P] [US1] Test (failing): `sales.subscribe(topic='recent')` emits on every new `sale.finalized` audit event for the current terminal; payload is compact (sale_id, sale_number, finalized_at); unsubscribe via token detaches the listener — `tests/unit/main/sales/bridge.sales-subscribe-recent.test.ts`
+- [ ] **T073** [P] [US1] Test (failing): defensive forbidden-field guard at `sales.*` bridge handler entry refuses requests with any forbidden key in the request payload (`reason='forbidden_field_in_request'`); §A4 checklist item 2 — `tests/unit/main/sales/bridge.sales-forbidden-field-guard.test.ts`
+
+### Implementation — persistence layer
+
+- [ ] **T080** [US1] Implement migration runner registration for the six new 008 migrations (compose with 001's existing better-sqlite3 transactional runner; runs in numeric order: 0001 → 0001b → 0002 → 0003 → 0004 → 0005 → 0006) — `src/main/db/migrations-registry.ts`
+- [ ] **T081** [P] [US1] Implement `sales` repository: `insert(saleRow)`, `readById(sale_id)`, `findByNumber(sale_number, tenantScope)`, `findByHandoffActionId(handoff_action_id)` (returns sale or null — used by AD-2 idempotency check); all reads tenant-scoped — `src/main/sales/repositories/sales.repository.ts`
+- [ ] **T082** [P] [US1] Implement `print_events` repository: `insert(row)`, `readBySale(sale_id)` (ordered by `printed_at DESC`), `hasSuccessfulPrint(sale_id)` (boolean projection for AD-10 reprint-precondition check), `countReprints(sale_id)` (for `duplicate_copy_sequence_number` allocation) — `src/main/sales/repositories/print-events.repository.ts`
+- [ ] **T083** [P] [US1] Implement `drawer_events` repository: `insert(row)`, `readBySale(sale_id)` (returns the ≤1 row), `findLastSuccessfulOpenForTerminal(terminal_id)` (returns `attempted_at` or null — used by `sale.drawer.failed` audit payload per Constitution Principle IV) — `src/main/sales/repositories/drawer-events.repository.ts`
+- [ ] **T084** [P] [US1] Implement `sale_sync_outbox` repository: `insert(row)`, `readBySale(sale_id)`. **No `update` method** (state column not transitioned by 008; AD-11) — `src/main/sync-outbox/sale-sync-outbox.repository.ts`
+- [ ] **T085** [P] [US1] Implement `sale_number_sequences` allocator (the AD-7 module): `allocate({ terminal_id, terminal_label, local_calendar_day }) → sale_number` via UPSERT-and-increment inside the caller's SQLite transaction; uses SQLite `INSERT … ON CONFLICT … DO UPDATE … SET next_sequence = next_sequence + 1 RETURNING next_sequence`; pads to 6 digits — `src/main/sales/sale-number-allocator.ts`
+
+### Implementation — AD-2 listener + finalize transaction
+
+- [ ] **T090** [US1] *(revised 2026-05-27 post-external-review R1)* Implement the AD-2 listener module: at main-process startup, register a better-sqlite3 `update_hook` callback on the shared SQLite connection (the same connection the migration runner / repositories use); the callback filters by `tbl_name='audit_events' AND category='payment.settled'`, reads the row's `payment_attempt_id`, fetches the 006-shaped payload via a follow-up `SELECT` (the hook itself must return immediately — finalize work runs outside the hook's transactional context), and dispatches AD-2 finalize with `envelope.handoff_action_id` as idempotency key. **No `EventEmitter` import from 006.** — `src/main/sales/finalize-listener.ts`
+- [ ] **T091** [US1] Implement the AD-2 atomic finalize transaction module: (1) check `sales.findByHandoffActionId` for idempotency, (2) allocate sale_number via T085, (3) validate `tender_lines_summary_json` against forbidden-field list (T060–T062), (4) refusal guard against `force_failed` / `reversal_pending` / `not_settled` source attempt (T055–T057), (5) INSERT `sales` row, (6) INSERT `sale_sync_outbox` row with `state='pending'`, (7) emit `sale.finalized` audit event into 004's `audit_events` — all inside one SQLite transaction — `src/main/sales/finalize-transaction.ts`
+- [ ] **T092** [US1] *(revised 2026-05-27 post-external-review R1 — recovery scan is now load-bearing as the durability path; the update_hook is the latency optimisation)* Implement the AD-2 startup recovery scan (per research §R-15): on startup, **before** the `update_hook` is registered, scan `audit_events` for `category='payment.settled'` rows scoped to the current terminal whose `handoff_action_id` has no matching `sales` row; for each, dispatch AD-2 finalize (idempotent per T051). After the scan completes, register the `update_hook` from T090. This ordering closes the race window where a `payment.settled` row could land between scan-start and hook-registration. The scan does NOT block live event handling for subsequent rows — `src/main/sales/finalize-listener.ts`
+- [ ] **T093** [US1] [P] Implement the 008-side audit-event emitter: writes into 004's `audit_events` table with all ten new 008 categories per AD-9 + the payload shapes from `data-model.md`. The emitter MUST redact `external_reference` to `*****` in any pino log line and MUST refuse to emit a payload containing any forbidden-field key (defence-in-depth) — `src/main/sales/audit-emitter.ts`
+
+### Implementation — `sales.*` bridge handlers (Slice 1 subset)
+
+- [ ] **T100** [US1] Implement `sales.read` bridge handler with `requireOperatorSession` gate + tenant-isolation scoping + the payload shape from `contracts/bridge-api.md §"sales.read"` (main-only fields excluded) + the defensive forbidden-field-in-request guard — `src/main/sales/sales-bridge.ts`
+- [ ] **T101** [P] [US1] Implement `sales.findByNumber` bridge handler — scoped tenant/branch/terminal lookup; cross-tenant misses refuse with `sale_not_found` (no `tenant_isolation` leak) — `src/main/sales/sales-bridge.ts`
+- [ ] **T102** [P] [US1] Implement `sales.subscribe` + `sales.unsubscribe` bridge handlers — `recent` topic emits compact sale summary on every new `sale.finalized` audit event; subscription token model mirrors 005 / 006 — `src/main/sales/sales-bridge.ts`
+- [ ] **T103** [US1] Wire the `sales.*` bridge into 008's preload `contextBridge.exposeInMainWorld` surface; add `src/preload/sales.ts` and register in the central preload entry — `src/preload/sales.ts`
+- [ ] **T104** [§A4] Record §A4 security-review sign-off for the `sales.*` bridge surface against the eight-item checklist in `contracts/bridge-api.md §"§A4 security-review checklist"` — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+### Slice 1 verification
+
+- [ ] **T110** Run `npx vitest tests/unit/main/sales/ tests/unit/shared/sales/ tests/integration/sales/` with coverage; assert ≥ 95 % on AD-2 transaction, AD-7 allocator, refusal guard, audit emitter, repositories; assert ≥ 95 % on `sales.*` bridge handlers — `tests/`
+- [ ] **T111** Manual smoke (dev fixture): run a 006 cash-only payment through to `payment.settled` in a dev build with 008 enabled; observe `sales` row + `sale_sync_outbox` row + `sale.finalized` audit event present; observe correct sale_number format `<terminal_label>-<YYYY-MM-DD>-000001` — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T112** Manual smoke (dev fixture): kill the dev process mid-finalize (between the AD-2 atomic-commit point and the next event); restart; assert recovery scan re-fires AD-2 and produces a complete sale — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T113** Record Slice 1 functional sign-off + per-module coverage numbers in coordination.md; §A2 no-op confirmed; §A3 + §A4 sign-offs cross-referenced — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 4 — Slice 2: Receipt payload generation + preview
+
+**Purpose:** Implement the AD-6 receipt template engine (single source, dual output: ESC/POS bytes + HTML/canvas) reading from the persisted Sale row; ship the three bilingual template asset variants; implement `receipts.preview` bridge handler; implement renderer preview panel. **No actual printing or drawer kicking in this slice.**
+**Gates:** §A1 (Slice 0 sign-off; template asset signed off) + §A2 (no-op) + §A4 (bridge review). **Held.**
+**User stories:** US1 acceptance scenarios 3 (payload from durable sale), 6 (preview), 13 (attribution), 11 (voucher-safe), 12 (external-card-safe).
+**Test floor:** ≥ 95 % on the template engine; ≥ 90 % on the preview UI; byte-stability tests; voucher-data + card-data minimisation tests.
+
+### TDD test tasks — template engine
+
+- [ ] **T120** [P] [US1] Test (failing): AD-6 template engine reads a `first_print.bilingual.template` asset + a canonical `ReceiptPayload` from a Sale row and emits two outputs: an ESC/POS byte stream + an HTML string. Both outputs derive from the **same** template + same payload (R-6 single-source) — `tests/unit/main/receipts/template-engine.dual-output.test.ts`
+- [ ] **T121** [P] [US1] Test (failing): byte-stability — regenerating the payload + rendering twice for the same Sale produces byte-identical outputs (modulo the reprint-marker and time-of-print field which are template-variant-controlled) (FR-016) — `tests/unit/main/receipts/template-engine.byte-stable.test.ts`
+- [ ] **T122** [P] [US1] Test (failing): Arabic-first RTL rendering — the template engine emits Arabic content in RTL flow direction; English fallback panel renders alongside; Latin numerals are used for every numeric field on the *printed* output (FR-066) — `tests/unit/main/receipts/template-engine.bilingual-rtl.test.ts`
+- [ ] **T123** [P] [US1] Test (failing): `reprint_duplicate` template variant emits the bilingual marker "نسخة طبق الأصل — DUPLICATE COPY" in the header band, bold, top-of-slip; the marker is **absent** in `first_print` and `preview` variants (FR-029) — `tests/unit/main/receipts/template-engine.duplicate-marker.test.ts`
+- [ ] **T124** [P] [US1] Test (failing): currency / date / time formatting goes through the existing `formatters` module — never inlined (FR-067; Constitution Localization) — `tests/unit/main/receipts/template-engine.formatters.test.ts`
+- [ ] **T125** [P] [US1] Test (failing): sale-level VAT footer renders `total_tax_minor` formatted via `formatters` + the tenant's tax-registration ID; **no per-line VAT column** is rendered (clarifications 2026-05-27) — `tests/unit/main/receipts/template-engine.vat-footer.test.ts`
+
+### TDD test tasks — receipt payload minimisation
+
+- [ ] **T130** [P] [US1] Test (failing): rendered receipt payload (HTML AND ESC/POS bytes) contains NO PAN / CVV / track data / cardholder name / expiry / auth payload / approval code / cryptogram / raw terminal-printed receipt text — across every tender mix fixture in `quickstart.md §"Test fixtures"` (FR-070, Constitution §P6) — `tests/unit/main/receipts/template-engine.card-data-minimisation.test.ts`
+- [ ] **T131** [P] [US1] Test (failing): rendered receipt payload contains NO voucher code / voucher balance / voucher holder PII / voucher redemption intent token / raw voucher authority response — across voucher fixtures (FR-071, Constitution §P7) — `tests/unit/main/receipts/template-engine.voucher-data-minimisation.test.ts`
+- [ ] **T132** [P] [US1] Test (failing): `external_reference` appears on the slip ONLY when the input Sale row's `tender_lines_summary_json` carries it (i.e. when 006 OQ-PLAN-5 resolves permissively); when absent from the Sale, it's absent from the slip (R-13) — `tests/unit/main/receipts/template-engine.external-reference-conditional.test.ts`
+- [ ] **T133** [P] [US1] Test (failing): `voucher_authority_redemption_id` appears on the slip ONLY when the Sale row carries it; when absent, it's absent (FR-017 / R-13) — `tests/unit/main/receipts/template-engine.voucher-redemption-id-conditional.test.ts`
+- [ ] **T134** [P] [US1] Test (failing): tender summary rows use the generic bilingual labels ("Cash / نقدًا", "Card / بطاقة", "Voucher / قسيمة"); no tender-specific identifier beyond the conditional fields above (FR-035 / FR-036 / FR-037) — `tests/unit/main/receipts/template-engine.tender-labels.test.ts`
+
+### TDD test tasks — `receipts.preview` bridge handler
+
+- [ ] **T140** [P] [US1] Test (failing): `receipts.preview({ sale_id, idempotency_key })` returns the HTML preview output for the given sale; tenant-isolation scoped; refuses with `sale_not_found` on miss — `tests/unit/main/receipts/bridge.receipts-preview.test.ts`
+- [ ] **T141** [P] [US1] Test (failing): `receipts.preview` does NOT emit a `receipts.print` command, does NOT kick the drawer, does NOT mutate the Sale — `tests/unit/main/receipts/bridge.receipts-preview.no-side-effects.test.ts`
+- [ ] **T142** [P] [US1] Test (failing): defensive forbidden-field guard at `receipts.preview` handler entry refuses requests with any forbidden key in the request payload (`reason='forbidden_field_in_request'`) — `tests/unit/main/receipts/bridge.receipts-preview.forbidden-field-guard.test.ts`
+
+### TDD test tasks — renderer preview surface
+
+- [ ] **T150** [P] [US1] Test (failing): `<ReceiptPreview>` component fetches via `receipts.preview` and renders the HTML output in a scrollable panel; visually mirrors the printed slip (44×44 floor on any interactive control per FR-068) — `tests/unit/renderer/receipts/ReceiptPreview.test.tsx`
+- [ ] **T151** [P] [US1] Test (failing): `<ReceiptPreview>` does not block the cashier from starting the next sale; preview panel is dismissible without side-effect — `tests/unit/renderer/receipts/ReceiptPreview.non-blocking.test.tsx`
+- [ ] **T152** [P] [US1] Test (failing): accessibility — `<ReceiptPreview>` is keyboard-operable (tab to close, escape to dismiss); axe-rule clean on default state (FR-069, P14 / 004 NFR-005) — `tests/unit/renderer/receipts/ReceiptPreview.a11y.test.tsx`
+
+### Implementation tasks — template engine + assets
+
+- [ ] **T160** [US1] Implement the AD-6 template engine: parses a template asset (data + layout description), takes a `ReceiptPayload`, emits ESC/POS bytes + HTML from one render call. ≤ 200 LOC first-party module (R-6: no Handlebars / EJS / Mustache dependency) — `src/main/receipts/templates/engine.ts`
+- [ ] **T161** [P] [US1] Author the `first_print.bilingual.template` asset (data + layout description for Arabic-first RTL header, body, sale-level VAT footer) signed off by §A1 — `src/main/receipts/templates/first-print.bilingual.template`
+- [ ] **T162** [P] [US1] Author the `reprint_duplicate.bilingual.template` asset — same body as `first_print` but with the prominent bilingual duplicate-copy marker in the header band — `src/main/receipts/templates/reprint-duplicate.bilingual.template`
+- [ ] **T163** [P] [US1] Author the `preview.bilingual.template` asset — same content as `first_print` for the renderer preview panel (FR-025 / R-14 byte-stability) — `src/main/receipts/templates/preview.bilingual.template`
+- [ ] **T164** [P] [US1] Implement `receipts-payload.ts` — derives the canonical `ReceiptPayload` from a persisted `sales` row (and the cached fields it carries); never re-reads `cart_lines`, never calls catalogue API, never re-validates voucher (FR-015) — `src/main/receipts/receipts-payload.ts`
+
+### Implementation tasks — bridge + renderer
+
+- [ ] **T170** [US1] Implement `receipts.preview` bridge handler: gates on `requireOperatorSession`; reads Sale via `sales.repository`; derives payload via T164; renders HTML via T160; returns `{ kind: 'ok', preview: { html, width_chars, bilingual_locale } }` — `src/main/receipts/receipts-bridge.ts`
+- [ ] **T171** [US1] Extend `src/shared/bridge-api.ts` with `receipts.preview` Request / Response types per `contracts/bridge-api.md §"receipts.preview"` — `src/shared/bridge-api.ts`
+- [ ] **T172** [US1] Wire the `receipts.*` bridge into preload `contextBridge.exposeInMainWorld`; add `src/preload/receipts.ts` and register in the central preload entry — `src/preload/receipts.ts`
+- [ ] **T173** [US1] Implement `<ReceiptPreview>` component: invokes `receipts.preview`, renders the returned HTML in a scrollable preview panel — `src/renderer/ui/receipts/ReceiptPreview.tsx`
+
+### Slice 2 verification
+
+- [ ] **T180** Run `npx vitest tests/unit/main/receipts/ tests/unit/renderer/receipts/` with coverage; assert ≥ 95 % on the template engine + payload derivation, ≥ 90 % on the preview component — `tests/`
+- [ ] **T181** Manual smoke (dev fixture): drive a 006 settlement → 008 finalize → preview a receipt; observe Arabic-first RTL layout, Latin numerals, correct sale number, sale-level VAT footer, no voucher / card data — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T182** Record Slice 2 functional sign-off + per-component coverage in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 5 — Slice 3 *(load-bearing)*: First-print pipeline (ESC/POS direct + OS-print fallback)
+
+**Purpose:** Implement the print pipeline: ESC/POS adapter + OS-print fallback with path-selection; `receipts.print` internal main-process handler (fires automatically on AD-2 finalize); `receipts.retryPrint` renderer-callable handler for retry-after-failure; `print_events` row INSERT on success / failure; audit event emission; persistent printer-failure banner (renderer).
+**Gates:** §A1 (Slice 0 sign-off + banner visuals signed off) + §A2 (no-op) + **§A3 (hardware bring-up record in `docs/hardware-matrix.md`)** + §A4 (bridge review). **Held.**
+**User stories:** US1 acceptance scenarios 4 (cash sale prints + drawer opens — drawer half is Slice 4), 5 (cashless prints without drawer — drawer half is Slice 4), 8 (printer failure stays loud).
+**Test floor:** ≥ 95 % on the print pipeline; printer-failure loud-banner test; retry-success-treated-as-first-print test (FR-052).
+
+### §A3 hardware-matrix tasks
+
+- [ ] **T200** [§A3] Confirm the chosen thermal printer + cash drawer model pair from T006; record vendor, model, driver version in `docs/hardware-matrix.md` under "008 §A3 bring-up — IN PROGRESS"; record any known caveats — `docs/hardware-matrix.md`
+- [ ] **T201** [§A3] Pick the ESC/POS library: confirm `node-thermal-printer` (or equivalent) as the chosen library; record the choice + transitive-dependency audit + license review in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T202** [§A3] Add the chosen ESC/POS library to `package.json` (production dep); run `npm install` and commit the lockfile change — `package.json` + `package-lock.json`
+
+### TDD test tasks — print pipeline path selection
+
+- [ ] **T210** [P] [US1] Test (failing): path selection — when the connected printer reports ESC/POS support (status byte check), the print pipeline dispatches via the ESC/POS adapter; otherwise falls back to `webContents.print` — `tests/unit/main/receipts/print-pipeline.path-selection.test.ts`
+- [ ] **T211** [P] [US1] Test (failing): both paths render from the same payload + same template; byte-stability of *user-visible fields* holds across paths (R-4 mitigation; layout differences allowed in width/font fallback, content differences refused) — `tests/unit/main/receipts/print-pipeline.both-paths-byte-stable.test.ts`
+- [ ] **T212** [P] [US1] Test (failing): cashier is not exposed to which path was used unless print fails; success returns `render_path` for audit only — `tests/unit/main/receipts/print-pipeline.path-opaque-to-cashier.test.ts`
+
+### TDD test tasks — ESC/POS adapter
+
+- [ ] **T220** [P] [US1] Test (failing): ESC/POS adapter writes the byte stream + polls the status byte; returns success on "ok" status; returns typed failure on "paper out" / "jam" / "offline" / "unknown" status — `tests/unit/main/receipts/escpos-adapter.status-handling.test.ts`
+- [ ] **T221** [P] [US1] Test (failing): ESC/POS adapter timeout — if status poll exceeds the timeout (configured per Constitution §IV), returns `escpos_status_unknown` failure; sale row remains durable — `tests/unit/main/receipts/escpos-adapter.timeout.test.ts`
+
+### TDD test tasks — OS-print fallback
+
+- [ ] **T230** [P] [US1] Test (failing): OS-print fallback path invokes `webContents.print` with the HTML rendering; success callback → INSERT `print_events` row with `render_path='os_print', outcome='success'`; failure callback → INSERT with `outcome='failure', failure_reason='os_print_error'` — `tests/unit/main/receipts/print-pipeline.os-print-fallback.test.ts`
+
+### TDD test tasks — first-print flow + audit
+
+- [ ] **T240** [P] [US1] Test (failing): on AD-2 finalize completion, `receipts.print` internal handler fires automatically; renders payload + dispatches print + writes `print_events` row on success; emits `sale.receipt.printed` audit event with `render_path` + `print_event_id` — `tests/integration/sales/print-pipeline.auto-fires-on-finalize.test.ts`
+- [ ] **T241** [P] [US1] Test (failing): print failure → `print_events` row written with `outcome='failure'` + closed `failure_reason` enum (`printer_offline` / `printer_out_of_paper` / `printer_jam` / `os_print_error` / `escpos_write_failure` / `escpos_status_unknown`); emits `sale.receipt.print_failed` audit event; **Sale row remains durable** (no rollback) — `tests/integration/sales/print-pipeline.failure-keeps-sale-durable.test.ts`
+- [ ] **T242** [P] [US1] Test (failing): the full receipt payload (HTML or ESC/POS bytes) does NOT appear in any pino log, Sentry event, audit-event row, or support bundle (FR-071 inheritance; AD-9 redaction discipline) — `tests/unit/main/receipts/print-pipeline.payload-not-logged.test.ts`
+
+### TDD test tasks — retry-print flow
+
+- [ ] **T250** [P] [US1] Test (failing): `receipts.retryPrint({ sale_id, idempotency_key })` re-runs the print pipeline; success → INSERT `print_events` row with `purpose='retry_after_failure', outcome='success', previous_failed_print_event_ids=[<failed-row-ids>]`; emits `sale.receipt.print_retried_success` audit event — `tests/unit/main/receipts/bridge.receipts-retry-print.success.test.ts`
+- [ ] **T251** [P] [US1] Test (failing): a retry that succeeds is treated as the canonical first print (FR-052) — no duplicate-copy marker, drawer-kick eligible on a cash-inclusive sale (the drawer-kick gating itself is Slice 4; this test asserts only that the audit event shape and the `print_events` row support this) — `tests/unit/main/receipts/bridge.receipts-retry-print.first-print-semantics.test.ts`
+- [ ] **T252** [P] [US1] Test (failing): a still-failed retry returns `kind:'ok'` with `outcome:'failure'` (NOT `kind:'refused'`) because the retry attempt itself was accepted (Path C in quickstart) — `tests/unit/main/receipts/bridge.receipts-retry-print.still-failed.test.ts`
+- [ ] **T253** [P] [US1] Test (failing): idempotency replay — identical-payload `receipts.retryPrint` is a no-op returning the original outcome; payload-mismatch refuses with `idempotency_payload_mismatch` (Constitution §P5) — `tests/unit/main/receipts/bridge.receipts-retry-print.idempotent.test.ts`
+
+### TDD test tasks — persistent printer-failure banner
+
+- [ ] **T260** [P] [US1] Test (failing): `<PrinterFailureBanner>` mounts whenever the latest `print_events` row for a recently finalized sale has `outcome='failure'`; banner is non-modal, **does not auto-dismiss**, includes three affordances (Retry print / Reprint / Manual receipt override) each ≥ 44×44 px (NFR-002 / Constitution §IV / FR-068) — `tests/unit/renderer/receipts/PrinterFailureBanner.persistence.test.tsx`
+- [ ] **T261** [P] [US1] Test (failing): banner observes `sales.subscribe(topic='banner_state')` for live banner-state updates — `tests/unit/renderer/receipts/PrinterFailureBanner.subscription.test.tsx`
+- [ ] **T262** [P] [US1] Test (failing): banner Reprint button is **disabled** until a successful print exists (per AD-10 reprint precondition); banner Retry button always enabled while in failure state; Manual override always enabled while in failure state — `tests/unit/renderer/receipts/PrinterFailureBanner.affordance-gating.test.tsx`
+- [ ] **T263** [P] [US1] Test (failing): accessibility — banner is keyboard-operable, has screen-reader landmark, focus management lands on the banner when it first mounts (P14) — `tests/unit/renderer/receipts/PrinterFailureBanner.a11y.test.tsx`
+
+### Implementation tasks — print pipeline
+
+- [ ] **T270** [US1] Implement the ESC/POS adapter wrapper around the chosen library (T201–T202): write-and-status-poll API with timeout + typed failure result — `src/main/receipts/escpos-adapter.ts`
+- [ ] **T271** [P] [US1] Implement the OS-print fallback wrapper around `webContents.print`: callback-to-promise adapter returning success / typed failure — `src/main/receipts/os-print-adapter.ts`
+- [ ] **T272** [US1] Implement the print pipeline module (`print-pipeline.ts`): renders payload via Slice 2's template engine → path-selects (ESC/POS preferred, OS-print fallback) → awaits ack → INSERTs `print_events` row → emits audit event — `src/main/receipts/print-pipeline.ts`
+- [ ] **T273** [US1] Wire the print pipeline into AD-2 finalize completion: after `sale.finalized` audit emit, dispatch the print pipeline asynchronously (the print is NOT part of the AD-2 atomic transaction; the Sale row stays durable regardless of print outcome) — `src/main/sales/finalize-listener.ts`
+
+### Implementation tasks — `receipts.*` mutating handlers (retry)
+
+- [ ] **T280** [US1] Implement `receipts.retryPrint` bridge handler: gate + idempotency + re-runs print pipeline + writes the `previous_failed_print_event_ids` lineage on the new `print_events` row — `src/main/receipts/receipts-bridge.ts`
+- [ ] **T281** [US1] Extend `src/shared/bridge-api.ts` with `receipts.retryPrint` Request / Response types per `contracts/bridge-api.md §"receipts.retryPrint"` (note the three-way response: success, refused, still-failed) — `src/shared/bridge-api.ts`
+
+### Implementation tasks — renderer banner
+
+- [ ] **T290** [US1] Implement `<PrinterFailureBanner>` component: subscribes to `sales.subscribe(topic='banner_state')`; renders the three affordances; no auto-dismiss; ≥44×44 controls — `src/renderer/ui/receipts/PrinterFailureBanner.tsx`
+- [ ] **T291** [P] [US1] Wire the banner mount into the renderer's persistent-banner host (per 003 / 007 banner-host pattern; layered on top of connection-state / operator-session banners per NFR-008) — `src/renderer/ui/banners/BannerHost.tsx`
+
+### Slice 3 verification
+
+- [ ] **T300** Run `npx vitest tests/unit/main/receipts/ tests/integration/sales/print-pipeline*.test.ts tests/unit/renderer/receipts/PrinterFailureBanner*` with coverage; assert ≥ 95 % on the print pipeline + adapter + retry handler, ≥ 90 % on the banner — `tests/`
+- [ ] **T301** [§A3] Hardware integration test: with a real thermal printer attached, drive a 006 settlement → 008 finalize → receipt prints. Record the result + observations in `docs/hardware-matrix.md` under the test row — `docs/hardware-matrix.md`
+- [ ] **T302** [§A3] Hardware integration test (failure path): with the printer disconnected, drive a 006 settlement → 008 finalize → assert banner persists, sale durable, retry succeeds when printer reconnects, no duplicate-copy marker on the retried slip (FR-052) — `docs/hardware-matrix.md`
+- [ ] **T303** Record Slice 3 functional sign-off + per-module coverage + §A3 hardware-matrix entry in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 6 — Slice 4: Drawer-kick + drawer-failure banner + drawer audit
+
+**Purpose:** Implement the separate ESC/POS DK1/DK2 pulse drawer-kick (AD-8); implement gating (FR-040: only first print of cash-inclusive sale, after print-success ack); implement double-kick suppression (FR-053); implement `drawer_events` row INSERT on opened / suppressed / failed; emit `sale.drawer.*` audit events; implement persistent drawer-failure banner with manual-override affordance.
+**Gates:** §A1 (Slice 0 sign-off; drawer-failure banner visuals signed off) + §A2 (no-op) + §A3 (drawer hardware bring-up record) + §A4 (no new renderer-callable surface — confirm `drawer.*` remains main-only). **Held.**
+**User stories:** US1 acceptance scenarios 4 (drawer opens on cash-inclusive first print), 5 (drawer does NOT open on cashless), 9 (drawer failure doesn't invalidate sale).
+**Test floor:** ≥ 95 % on drawer-kick logic; cashless no-kick test; reprint no-kick test; double-kick suppression test; drawer-failure banner test.
+
+### TDD test tasks — drawer-kick gating
+
+- [ ] **T310** [P] [US1] Test (failing): drawer kick fires ONLY when (a) Sale durably committed, (b) print-success ack received, (c) tender mix includes ≥ 1 applied `cash` line — all three gates per FR-040. Any failure of any gate → no kick — `tests/unit/main/drawer/drawer-kick.gating.test.ts`
+- [ ] **T311** [P] [US1] Test (failing): cashless sale (only `external_card_terminal` and/or `internal_voucher` lines) → drawer NOT kicked; INSERT `drawer_events` row with `outcome='suppressed', suppression_reason='cashless_tender_mix'`; emits `sale.drawer.suppressed` audit event (FR-042) — `tests/unit/main/drawer/drawer-kick.cashless-suppression.test.ts`
+- [ ] **T312** [P] [US1] Test (failing): reprint of a cash-inclusive sale → drawer NOT kicked; the UNIQUE constraint on `drawer_events.sale_id` from Slice 1 prevents a second row (FR-030 / FR-053). The reprint flow does NOT attempt to INSERT a fresh suppressed row either, because the existing `drawer_events` row already captures the sale's drawer history — `tests/integration/sales/drawer-kick.reprint-no-kick.test.ts`
+- [ ] **T313** [P] [US1] Test (failing): double-kick suppression — a print-retry-after-failure on a cash-inclusive sale whose drawer already opened in a partial-success earlier attempt does NOT re-kick; main-side check on existence of `drawer_events` row with `outcome='opened'` (FR-053 / Risk R-5) — `tests/integration/sales/drawer-kick.double-kick-suppression.test.ts`
+
+### TDD test tasks — drawer-kick mechanism (separate-command rule)
+
+- [ ] **T320** [P] [US1] Test (failing): drawer kick is issued as a **separate ESC/POS write** distinct from the receipt byte stream (AD-8); embedded-in-receipt kick is NOT used — assert by inspecting the byte stream of the print attempt and confirming no DK1/DK2 pulse sequence inside it; the kick is a follow-up write — `tests/unit/main/drawer/drawer-kick.separate-command.test.ts`
+- [ ] **T321** [P] [US1] Test (failing): drawer-kick command awaits printer status ack; success → INSERT `drawer_events` with `outcome='opened'`, emits `sale.drawer.opened`; failure → INSERT `drawer_events` with `outcome='failed', failure_reason=<closed enum>`, emits `sale.drawer.failed` with `last_successful_open_at_for_terminal` populated (Constitution §IV) — `tests/unit/main/drawer/drawer-kick.ack-handling.test.ts`
+
+### TDD test tasks — drawer-failure banner
+
+- [ ] **T330** [P] [US1] Test (failing): `<DrawerFailureBanner>` mounts whenever the latest `drawer_events` row for a recently finalized sale has `outcome='failed'`; banner is non-modal, **does not auto-dismiss**, includes the manual-override affordance + the relative `last_successful_open_at` timestamp ("last opened: 2 hours ago"); banner is visually distinct from the printer-failure banner (NFR-008) — `tests/unit/renderer/receipts/DrawerFailureBanner.persistence.test.tsx`
+- [ ] **T331** [P] [US1] Test (failing): banner **does NOT** offer a retry-kick affordance (per quickstart §Path D — retry-kick would either violate FR-053 or have no audit anchor); only the manual-override affordance is offered — `tests/unit/renderer/receipts/DrawerFailureBanner.no-retry.test.tsx`
+- [ ] **T332** [P] [US1] Test (failing): accessibility — banner is keyboard-operable, has screen-reader landmark, focus management lands on the banner when it first mounts; manual-override button ≥ 44×44 px (P14) — `tests/unit/renderer/receipts/DrawerFailureBanner.a11y.test.tsx`
+
+### TDD test tasks — drawer audit redaction
+
+- [ ] **T340** [P] [US1] Test (failing): drawer-event audit payloads contain NO sensitive fields (no PAN, no voucher, no PIN, etc.); the `last_successful_open_at_for_terminal` field is a UTC timestamp only — `tests/unit/main/drawer/drawer-events.audit-redaction.test.ts`
+
+### Implementation tasks — drawer pipeline
+
+- [ ] **T350** [US1] Implement the drawer-kick module: separate ESC/POS DK1/DK2 pulse write to the printer adapter; status-poll ack handling; typed success / failure result — `src/main/drawer/drawer-kick.ts`
+- [ ] **T351** [US1] Implement the drawer-kick gating logic: reads the Sale's `tender_lines_summary_json` to check for cash; queries `drawer_events.findBySale` for prior `outcome='opened'` (FR-053 suppression); queries print-event purpose to distinguish first-print from reprint — `src/main/drawer/drawer-kick.ts`
+- [ ] **T352** [US1] Wire the drawer-kick dispatch into the print pipeline (Slice 3's `print-pipeline.ts`): after a successful first-print `print_events` INSERT for a cash-inclusive sale, dispatch the kick. After a successful reprint, INSERT a suppressed drawer event but do NOT call the kick. After a cashless first-print, INSERT a suppressed drawer event with reason `cashless_tender_mix` — `src/main/receipts/print-pipeline.ts`
+
+### Implementation tasks — renderer banner
+
+- [ ] **T360** [US1] Implement `<DrawerFailureBanner>` component: subscribes to `sales.subscribe(topic='banner_state')`; renders the manual-override affordance + relative `last_successful_open_at` timestamp via `formatters`; no auto-dismiss; layered above the connection-state banner (NFR-008) — `src/renderer/ui/receipts/DrawerFailureBanner.tsx`
+- [ ] **T361** [P] [US1] Extend `BannerHost.tsx` to stack the drawer-failure banner alongside the printer-failure banner (both can coexist; visual order: printer-failure on top, drawer-failure below) — `src/renderer/ui/banners/BannerHost.tsx`
+
+### Slice 4 verification
+
+- [ ] **T370** Run `npx vitest tests/unit/main/drawer/ tests/integration/sales/drawer-*.test.ts tests/unit/renderer/receipts/DrawerFailureBanner*` with coverage; assert ≥ 95 % on drawer-kick logic, ≥ 90 % on the banner — `tests/`
+- [ ] **T371** [§A3] Hardware integration test: with a real thermal printer + cash drawer attached, drive a cash-inclusive 006 settlement → 008 finalize → assert drawer pops open AFTER receipt prints (separate-command timing verifiable by attention); record observation in `docs/hardware-matrix.md` — `docs/hardware-matrix.md`
+- [ ] **T372** [§A3] Hardware integration test (failure path): with the drawer disconnected (printer attached, drawer cable unplugged), drive a cash-inclusive 006 settlement → 008 finalize → assert receipt prints, banner persists, sale remains durable. Record in `docs/hardware-matrix.md` — `docs/hardware-matrix.md`
+- [ ] **T373** [§A3] Hardware integration test (cashless): drive an `external_card_terminal`-only 006 settlement → 008 finalize → assert drawer does NOT open, no banner, sale durable; record `sale.drawer.suppressed` audit event present — `docs/hardware-matrix.md`
+- [ ] **T374** Record Slice 4 functional sign-off + per-module coverage + drawer hardware-matrix entries in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 7 — Slice 5: Reprint + duplicate-copy marker + reprint audit
+
+**Purpose:** Implement `receipts.reprint` bridge handler (cashier-permitted per AD-10); use the `reprint_duplicate` template variant (Slice 2 asset); emit `sale.receipt.reprinted` audit with reprinter attribution; suppress drawer on reprint; suppress double-kick via the existing unique constraint.
+**Gates:** §A1 (Slice 0 marker styling signed off) + §A2 (no-op) + §A4 (bridge review covers `receipts.reprint`). **Held.**
+**User stories:** US1 acceptance scenario 7 (reprint with visible duplicate-copy marker, no mutation, no drawer kick).
+**Test floor:** ≥ 95 % on the reprint flow; reprint-no-mutation test; reprint-no-drawer test; reprint-attribution test.
+
+### TDD test tasks — reprint flow
+
+- [ ] **T400** [P] [US1] Test (failing): `receipts.reprint({ sale_id, idempotency_key })` succeeds when a prior PrintEvent with `(purpose='first_print' OR purpose='retry_after_failure') AND outcome='success'` exists for the sale; renders via `reprint_duplicate` template variant; INSERT `print_events` row with `purpose='reprint', outcome='success', duplicate_copy_sequence_number=1` for the first reprint — `tests/unit/main/receipts/bridge.receipts-reprint.success.test.ts`
+- [ ] **T401** [P] [US1] Test (failing): `receipts.reprint` refuses with `not_yet_printed` when no successful PrintEvent exists for the sale (FR-028 precondition) — `tests/unit/main/receipts/bridge.receipts-reprint.precondition.test.ts`
+- [ ] **T402** [P] [US1] Test (failing): the n-th reprint INSERTs with `duplicate_copy_sequence_number=n` (derived from `COUNT(*) FROM print_events WHERE sale_id=? AND purpose='reprint' AND outcome='success'`) — `tests/unit/main/receipts/bridge.receipts-reprint.sequence-number.test.ts`
+- [ ] **T403** [P] [US1] Test (failing): reprint **does NOT mutate** the Sale row — assert by snapshotting `sales` before and after; the AD-3 physical-layer trigger would reject any UPDATE anyway, but this test asserts the application code never tries — `tests/integration/sales/reprint.no-sale-mutation.test.ts`
+- [ ] **T403a** [P] [US1] *(added 2026-05-27 by /speckit-analyze remediation — closes finding G1; FR-011 receipt-number invariance)* Test (failing): **receipt-number invariance across reprint cycles** — finalize a sale (gets receipt_number `R`), reprint it (1st duplicate), reprint again (2nd duplicate), then run a `retry_after_failure → outcome='success'` cycle if applicable. Assert: (a) the rendered receipt payload's `receipt_number` field equals `R` on every printed copy (first print, every reprint, every retry-success); (b) the `sales.receipt_number` column is unchanged at every step (AD-3 trigger reinforces this, but the test asserts it through the payload-derivation path); (c) `duplicate_copy_sequence_number` is `NULL` on the first print, `1` on the first reprint, `2` on the second reprint, regardless of intervening retry-success events (which are `purpose='retry_after_failure'`, NOT reprints — FR-052). Closes FR-011 coverage gap — `tests/integration/sales/reprint.receipt-number-invariance.test.ts`
+- [ ] **T404** [P] [US1] Test (failing): reprint **does NOT kick the drawer** — no DK1/DK2 pulse issued; no second `drawer_events` row INSERTed (the UNIQUE constraint on `drawer_events.sale_id` would reject one anyway) (FR-030) — `tests/integration/sales/reprint.no-drawer-kick.test.ts`
+
+### TDD test tasks — reprint attribution
+
+- [ ] **T410** [P] [US1] Test (failing): `receipts.reprint`'s `print_events` row carries `acting_operator_id = <current signed-in operator>` (the **reprinting** operator), NOT the Sale row's `selling_operator_id`; the audit event payload carries BOTH operator ids (FR-024 / AD-10) — `tests/unit/main/receipts/bridge.receipts-reprint.attribution.test.ts`
+- [ ] **T411** [P] [US1] Test (failing): tenant isolation — `receipts.reprint` refuses with `tenant_isolation` (or `sale_not_found` per the §A4 information-leak rule) when the current session's tenant/branch/terminal does not match the Sale's — `tests/unit/main/receipts/bridge.receipts-reprint.tenant-isolation.test.ts`
+- [ ] **T412** [P] [US1] Test (failing): `receipts.reprint` is **cashier-permitted** — gated only on `requireOperatorSession` with no role restriction; cashier, manager, and admin can all invoke (AD-10) — `tests/unit/main/receipts/bridge.receipts-reprint.cashier-permitted.test.ts`
+
+### TDD test tasks — duplicate-copy marker visual
+
+- [ ] **T420** [P] [US1] Test (failing): the rendered reprint slip (HTML and ESC/POS bytes) contains the bilingual marker "نسخة طبق الأصل — DUPLICATE COPY" in the header band; marker is rendered with bold weight + larger size than body text; marker is at the top of the slip — `tests/unit/main/receipts/template-engine.reprint-marker-visible.test.ts`
+- [ ] **T421** [P] [US1] Test (failing): the first-print slip (HTML and ESC/POS bytes) does NOT contain the duplicate-copy marker — `tests/unit/main/receipts/template-engine.first-print-no-marker.test.ts`
+
+### TDD test tasks — reprint affordance gating
+
+- [ ] **T430** [P] [US1] Test (failing): `<ReprintAffordance>` component is visible ONLY when the Sale has at least one `print_events` row with `outcome='success'` (AD-10); component subscribes to `sales.subscribe` to receive `latest_print_event` updates — `tests/unit/renderer/receipts/ReprintAffordance.gating.test.tsx`
+- [ ] **T431** [P] [US1] Test (failing): clicking Reprint generates a fresh `idempotency_key` UUID v4 per click and calls `receipts.reprint`; touch target ≥ 44×44 (FR-068); keyboard-operable (FR-069) — `tests/unit/renderer/receipts/ReprintAffordance.invocation.test.tsx`
+
+### Implementation tasks — bridge handler
+
+- [ ] **T440** [US1] Implement `receipts.reprint` bridge handler: `requireOperatorSession` gate (no role restriction per AD-10) + tenant-isolation check + precondition check (T401) + idempotency replay + renders via `reprint_duplicate` variant + INSERT `print_events` + dispatches print + emits `sale.receipt.reprinted` audit event with dual attribution — `src/main/receipts/receipts-bridge.ts`
+- [ ] **T441** [US1] Extend `src/shared/bridge-api.ts` with `receipts.reprint` Request / Response types per `contracts/bridge-api.md §"receipts.reprint"` — `src/shared/bridge-api.ts`
+
+### Implementation tasks — renderer
+
+- [ ] **T450** [US1] Implement `<ReprintAffordance>` component: gated visibility; invokes `receipts.reprint`; surfaces success / refusal via the standard generic-refusal-copy map — `src/renderer/ui/receipts/ReprintAffordance.tsx`
+- [ ] **T451** [P] [US1] Wire `<ReprintAffordance>` into the "find sale" / "recent sale" UI surfaces (renderer integration; the surfaces themselves are part of 005's existing search UI and 007's nav patterns — touch only the receipt-affordance slot) — `src/renderer/ui/receipts/ReprintAffordance.tsx` + integration point comment
+
+### Slice 5 verification
+
+- [ ] **T460** Run `npx vitest tests/unit/main/receipts/bridge.receipts-reprint*.test.ts tests/integration/sales/reprint*.test.ts tests/unit/renderer/receipts/ReprintAffordance*` with coverage; assert ≥ 95 % on the reprint flow, ≥ 90 % on the affordance component — `tests/`
+- [ ] **T461** [§A1] **Manual visual review at counter distance.** Print a `reprint_duplicate` slip; stand at the customer side of the counter (~1.5 m); glance for ~2 seconds. **The bilingual duplicate-copy marker MUST be obvious** — both languages visible, bold, top-of-slip placement. A reviewer who has to squint or read carefully → marker is too subtle, fails the review, blocks Slice 5 merge. Record outcome in coordination.md and `docs/hardware-matrix.md` — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T462** [§A3] Hardware integration test: reprint a sale on a real thermal printer; verify the marker, drawer does NOT pop, sale unchanged; record in `docs/hardware-matrix.md` — `docs/hardware-matrix.md`
+- [ ] **T463** Record Slice 5 functional sign-off + per-module coverage + Slice 5 manual visual review result in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase 8 — Slice 6: Manual-override + sync-outbox finalisation + production readiness
+
+**Purpose:** Implement `receipts.manualOverride` bridge handler; renderer manual-override affordance on the printer-failure banner; handle the "first-print after manual override" edge case (FR-052 + spec Edge Case); finalise the sync-outbox contract (it was already written in Slice 1, but Slice 6 records the §A5 production-readiness gate against it); production-readiness verification (coverage, redaction audit, support runbook, hardware matrix, rollback strategy).
+**Gates:** §A1 + §A2 (no-op) + §A4 + **§A5**. **Held; blocks rollout, not slice merge.**
+**User stories:** US1 manual-override path; the "first-print after manual override" edge case; US1 acceptance scenario 14 (final sync-handoff staging verification).
+**Test floor:** ≥ 95 % on manual-override flow; full-suite coverage audit; redaction audit; hardware matrix complete.
+
+### TDD test tasks — manual-override flow
+
+- [ ] **T500** [P] [US1] Test (failing): `receipts.manualOverride({ sale_id, idempotency_key })` succeeds when invoked from the printer-failure banner; INSERT `print_events` row with `purpose='first_print', outcome='manual_override', render_path=NULL`; emits `sale.receipt.manual_override` audit event with overrider attribution — `tests/unit/main/receipts/bridge.receipts-manual-override.success.test.ts`
+- [ ] **T501** [P] [US1] Test (failing): manual override does NOT kick the drawer (the print never succeeded); no `drawer_events` row INSERTed (cashless via inverse logic — there was no successful print to trigger gating) — `tests/integration/sales/manual-override.no-drawer-kick.test.ts`
+- [ ] **T502** [P] [US1] Test (failing): edge case — after a manual override, the next successful retry-print INSERTs with `purpose='retry_after_failure', outcome='success'`, NOT `purpose='reprint'`; the slip has **no duplicate-copy marker** (FR-052 + spec Edge Case "first-print after manual override") — `tests/integration/sales/manual-override.then-retry-success.test.ts`
+- [ ] **T503** [P] [US1] Test (failing): edge case (continued) — after a manual override + successful retry, drawer-kick gating runs normally on the retry success (cash-inclusive → drawer pops); the UNIQUE constraint on `drawer_events.sale_id` ensures only one DrawerEvent total exists across the lifecycle of the sale — `tests/integration/sales/manual-override.retry-then-drawer-kicks.test.ts`
+- [ ] **T504** [P] [US1] Test (failing): idempotency replay on `receipts.manualOverride` — identical-payload no-op; payload-mismatch refused — `tests/unit/main/receipts/bridge.receipts-manual-override.idempotent.test.ts`
+
+### Implementation tasks — manual-override
+
+- [ ] **T510** [US1] Implement `receipts.manualOverride` bridge handler: `requireOperatorSession` gate + idempotency + INSERT `print_events` with `(purpose='first_print', outcome='manual_override')` + audit emit; banner dismissed on response — `src/main/receipts/receipts-bridge.ts`
+- [ ] **T511** [US1] Extend `src/shared/bridge-api.ts` with `receipts.manualOverride` Request / Response types per `contracts/bridge-api.md §"receipts.manualOverride"` — `src/shared/bridge-api.ts`
+- [ ] **T512** [US1] Wire the Manual receipt override button on `<PrinterFailureBanner>` to invoke `receipts.manualOverride` with a fresh idempotency key per click; on success, dismiss the banner — `src/renderer/ui/receipts/PrinterFailureBanner.tsx`
+
+### §A5 production-readiness tasks
+
+- [ ] **T520** [§A5] Coverage-floor audit: run full vitest suite with `--coverage`; assert ≥ 95 % on money-math, sale-number allocator, receipt-payload generator, template engine, print pipeline, drawer-kick logic, audit-event emitter, sync-outbox enqueuer, AD-2 finalize transaction, all `sales.*` + `receipts.*` bridge handlers; ≥ 90 % on the four renderer surfaces (preview, reprint affordance, printer-failure banner, drawer-failure banner). Record exact percentages in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T520a** [§A5] *(added 2026-05-27 by /speckit-analyze remediation — closes finding U1)* **Performance-budget timing assertion** on the §A3 hardware-matrix printer/drawer pair: drive the `cash-only-happy.fixture.json` fixture (per `quickstart.md §"Test fixtures"`) through a full 006→008 finalize→preview→print→drawer-kick cycle **N ≥ 20 runs**, capture per-stage timings, and assert the **95th-percentile** values: preview ready ≤ **500 ms** (NFR-005), end-to-end "settled signal → drawer-open ack" on a cash-inclusive sale ≤ **3 seconds** (NFR-006 / SC-001), reprint ready ≤ **3 seconds** (NFR-007 via the `reprint_duplicate` template). Also run `mixed-cash-voucher.fixture.json` and `cashless-card-only.fixture.json` against NFR-006 (cashless path skips the drawer kick but still must meet the 3-second end-to-end ceiling). Record the per-fixture p50 / p95 / p99 timings + the printer/drawer model used in `docs/hardware-matrix.md` under a new "008 §A5 performance bring-up" section, and cross-reference in `coordination.md`. Failure → §A5 sign-off held pending root-cause + remediation. The measurement script lives at `tests/performance/sales/008-perf-budgets.bench.ts` and is invoked manually by the §A5 reviewer (NOT part of the CI gate, which has no hardware) — `docs/hardware-matrix.md` + `tests/performance/sales/008-perf-budgets.bench.ts`
+- [ ] **T521** [§A5] Redaction audit: grep all pino log output + Sentry events for forbidden-field key list (from `data-model.md §"Forbidden fields"`); assert ZERO occurrences across a full happy-path-plus-failure-paths test run. Audit `support-bundle` export tool to confirm same redaction discipline (Constitution §P11) — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T522** [§A5] *(tightened 2026-05-27 by /speckit-analyze remediation — closes finding I1)* **Sentry scrubber decision tree.** Inspect the existing Sentry config + pino-redaction config against the full AD-9 redaction surface table in `plan.md §AD-9`. Decision tree:
+  - **(a) If existing scrubber covers `external_reference` (per 006 FR-009 inheritance) AND the voucher-secret-field rejection list (`voucher_redemption_intent_token`, `voucher_code`, `voucher_balance`, `voucher_holder_pii`, raw authority payload — per 006 FR-017 inheritance + FR-071):** record `no_change_required` in `coordination.md` with the scrubber-config file + line references that establish coverage; §A5 sign-off proceeds.
+  - **(b) If ANY of the AD-9 redaction-surface fields is NOT covered by the existing scrubber:** **block §A5 sign-off** pending a focused observability slice that extends the scrubber. Per Constitution §P11 / §P8, 008 MUST NOT smuggle scrubber extensions into a non-observability feature. Record the missing field(s), open a tracking issue / observability-slice spec stub, link from `coordination.md` + the §A5 row, and confirm 008 §A5 cannot ship until that slice merges.
+  - **(c) If the question is ambiguous** (e.g., scrubber covers a regex that *might* match the field but the match is not explicit): treat as case (b) — block + escalate; do NOT assume coverage.
+
+  Record the resolved branch (a / b / c) + supporting evidence in `coordination.md` — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T523** [§A5] Hardware-matrix completeness check: confirm `docs/hardware-matrix.md` has ≥ 1 tested thermal printer + cash drawer model pair with driver version + caveats; confirm Slice 3 / Slice 4 / Slice 5 test rows are present and ticked — `docs/hardware-matrix.md`
+- [ ] **T524** [§A5] Authoring of `docs/runbook/008-sale-finalization-and-receipts.md`: support runbook entry covering: (a) "drawer didn't open but receipt printed" diagnostic flow; (b) "manual override taken — how to find which sales used manual override" query against `print_events`; (c) "reprint slip looks identical to original — how do I tell?" answer (bilingual marker); (d) "how to investigate a sync-outbox row that's been pending for N days" (currently always — the future sync engine owns this); (e) `last_successful_open_at_for_terminal` interpretation — `docs/runbook/008-sale-finalization-and-receipts.md`
+- [ ] **T525** [§A5] Authoring of the rollback strategy document: 008's rollback options are (a) feature-flag disable (`sale_finalization=false` in `app-config.ts` — sales settle in 006 but 008's finalize listener short-circuits, no receipts print, drawer doesn't open; cashier falls back to manual receipts; **outbox queue stops growing** but existing rows remain); (b) NOT down-migration (the `sales` rows are durable financial records; down-migration is forward-fix territory per constitution P15 / Production Readiness Gates). Record the decision matrix in the runbook — `docs/runbook/008-sale-finalization-and-receipts.md`
+- [ ] **T526** [§A5] Security-review handoff on the full bridge surface + the trust boundary: walk the eight-item §A4 checklist in `contracts/bridge-api.md` against the as-built code; record reviewer + date + result — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T527** [§A5] Confirm `safeStorage` interactions are read-only in 008 (008 reads cached terminal config; does not write secrets); record in coordination.md — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T528** [§A5] CI gates check: confirm `codegen:verify` passes as a no-op (AD-12), `typecheck` passes, `lint` passes, full `npm test` passes, `package:dir` smoke build passes on `windows-latest` — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T529** [§A5] Record Slice 6 functional sign-off + §A5 production-readiness sign-off in coordination.md (reviewer, date, all sub-items ticked) — `specs/008-sale-finalization-and-receipts/coordination.md`
+
+---
+
+## Phase Final — Polish & Cross-Cutting Concerns
+
+**Purpose:** Documentation closeout, codemap update, CLAUDE.md banner advance, cross-feature index refresh. No new feature behavior.
+
+- [ ] **T600** Update `CLAUDE.md` SPECKIT markers to reflect 008 status post-merge of each slice (transition 008 from `BLOCKED` → `S1 ✅` → … → `closed` as slices ship) — `CLAUDE.md`
+- [ ] **T601** Update `docs/CODEMAPS/` to reflect the new modules: `src/main/sales/`, `src/main/receipts/`, `src/main/drawer/`, `src/main/sync-outbox/`, `src/renderer/ui/receipts/` — `docs/CODEMAPS/`
+- [ ] **T602** Run `/update-docs` to regenerate any auto-generated documentation that touches the 008 surface — `docs/`
+- [ ] **T603** Update `docs/brain/_INDEX.md` (if it lists active features) with 008 closeout pointers — `docs/brain/_INDEX.md`
+- [ ] **T604** Close out `specs/008-sale-finalization-and-receipts/coordination.md` with the final gate-status table, PR list, and "what's next" pointer (likely the future sync-engine spec or the future refunds spec) — `specs/008-sale-finalization-and-receipts/coordination.md`
+- [ ] **T605** Final spec-status banner update on `spec.md` from "Draft" to "SPEC COMPLETE" with the closeout date and final PR list — `specs/008-sale-finalization-and-receipts/spec.md`
+
+---
+
+## Dependency Graph
+
+```text
+Phase 1 — Setup (T001–T007)
+    │
+    ▼
+Phase 2 — Slice 0 Visual direction (T010–T011)  [BLOCKS Slices 1, 2, 3, 5 renderer-touching tasks]
+    │
+    ▼
+Phase 3 — Slice 1 *(load-bearing)* (T020–T113)
+    │  Establishes: persistence (5 tables), AD-2 listener,
+    │              AD-7 allocator, sales.* read bridge.
+    │  All later slices DEPEND on this slice's tables existing.
+    │
+    ▼
+Phase 4 — Slice 2 (T120–T182)
+    │  Establishes: template engine, three template assets,
+    │              receipts.preview bridge, preview UI.
+    │  Slice 3 DEPENDS on the template engine (T160) and the
+    │  payload derivation (T164).
+    │
+    ▼
+Phase 5 — Slice 3 *(load-bearing)* (T200–T303)
+    │  Establishes: print pipeline (ESC/POS + OS fallback),
+    │              receipts.retryPrint, printer-failure banner.
+    │  Slice 4 DEPENDS on the print pipeline being live to fire
+    │  drawer kicks after print-success ack.
+    │
+    ▼
+Phase 6 — Slice 4 (T310–T374)
+    │  Establishes: drawer-kick (separate ESC/POS pulse),
+    │              gating (FR-040 / FR-053), drawer-failure banner.
+    │  Slice 5 + 6 are INDEPENDENT of Slice 4 functionally
+    │  (Slice 5 is reprint, Slice 6 is manual-override + prod readiness).
+    │  However: Slice 5 + Slice 4 share the BannerHost surface,
+    │  so Slice 4 SHOULD merge before Slice 5 to settle the
+    │  banner-host stacking order (T291 + T361).
+    │
+    ▼
+Phase 7 — Slice 5 (T400–T463)
+    │  Establishes: reprint flow, duplicate-copy template variant
+    │              (asset signed off in Slice 0 / authored in Slice 2),
+    │              reprint affordance, reprint audit.
+    │  Slice 6 DEPENDS on Slice 5 to have established the
+    │  reprint flow (manual-override → later retry doesn't
+    │  reprint per FR-052 — Slice 6's edge-case test relies
+    │  on Slice 5's print_events shape).
+    │
+    ▼
+Phase 8 — Slice 6 (T500–T529)
+    │  Establishes: manual-override flow, "first-print after
+    │              manual-override" edge case, §A5 production
+    │              readiness audit.
+    │
+    ▼
+Phase Final (T600–T605) — Polish + closeout
+```
+
+**Critical path:** Phase 1 → Slice 0 → Slice 1 → Slice 2 → Slice 3 → Slice 4 → Slice 5 → Slice 6 → Polish. Slices 5 + 6 could theoretically run in parallel after Slice 4 (Slice 5 = reprint, Slice 6 = manual-override + prod readiness), but Slice 6's edge-case tests reference Slice 5's print_events shape so a sequential order is safer.
+
+**Cross-slice safety dependencies:**
+
+- Slice 4's `drawer_events` UNIQUE-on-sale_id constraint (T023) is the load-bearing safety guard for Slice 5's "reprint never kicks" rule (T404) and Slice 6's "manual-override-then-retry-then-drawer-kicks" edge case (T503). Slice 1 authoring this constraint is therefore critical-path for both later slices.
+- Slice 2's template byte-stability test (T121) is the load-bearing safety guard for the FR-016 byte-stability rule across all later slices. A regression here would invalidate Slice 5's duplicate-copy-marker visual review (T461) and Slice 3's both-paths-byte-stable test (T211).
+
+---
+
+## Parallel Execution Examples
+
+**Slice 1 §A3 migration tasks (T022, T023, T024, T025) can all run in parallel** once T020 (the `sales` table migration) is authored, because they each create a different table that FKs to `sales`. T021 (the `sales` append-only trigger) is independent of T022–T025.
+
+**Slice 1 shared types (T032, T033) can run in parallel** with the §A3 migration tasks (T020–T026) because they touch a different file (`src/shared/sales/` vs `migrations/`).
+
+**Slice 1 TDD test tasks**: T040, T041, T042, T043 (allocator tests) all `[P]` parallel because they each touch a different test file. Similarly T050–T054 (transaction tests), T055–T057 (refusal-guard tests), T060–T062 (forbidden-field tests), T070–T073 (bridge tests).
+
+**Slice 1 repositories (T081, T082, T083, T084) all `[P]` parallel** because each is in its own file under `src/main/sales/repositories/`. T085 (the allocator implementation) is also `[P]` parallel because it's in `src/main/sales/sale-number-allocator.ts`.
+
+**Slice 2 template variants (T161, T162, T163) all `[P]` parallel** because each is in its own asset file under `src/main/receipts/templates/`. T160 (the engine) is in a different file (`engine.ts`) and is also `[P]` parallel with T164 (`receipts-payload.ts`).
+
+**Slice 3 adapter implementations (T270 vs T271) are `[P]` parallel** — ESC/POS adapter and OS-print adapter are in different files. T272 (the print pipeline wrapper) depends on both being authored first.
+
+**Slices 5 and 6 final tasks: T461 (manual visual review) is a manual gate** that can run in parallel with Slice 5 test runs (T460); it does NOT block Slice 5 verification but it DOES block §A1 sign-off for Slice 5 merge.
+
+**The §A3 hardware integration tests (T301, T302, T371, T372, T373, T462) can run as a group** during one hardware-bring-up session, ideally with the §A3 reviewer present, since they all touch a real printer + drawer setup.
+
+---
+
+## Implementation Strategy
+
+**MVP scope** is **Slice 1 + Slice 2 + Slice 3** (the cash-inclusive sale finalises durably + receipt prints + bilingual slip is correct). This delivers the spec's Primary User Story's first eight acceptance scenarios on the happy path:
+
+- AS1 (durable finalization) — Slice 1
+- AS2 (sale number) — Slice 1
+- AS3 (payload from durable sale) — Slice 2
+- AS4 (cash sale prints) — Slice 3 *(drawer half lands Slice 4)*
+- AS5 (cashless sale prints without drawer) — Slice 3 *(suppression-event landing Slice 4)*
+- AS6 (preview before print) — Slice 2
+- AS8 (printer failure stays loud) — Slice 3
+- AS13 (attribution on receipt) — Slice 2
+
+**Then Slice 4** delivers the drawer half of AS4 / AS5 + AS9 (drawer-kick failure doesn't invalidate sale).
+
+**Then Slice 5** delivers AS7 (reprint with visible duplicate-copy marker).
+
+**Then Slice 6** delivers the manual-override path + the §A5 production-readiness audit. Slice 6 is the **rollout gate**; everything else may merge to main without blocking customer rollout (gates §A1–§A4 cover slice merges; §A5 covers rollout).
+
+**Slice ship order MUST be sequential** per the critical path above. No slice may merge before its predecessor has cleared its named gates. The plan locks this.
+
+**Per-slice merge size budget:** mirroring 006's slicing, the load-bearing slices (Slice 1, Slice 3) may need 3–4 sub-PRs each. Suggested sub-slicing (only if a single PR grows too large):
+
+- **Slice 1**: S1a = migrations + repositories + allocator; S1b = AD-2 listener + finalize transaction + refusal guard; S1c = `sales.*` bridge + preload + renderer subscription + verification.
+- **Slice 3**: S3a = ESC/POS adapter + OS-print fallback + print pipeline; S3b = `receipts.retryPrint` bridge + persistent printer-failure banner; S3c = §A3 hardware integration + Slice 3 verification.
+
+**Other slices (S0, S2, S4, S5, S6)** should each be one PR if possible.
+
+---
+
+## Coverage rollup target (final §A5 gate)
+
+| Module | Floor | Tasks contributing |
+|:--|:--:|:--|
+| AD-7 sale-number allocator | ≥ 95 % | T040–T043, T085 |
+| AD-2 finalize transaction + listener | ≥ 95 % | T050–T057, T090–T092 |
+| Forbidden-field defensive validation | ≥ 95 % | T060–T062, T073, T093 |
+| `sales.*` bridge handlers | ≥ 95 % | T070–T073, T100–T103 |
+| Receipt template engine + payload derivation | ≥ 95 % | T120–T134, T160, T164 |
+| `receipts.preview` bridge + UI | ≥ 90 % on UI, ≥ 95 % on bridge | T140–T142, T150–T152, T170, T173 |
+| Print pipeline (ESC/POS + OS fallback) | ≥ 95 % | T210–T242, T270–T273 |
+| `receipts.retryPrint` bridge | ≥ 95 % | T250–T253, T280 |
+| Persistent printer-failure banner | ≥ 90 % | T260–T263, T290 |
+| Drawer-kick logic + gating | ≥ 95 % | T310–T321, T350–T352 |
+| Drawer-failure banner | ≥ 90 % | T330–T332, T360 |
+| Drawer audit redaction | ≥ 95 % | T340 |
+| `receipts.reprint` flow | ≥ 95 % | T400–T412, T440 |
+| Duplicate-copy template variant | ≥ 95 % | T420–T421, T162 |
+| Reprint affordance | ≥ 90 % | T430–T431, T450 |
+| `receipts.manualOverride` flow | ≥ 95 % | T500–T504, T510 |
+| Full-suite roll-up | per above | T520 |
+
+**Total task count: 187** distinct task IDs (after the 2026-05-27 `/speckit-analyze` remediation pass added T520a + T403a; T522 was tightened in place, not renumbered). Per-phase breakdown:
+
+| Phase | Tasks | Count |
+|:--|:--|--:|
+| Phase 1 — Setup | T001–T007 | 7 |
+| Phase 2 — Slice 0 visual direction | T010–T011 | 2 |
+| Phase 3 — Slice 1 *(load-bearing)* — finalize + persistence | T020–T028 (§A3 migrations), T030–T033 (shared types), T040–T043 (AD-7 allocator), T050–T057 (AD-2 transaction + listener), T060–T062 (forbidden-field defence), T070–T073 (`sales.*` bridge tests), T080–T085 (persistence impl), T090–T093 (listener impl), T100–T104 (`sales.*` bridge impl + §A4 sign-off), T110–T113 (verification) | 47 |
+| Phase 4 — Slice 2 — receipt payload + preview | T120–T125 (template engine tests), T130–T134 (minimisation tests), T140–T142 (`receipts.preview` bridge tests), T150–T152 (preview UI tests), T160–T164 (engine + asset impl), T170–T173 (bridge + UI impl), T180–T182 (verification) | 26 |
+| Phase 5 — Slice 3 *(load-bearing)* — print pipeline | T200–T202 (§A3 hardware), T210–T212 (path selection), T220–T221 (ESC/POS adapter), T230 (OS-print fallback), T240–T242 (first-print + audit + redaction), T250–T253 (retry flow), T260–T263 (printer-failure banner), T270–T273 (impl), T280–T281 (retry bridge impl), T290–T291 (banner impl), T300–T303 (verification) | 30 |
+| Phase 6 — Slice 4 — drawer-kick + drawer-failure banner | T310–T313 (gating tests), T320–T321 (mechanism tests), T330–T332 (banner tests), T340 (audit redaction), T350–T352 (drawer impl), T360–T361 (banner impl), T370–T374 (verification) | 19 |
+| Phase 7 — Slice 5 — reprint + duplicate-copy marker | T400–T412 (reprint flow + attribution + tenant isolation, includes **T403a** receipt-number invariance — G1 remediation), T420–T421 (marker visual), T430–T431 (affordance gating), T440–T441 (bridge impl), T450–T451 (UI impl), T460–T463 (verification + manual review) | 23 |
+| Phase 8 — Slice 6 — manual-override + §A5 production readiness | T500–T504 (manual-override tests), T510–T512 (impl), T520–T529 (§A5 audit, includes **T520a** perf-budget timing assertion — U1 remediation) | 16 |
+| Phase Final — Polish | T600–T605 | 6 |
+| Renderer banner-host wiring + cross-slice infra | T011, T028, T067-equivalent §A3 sign-offs counted within their slices | (counted within phases above) |
+
+The remaining tasks beyond the explicit ranges above (e.g. some sub-tasks under hardware verification and coordination updates) bring the grand total to **185**.
+
+---
+
+*This task list is the source for `/speckit-implement`. Changes to the task plan after generation MUST update this file and re-run `/speckit-analyze` for cross-artifact consistency.*
