@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
   <title id="title">POS Pulse terminal architecture</title>
-  <desc id="desc">Isometric architecture view showing cashier, renderer, preload bridge, Electron main process, SQLite, safeStorage, backend API, and hardware.</desc>
+  <desc id="desc">Animated isometric architecture flow showing cashier, renderer, preload bridge, Electron main process, SQLite, safeStorage, backend API, and hardware. Data tokens flow along the connections.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#f8fafc"/>
@@ -8,23 +8,45 @@
       <stop offset="1" stop-color="#f8f5ed"/>
     </linearGradient>
     <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#2563eb"/>
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="0.55" stop-color="#2563eb"/>
       <stop offset="1" stop-color="#0891b2"/>
     </linearGradient>
     <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0f766e"/>
-      <stop offset="1" stop-color="#14b8a6"/>
+      <stop offset="0" stop-color="#14b8a6"/>
+      <stop offset="0.55" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#134e4a"/>
     </linearGradient>
     <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#f59e0b"/>
-      <stop offset="1" stop-color="#d97706"/>
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="0.55" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#b45309"/>
     </linearGradient>
     <linearGradient id="slate" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#475569"/>
-      <stop offset="1" stop-color="#1e293b"/>
+      <stop offset="1" stop-color="#0f172a"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
-      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.18"/>
+    <linearGradient id="cashier" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e0e7ff"/>
+      <stop offset="1" stop-color="#a5b4fc"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+    <linearGradient id="hi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#0f172a" flood-opacity="0.22"/>
+    </filter>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#0f172a" flood-opacity="0.18"/>
     </filter>
     <style>
       .title { font: 800 30px Arial, sans-serif; fill: #0f172a; }
@@ -33,70 +55,191 @@
       .whiteSmall { font: 600 13px Arial, sans-serif; fill: #e2e8f0; }
       .dark { font: 800 15px Arial, sans-serif; fill: #0f172a; }
       .small { font: 600 12px Arial, sans-serif; fill: #475569; }
-      .line { stroke: #334155; stroke-width: 4; stroke-linecap: round; fill: none; }
-      .dash { stroke: #64748b; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 8 10; fill: none; }
+      .line { stroke: #334155; stroke-width: 3.5; stroke-linecap: round; fill: none; }
+      .dash { stroke: #64748b; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 8 10; fill: none; }
+      .legend { font: 600 12px Arial, sans-serif; fill: #475569; }
     </style>
+    <path id="flow-1" d="M245 280 C340 220 430 220 520 270" fill="none"/>
+    <path id="flow-2" d="M752 290 C826 280 894 312 960 360" fill="none"/>
+    <path id="flow-3" d="M614 462 C610 522 566 560 496 580" fill="none"/>
+    <path id="flow-4" d="M702 456 C752 520 835 552 936 540" fill="none"/>
+    <path id="flow-5" d="M1062 332 C1100 250 1080 170 1000 138" fill="none"/>
   </defs>
   <rect width="1280" height="720" fill="url(#bg)"/>
+
+  <!-- Subtle grid -->
+  <g stroke="#e2e8f0" stroke-width="1" opacity="0.6">
+    <path d="M0 200h1280M0 360h1280M0 520h1280"/>
+    <path d="M320 0v720M640 0v720M960 0v720"/>
+  </g>
+
   <text x="72" y="72" class="title">POS Pulse Terminal Architecture</text>
-  <text x="72" y="100" class="subtitle">Secure Electron boundary, typed preload bridge, local SQLite durability, and contract-backed SaaS integration.</text>
+  <text x="72" y="100" class="subtitle">Secure Electron boundary · typed preload bridge · local SQLite durability · contract-backed SaaS integration</text>
 
-  <path d="M245 248 C340 196 430 198 520 238" class="line"/>
-  <path d="M752 258 C826 252 894 280 960 330" class="line"/>
-  <path d="M614 430 C610 490 566 532 496 556" class="dash"/>
-  <path d="M702 424 C752 496 835 530 936 514" class="dash"/>
+  <!-- Connection paths (visible) -->
+  <path d="M245 280 C340 220 430 220 520 270" class="line"/>
+  <path d="M752 290 C826 280 894 312 960 360" class="line"/>
+  <path d="M614 462 C610 522 566 560 496 580" class="dash"/>
+  <path d="M702 456 C752 520 835 552 936 540" class="dash"/>
+  <path d="M1062 332 C1100 250 1080 170 1000 138" class="dash"/>
 
-  <g filter="url(#shadow)">
-    <polygon points="96,248 224,184 352,248 224,312" fill="#dbeafe"/>
-    <polygon points="96,248 224,312 224,382 96,318" fill="#bfdbfe"/>
-    <polygon points="224,312 352,248 352,318 224,382" fill="#93c5fd"/>
-    <text x="176" y="252" class="dark">Cashier</text>
-    <text x="150" y="282" class="small">Scanner / checkout</text>
+  <!-- Animated data tokens flowing along paths -->
+  <g>
+    <circle r="6" fill="#2563eb">
+      <animateMotion dur="3.2s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-1"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="4" fill="#22d3ee">
+      <animateMotion dur="3.2s" begin="1.6s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-1"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3.2s" begin="1.6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <g>
+    <circle r="6" fill="#0f766e">
+      <animateMotion dur="3s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-2"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="4" fill="#5eead4">
+      <animateMotion dur="3s" begin="1.5s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-2"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <g>
+    <circle r="5" fill="#f59e0b">
+      <animateMotion dur="3.6s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-3"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3.6s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <g>
+    <circle r="5" fill="#f59e0b">
+      <animateMotion dur="3.6s" begin="1.8s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-4"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3.6s" begin="1.8s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+  <g>
+    <circle r="5" fill="#94a3b8">
+      <animateMotion dur="4s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#flow-5"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;0.9;0.9;0" dur="4s" repeatCount="indefinite"/>
+    </circle>
   </g>
 
+  <!-- Cashier isometric block -->
   <g filter="url(#shadow)">
-    <polygon points="456,236 610,159 764,236 610,313" fill="url(#blue)"/>
-    <polygon points="456,236 610,313 610,430 456,353" fill="#1d4ed8"/>
-    <polygon points="610,313 764,236 764,353 610,430" fill="#0e7490"/>
-    <text x="568" y="236" class="white">Renderer</text>
-    <text x="532" y="266" class="whiteSmall">React POS shell</text>
-    <text x="500" y="344" class="whiteSmall">No Node access</text>
-    <text x="630" y="344" class="whiteSmall">Typed bridge only</text>
+    <polygon points="96,280 224,216 352,280 224,344" fill="url(#cashier)"/>
+    <polygon points="96,280 224,344 224,414 96,350" fill="#a5b4fc"/>
+    <polygon points="224,344 352,280 352,350 224,414" fill="#818cf8"/>
+    <polygon points="96,280 224,216 352,280 224,344" fill="url(#hi)"/>
+  </g>
+  <text x="172" y="284" class="dark">Cashier</text>
+  <text x="146" y="314" class="small">Scanner · checkout · POS UX</text>
+
+  <!-- Renderer isometric -->
+  <g filter="url(#shadow)">
+    <polygon points="456,268 610,191 764,268 610,345" fill="url(#blue)"/>
+    <polygon points="456,268 610,345 610,462 456,385" fill="#1d4ed8"/>
+    <polygon points="610,345 764,268 764,385 610,462" fill="#0e7490"/>
+    <polygon points="456,268 610,191 764,268 610,345" fill="url(#hi)"/>
+  </g>
+  <text x="568" y="268" class="white">Renderer</text>
+  <text x="532" y="298" class="whiteSmall">React POS shell</text>
+  <text x="500" y="376" class="whiteSmall">No Node access</text>
+  <text x="630" y="376" class="whiteSmall">Typed bridge only</text>
+  <circle cx="610" cy="268" r="4" fill="#ffffff">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="2.4s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Main process isometric -->
+  <g filter="url(#shadow)">
+    <polygon points="940,362 1062,301 1184,362 1062,423" fill="url(#teal)"/>
+    <polygon points="940,362 1062,423 1062,504 940,443" fill="#0f766e"/>
+    <polygon points="1062,423 1184,362 1184,443 1062,504" fill="#115e59"/>
+    <polygon points="940,362 1062,301 1184,362 1062,423" fill="url(#hi)"/>
+  </g>
+  <text x="1008" y="364" class="white">Main</text>
+  <text x="994" y="394" class="whiteSmall">IPC + local services</text>
+  <circle cx="1062" cy="362" r="4" fill="#ffffff">
+    <animate attributeName="opacity" values="0.4;1;0.4" dur="2.4s" begin="0.8s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Preload bridge -->
+  <g filter="url(#shadow)">
+    <polygon points="336,590 496,510 656,590 496,670" fill="url(#paper)"/>
+    <polygon points="336,590 496,670 496,702 336,622" fill="#e2e8f0"/>
+    <polygon points="496,670 656,590 656,622 496,702" fill="#cbd5e1"/>
+  </g>
+  <text x="448" y="590" class="dark">Preload</text>
+  <text x="400" y="618" class="small">contextBridge contract</text>
+
+  <!-- SQLite -->
+  <g filter="url(#shadow)">
+    <polygon points="806,572 948,501 1090,572 948,643" fill="url(#amber)"/>
+    <polygon points="806,572 948,643 948,684 806,613" fill="#d97706"/>
+    <polygon points="948,643 1090,572 1090,613 948,684" fill="#b45309"/>
+    <polygon points="806,572 948,501 1090,572 948,643" fill="url(#hi)"/>
+  </g>
+  <text x="918" y="572" class="white">SQLite</text>
+  <text x="892" y="602" class="whiteSmall">Local terminal state</text>
+
+  <!-- SmartDataPulse API -->
+  <g filter="url(#soft)">
+    <rect x="880" y="112" width="226" height="72" rx="14" fill="#ffffff" stroke="#cbd5e1"/>
+    <rect x="880" y="112" width="226" height="72" rx="14" fill="url(#hi)" opacity="0.6"/>
+    <circle cx="908" cy="148" r="11" fill="url(#blue)"/>
+    <path d="M903 148 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0" fill="#ffffff"/>
+  </g>
+  <text x="930" y="145" class="dark">SmartDataPulse API</text>
+  <text x="930" y="168" class="small">External SaaS backend</text>
+  <circle cx="1090" cy="148" r="4" fill="#22c55e">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1.6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Hardware -->
+  <g filter="url(#soft)">
+    <rect x="128" y="468" width="200" height="72" rx="14" fill="url(#slate)"/>
+    <rect x="128" y="468" width="200" height="72" rx="14" fill="url(#hi)" opacity="0.5"/>
+  </g>
+  <g fill="#94a3b8">
+    <rect x="148" y="488" width="36" height="22" rx="3"/>
+    <rect x="190" y="488" width="36" height="22" rx="3"/>
+    <rect x="232" y="488" width="36" height="22" rx="3"/>
+  </g>
+  <text x="158" y="528" class="white">Hardware</text>
+  <text x="158" y="544" class="whiteSmall" opacity="0">Scanner · printer · drawer</text>
+
+  <!-- Legend -->
+  <g transform="translate(72, 638)">
+    <rect width="380" height="60" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+    <circle cx="22" cy="22" r="5" fill="#2563eb"/>
+    <text x="36" y="26" class="legend">Authenticated IPC</text>
+    <circle cx="22" cy="44" r="4" fill="#f59e0b"/>
+    <text x="36" y="48" class="legend">Local-only data path</text>
+    <circle cx="180" cy="22" r="5" fill="#0f766e"/>
+    <text x="194" y="26" class="legend">Contract-backed call</text>
+    <circle cx="180" cy="44" r="4" fill="#94a3b8"/>
+    <text x="194" y="48" class="legend">External SaaS link</text>
   </g>
 
-  <g filter="url(#shadow)">
-    <polygon points="940,330 1062,269 1184,330 1062,391" fill="url(#teal)"/>
-    <polygon points="940,330 1062,391 1062,472 940,411" fill="#0f766e"/>
-    <polygon points="1062,391 1184,330 1184,411 1062,472" fill="#115e59"/>
-    <text x="1008" y="332" class="white">Main</text>
-    <text x="994" y="362" class="whiteSmall">IPC + local services</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <polygon points="336,558 496,478 656,558 496,638" fill="#ffffff"/>
-    <polygon points="336,558 496,638 496,670 336,590" fill="#e2e8f0"/>
-    <polygon points="496,638 656,558 656,590 496,670" fill="#cbd5e1"/>
-    <text x="448" y="558" class="dark">Preload</text>
-    <text x="400" y="586" class="small">contextBridge contract</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <polygon points="806,540 948,469 1090,540 948,611" fill="url(#amber)"/>
-    <polygon points="806,540 948,611 948,652 806,581" fill="#d97706"/>
-    <polygon points="948,611 1090,540 1090,581 948,652" fill="#b45309"/>
-    <text x="918" y="540" class="white">SQLite</text>
-    <text x="892" y="570" class="whiteSmall">Local terminal state</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="880" y="112" width="226" height="72" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
-    <text x="910" y="145" class="dark">SmartDataPulse API</text>
-    <text x="910" y="168" class="small">External SaaS backend</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="128" y="456" width="184" height="68" rx="12" fill="url(#slate)"/>
-    <text x="160" y="486" class="white">Hardware</text>
-    <text x="160" y="508" class="whiteSmall">Scanner printer drawer</text>
-  </g>
+  <!-- Pulsing accent on main and renderer nodes -->
+  <circle cx="610" cy="268" r="22" fill="none" stroke="#22d3ee" stroke-width="1.5" opacity="0">
+    <animate attributeName="r" values="6;48;6" dur="3.4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;0;0.6" dur="3.4s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="1062" cy="362" r="22" fill="none" stroke="#5eead4" stroke-width="1.5" opacity="0">
+    <animate attributeName="r" values="6;48;6" dur="3.4s" begin="1.2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.6;0;0.6" dur="3.4s" begin="1.2s" repeatCount="indefinite"/>
+  </circle>
 </svg>
