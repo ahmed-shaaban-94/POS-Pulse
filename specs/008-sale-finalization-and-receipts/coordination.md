@@ -7,7 +7,15 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-26 (gate-coordination assignments — Ahmed accepts §A1 reviewer + `/impeccable shape=pass` approver role; Ahmed assigned §A3 migration reviewer + §A4 bridge-API reviewer per 006 precedent; all three gates remain ⛔ held until actual sign-off evidence lands). Previous entries: 2026-05-26 (T002 closure — PR #250 merged); 2026-05-27 (initial creation — closes T001; opens T003 / T004 / T005 / T006 / T007 coordination threads).
+**Last updated:** 2026-05-26 (gate-coordination assignments — Ahmed accepts §A1 reviewer + `/impeccable shape=pass` approver role; Ahmed assigned §A3 migration reviewer + §A4 bridge-API reviewer per 006 precedent; all three gates remain ⛔ held until actual sign-off evidence lands).
+
+**Change log (oldest → newest):**
+
+1. 2026-05-26 — initial creation; closes T001; opens T003 / T004 / T005 / T006 / T007 coordination threads.
+2. 2026-05-26 — T002 closure (PR #250 merged): `sale_finalization` feature flag wired end-to-end.
+3. 2026-05-26 — gate-coordination assignments (this commit; see "Last updated" line above).
+
+*Note on artifact dates:* the `/speckit-plan` v1.0 / `/speckit-tasks` / `/speckit-analyze` / CodeRabbit-pass authoring shows "2026-05-27" in the status table below because those artifacts were authored under a future-shifted machine clock during PR #238's session. The actual chronological order of file mutations on this branch is the change-log above; the "2026-05-27" labels are preserved verbatim in the status table to match the artifact frontmatter and PR records.
 
 ---
 
@@ -42,8 +50,8 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | Embed activation: `[IMPECCABLE …]` markers injected into tasks.md; `docs/DESIGN.md` in canonical Stitch format; §A1 row reframed | ✅ 2026-05-27 (PR #241) |
 | **T001 — Create this file** | ✅ This document |
 | **T002 — Feature flag `sale_finalization` confirmed in `src/shared/app-config.ts`** | ✅ Closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) — `features.saleFinalization?: boolean` added to `AppConfig`; `FeatureFlagsState.saleFinalization` added with fail-closed default `false`; env-var `POS_PULSE_FEATURE_SALE_FINALIZATION` wired into `getAppConfig()`; renderer-store test coverage extended (4 new tests + 2 expanded). Slice 2's `<ReceiptPreview>` and subsequent renderer surfaces gate on this flag at the hydrate boundary. |
-| **T003 — §A3 migration coordination thread opened** | ✅ Opened (see §A3 row + reviewer thread below) — reviewer assignment pending |
-| **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below) — reviewer assignment pending |
+| **T003 — §A3 migration coordination thread opened** | ✅ Opened (see §A3 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A3 pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
+| **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A4-A pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
 | **T005 — §A1 Slice 0 visual-direction reviewer assigned** | ✅ Reviewer: Ahmed; target date: [TARGET DATE TBD] |
 | **T006 — §A3 hardware-matrix coordination thread opened** | ✅ Opened (see Hardware Matrix coordination below) — model pair pending |
 | **T007 — `/speckit-tasks` completion recorded in gate-status table** | ✅ This document |
