@@ -15,7 +15,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
 **Last updated:** 2026-05-27 (three same-day passes: (1) initial generation by `/speckit-tasks`; (2) `/speckit-analyze` remediation — added T520a perf-budget + T403a receipt-number-invariance, tightened T522 Sentry decision-tree; (3) CodeRabbit review response — rewrote T052/T090/T092 against the AD-2 v3 polling worker per CR1, fixed FR-055 audit-category mismatch per CR2 + R2 cleanup, added `issuer_name` + `pin_record_id` to forbidden-fields per CR3, reconciled 187-vs-185 count per CR4)
-**Status:** **Slice 0 ❌ not started** · **Slices 1–6 ❌ blocked pending `/speckit-analyze` + §A1 + §A3 + §A4 commission**
+**Status:** **Slice 0 ❌ not started** · **Slices 1–6 ❌ blocked pending artifact review, owner approval, and gates §A1–§A5**
 
 ---
 
