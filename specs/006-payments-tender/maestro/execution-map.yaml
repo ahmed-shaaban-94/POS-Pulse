@@ -16,12 +16,18 @@
 # It does not invent requirements, task IDs, or gates.
 
 spec: 006-payments-tender
-slice: 4
-version: 9
-base: d45b9a1
-status: SLICE-4-IN-PROGRESS
-preflight: SLICE-4-WAVE-5C-NEXT
-last_updated: "2026-05-25"
+slice: 5
+version: 10
+base: 9778361
+status: SPEC-COMPLETE
+preflight: NONE-SPEC-CLOSED
+last_updated: "2026-05-26"
+# Status history:
+#   v9  (2026-05-25): SLICE-4-IN-PROGRESS, preflight SLICE-4-WAVE-5C-NEXT
+#   v10 (2026-05-26): SPEC-COMPLETE. Slice 4 closed via Waves 5c (PR #225) + 5d (PR #227) + 5e (PR #228).
+#                     Slice 5 (§A5 production readiness) signed off via Waves 6a (PR #231) + 6a-fixup
+#                     (PR #232) + 6b (PR #233) + 6c (PR #234). T309 (feature-flag flip to default-enabled)
+#                     remains explicitly out of 006 scope per tasks.md line 451 — future rollout PR.
 
 source_of_truth:
   tasks: specs/006-payments-tender/tasks.md
@@ -104,8 +110,24 @@ gates:
 
   - id: §A5
     label: Production readiness
-    status: held
-    note: Rollout-time gate only. Does not block slice merge.
+    status: cleared
+    reviewer: Ahmed
+    commissioned_at: "2026-05-26"
+    signed_off_at: "2026-05-26"
+    signed_off_result: "Approved — all §A5 sub-checks green; T309 deferred to future rollout PR (explicitly out of 006 scope per tasks.md line 451)"
+    closed_in_pr: 234
+    note: >
+      Cleared. Wave 6c T308 sign-off recorded in PR #234 (merge SHA 9778361,
+      2026-05-26). Sub-checks: coverage floors met (≥95 % money-math / FSM /
+      audit-emitter; ≥90 % renderer surfaces); Sentry/log redaction audit
+      (docs/runbook/006-payments-redaction-audit.md); security-review handoff
+      packet (docs/runbook/006-payments-security-review.md); race test
+      (tests/integration/payments/concurrent-start-race.test.ts); cashier
+      runbook + developer onboarding written; T307 CI matrix green on
+      windows-latest for codegen:verify → typecheck → lint → test →
+      package:dir. F-W6A-001 (audit-emitter coverage 94.74 %) closed via
+      PR #232 (audit-emitter 100 % line). T309 (feature-flag flip to
+      default-enabled) remains future rollout PR, NOT part of 006 sign-off.
 
 # ---------------------------------------------------------------------------
 # Findings (divergences flagged for /speckit-analyze)
@@ -1410,11 +1432,148 @@ closeout:
         new RED tests in this wave. T291 modifies a Slice 1 file
         (TenderSelection.tsx — cross-feature serialisation point).
 
+    - sub_slice: 006-W5c
+      pr: 225
+      date: "2026-05-25"
+      report_location: >
+        PR #225 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 4 Wave 5c — voucher entry UI"
+      tasks_completed:
+        - T290  # VoucherEntry.tsx
+        - T291  # TenderSelection.tsx (EXTEND — remove reserved-disabled voucher slot)
+      next_action: >
+        Wave 5d (verification + Slice 4 sign-off, T295–T298) closes
+        Slice 4. No source changes; verification + sign-off only.
+
+    - sub_slice: 006-W5d
+      pr: 227
+      date: "2026-05-25"
+      report_location: >
+        PR #227 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 4 Wave 5d — verification + sign-off"
+      tasks_completed:
+        - T295  # full Slice 4 coverage audit
+        - T296  # voucher end-to-end integration test
+        - T297  # force-fail end-to-end integration test
+        - T298  # coordination.md Slice 4 sign-off ledger entry
+      findings_surfaced:
+        - F-W5D-001  # closed in Wave 5e (PR #228)
+      next_action: >
+        Wave 5e closes F-W5D-001 + records T299 final sign-off.
+
+    - sub_slice: 006-W5e
+      pr: 228
+      date: "2026-05-25"
+      report_location: >
+        PR #228 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 4 sign-off (T299)"
+      tasks_completed:
+        - T299  # Slice 4 sign-off recorded
+      findings_closed:
+        - F-W5D-001
+      next_action: >
+        Slice 4 closed. Slice 5 (§A5 production readiness) is the next
+        Maestro work — gate is rollout-time, not slice-merge-time, but
+        the §A5 evidence artifacts (T300–T308) are scoped as Slice 5
+        of the spec.
+
+    - sub_slice: 006-W6-preflight
+      pr: 230
+      date: "2026-05-26"
+      report_location: >
+        PR #230 description on GitHub.
+        Adds docs/superpowers/specs/2026-05-26-006-slice5-preflight-design.md
+        and docs/superpowers/plans/2026-05-26-006-slice5-preflight.md
+        (brainstorming + writing-plans output for Waves 6a/6b/6c).
+      docs_only: true
+      next_action: >
+        Wave 6a (T300 coverage audit) is the first executable wave.
+
+    - sub_slice: 006-W6a
+      pr: 231
+      date: "2026-05-26"
+      report_location: >
+        PR #231 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 5 — Wave 6a coverage audit (T300)"
+      tasks_completed:
+        - T300  # coverage audit; per-floor pass/fail table; reproducibility awk script
+      findings_surfaced:
+        - F-W6A-001  # audit-emitter.ts at 94.74 % line; below §A5 ≥ 95 % floor
+      next_action: >
+        Close F-W6A-001 in a fixup PR (audit-emitter coverage backfill)
+        before progressing Wave 6b.
+
+    - sub_slice: 006-W6a-fixup
+      pr: 232
+      date: "2026-05-26"
+      report_location: >
+        PR #232 description on GitHub.
+        Closes F-W6A-001 by adding 6 unit tests for audit-emitter.ts uncovered
+        lines 220 (deriveAttributionOperatorId malformed inputs), 433
+        (emitTenderReversed reversal_pending_since branches), 449
+        (emitTenderReversalPending shape).
+      findings_closed:
+        - F-W6A-001
+      coverage_result: "audit-emitter.ts 94.74 % → 100.00 % line"
+      next_action: >
+        Wave 6b (T301–T306 six evidence artifacts) is unblocked.
+
+    - sub_slice: 006-W6b
+      pr: 233
+      date: "2026-05-26"
+      report_location: >
+        PR #233 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 5 — Wave 6b evidence artifacts"
+      tasks_completed:
+        - T301  # docs/runbook/006-payments-redaction-audit.md
+        - T302  # docs/runbook/006-payments-security-review.md
+        - T303  # contracts/bridge-api.md Appendix A — receipt-handoff payload
+        - T304  # docs/runbook/006-payments-tender.md (cashier/manager runbook)
+        - T305  # docs/onboarding/006-payments-tender.md
+        - T306  # tests/integration/payments/concurrent-start-race.test.ts
+      coderabbit_fixup: >
+        CR-1 (Major) failure_reason enum drift — 'force_failed_by_manager' →
+        canonical 'manager_force_failed' aligned across bridge-api.md +
+        data-model.md with reference to Wave 5b-main FR-006 amendment +
+        Wave 5e migration 0019. CR-3 (Minor) shell redirection order fixed
+        in redaction audit (2>&1 > file → > file 2>&1). CR-4 (Minor)
+        Number.isSafeInteger-on-string-length corrected to cite the actual
+        EXTERNAL_REFERENCE_REGEX = /^[A-Z0-9]{0,6}$/ at FSM layer.
+      next_action: >
+        Wave 6c (T307 CI matrix verification + T308 §A5 sign-off) closes
+        the spec.
+
+    - sub_slice: 006-W6c
+      pr: 234
+      date: "2026-05-26"
+      report_location: >
+        PR #234 description on GitHub +
+        specs/006-payments-tender/coordination.md §"Slice 5 — §A5
+        production-readiness sign-off (T308)"
+      tasks_completed:
+        - T307  # CI matrix verification (codegen:verify → typecheck → lint → test → package:dir on windows-latest)
+        - T308  # §A5 sign-off recorded
+      gate_cleared: §A5
+      out_of_scope:
+        - T309  # Feature-flag flip to default-enabled — future rollout PR per tasks.md line 451
+      ci_note: >
+        T307 stages all green (codegen:verify, typecheck, lint, test,
+        package:dir). Merge commit 621f7dc (PR #233) hit a post-matrix
+        artifact-upload-step failure due to GitHub Actions storage quota
+        exhaustion — out-of-scope ops/billing concern, not a matrix-stage
+        failure. T307 closes ✅.
+      next_action: >
+        None. Spec 006-payments-tender is COMPLETE. T309 deferred to future
+        rollout PR — not part of 006 closeout. Sub-slice closeout list ends
+        here for spec 006.
+
 # ---------------------------------------------------------------------------
-# Slice 4 trajectory — current state + remaining work
+# Slice 4 trajectory — closed
 # ---------------------------------------------------------------------------
 slice_4_state:
-  status: in_progress
+  status: completed
+  closed_at: "2026-05-25"
+  closed_in_pr: 228  # Wave 5e — F-W5D-001 + Slice 4 sign-off recorded (T299)
   waves_complete:
     - Wave 1 — voucher V-A contract pin (PR #214)
     - Wave 2 — additive migration (PR #215)
@@ -1424,21 +1583,38 @@ slice_4_state:
     - Wave 5a — deferred-reversal resolver (PR #222)
     - Wave 5b-main — force-fail handler + FSM (PR #223)
     - Wave 5b-renderer — ForceFailSurface + route + IPC (PR #224)
-  waves_remaining:
-    - Wave 5c — voucher entry UI (T290 + T291) — NEXT
-    - Wave 5d — verification + Slice 4 sign-off (T295–T298)
+    - Wave 5c — voucher entry UI (T290 + T291) (PR #225)
+    - Wave 5d — verification + Slice 4 sign-off (PR #227)
+    - Wave 5e — F-W5D-001 close + T299 Slice 4 sign-off recorded (PR #228)
   gates_state:
     §A1: cleared
     §A2: cleared
     §A3: cleared
     §A4-A: cleared
     §A4-B: cleared
-    §A5: held (rollout-time only — does NOT block Slice 4 sign-off)
+    §A5: cleared (Wave 6c PR #234 — see slice_5_state below)
+
+# ---------------------------------------------------------------------------
+# Slice 5 trajectory — closed (§A5 production-readiness gate signed off)
+# ---------------------------------------------------------------------------
+slice_5_state:
+  status: completed
+  closed_at: "2026-05-26"
+  closed_in_pr: 234  # Wave 6c — T308 §A5 sign-off
+  waves_complete:
+    - Preflight design + per-task plan (PR #230 — superpowers brainstorming + writing-plans)
+    - Wave 6a — T300 coverage audit + F-W6A-001 surfaced (PR #231)
+    - Wave 6a-fixup — F-W6A-001 closed; audit-emitter 94.74 % → 100 % line (PR #232)
+    - Wave 6b — T301–T306 evidence artifacts (redaction audit, security review,
+      bridge-contract receipt-handoff appendix, cashier runbook, developer
+      onboarding, concurrent-start-race integration test) (PR #233)
+    - Wave 6c — T307 CI matrix verification + T308 §A5 sign-off (PR #234)
+  out_of_scope:
+    - T309  # Feature-flag flip to default-enabled; explicitly future rollout PR per tasks.md line 451
+  findings_closed:
+    - F-W6A-001  # audit-emitter coverage 94.74 % → 100 % line (PR #232)
   next_recommended_action: >
-    Dispatch Wave 5c (voucher entry UI: T290 + T291) single-agent.
-    Authority: §A1 + §A4-B both cleared. Scope: src/renderer/ui/payments/
-    VoucherEntry.tsx (NEW) + src/renderer/ui/payments/TenderSelection.tsx
-    (EXTEND — remove the reserved-disabled voucher slot). Includes 2 RED
-    tests for F-A4B-003 enforcement (8→1 refusal-copy mapping). Does NOT
-    touch any bridge / IPC / main-process file. After Wave 5c merges,
-    Wave 5d (verification + sign-off, no source changes) closes Slice 4.
+    None. Spec 006-payments-tender is COMPLETE. T309 (feature-flag flip to
+    default-enabled) is a future rollout PR — separately scheduled, not part
+    of spec 006 closeout. No further Maestro work commissioned at the 006
+    level. See top-level `status: SPEC-COMPLETE`.
