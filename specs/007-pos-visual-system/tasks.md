@@ -1071,13 +1071,20 @@ inherits 007's recovery without copying generated source.
   four ticked criteria. The note is the final reference any future
   005 / 006 implementing PR uses to claim inheritance.
 
-- [ ] T087 [S6] **Run final validation** — full project
+- [X] T087 [S6] **Run final validation** — full project
   implementation validation set + `package:dir` smoke. `npm run
   typecheck`, `npm run lint`, `npm test`, `npm test -- --coverage`,
   `npm run codegen:verify`, `npm run package:dir`. All green on
   `windows-latest`. The `package:dir` invocation is the **only** one
   in this tasks file (per the "not for every slice" rule); every
   prior implementation slice ran the same set **minus** `package:dir`.
+  **Evidence recorded in PR #118 body** (merged 2026-05-10) under the
+  T087 final-validation table: typecheck/test/codegen:verify green;
+  `lint` + `package:dir` failed on the original author's machine for
+  environment-only reasons (Node 4 GB heap OOM on ESLint, argon2
+  requiring VS C++ Build Tools) — `windows-latest` CI has both
+  resolved and ran the full chain green. The checkbox flip is the
+  documentation closeout for T087; no new execution is required.
 
 - [X] T088 [S6] **Open S6 PR titled `docs(007 S6): visual recovery
   acceptance + regression checklist final`.** Body cites every prior

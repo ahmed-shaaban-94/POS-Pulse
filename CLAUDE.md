@@ -14,29 +14,21 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 ## Active feature
 
 <!-- SPECKIT START -->
-**Active feature:** `specs/007-pos-visual-system` — **status: S1 + S2 + S3 merged; 005/006 UI gate UNBLOCKED; S4 next**
-- Spec: [specs/007-pos-visual-system/spec.md](specs/007-pos-visual-system/spec.md)
-- Plan: [specs/007-pos-visual-system/plan.md](specs/007-pos-visual-system/plan.md)
-- Tasks: [specs/007-pos-visual-system/tasks.md](specs/007-pos-visual-system/tasks.md)
-- Research: [specs/007-pos-visual-system/research.md](specs/007-pos-visual-system/research.md)
-- Contracts: [specs/007-pos-visual-system/contracts/](specs/007-pos-visual-system/contracts/)
+**Active feature:** none — all specs through 007 are closed. Awaiting next commission.
 
-**Slice status:**
-- S0 — Visual reference adjudication (complete, PR #109)
-- S1 — Token layer + global CSS foundation (complete, PR #113)
-- S2 — Shared primitives polish (complete, PR #114)
-- S3 — Shell, sidebar, topbar, route layout primitives (complete, PR #115)
-- S4 — Pairing and terminal-state surfaces (**next**)
-- S5 — Operator sign-in, roster, PinPad, TakeoverPrompt, OperatorBadge
-- S6 — Screenshot / contact-sheet acceptance + regression checklist
-
-**005/006 UI gate:** UNBLOCKED — S1 + S2 + S3 merged with reviewer-ticked T060 criteria.
+**Recently closed:**
+- `specs/007-pos-visual-system` — POS Visual System Recovery. Complete; all six slices (S0–S6) merged. Closeout: PR #118 (S6) + PR for T087 checkbox flip + this banner update.
 
 **Previous features (complete)**:
 - `specs/001-foundation` — Foundation (Electron + Vite + TS + tests + CI).
 - `specs/002-terminal-pairing` — Terminal pairing (device token, branch scope).
 - `specs/003-pos-ui-shell` — POS UI shell (design tokens, navigation, role-indicator slot).
-- `specs/004-operator-session` — Operator session (planning complete v1.1; §A1-gated before implementation).
+- `specs/004-operator-session` — Operator session (complete, §A1 + §A2 gates cleared).
+- `specs/005-sales-cart` — Sales cart (complete through S4-b handoff core).
+- `specs/006-payments-tender` — Payments + tender (complete; §A5 production-readiness gate signed off in PR #234 on 2026-05-26).
+- `specs/007-pos-visual-system` — POS Visual System Recovery (complete; six slices S0–S6 merged 2026-05-10; PRs #109, #113, #114, #115, #116, #117, #118).
+
+**005/006 UI gate:** UNBLOCKED — S1 + S2 + S3 merged with reviewer-ticked T060 criteria. 005 and 006 both consumed the gate; 006 is now closed.
 <!-- SPECKIT END -->
 
 ## Spec Kit workflow
