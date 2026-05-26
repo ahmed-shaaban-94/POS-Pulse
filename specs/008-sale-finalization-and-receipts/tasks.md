@@ -16,6 +16,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 **Created:** 2026-05-27
 **Last updated:** 2026-05-27 (three same-day passes: (1) initial generation by `/speckit-tasks`; (2) `/speckit-analyze` remediation — added T520a perf-budget + T403a receipt-number-invariance, tightened T522 Sentry decision-tree; (3) CodeRabbit review response — rewrote T052/T090/T092 against the AD-2 v3 polling worker per CR1, fixed FR-055 audit-category mismatch per CR2 + R2 cleanup, added `issuer_name` + `pin_record_id` to forbidden-fields per CR3, reconciled 187-vs-185 count per CR4)
 **Status:** **Slice 0 ❌ not started** · **Slices 1–6 ❌ blocked pending artifact review, owner approval, and gates §A1–§A5**
+**Embed:** `[IMPECCABLE shape|craft|polish]` markers on T010 / T173 / T290 / T360 / T450 / T512 delegate UI direction and polish to the `/impeccable` skill per `docs/impeccable-embed-preflight.md §4`. Pre-craft red-bar check (per `docs/impeccable-embed-preflight.md §4.2`) is mandatory before invoking any craft marker.
 
 ---
 
@@ -75,7 +76,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 | Gate | Status | Blocks |
 |:--|:--|:--|
 | **§A0** — Upstream readiness + `/speckit-plan` v1.0 | ✅ Cleared (plan PR closes §A0); procedural lift on `/speckit-analyze` merge | Phase 1 (Setup) startable now |
-| **§A1** — Visual direction Slice 0 | ⛔ Held; gated on `/speckit-analyze` | Slices 1, 2, 3, 5 renderer-touching tasks |
+| **§A1** — Visual direction Slice 0 | ⛔ Held; cleared by the named visual-direction reviewer's sign-off on `specs/008-sale-finalization-and-receipts/visual-direction/README.md` (T010 + T011) — which is also the `/impeccable shape=pass` event per `docs/impeccable-embed-preflight.md §3` | Slices 1, 2, 3, 5 renderer-touching tasks |
 | **§A2** — Backend / OpenAPI | ⛔ Held — **no-op for every 008 slice** confirmed by AD-12 | Documentation only (no-op sign-off recorded per slice) |
 | **§A3** — Migrations | ⛔ Held — five new tables + append-only triggers + indices + audit-category extension in Slice 1 | Slice 1 persistence |
 | **§A4** — Bridge-API surface | ⛔ Held — `sales.*` + `receipts.*` security review required before Slice 1 ships | Slice 1, Slice 2, Slice 3, Slice 5, Slice 6 |
@@ -131,7 +132,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 **Purpose:** Commission §A1 visual-direction review for every 008 receipt + UI surface variant.
 **Gates:** §A0 ✅ + §A1 commission. **Held.**
 
-- [ ] **T010** Commission Slice 0 visual-direction review covering: (a) `first_print` bilingual receipt slip (Arabic-first RTL header, Latin numerals on all numerals, sale-number prominent, sale-level VAT footer with tax-registration ID, branch + terminal_label + cashier display name); (b) `reprint_duplicate` variant with **prominently visible bilingual duplicate-copy marker** ("نسخة طبق الأصل — DUPLICATE COPY") in header band — large weight, top-of-slip, obvious at counter distance (~1.5 m glance); (c) `preview` variant matching `first_print` content; (d) preview UI panel; (e) reprint affordance; (f) **persistent printer-failure banner** (non-modal, no auto-dismiss, retry / reprint / manual-override affordances; 44×44 floor); (g) **persistent drawer-failure manual-override banner** (non-modal, no auto-dismiss, includes `last_successful_open_at` relative timestamp). Output: `specs/008-sale-finalization-and-receipts/visual-direction/README.md`. No code — `specs/008-sale-finalization-and-receipts/visual-direction/README.md`
+- [ ] **T010** [§A1] [IMPECCABLE shape] Commission Slice 0 visual-direction review covering: (a) `first_print` bilingual receipt slip (Arabic-first RTL header, Latin numerals on all numerals, sale-number prominent, sale-level VAT footer with tax-registration ID, branch + terminal_label + cashier display name); (b) `reprint_duplicate` variant with **prominently visible bilingual duplicate-copy marker** ("نسخة طبق الأصل — DUPLICATE COPY") in header band — large weight, top-of-slip, obvious at counter distance (~1.5 m glance); (c) `preview` variant matching `first_print` content; (d) preview UI panel; (e) reprint affordance; (f) **persistent printer-failure banner** (non-modal, no auto-dismiss, retry / reprint / manual-override affordances; 44×44 floor); (g) **persistent drawer-failure manual-override banner** (non-modal, no auto-dismiss, includes `last_successful_open_at` relative timestamp). Sub-items (d)/(e)/(f)/(g) are drafted by `/impeccable shape 008-receipt-surfaces` per `docs/impeccable-embed-preflight.md §3.3`; printed-slip sub-items (a)/(b)/(c) remain reviewer-authored (out of `/impeccable` register). The §A1 reviewer's sign-off IS the `/impeccable shape=pass` event. Output: `specs/008-sale-finalization-and-receipts/visual-direction/README.md`. No code — `specs/008-sale-finalization-and-receipts/visual-direction/README.md`
 - [ ] **T011** Slice 0 review record signed (reviewer, date, result `approved` or `approved-with-revisions`, all seven sub-items above ticked); §A1 sign-off recorded — `specs/008-sale-finalization-and-receipts/coordination.md`
 
 ---
@@ -278,7 +279,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 - [ ] **T170** [US1] Implement `receipts.preview` bridge handler: gates on `requireOperatorSession`; reads Sale via `sales.repository`; derives payload via T164; renders HTML via T160; returns `{ kind: 'ok', preview: { html, width_chars, bilingual_locale } }` — `src/main/receipts/receipts-bridge.ts`
 - [ ] **T171** [US1] Extend `src/shared/bridge-api.ts` with `receipts.preview` Request / Response types per `contracts/bridge-api.md §"receipts.preview"` — `src/shared/bridge-api.ts`
 - [ ] **T172** [US1] Wire the `receipts.*` bridge into preload `contextBridge.exposeInMainWorld`; add `src/preload/receipts.ts` and register in the central preload entry — `src/preload/receipts.ts`
-- [ ] **T173** [US1] Implement `<ReceiptPreview>` component: invokes `receipts.preview`, renders the returned HTML in a scrollable preview panel — `src/renderer/ui/receipts/ReceiptPreview.tsx`
+- [ ] **T173** [US1] [IMPECCABLE craft] Implement `<ReceiptPreview>` component per `/impeccable craft 008-receipt-preview` against the §A1 shape brief; invokes `receipts.preview`, renders the returned HTML in a scrollable preview panel. Component MUST satisfy the failing tests already written in T150 / T151 / T152 (red-bar confirmation per `docs/impeccable-embed-preflight.md §4.2` recorded in `coordination.md` before invocation) — `src/renderer/ui/receipts/ReceiptPreview.tsx`
 
 ### Slice 2 verification
 
@@ -350,7 +351,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 
 ### Implementation tasks — renderer banner
 
-- [ ] **T290** [US1] Implement `<PrinterFailureBanner>` component: subscribes to `sales.subscribe(topic='banner_state')`; renders the three affordances; no auto-dismiss; ≥44×44 controls — `src/renderer/ui/receipts/PrinterFailureBanner.tsx`
+- [ ] **T290** [US1] [IMPECCABLE craft] Implement `<PrinterFailureBanner>` component per `/impeccable craft 008-printer-failure-banner` against the §A1 shape brief; subscribes to `sales.subscribe(topic='banner_state')`; renders the three affordances; no auto-dismiss; ≥44×44 controls. Component MUST satisfy the failing tests already written in T260 / T261 / T262 / T263 (red-bar confirmation per `docs/impeccable-embed-preflight.md §4.2` recorded in `coordination.md` before invocation) — `src/renderer/ui/receipts/PrinterFailureBanner.tsx`
 - [ ] **T291** [P] [US1] Wire the banner mount into the renderer's persistent-banner host (per 003 / 007 banner-host pattern; layered on top of connection-state / operator-session banners per NFR-008) — `src/renderer/ui/banners/BannerHost.tsx`
 
 ### Slice 3 verification
@@ -399,7 +400,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 
 ### Implementation tasks — renderer banner
 
-- [ ] **T360** [US1] Implement `<DrawerFailureBanner>` component: subscribes to `sales.subscribe(topic='banner_state')`; renders the manual-override affordance + relative `last_successful_open_at` timestamp via `formatters`; no auto-dismiss; layered above the connection-state banner (NFR-008) — `src/renderer/ui/receipts/DrawerFailureBanner.tsx`
+- [ ] **T360** [US1] [IMPECCABLE craft] Implement `<DrawerFailureBanner>` component per `/impeccable craft 008-drawer-failure-banner` against the §A1 shape brief; subscribes to `sales.subscribe(topic='banner_state')`; renders the manual-override affordance + relative `last_successful_open_at` timestamp via `formatters`; no auto-dismiss; layered above the connection-state banner (NFR-008). Component MUST satisfy the failing tests already written in T330 / T331 / T332 (red-bar confirmation per `docs/impeccable-embed-preflight.md §4.2` recorded in `coordination.md` before invocation) — `src/renderer/ui/receipts/DrawerFailureBanner.tsx`
 - [ ] **T361** [P] [US1] Extend `BannerHost.tsx` to stack the drawer-failure banner alongside the printer-failure banner (both can coexist; visual order: printer-failure on top, drawer-failure below) — `src/renderer/ui/banners/BannerHost.tsx`
 
 ### Slice 4 verification
@@ -451,7 +452,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 
 ### Implementation tasks — renderer
 
-- [ ] **T450** [US1] Implement `<ReprintAffordance>` component: gated visibility; invokes `receipts.reprint`; surfaces success / refusal via the standard generic-refusal-copy map — `src/renderer/ui/receipts/ReprintAffordance.tsx`
+- [ ] **T450** [US1] [IMPECCABLE craft] Implement `<ReprintAffordance>` component per `/impeccable craft 008-reprint-affordance` against the §A1 shape brief; gated visibility; invokes `receipts.reprint`; surfaces success / refusal via the standard generic-refusal-copy map. Component MUST satisfy the failing tests already written in T430 / T431 (red-bar confirmation per `docs/impeccable-embed-preflight.md §4.2` recorded in `coordination.md` before invocation) — `src/renderer/ui/receipts/ReprintAffordance.tsx`
 - [ ] **T451** [P] [US1] Wire `<ReprintAffordance>` into the "find sale" / "recent sale" UI surfaces (renderer integration; the surfaces themselves are part of 005's existing search UI and 007's nav patterns — touch only the receipt-affordance slot) — `src/renderer/ui/receipts/ReprintAffordance.tsx` + integration point comment
 
 ### Slice 5 verification
@@ -482,7 +483,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 
 - [ ] **T510** [US1] Implement `receipts.manualOverride` bridge handler: `requireOperatorSession` gate + idempotency + INSERT `print_events` with `(purpose='first_print', outcome='manual_override')` + audit emit; banner dismissed on response — `src/main/receipts/receipts-bridge.ts`
 - [ ] **T511** [US1] Extend `src/shared/bridge-api.ts` with `receipts.manualOverride` Request / Response types per `contracts/bridge-api.md §"receipts.manualOverride"` — `src/shared/bridge-api.ts`
-- [ ] **T512** [US1] Wire the Manual receipt override button on `<PrinterFailureBanner>` to invoke `receipts.manualOverride` with a fresh idempotency key per click; on success, dismiss the banner — `src/renderer/ui/receipts/PrinterFailureBanner.tsx`
+- [ ] **T512** [US1] [IMPECCABLE craft] Wire the Manual receipt override button on `<PrinterFailureBanner>` to invoke `receipts.manualOverride` with a fresh idempotency key per click; on success, dismiss the banner. Extends T290's `<PrinterFailureBanner>` per `/impeccable craft 008-printer-failure-banner-manual-override` against the §A1 shape brief. Component MUST satisfy the failing tests already written in T501–T504 (red-bar confirmation per `docs/impeccable-embed-preflight.md §4.2` recorded in `coordination.md` before invocation) — `src/renderer/ui/receipts/PrinterFailureBanner.tsx`
 
 ### §A5 production-readiness tasks
 

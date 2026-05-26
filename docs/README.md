@@ -8,7 +8,7 @@ Documentation index for POS Pulse, the Windows desktop point-of-sale terminal fo
 | --- | --- |
 | Product &amp; operations | [Root README](../README.md) · [Product brief](product.md) · [Hardware matrix](hardware-matrix.md) · [POS shell spec](../specs/003-pos-ui-shell/spec.md) |
 | Engineering | [Foundation plan](../specs/001-foundation/plan.md) · [Terminal pairing plan](../specs/002-terminal-pairing/plan.md) · [Operator session plan](../specs/004-operator-session/plan.md) · [Visual system plan](../specs/007-pos-visual-system/plan.md) |
-| Design | [Design system tokens](design-system.md) · [Visual system spec](../specs/007-pos-visual-system/spec.md) · [Asset guide](assets/README.md) |
+| Design | [Design system](DESIGN.md) · [Visual system spec](../specs/007-pos-visual-system/spec.md) · [Asset guide](assets/README.md) |
 | Security | [Constitution](../.specify/memory/constitution.md) · [Operator security review](../specs/004-operator-session/security-review/s1-review.md) · [Redaction evidence](../specs/004-operator-session/security-review/s1-redaction-evidence.md) |
 | Integration | [Pairing HTTP contract](../specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator backend endpoints](../specs/004-operator-session/contracts/backend-endpoints.md) · [API snapshot](../scripts/openapi-snapshot.json) |
 
@@ -17,7 +17,7 @@ Documentation index for POS Pulse, the Windows desktop point-of-sale terminal fo
 | Document | Purpose |
 | --- | --- |
 | [Product brief](product.md) | Users, product purpose, brand personality, design principles, accessibility. |
-| [Design system](design-system.md) | Color tokens, typography, spacing, motion, and component foundations. |
+| [Design system](DESIGN.md) | Color tokens, typography, spacing, motion, and component foundations. Stitch-format DESIGN.md consumed by the `/impeccable` skill. |
 | [Hardware matrix](hardware-matrix.md) | MVP hardware scope, tested-model registry, and update rules. |
 | [Asset guide](assets/README.md) | Visual asset naming and style guidance for README and docs diagrams. |
 | [Foundation quickstart](../specs/001-foundation/quickstart.md) | Clone-to-window developer onboarding for the secure Electron substrate. |

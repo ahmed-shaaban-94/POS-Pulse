@@ -2,9 +2,11 @@
 
 > Authoritative checklist for embedding the `/impeccable` skill into a Spec Kit feature's `tasks.md` to drive UI decisions and polish.
 >
-> **Status:** DRAFT v0.3 — written 2026-05-27 in service of `specs/008-sale-finalization-and-receipts`. Apply to 008 first; promote to general use only after 008 §A5 sign-off retrospects this pattern.
+> **Status:** ACTIVATING v0.4 — written 2026-05-27 in service of `specs/008-sale-finalization-and-receipts`. Apply to 008 first; promote to general use only after 008 §A5 sign-off retrospects this pattern.
 >
-> **v0.3 changelog (2026-05-27):** Metadata/path fix — corrected every reference to the product context file from the uppercase `docs/PRODUCT.md` to the actual on-disk lowercase `docs/product.md`. Reframed `docs/DESIGN.md` as an **activation artifact** that the embed creates (via `/impeccable document` reconciled against existing sources), not a precondition that must already exist on `main`. `docs/design-system.md` and `specs/007-pos-visual-system/` remain the reconciliation sources (inputs to DESIGN.md authoring, not substitutes for it).
+> **v0.4 changelog (2026-05-27 — activation PR):** Activation discovery — `docs/design-system.md` was already a complete Stitch-format DESIGN.md (YAML frontmatter + all six sections + the "Accountable Instrument" North Star + Named Rules). The preflight's v0.3 premise that DESIGN.md needed to be generated from scratch was therefore wrong. The activation PR resolves this with a `git mv docs/design-system.md docs/DESIGN.md` (history-preserving), updates the three repo references (this preflight, `docs/README.md`, root `README.md`), and rewrites P2 + §9 to reflect that DESIGN.md is now present in canonical form. The `/impeccable document` step is **skipped** because the artifact already exists in the right shape under a different name. `specs/007-pos-visual-system/` remains as a secondary reconciliation reference for any visual decisions that didn't make it into DESIGN.md.
+>
+> **v0.3 changelog (2026-05-27):** Metadata/path fix — corrected every reference to the product context file from the uppercase `docs/PRODUCT.md` to the actual on-disk lowercase `docs/product.md`. Reframed `docs/DESIGN.md` as an **activation artifact** that the embed creates (via `/impeccable document` reconciled against existing sources), not a precondition that must already exist on `main`. `docs/design-system.md` and `specs/007-pos-visual-system/` remain the reconciliation sources (inputs to DESIGN.md authoring, not substitutes for it). *(Superseded by v0.4 — the artifact existed all along.)*
 >
 > **v0.2 changelog (2026-05-27):** External review applied — corrected `src/shared/money/` → `src/shared/payments/money-math.ts` (C1); added tag stacking order to §4 (C2); reconciled §A1 gate definition vs tasks.md line 78 (C3); added `docs/design-system.md` + 007 reconciliation to P2 (H1); pinned T-numbers to current tasks.md state (H2); scoped §3 shape-brief coverage to renderer-only surfaces (H3); added pre-craft red-bar check to §4 (H4).
 
@@ -47,13 +49,13 @@ Every prereq below MUST pass before the embed activates. Each row is a blocker.
 | # | Prereq | Verification | Why |
 |:--:|:--|:--|:--|
 | P1 | `docs/product.md` exists, ≥ 200 chars, no `[TODO]` markers | `node .claude/skills/impeccable/scripts/load-context.mjs` → `hasProduct: true` | `/impeccable` refuses to design without product context. |
-| P2 | `docs/DESIGN.md` **does not exist on `main` yet**. It is an **activation artifact** that the embed creates during activation, by running `/impeccable document` against `src/renderer/` and reconciling the draft against the two existing reconciliation sources: `docs/design-system.md` and `specs/007-pos-visual-system/`. The reconciled file is committed at activation time, never assumed to be present before. | Activation procedure: (a) confirm `docs/DESIGN.md` is absent on `main` (this is the expected starting state). (b) Run `/impeccable document` against `src/renderer/` to draft DESIGN.md. (c) Diff the draft against `docs/design-system.md` and `specs/007-pos-visual-system/`. (d) Resolve conflicts in favor of the existing 003 tokens + 007 visual system; record reconciled deltas in DESIGN.md. (e) Commit DESIGN.md in the activation PR (not in this preflight PR). | The repo already has a design system (`docs/design-system.md`) and a recovered visual system (007). These are **reconciliation sources**, not substitutes for DESIGN.md — `/impeccable` reads DESIGN.md specifically. Pretending DESIGN.md already exists creates an audit-trail lie; treating it as an activation artifact correctly records that the embed PR is what produces it. |
+| P2 | `docs/DESIGN.md` exists at `docs/DESIGN.md`, in Stitch DESIGN.md format (YAML frontmatter + six fixed sections + Named Rules). The file is `/impeccable`-loader-readable via the skill's standard `docs/` fallback. | (a) Confirm `docs/DESIGN.md` is present (renamed from `docs/design-system.md` in the activation PR). (b) Confirm the loader resolves it: `node .claude/skills/impeccable/scripts/load-context.mjs` returns `hasDesign: true`. (c) Spot-check the six sections (Overview, Colors, Typography, Elevation, Components, Do's and Don'ts) are present and the Creative North Star is articulated. | `/impeccable` reads `DESIGN.md` (case-insensitive) at root or in `docs/`; without it, the skill operates from PRODUCT.md alone and produces less-on-brand output. The pre-existing `docs/design-system.md` was already in Stitch format; the activation PR renamed it to satisfy the loader's expected filename without regenerating the content. |
 | P3 | `register=product` recorded in `docs/product.md` | `grep -n 'register' docs/product.md` | 008 is a product surface (terminal UI), not a brand surface. Mismatched register loads the wrong reference and produces marketing aesthetics. |
 | P4 | §A1 visual-direction reviewer named in `coordination.md` | Task T005 complete | The reviewer adjudicates `/impeccable`'s shape brief. Without a named owner, the shape-pass gate cannot be cleared. |
 | P5 | Constitution v1.5.1 (or later) read by the embedder | Section §IV (44×44 invariant), §P8 (no copy-paste from `_reference/Data-Pulse/`), §P11 (PII / cards never in logs), §P14 (a11y AA + axe-core) | `/impeccable` does not know constitution rules; the embedder enforces them in the post-craft checklist (§7 below). |
 | P6 | TDD posture: failing test exists for each component before craft begins | Tasks T150 / T260 / T330 / T430 (and analogues for new components) are written first | `/impeccable craft` is **shape-driven**, not test-driven. The failing test is the load-bearing contract; impeccable's output must satisfy it. Reversing the order risks impeccable producing UI that the test then forces a rewrite of. |
 
-If P1 passes but P2 has not been executed at activation time, **do not let `/impeccable` synthesize DESIGN.md from `docs/product.md` alone**. The renderer code (plus `docs/design-system.md` and 007) is the source of truth. Run `/impeccable document` against `src/renderer/` and reconcile against both existing sources before committing DESIGN.md.
+If P1 passes but P2's loader check returns `hasDesign: false`, **do not let `/impeccable` proceed**. Verify `docs/DESIGN.md` is committed (the activation PR landed `git mv docs/design-system.md docs/DESIGN.md`) before re-running the loader. `specs/007-pos-visual-system/` remains a secondary reference for any visual decisions not captured in DESIGN.md.
 
 ---
 
@@ -238,18 +240,18 @@ If a `[IMPECCABLE]` marker shows up on any of the above, it's a preflight violat
 
 The embed activates ONLY when every line below is signed.
 
-- [ ] **§A1 gate definition reconciled** per §3.1 — `tasks.md` line 78 updated to match the reviewer-sign-off framing, OR §A1 owner confirms the visual-direction-reviewer gate is the active §A1 deliverable.
-- [ ] **P1–P6 all green** (load-context output saved to `coordination.md`).
+- [x] **§A1 gate definition reconciled** per §3.1 — `tasks.md` line 78 §A1 row updated in this activation PR to reflect the reviewer-sign-off framing ("⛔ Held; cleared by the named visual-direction reviewer's sign-off on `visual-direction/README.md` (T010 + T011) — which is also the `/impeccable shape=pass` event").
+- [ ] **P1–P6 all green** (load-context output saved to `coordination.md`). *(Self-validatable: P1 ✅ `docs/product.md` present; P2 ✅ `docs/DESIGN.md` present per box 4 below; P3 ✅ register=product in product.md line 5; P5 ✅ constitution v1.5.1 present. P4 — §A1 reviewer-named — and P6 — failing tests on the board — require the §A1 reviewer + Slice 0 commencement, hence this box stays unticked until those land.)*
 - [ ] **§A1 reviewer named AND has accepted the role** of shape-brief approver per §3 (notification alone is insufficient — record explicit acceptance in `coordination.md`).
-- [ ] **`docs/DESIGN.md` generated as an activation artifact**, reconciled against `docs/design-system.md` + 007, and committed in the activation PR (NOT in this preflight PR) per P2.
-- [ ] **Embed scope ratified**: this preflight read, scope table (§1) confirmed, non-uses (§8) confirmed.
-- [ ] **Marker syntax (§4) referenced from `specs/008-.../tasks.md`** via a single sentence near the Status line — e.g., "Embed: `[IMPECCABLE …]` markers per `docs/impeccable-embed-preflight.md §4`."
-- [ ] **Constitution version pinned** at the bottom of this preflight matches `tasks.md`'s pinned version (v1.5.1).
+- [x] **`docs/DESIGN.md` present in canonical Stitch format** (renamed from `docs/design-system.md` in this activation PR per v0.4 changelog). Loader returns `hasDesign: true`. `specs/007-pos-visual-system/` retained as secondary reference.
+- [x] **Embed scope ratified**: this preflight read, scope table (§1) confirmed, non-uses (§8) confirmed. Activation PR injects markers strictly within the §1 in-scope list (T010 / T173 / T290 / T360 / T450 / T512); no §8 non-use surface received a marker.
+- [x] **Marker syntax (§4) referenced from `specs/008-.../tasks.md`** via a single sentence directly under the Status line — "Embed: `[IMPECCABLE shape\|craft\|polish]` markers on T010 / T173 / T290 / T360 / T450 / T512 delegate UI direction and polish to the `/impeccable` skill per `docs/impeccable-embed-preflight.md §4`."
+- [x] **Constitution version pinned** at the bottom of this preflight (v1.5.1) matches `tasks.md` line 15 (v1.5.1).
 
 Signed: ___________________ (embedder) · ___________________ (§A1 reviewer) · ___________________ (date)
 
 ---
 
 **Constitution version pinned:** v1.5.1
-**Last updated:** 2026-05-27 (v0.3 — metadata/path fixes; DESIGN.md framed as activation artifact)
+**Last updated:** 2026-05-27 (v0.4 — activation discovery: design-system.md was already Stitch DESIGN.md; renamed in this activation PR)
 **Owner of this preflight:** the embedder for 008. Promote to a general spec-kit rule only after 008 §A5 retrospects the embed.
