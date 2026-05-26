@@ -16,18 +16,21 @@ export interface FeatureFlagsState {
   cart: boolean;
   /** 006-payments-tender S1: enables PaymentSurface. Fail-closed default: false. */
   payments: boolean;
+  /** 008-sale-finalization-and-receipts T002: enables 008 finalize listener + receipts UI. Fail-closed default: false. */
+  saleFinalization: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
 
 export interface FeatureFlagsStore extends FeatureFlagsState {
-  hydrate(flags: { cart?: boolean; payments?: boolean }): void;
+  hydrate(flags: { cart?: boolean; payments?: boolean; saleFinalization?: boolean }): void;
   reset(): void;
 }
 
 const INITIAL: FeatureFlagsState = {
   cart: false,
   payments: false,
+  saleFinalization: false,
   hydrated: false,
 };
 
@@ -37,6 +40,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
     set({
       cart: flags.cart === true,
       payments: flags.payments === true,
+      saleFinalization: flags.saleFinalization === true,
       hydrated: true,
     });
   },

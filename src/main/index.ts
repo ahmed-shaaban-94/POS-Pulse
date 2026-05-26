@@ -336,7 +336,16 @@ app
       const cartEnabled =
         typeof cartRaw === 'string' &&
         ['1', 'true', 'yes', 'on'].includes(cartRaw.trim().toLowerCase());
-      cfg.features = { cart: cartEnabled };
+      // 008-sale-finalization-and-receipts T002 — sale_finalization feature flag (default false).
+      // Same truthy-value contract as cart. Disabled-by-default is the fail-safe: 006 still
+      // settles payments but 008's finalize listener short-circuits — no receipt prints, no
+      // drawer kicks, no audit-event emits. See `docs/runbook/008-sale-finalization-and-receipts.md`
+      // (authored at Slice 6 T524 / T525) for the rollback path.
+      const saleFinalizationRaw = process.env['POS_PULSE_FEATURE_SALE_FINALIZATION'];
+      const saleFinalizationEnabled =
+        typeof saleFinalizationRaw === 'string' &&
+        ['1', 'true', 'yes', 'on'].includes(saleFinalizationRaw.trim().toLowerCase());
+      cfg.features = { cart: cartEnabled, saleFinalization: saleFinalizationEnabled };
       return cfg;
     };
     registerAppConfigHandler(ipcMain, getAppConfig);

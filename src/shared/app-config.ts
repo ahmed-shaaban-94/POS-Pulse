@@ -40,5 +40,18 @@ export interface AppConfig {
      * Defaults to `false`. Flip via `POS_PULSE_FEATURE_PAYMENTS` in main.
      */
     payments?: boolean;
+    /**
+     * 008-sale-finalization-and-receipts T002 — enables the 008 finalize
+     * listener + receipts preview/print/reprint UI surfaces.
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_SALE_FINALIZATION`
+     * in main. Disabled-by-default is the fail-safe per Constitution
+     * (Production Readiness Gates): in disabled state, 006 still settles
+     * payments but 008's finalize listener short-circuits — no receipt
+     * prints, no drawer kicks, no audit-event emits. The cashier falls
+     * back to manual receipts. See `docs/runbook/008-sale-finalization-and-receipts.md`
+     * (authored at Slice 6 T524 / T525) for the rollback path.
+     */
+    saleFinalization?: boolean;
   };
 }
