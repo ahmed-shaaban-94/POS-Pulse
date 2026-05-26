@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-26 (§A1 SIGN-OFF — Ahmed signed `approved` on the visual-direction brief; `shape=pass` recorded; §A1 gate ✅ CLEARED; T010 + T011 complete; (d)/(e)/(f)/(g) approved verbatim; (a)/(b)/(c) printed-slip layouts DEFERRED to follow-up commit before T173 craft fires; all 6 open follow-ups resolved by accepting brief defaults).
+**Last updated:** 2026-05-27 (post-parallel-sign-off cleanup — roll up change log for four merged sister PRs; flip §A3 + §A4 rows in tasks.md gate ledger; refresh top-of-tasks.md status line. All 008 implementation gates (§A1 / §A3 / §A4) now ✅ cleared; §A5 remains the production-readiness Slice 6 sign-off only).
 
 **Change log (oldest → newest):**
 
@@ -15,7 +15,12 @@
 2. 2026-05-26 — T002 closure (PR #250 merged): `sale_finalization` feature flag wired end-to-end.
 3. 2026-05-26 — gate-coordination assignments: Ahmed accepts §A1 reviewer role; Ahmed assigned §A3 + §A4 reviewer per 006 precedent.
 4. 2026-05-26 — T010 shape draft authored (PR #254 merged): renderer-portion sub-items (d) (e) (f) (g) of visual-direction/README.md drafted by `/impeccable shape 008-receipt-surfaces`.
-5. 2026-05-26 — §A1 SIGN-OFF (this commit): Ahmed signs `approved` on visual-direction/README.md; `/impeccable shape=pass` recorded; §A1 gate ✅ cleared; T010 + T011 marked complete; (a)/(b)/(c) DEFERRED to a follow-up commit (must land before Slice 2's T173 craft fires).
+5. 2026-05-26 — §A1 SIGN-OFF (PR #255 merged): Ahmed signs `approved` on visual-direction/README.md; `/impeccable shape=pass` recorded; §A1 gate ✅ cleared; T010 + T011 marked complete; (a)/(b)/(c) DEFERRED to follow-up commit (which then landed in PR #259 — see entry 9 below).
+6. 2026-05-27 — §A3 SIGN-OFF (PR #256 merged): Ahmed signs migration review `approved`; ten-item scope checklist verified; Slice 1 §A3 migration tasks T020–T027 authorized.
+7. 2026-05-27 — §A4 SIGN-OFF (PR #257 merged): Ahmed signs bridge-API security review `approved`; eight-item §A4 security checklist verified; Slice 1 bridge handlers T100/T101 + all later slices' bridge work authorized.
+8. 2026-05-27 — T006 hardware-matrix pair committed (PR #258 merged): Epson TM-T20III + APG VBS320 pair landed in docs/hardware-matrix.md pending rows; Slice 3 (T200/T201/T202) + Slice 4 (T310–T352) targets locked.
+9. 2026-05-27 — Printed-slip (a)/(b)/(c) proxy-authored (PR #259 merged): full 42-column 80 mm ESC/POS layout + duplicate-copy marker composition + preview-equals-print byte-stability commitment. The §A1 deferred-authoring deviation is now resolved; Slice 2 T173 craft unblocked from the printed-slip side.
+10. 2026-05-27 — post-parallel-sign-off cleanup (this commit): change log rolled up; tasks.md §A3 + §A4 gate-ledger rows flipped from ⛔ Held to ✅ Cleared; top-of-tasks.md Status line refreshed to reflect Slice 1 startable.
 
 *Note on artifact dates:* the `/speckit-plan` v1.0 / `/speckit-tasks` / `/speckit-analyze` / CodeRabbit-pass authoring shows "2026-05-27" in the status table below because those artifacts were authored under a future-shifted machine clock during PR #238's session. The actual chronological order of file mutations on this branch is the change-log above; the "2026-05-27" labels are preserved verbatim in the status table to match the artifact frontmatter and PR records.
 
