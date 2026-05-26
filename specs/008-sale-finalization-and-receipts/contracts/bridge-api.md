@@ -1,4 +1,4 @@
-# Contract: `sales.*` + `receipts.*` Bridge API — DRAFT, NOT APPROVED
+# Contract: `sales.*` + `receipts.*` Bridge API — ✅ §A4 APPROVED 2026-05-26
 
 **Feature ID:** 008-sale-finalization-and-receipts
 **Plan:** [../plan.md](../plan.md) v1.0
@@ -7,7 +7,7 @@
 **Research:** [../research.md](../research.md)
 **Created:** 2026-05-27
 **Constitution version pinned:** v1.5.1
-**§A4 gate:** ⛔ **Held** — security-review handoff required before Slice 1 ships.
+**§A4 gate:** ✅ **CLEARED 2026-05-26** — Ahmed signed `approved`; eight-item security checklist below verified. Slice 1 bridge-handler tasks (T100, T101) + all subsequent slices' bridge work authorized. Full sign-off record in [../coordination.md §"§A4 bridge-API reviewer thread (T004)"](../coordination.md).
 
 > The `sales.*` and `receipts.*` preload-bridge namespaces are the
 > **trust boundary** between the renderer and the main process for
