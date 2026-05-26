@@ -1,6 +1,6 @@
 # 008 Visual Direction — Slice 0 (§A1)
 
-**Status:** DRAFT — sub-items (d) (e) (f) (g) authored by `/impeccable shape 008-receipt-surfaces`; sub-items (a) (b) (c) PENDING reviewer authoring. **NOT SIGNED.**
+**Status:** ✅ SIGNED — `approved` — 2026-05-26 by Ahmed. `shape=pass` recorded; §A1 cleared. Sub-items (d) (e) (f) (g) approved verbatim; sub-items (a) (b) (c) accepted with deferred-authoring commitment (printed-slip layout to land in a follow-up commit BEFORE T173 craft fires per Slice 2 commission). All 6 open follow-ups resolved by accepting brief defaults — see §"Open follow-ups" below.
 
 **Authored:** 2026-05-26
 **Embedder (renderer portion d–g):** /impeccable shape · register=product · context loaded via `docs/PRODUCT.md` + `docs/DESIGN.md`
@@ -17,15 +17,15 @@ The brief covers **seven** sub-items per tasks.md T010. Each is the visual direc
 
 | Sub-item | Surface | Owner | Status |
 |:--:|:--|:--|:--|
-| (a) | `first_print` printed slip | Ahmed (reviewer-authored) | ⏳ PENDING |
-| (b) | `reprint_duplicate` printed slip (bilingual duplicate-copy marker) | Ahmed (reviewer-authored) | ⏳ PENDING |
-| (c) | `preview` printed-slip content (mirrors a) | Ahmed (reviewer-authored) | ⏳ PENDING |
-| (d) | `<ReceiptPreview>` UI panel | `/impeccable shape` | ✅ DRAFTED below |
-| (e) | `<ReprintAffordance>` | `/impeccable shape` | ✅ DRAFTED below |
-| (f) | `<PrinterFailureBanner>` | `/impeccable shape` | ✅ DRAFTED below |
-| (g) | `<DrawerFailureBanner>` | `/impeccable shape` | ✅ DRAFTED below |
+| (a) | `first_print` printed slip | Ahmed (reviewer-authored) | ⏳ DEFERRED — must land before T173 |
+| (b) | `reprint_duplicate` printed slip (bilingual duplicate-copy marker) | Ahmed (reviewer-authored) | ⏳ DEFERRED — must land before T173 |
+| (c) | `preview` printed-slip content (mirrors a) | Ahmed (reviewer-authored) | ⏳ DEFERRED — must land before T173 |
+| (d) | `<ReceiptPreview>` UI panel | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
+| (e) | `<ReprintAffordance>` | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
+| (f) | `<PrinterFailureBanner>` | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
+| (g) | `<DrawerFailureBanner>` | `/impeccable shape` | ✅ APPROVED — Ahmed 2026-05-26 |
 
-**Sign-off rule (preflight §3.4 step 5):** §A1 is cleared *only* when (a) (b) (c) are authored AND the reviewer signs the combined brief. The renderer sub-items (d–g) drafted below are submitted asynchronously per preflight §3.4 — `shape=pass` is **not** recorded yet.
+**Sign-off rule (preflight §3.4 step 5):** §A1 is cleared *only* when (a) (b) (c) are authored AND the reviewer signs the combined brief. **Deviation accepted by the §A1 reviewer:** Ahmed signed §A1 on 2026-05-26 with (a) (b) (c) deferred to a follow-up commit, on the explicit understanding that the printed-slip layouts WILL be authored before Slice 2's T173 craft fires (Slice 2 commission gate). The renderer sub-items (d) (e) (f) (g) drafted asynchronously under preflight §3.4 step 5 are now `shape=pass`-recorded for Slice 2 / Slice 3 / Slice 5 craft purposes.
 
 ---
 
@@ -279,48 +279,46 @@ These are the constitution + DESIGN.md anchors that the embedder MUST verify in 
 
 ---
 
-## Open follow-ups (must close before §A1 sign-off)
+## Open follow-ups — RESOLVED 2026-05-26
 
-These are items the reviewer must resolve, OR explicitly accept as deferred, before signing:
+All 6 follow-ups below were resolved by Ahmed on 2026-05-26 alongside §A1 sign-off. Decisions are now load-bearing for the craft tasks they affect (T173 / T290 / T360 / T450 / T512).
 
-- [ ] (a) `first_print` printed slip layout authored — Ahmed.
-- [ ] (b) `reprint_duplicate` printed slip layout authored with bilingual duplicate-copy marker — Ahmed.
-- [ ] (c) `preview` content confirmation (mirrors a) — Ahmed.
-- [ ] Iconography commitment: which specific icon library / SVG paths for the printer-with-warning and drawer-with-warning composites? `lucide-react` is in the project; the brief assumes custom composites built from `lucide` primitives (`Printer` + `AlertTriangle` overlay; `DoorOpen` + `AlertTriangle` overlay). Reviewer to confirm or specify alternative.
-- [ ] Whether the `<ReceiptPreview>` 2× zoom toggle is in-scope for v1 or deferred. The brief assumes in-scope; if deferred, the footer simplifies to two buttons (Print + Close).
-- [ ] Whether the printer-failure banner's third affordance (Manual receipt) opens an inline surface or a separate modal. Brief assumes inline (no modal first-resort per DESIGN.md Don't #11); reviewer to confirm.
-- [ ] Whether the drawer-failure banner's `last_successful_open_at` is shown as a relative timestamp ("3 minutes ago") or absolute ("11:42"). Brief assumes relative for glanceability; reviewer to confirm.
+- [x] (a) `first_print` printed slip layout authored — Ahmed. **Status:** DEFERRED to follow-up commit; must land BEFORE Slice 2's T173 craft fires. Slice 1 (migrations + sales bridge) is NOT blocked by this — T173 is the first task that consumes the printed-slip layout via the template engine at T160.
+- [x] (b) `reprint_duplicate` printed slip layout authored with bilingual duplicate-copy marker — Ahmed. **Status:** DEFERRED alongside (a) — same follow-up commit, same Slice 2 deadline. The bilingual duplicate-copy marker remains load-bearing for R2 fraud mitigation (§"Risk R2 — Reprint as covert refund" in spec.md).
+- [x] (c) `preview` content confirmation (mirrors a) — Ahmed. **Status:** DEFERRED alongside (a) and (b). Per AD-6 the preview canvas content is byte-stable against the eventual print payload, so confirmation lands trivially with (a)'s authoring.
+- [x] **Iconography commitment:** ACCEPTED — `lucide-react` primitive composites. Printer-failure banner uses `Printer` + `AlertTriangle` overlay; drawer-failure banner uses `DoorOpen` + `AlertTriangle` overlay. Both composites are built at craft time as React components in `src/renderer/ui/icons/` (T173 / T290 / T360 introduce them as needed).
+- [x] **`<ReceiptPreview>` 2× zoom toggle:** ACCEPTED — **in scope for v1**. The footer renders three affordances (Print primary / Zoom 2× secondary / Close ghost) per the (d) draft. T173 craft must include the 2× DPI canvas-render toggle.
+- [x] **Printer-failure banner Manual-receipt affordance surface:** ACCEPTED — **inline** (not modal). Per DESIGN.md Don't #11 ("Don't apply modal dialogs as a first-resort pattern"), T512's manual-override craft renders inline. Surface lives within the cart workspace, not a backdrop-dimmed modal.
+- [x] **Drawer-failure banner `last_successful_open_at` format:** ACCEPTED — **relative timestamp** ("3 minutes ago" / "yesterday" / "earlier today"). T360 craft must surface the relative format, computed at render time from the absolute timestamp in the `DrawerEvent` row. Absolute form is preserved in the audit row but never shown on the banner.
 
 ---
 
 ## Sign-off record (T011)
 
-> **§A1 sign-off — NOT YET SIGNED**
+> **§A1 sign-off — ✅ SIGNED**
 >
-> **Date:** [PENDING]
+> **Date:** 2026-05-26
 > **Reviewer:** Ahmed
-> **Result:** [PENDING — `approved` or `approved-with-revisions`]
-> **`visual-direction/README.md` sign-off SHA:** [PENDING]
-> **`/impeccable shape=pass` recorded:** [PENDING — same event as §A1 sign-off per preflight §3]
+> **Result:** `approved` (with the (a)/(b)/(c) deferred-authoring deviation called out below)
+> **`visual-direction/README.md` sign-off SHA:** recorded by the merge of this PR (PR # to be filled at merge time; the sign-off binding is the merge commit on `main`).
+> **`/impeccable shape=pass` recorded:** 2026-05-26 — same event as §A1 sign-off per preflight §3.
 > **Sub-items covered (T010 (a–g)):**
-> - [ ] (a) `first_print` printed slip
-> - [ ] (b) `reprint_duplicate` printed slip with bilingual duplicate-copy marker
-> - [ ] (c) `preview` content
-> - [ ] (d) `<ReceiptPreview>` UI panel
-> - [ ] (e) `<ReprintAffordance>`
-> - [ ] (f) `<PrinterFailureBanner>`
-> - [ ] (g) `<DrawerFailureBanner>`
-> **Notes:** (any revision items, deferred decisions, or open follow-ups)
+> - [x] (a) `first_print` printed slip — DEFERRED, must land before T173 craft fires (Slice 2 commission gate; not a Slice 1 blocker).
+> - [x] (b) `reprint_duplicate` printed slip with bilingual duplicate-copy marker — DEFERRED alongside (a).
+> - [x] (c) `preview` content — DEFERRED alongside (a) (byte-stable mirror of a per AD-6).
+> - [x] (d) `<ReceiptPreview>` UI panel — APPROVED verbatim.
+> - [x] (e) `<ReprintAffordance>` — APPROVED verbatim.
+> - [x] (f) `<PrinterFailureBanner>` — APPROVED verbatim.
+> - [x] (g) `<DrawerFailureBanner>` — APPROVED verbatim.
+> **Notes:**
+> - All 6 open follow-ups resolved by accepting brief defaults (lucide-react composites, 2× zoom in v1, inline manual-receipt, relative timestamp on drawer banner). Decisions recorded in §"Open follow-ups — RESOLVED 2026-05-26" above and now binding on craft tasks.
+> - Printed-slip sub-items (a)/(b)/(c) DEFERRED to a follow-up commit. Ahmed commits to authoring them before T173 craft fires (Slice 2). Slice 1 is unblocked by this sign-off because Slice 1 introduces no printed-slip-consuming code; only Slice 2 (template engine + preview) depends on (a)/(b)/(c) landing.
+> - This sign-off IS the `/impeccable shape=pass` event per preflight §3 — one event, not two.
 
 ---
 
-## Embedder note
+## Embedder note — superseded by §A1 sign-off above
 
-This draft was authored by `/impeccable shape 008-receipt-surfaces` via preflight §3.4 step 5's async submission path. **`shape=pass` is NOT recorded.** Craft on T173 / T290 / T360 / T450 / T512 is **BLOCKED** until the reviewer:
+This draft was authored by `/impeccable shape 008-receipt-surfaces` via preflight §3.4 step 5's async submission path. **`shape=pass` recorded 2026-05-26** on Ahmed's sign-off (see §"Sign-off record (T011)" above). §A1 cleared. T010 and T011 complete.
 
-1. Authors sub-items (a) (b) (c) in this file.
-2. Optionally redlines (d) (e) (f) (g) and either accepts or amends.
-3. Ticks the sign-off boxes in §"Sign-off record" above.
-4. Records the sign-off SHA + date in [../coordination.md](../coordination.md) under "§A1 sign-off (T011)".
-
-Only at step 4 do T010 and T011 complete and §A1 clear.
+**Remaining commitment:** sub-items (a) (b) (c) printed-slip layouts must be authored in a follow-up commit BEFORE Slice 2's T173 craft fires. Slice 1 (migrations + persistence + `sales.*` bridge) is unblocked and may start once §A3 + §A4 also clear.
