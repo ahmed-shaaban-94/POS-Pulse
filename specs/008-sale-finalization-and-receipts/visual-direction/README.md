@@ -6,7 +6,7 @@
 **Embedder (renderer portion d–g):** /impeccable shape · register=product · context loaded via `docs/PRODUCT.md` + `docs/DESIGN.md`
 **§A1 reviewer:** Ahmed (assigned per [../coordination.md](../coordination.md))
 **Embed-preflight reference:** [../../../docs/impeccable-embed-preflight.md §3.4](../../../docs/impeccable-embed-preflight.md)
-**Spec FRs grounded against:** FR-024, FR-025, FR-026, FR-027, FR-028, FR-029, FR-030, FR-031, FR-040, FR-041, FR-042, FR-043, FR-046, FR-053, FR-065, FR-066, FR-068, FR-069, FR-071, NFR-004, NFR-008; AD-2, AD-5, AD-8, AD-10
+**Spec FRs grounded against:** FR-024, FR-025, FR-026, FR-027, FR-028, FR-029, FR-030, FR-031, FR-040, FR-041, FR-042, FR-043, FR-046, FR-053, FR-065, FR-066, FR-068, FR-069, FR-071, NFR-004, NFR-008; AD-2, AD-5, AD-6, AD-8, AD-10
 **Design system source of truth:** [../../../docs/DESIGN.md](../../../docs/DESIGN.md) (Stitch-format DESIGN.md; Creative North Star: "The Accountable Instrument")
 
 ---
@@ -142,7 +142,7 @@ A single **elevated card** (DESIGN.md §5 "Cards — Elevated card; `--shadow-pa
 
 ## (e) `<ReprintAffordance>` — DRAFTED ✅
 
-**Slot:** mounts on a **finalized sale** detail surface (NOT the active cart). The reprint surface is reached from a "Last sale" or "Sales history" lookup affordance — the cashier is acting on a sale already finalized at this terminal. Per FR-028 / AD-10, this affordance is GATED — invisible / disabled if no successful print event exists on the sale.
+**Slot:** mounts on a **finalized sale** detail surface (NOT the active cart). The reprint surface is reached from a "Last sale" or "Sales history" lookup affordance — the cashier is acting on a sale already finalized at this terminal. Per FR-028 / AD-10, this affordance is GATED by two distinct conditions with distinct outcomes: **disabled** (visible but inert, with explanatory tooltip) when the sale has no successful `print_events` row yet; **hidden** (not rendered at all) when there is no active operator session. The two outcomes are deterministic — see §"Empty / unavailable states" below for the full state table.
 
 **Shape:**
 
