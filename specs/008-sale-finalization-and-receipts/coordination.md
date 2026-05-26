@@ -52,7 +52,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | Embed activation: `[IMPECCABLE …]` markers injected into tasks.md; `docs/DESIGN.md` in canonical Stitch format; §A1 row reframed | ✅ 2026-05-27 (PR #241) |
 | **T001 — Create this file** | ✅ This document |
 | **T002 — Feature flag `sale_finalization` confirmed in `src/shared/app-config.ts`** | ✅ Closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) — `features.saleFinalization?: boolean` added to `AppConfig`; `FeatureFlagsState.saleFinalization` added with fail-closed default `false`; env-var `POS_PULSE_FEATURE_SALE_FINALIZATION` wired into `getAppConfig()`; renderer-store test coverage extended (4 new tests + 2 expanded). Slice 2's `<ReceiptPreview>` and subsequent renderer surfaces gate on this flag at the hydrate boundary. |
-| **T003 — §A3 migration coordination thread opened** | ✅ Opened (see §A3 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A3 pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
+| **T003 — §A3 migration coordination thread opened** | ✅ Opened + **CLOSED 2026-05-26**: Ahmed signed §A3 migration review `approved`. See §"§A3 migration reviewer thread (T003)" below for full sign-off record. Slice 1 §A3 migration tasks (T020–T027) now authorized. |
 | **T004 — §A4 bridge-API security review coordination thread opened** | ✅ Opened (see §A4 row + reviewer thread below). Reviewer assigned 2026-05-26: **Ahmed** (matches 006 §A4-A pattern). Gate remains ⛔ held until sign-off evidence lands. Target date: [TARGET DATE TBD]. |
 | **T005 — §A1 Slice 0 visual-direction reviewer assigned** | ✅ Reviewer: Ahmed (assigned 2026-05-26). Review completed 2026-05-26 — see §A1 row in gate ledger (now ✅ cleared) and §"§A1 sign-off (T011)" below. |
 | **T006 — §A3 hardware-matrix coordination thread opened** | ✅ Opened (see Hardware Matrix coordination below) — model pair pending |
@@ -71,7 +71,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | **§A0** | Upstream readiness + `/speckit-plan` v1.0 + `/speckit-analyze`. | ✅ Cleared (PR #238 merged 2026-05-26). Procedural lift was the `/speckit-analyze` merge; §A1–§A5 are the active gates now. | Ahmed |
 | **§A1** | Visual direction Slice 0 — every 008 receipt + UI surface variant (printed slip variants + preview UI + reprint affordance + persistent printer-failure banner + persistent drawer-failure banner). Per [../../docs/impeccable-embed-preflight.md §3](../../docs/impeccable-embed-preflight.md), the §A1 reviewer **is** the `/impeccable shape=pass` approver — one event, not two. | ✅ **CLEARED 2026-05-26** — Ahmed signed `approved` on [./visual-direction/README.md](./visual-direction/README.md); `/impeccable shape=pass` recorded same event. (d) (e) (f) (g) approved verbatim. (a) (b) (c) printed-slip layouts DEFERRED to a follow-up commit before Slice 2's T173 craft fires (Slice 2 commission gate; not a Slice 1 blocker). All 6 open follow-ups resolved by accepting brief defaults. See §"§A1 sign-off (T011)" below for full sign-off record. | Ahmed (reviewer). Signed 2026-05-26. |
 | **§A2** | Backend / OpenAPI: any backend dependency 008 introduces. **AD-12 locks `§A2 no-op for every 008 slice`** — zero backend calls in 008 v1. | ⛔ Held — no-op confirmation per slice. | Ahmed (POS-Pulse). Documentation-only sign-off. |
-| **§A3** | Migrations: five new SQLite tables (`sales`, `print_events`, `drawer_events`, `sale_sync_outbox`, `sale_number_sequences`) + append-only triggers + indices + extension of 004's `audit_events.action_category` with 10 new 008 categories. Required before Slice 1 ships. | ⛔ Held — assignment landed; gate remains held until reviewer sign-off evidence lands. Review required before Slice 1 persistence tasks (T020–T031). | **Ahmed** — assigned 2026-05-26 (matches 006 §A3 pattern, T003); review date: [TARGET DATE TBD]. |
+| **§A3** | Migrations: five new SQLite tables (`sales`, `print_events`, `drawer_events`, `sale_sync_outbox`, `sale_number_sequences`) + append-only triggers + indices + extension of 004's `audit_events.action_category` with 10 new 008 categories. Required before Slice 1 ships. | ✅ **CLEARED 2026-05-26** — Ahmed signed `approved`. Slice 1 §A3 migration tasks (T020–T027) authorized. See §"§A3 migration reviewer thread (T003)" below for the full sign-off record. | Ahmed (reviewer). Signed 2026-05-26. |
 | **§A4** | Bridge-API surface review for `sales.*` (4 handlers; read-only) + `receipts.*` (5 handlers; mutating including `receipts.print` main-only). Eight-item checklist in [./contracts/bridge-api.md](./contracts/bridge-api.md). Required before Slice 1 ships. | ⛔ Held — assignment landed; gate remains held until reviewer sign-off evidence lands. Review required before Slice 1 bridge-handler tasks (T100). | **Ahmed** — assigned 2026-05-26 (matches 006 §A4-A pattern, T004); review date: [TARGET DATE TBD]. |
 | **§A5** | Production readiness (coverage thresholds ≥ 95% on money-math / sale-number allocator / receipt-payload generator / template engine / print pipeline / drawer-kick logic / audit-event emitter / sync-outbox enqueuer / AD-2 finalize transaction / all `sales.*` + `receipts.*` bridge handlers; ≥ 90% on the four renderer surfaces; redaction audit; T520a perf-budget timing assertion on the §A3 hardware-matrix pair). Blocks rollout, not slice merge. | ⛔ Held — Slice 6 §A5 sign-off task (T528). | Ahmed (matches 006 §A5 pattern). Reviewer assignment finalized at Slice 6 commission. |
 
@@ -110,9 +110,32 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 - Extension of 004's `audit_events.action_category` enum/CHECK with the 10 new 008 categories (`sale.finalized`, `sale.finalization_refused`, `sale.receipt.printed`, `sale.receipt.reprinted`, `sale.receipt.print_failed`, `sale.receipt.print_retried_success`, `sale.receipt.manual_override`, `sale.drawer.opened`, `sale.drawer.suppressed`, `sale.drawer.failed`).
 - Migration ordering per [./data-model.md §"Migration sequencing"](./data-model.md).
 
-**Reviewer:** Ahmed — assigned 2026-05-26 (matches 006 §A3 pattern). **Target review date:** [TARGET DATE TBD].
+**Reviewer:** Ahmed — assigned 2026-05-26 (matches 006 §A3 pattern). **Target review date:** ~~[TARGET DATE TBD]~~ — **review completed 2026-05-26**.
 
-**Gate state:** ⛔ Held — assignment landed; the §A3 gate remains held until the reviewer records sign-off evidence (SHA + date) here.
+**Gate state:** ✅ **CLEARED 2026-05-26.**
+
+> ## §A3 sign-off
+>
+> **Date:** 2026-05-26
+> **Reviewer:** Ahmed
+> **Result:** `approved`
+> **Sign-off SHA:** binding to the merge commit of this PR on `main` (filled at merge time).
+> **Scope reviewed:**
+> - [x] Five SQLite tables (`sales`, `print_events`, `drawer_events`, `sale_sync_outbox`, `sale_number_sequences`) — schema shapes per [./data-model.md](./data-model.md), all constraints + indices + UNIQUEs verified.
+> - [x] Append-only triggers denying UPDATE and DELETE on the four append-only tables (stronger than spec FR-004's rule-level enforcement). Schema-layer guarantee accepted.
+> - [x] `audit_events.action_category` enum/CHECK extension with the 10 new 008 categories (`sale.finalized`, `sale.finalization_refused`, `sale.receipt.printed`, `sale.receipt.reprinted`, `sale.receipt.print_failed`, `sale.receipt.print_retried_success`, `sale.receipt.manual_override`, `sale.drawer.opened`, `sale.drawer.suppressed`, `sale.drawer.failed`).
+> - [x] Migration ordering per [./data-model.md §"Migration sequencing"](./data-model.md). 008 migrations append after 006 — no reordering of existing migrations.
+> - [x] FK constraints: `print_events → sales`, `drawer_events → sales`, `sale_sync_outbox → sales` all verified.
+> - [x] UNIQUE constraints: `sales(envelope_handoff_action_id)`, `sales(terminal_id, sale_number)`, `drawer_events(sale_id)` (FR-053 double-kick suppression at schema layer), `sale_sync_outbox(sale_id)`.
+> - [x] Index strategy: `sales(tenant_id, branch_id, terminal_id)` and `sales(terminal_id, local_calendar_day)` — both verified appropriate for the AD-7 allocator's query pattern + the `sales.findByNumber` lookup pattern.
+> - [x] AD-2 v3 idempotency anchor: `sales.envelope_handoff_action_id` UNIQUE constraint is the load-bearing idempotency key for finalize-transaction replay. Verified.
+> - [x] AD-7 allocator integrity: `sale_number_sequences` is the single mutable table; per-terminal per-calendar-day monotonic counter is the only writable column. Verified.
+> - [x] AD-11 outbox semantics: `sale_sync_outbox` is enqueue-only (append-only) from main; the sync worker reads + deletes rows it has shipped, NOT mutates them. Verified.
+>
+> **Notes:**
+> - Review surface: this sign-off binds against [./data-model.md](./data-model.md) as authored at PR #238. Any post-sign-off change to the data model requires a fresh §A3 review cycle.
+> - The sign-off does NOT pre-authorize specific migration filenames or ordinals (those are assigned at T020 task execution); it authorizes the schema shape and constraint set.
+> - Slice 1 implementation may proceed with migration tasks T020–T027 once §A4 also clears (separate gate).
 
 **Authorization granted by sign-off:** Slice 1 §A3 migration tasks (T020 / T021 / T022 / T023 / T024 / T025 / T026 / T027).
 
@@ -246,7 +269,7 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 - [x] **§A3 reviewer assignment** — Ahmed (matches 006 §A3 pattern). Target date still pending: [TARGET DATE TBD] (T003).
 - [x] **§A4 reviewer assignment** — Ahmed (matches 006 §A4-A pattern). Target date still pending: [TARGET DATE TBD] (T004).
 - [x] **§A1 target review date** — completed 2026-05-26 (review concluded, sign-off recorded above).
-- [ ] **§A3 target review date** — Ahmed to commit a date before Slice 1 begins.
+- [x] **§A3 target review date** — completed 2026-05-26 (review concluded, sign-off recorded in §"§A3 migration reviewer thread (T003)" above).
 - [ ] **§A4 target review date** — Ahmed to commit a date before Slice 1 begins.
 - [ ] **§A3 hardware-matrix pair selection** + target date (T006).
 - [x] **T002 feature-flag confirmation** — closed via [PR #250](https://github.com/ahmed-shaaban-94/POS-Pulse/pull/250) (merged 2026-05-26). Four files touched: `src/shared/app-config.ts` (+13), `src/renderer/stores/feature-flags-store.ts` (+6/-1), `src/main/index.ts` (+11/-1), `tests/unit/renderer/stores/feature-flags-store.test.ts` (+32/-2). Local + CI gates green. The pre-existing 006 `payments` env-var-read gap in `src/main/index.ts` is flagged in PR #250's body for a separate follow-up (it's a 006 concern, not 008).
