@@ -22,7 +22,7 @@
 **Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-09
-**Last updated:** 2026-05-25 (Slice 4 Wave 5e — **SLICE 4 CLOSED ✅**. F-W5D-001 closed by migration `0019_extend_payment_failure_reason_enum.sql` (SQLite table-rebuild extending `payment_attempts.failure_reason` CHECK enum with `'manager_force_failed'`). T297 `it.todo()` blocks promoted to `it()` and both pass; T295 coverage re-run on the migrated schema — `payment-attempt-fsm.ts` jumped 89.74% → **97.44% line** (the load-bearing forceFail transaction body is now reachable end-to-end). All 80 integration payment tests pass; whole-suite 285 files / 3571 passed / 0 todo / 0 failed; whole-repo line coverage 97.33%. T298 status: **SIGNED OFF**. Previous entry: 2026-05-25 — Slice 4 Wave 5d verification (sign-off DEFERRED).)
+**Last updated:** 2026-05-26 (Slice 5 Wave 6a — T300 coverage audit recorded. Per-floor results captured against §A5 (plan.md line 407): money-math 100% ✅, both FSMs ≥ 97% ✅, all renderer surfaces ≥ 95% ✅, audit-emitter (payments) **94.74% ❌** — recorded as F-W6A-001, must close before Wave 6c §A5 sign-off (one or two targeted unit tests on `audit-emitter.ts` lines 220/433/449). Tasks.md T300's broader-than-§A5 floor list reconciled in §"Documentation drift noted" — gate-decision uses plan.md per T300's own citation. Whole-suite 285 files / 3582 passed / 3 skipped / 0 failed; line coverage 97.33%. Previous entry: 2026-05-25 — Slice 4 Wave 5e closed F-W5D-001.)
 
 ---
 
@@ -2015,6 +2015,124 @@ adds T299 + promotes the two Wave 5d `it.todo()` blocks.
 ### Next step (single concrete action)
 
 **Slice 4 is closed.** The next Maestro work is a fresh **preflight for Slice 5** (production readiness, §A5 rollout-time gate). Until then, no further 006-payments-tender code work.
+
+---
+
+## Slice 5 — Wave 6a coverage audit (T300)
+
+**Date:** 2026-05-26
+**Commit audited:** `3e32c35` (`main` at start of Wave 6a; HEAD pre-audit)
+**Command:** `npx vitest run --coverage --testTimeout=30000`
+**Whole-suite outcome:** 285 test files / 3582 passed / 3 skipped / 0 failed.
+
+### Authoritative floor scope
+
+The §A5 gate definition in `plan.md` line 407 names exactly three module
+categories at ≥ 95% line coverage (money-math, FSM, audit-emitter) plus
+renderer surfaces at ≥ 90%. `tasks.md` T300 lists a broader set ("all
+bridge handlers ≥ 95%, idempotency-replay ≥ 95%, voucher V-A client
+≥ 95%") that includes the §A5 gate floors as a subset. The plan.md
+gate definition is authoritative for the pass/fail decision — T300
+explicitly cites plan §"Test Strategy" as its source. We audit the
+broader set for ops visibility, but the gate-decision column reflects
+the plan.md scope. The §A5-not-gated rows are marked **ungated** for
+transparency.
+
+### Per-floor results (audited 2026-05-26)
+
+| Module | File | Floor | Line % | Status |
+|:--|:--|:--|:--|:--|
+| money-math (helper) | `src/shared/money.ts` | ≥ 95% line | **100.00%** | ✅ |
+| money-math (payments) | `src/shared/payments/money-math.ts` | ≥ 95% line | **100.00%** | ✅ |
+| **PaymentAttempt FSM** | `src/main/payments/fsm/payment-attempt-fsm.ts` | ≥ 95% line | **97.44%** | ✅ |
+| **TenderLine FSM** | `src/main/payments/fsm/tender-line-fsm.ts` | ≥ 95% line | **98.15%** | ✅ |
+| **audit-emitter (payments)** | `src/main/payments/audit-emitter.ts` | ≥ 95% line | **94.74%** | ❌ **F-W6A-001** |
+| audit-emitter (cross-spec) | `src/main/audit/audit-emitter.ts` | (not §A5) | 100.00% | ✅ |
+| **renderer `PaymentSurface.tsx`** | `src/renderer/ui/payments/PaymentSurface.tsx` | ≥ 90% line | 96.40% | ✅ |
+| **renderer `CashEntry.tsx`** | `src/renderer/ui/payments/CashEntry.tsx` | ≥ 90% line | 95.12% | ✅ |
+| **renderer `ExternalCardTerminalEntry.tsx`** | `src/renderer/ui/payments/ExternalCardTerminalEntry.tsx` | ≥ 90% line | 95.45% | ✅ |
+| **renderer `VoucherEntry.tsx`** | `src/renderer/ui/payments/VoucherEntry.tsx` | ≥ 90% line | 95.74% | ✅ |
+| **renderer `ForceFailSurface.tsx`** | `src/renderer/ui/payments/ForceFailSurface.tsx` | ≥ 90% line | 100.00% | ✅ |
+| **renderer `TenderSelection.tsx`** | `src/renderer/ui/payments/TenderSelection.tsx` | ≥ 90% line | 100.00% | ✅ |
+
+### Ungated rows (T300 wording, not §A5 gate) — reported for ops visibility
+
+| Module | File | Line % | Note |
+|:--|:--|:--|:--|
+| idempotency-replay | `src/main/payments/idempotency.ts` | 100.00% | Would pass if gated |
+| deferred-reversal-resolver | `src/main/payments/deferred-reversal-resolver.ts` | 100.00% | Would pass if gated |
+| voucher V-A `validate.ts` | `src/main/payments/voucher-authority/validate.ts` | 100.00% | Would pass if gated |
+| voucher V-A `redeem.ts` | `src/main/payments/voucher-authority/redeem.ts` | 100.00% | Would pass if gated |
+| voucher V-A `reverse.ts` | `src/main/payments/voucher-authority/reverse.ts` | 100.00% | Would pass if gated |
+| voucher V-A `refusal-mapping.ts` | `src/main/payments/voucher-authority/refusal-mapping.ts` | 100.00% | Would pass if gated |
+| voucher V-A `error-body.ts` | `src/main/payments/voucher-authority/error-body.ts` | 100.00% | Would pass if gated |
+| handler `apply-voucher-line.ts` | `src/main/payments/handlers/apply-voucher-line.ts` | 100.00% | Would pass if gated |
+| handler `payments-read.ts` | `src/main/payments/handlers/payments-read.ts` | 100.00% | Would pass if gated |
+| handler `vouchers-validate.ts` | `src/main/payments/handlers/vouchers-validate.ts` | 100.00% | Would pass if gated |
+| handler `payments-confirm.ts` | `src/main/payments/handlers/payments-confirm.ts` | 97.22% | Would pass if gated |
+| handler `payments-start.ts` | `src/main/payments/handlers/payments-start.ts` | 96.00% | Would pass if gated |
+| handler `tender-apply.ts` | `src/main/payments/handlers/tender-apply.ts` | 96.30% | Would pass if gated |
+| handler `tender-reverse.ts` | `src/main/payments/handlers/tender-reverse.ts` | 95.83% | Would pass if gated |
+| handler `payments-cancel.ts` | `src/main/payments/handlers/payments-cancel.ts` | 95.12% | Would pass if gated |
+| handler `tender-read.ts` | `src/main/payments/handlers/tender-read.ts` | 93.33% | Would FAIL if gated |
+| handler `payments-force-fail.ts` | `src/main/payments/handlers/payments-force-fail.ts` | 92.86% | Would FAIL if gated; defensive race branches covered by unit test `bridge.payments-force-fail.audit.test.ts` |
+| handler `payments-subscribe.ts` | `src/main/payments/handlers/payments-subscribe.ts` | 92.31% | Would FAIL if gated |
+
+### Whole-suite headline
+
+- **Statements:** 95.10% (4256 / 4475)
+- **Branches:** 91.36% (2731 / 2989)
+- **Functions:** 97.81% (851 / 870)
+- **Lines:** 97.33% (3950 / 4058)
+
+### Hold list (Wave 6a findings)
+
+**F-W6A-001 — `src/main/payments/audit-emitter.ts` line coverage 94.74%, below §A5 floor of 95%.**
+
+The §A5 gate explicitly names `audit-emitter` at ≥ 95% line coverage. The current figure is 0.26 percentage points below the floor (three uncovered lines: 220, 433, 449). These are identical to the uncovered lines recorded during Wave 5d's audit — they have been quietly off-floor for the entire Slice 4 series; the §A5 gate scope is what surfaces them now.
+
+**Close path.** Add one or two targeted unit tests in `tests/unit/main/payments/audit-emitter.test.ts` that drive the three branches:
+- Line 220: inspect what audit-event variant or guard sits at this line
+- Lines 433 + 449: same investigation; likely the rarely-emitted variants
+
+Wave 6c §A5 sign-off CANNOT proceed until F-W6A-001 closes. The recommended sequencing is: Wave 6a (this PR) ships the audit, Wave 6a-fixup adds the test that closes F-W6A-001, then Wave 6b ships the evidence artifacts, then Wave 6c records the sign-off.
+
+### Reproducibility
+
+The per-file numbers above were extracted from `coverage/lcov.info` using this awk script (reproducible by any maintainer on any commit):
+
+```bash
+awk '
+  /^SF:/ { sf = $0; sub(/^SF:/, "", sf); LH=0; LF=0; FNH=0; FNF=0; BRH=0; BRF=0 }
+  /^LH:/ { sub(/^LH:/, "", $0); LH = $0 }
+  /^LF:/ { sub(/^LF:/, "", $0); LF = $0 }
+  /^FNH:/ { sub(/^FNH:/, "", $0); FNH = $0 }
+  /^FNF:/ { sub(/^FNF:/, "", $0); FNF = $0 }
+  /^BRH:/ { sub(/^BRH:/, "", $0); BRH = $0 }
+  /^BRF:/ { sub(/^BRF:/, "", $0); BRF = $0 }
+  /^end_of_record$/ {
+    if (sf ~ /(money|payment-attempt-fsm|tender-line-fsm|audit-emitter|idempotency|voucher-authority|payments-(start|confirm|cancel|force-fail|read|subscribe)|tender-(apply|read|reverse)|apply-voucher-line|vouchers-validate|deferred-reversal-resolver|VoucherEntry|ForceFailSurface|PaymentSurface|CashEntry|ExternalCardTerminalEntry|TenderSelection)/) {
+      line_pct = (LF > 0) ? (LH*100/LF) : 100
+      fn_pct   = (FNF > 0) ? (FNH*100/FNF) : 100
+      br_pct   = (BRF > 0) ? (BRH*100/BRF) : 100
+      printf "%-80s | line %6.2f%% | func %6.2f%% | branch %6.2f%%\n", sf, line_pct, fn_pct, br_pct
+    }
+    sf=""
+  }
+' coverage/lcov.info
+```
+
+To re-audit (any maintainer, any commit):
+
+```bash
+git checkout <commit>
+npx vitest run --coverage --testTimeout=30000
+# Then run the awk script above.
+```
+
+### Documentation drift noted
+
+`tasks.md` T300 lists broader coverage floors than `plan.md` line 407 §A5. The gate decision uses `plan.md` (T300 explicitly cites plan §"Test Strategy" as its source). The ungated rows are reported for ops visibility but do not affect §A5 sign-off. A future spec-hygiene pass MAY reconcile T300's wording with plan.md §A5 to remove the apparent inconsistency.
 
 ---
 
