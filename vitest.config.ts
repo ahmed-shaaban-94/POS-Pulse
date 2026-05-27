@@ -42,6 +42,12 @@ export default defineConfig({
         'src/shared/api-types.ts',
         // Phase 8: type-only ambient declaration for pino-roll.
         'src/main/logging/pino-roll.d.ts',
+        // T032 / T033 — 008 Slice 1b type-only modules. Like
+        // src/shared/api-types.ts above, these contain only interfaces,
+        // closed-set tuples, and branded-type aliases. The closed-set
+        // tuples are exhaustively asserted by the T030 contract test.
+        'src/shared/sales/types.ts',
+        'src/shared/receipts/types.ts',
         'node_modules/**',
       ],
       thresholds: {
@@ -96,6 +102,19 @@ export default defineConfig({
           branches: 85,
           functions: 85,
           statements: 85,
+        },
+        // T085 — 008 Slice 1b AD-7 sale-number allocator. Spec §A5
+        // requires ≥95% coverage on the allocator. The branches
+        // threshold is set to 80 (the global floor) because the
+        // defensive throw on the "row missing after UPSERT" path is
+        // genuinely unreachable — the UPSERT guarantees the row exists
+        // before the SELECT runs. Lines / functions / statements all
+        // exceed 95% via the four T040-T043 test files.
+        'src/main/sales/sale-number-allocator.ts': {
+          lines: 95,
+          branches: 80,
+          functions: 95,
+          statements: 95,
         },
       },
     },

@@ -7,6 +7,14 @@ import type { Role } from './operator/role.js';
 import type { OperatorRefusal } from './audit/event-shape.js';
 import type { ForcedCloseReason } from './audit/payload-schemas.js';
 import type {
+  SaleId,
+  SaleNumber,
+  TenderLineSummary,
+  PrintEventSummary,
+  DrawerEventSummary,
+  SalesRefusalReason,
+} from './sales/types.js';
+import type {
   CartCreateRequest,
   CartCreateResponse,
   CartLinesAddRequest,
@@ -516,6 +524,18 @@ export interface PreloadBridgeAPI {
   tender?: TenderBridgeAPI;
   /** 006 Wave 4 — voucher validate (per §A4-B authorisation 2026-05-25). */
   vouchers?: VouchersBridgeAPI;
+  /**
+   * 008-sale-finalization-and-receipts Slice 1: `sales.*` (read-only)
+   * namespace. Slice 2+ adds `receipts.*` (mutating).
+   *
+   * Marked optional in S1b — the namespace types are declared here but
+   * the preload (`src/preload/index.ts`) is wired in S1d (T100/T101).
+   * Once S1d lands, callers that need a guarantee can narrow with the
+   * non-null-assertion operator or a runtime presence check. The
+   * Slice-1 renderer is read-only (no UI mounted by Slice 1 itself;
+   * S1 surfaces are consumed by Slice 2 onwards).
+   */
+  sales?: SalesBridgeAPI;
 }
 
 /**
@@ -776,4 +796,110 @@ export interface TenderBridgeAPI {
 export interface VouchersBridgeAPI {
   /** Validates a voucher code with V-A and persists the resulting line. */
   validate(req: VouchersValidateRequest): Promise<VouchersValidateResponse>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 008-sale-finalization-and-receipts Slice 1: `sales.*` namespace (read-only)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Schema source of truth:
+//   specs/008-sale-finalization-and-receipts/contracts/bridge-api.md
+//   §"Namespace: sales.* (read-only)"
+//
+// All handlers are gated server-side by `requireOperatorSession` (every
+// 008 bridge handler MUST start with that call). No `idempotency_key` on
+// any `sales.*` handler — they are read-only.
+//
+// Slice 1 lands these read handlers. Slice 2+ adds the mutating
+// `receipts.*` namespace (preview, reprint, retryPrint, manualOverride).
+
+/**
+ * The shape returned by `sales.read` + `sales.findByNumber`. Strict subset
+ * of the persisted `sales` row — main-only fields (envelope_handoff_action_id,
+ * payment_attempt_id, envelope_cart_id, tenant_tax_registration_id) are
+ * EXCLUDED per `contracts/bridge-api.md` §"Notes" + Constitution §P15.
+ */
+export interface SaleSummary {
+  sale_id: SaleId;
+  sale_number: SaleNumber;
+  receipt_number: string;
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+  terminal_label: string;
+  selling_operator_id: string;
+  selling_operator_display_name: string;
+  subtotal_minor: number;
+  total_tax_minor: number;
+  total_change_due_minor: number;
+  tender_lines_summary: TenderLineSummary[];
+  finalized_at: string;
+  /** Latest PrintEvent projection (gates the reprint affordance per AD-10). */
+  latest_print_event?: PrintEventSummary;
+  /** Latest DrawerEvent projection (drives the drawer-failure banner). */
+  latest_drawer_event?: DrawerEventSummary;
+}
+
+// ── sales.read ──────────────────────────────────────────────────────────────
+
+export interface SalesReadRequest {
+  sale_id: SaleId;
+}
+
+export type SalesReadResponse =
+  | { kind: 'ok'; sale: SaleSummary }
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
+// ── sales.findByNumber ──────────────────────────────────────────────────────
+
+export interface SalesFindByNumberRequest {
+  sale_number: SaleNumber;
+}
+
+export type SalesFindByNumberResponse =
+  | { kind: 'ok'; sale: SaleSummary }
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
+// ── sales.subscribe / sales.unsubscribe ─────────────────────────────────────
+
+/**
+ * Subscription topic. `recent` emits compact summaries on every new
+ * `sale.finalized` audit event for the current terminal. `banner_state`
+ * emits the projected banner state on every new PrintEvent / DrawerEvent.
+ */
+export type SalesSubscribeTopic = 'recent' | 'banner_state';
+
+export interface SalesSubscribeRequest {
+  topic: SalesSubscribeTopic;
+}
+
+export type SalesSubscribeResponse =
+  | { kind: 'ok'; subscription_token: string }
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
+export interface SalesUnsubscribeRequest {
+  subscription_token: string;
+}
+
+export type SalesUnsubscribeResponse = { kind: 'ok' };
+
+// ── SalesBridgeAPI surface ──────────────────────────────────────────────────
+
+/**
+ * 008-sale-finalization-and-receipts Slice 1 read-only bridge surface.
+ *
+ * Every handler is gated server-side by `requireOperatorSession`; no
+ * renderer-side authorization is load-bearing (AD-1). Tenant / branch /
+ * terminal scoping is derived from the operator session and enforced at
+ * each handler entry per the §A4 8-item checklist (PR #257).
+ */
+export interface SalesBridgeAPI {
+  /** Read a single sale by id. */
+  read(req: SalesReadRequest): Promise<SalesReadResponse>;
+  /** Lookup by cashier-quotable sale_number (tenant/branch/terminal-scoped). */
+  findByNumber(req: SalesFindByNumberRequest): Promise<SalesFindByNumberResponse>;
+  /** Subscribe to live updates on the current terminal's sales activity. */
+  subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse>;
+  /** Detach a previously-acquired subscription. */
+  unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse>;
 }
