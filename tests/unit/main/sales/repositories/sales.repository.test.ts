@@ -30,9 +30,7 @@ const MIGRATIONS = [
   '0020_create_sales.sql',
   '0021_sales_append_only_trigger.sql',
   '0028_extend_sales_with_lines_json.sql',
-].map((f) =>
-  readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'),
-);
+].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
 beforeAll(async () => {

@@ -149,7 +149,7 @@ export function buildFinalizeInput(deps: BuildFinalizeInputDeps): BuildFinalizeI
   try {
     const parsed: unknown = JSON.parse(auditRow.payload);
     if (!isObject(parsed)) return { kind: 'refused', reason: 'malformed_settled_payload' };
-    payload = parsed as SettledPayload;
+    payload = parsed;
   } catch {
     return { kind: 'refused', reason: 'malformed_settled_payload' };
   }

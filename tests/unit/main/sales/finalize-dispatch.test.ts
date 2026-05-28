@@ -162,8 +162,18 @@ function seedSettledAudit(): void {
     attribution_operator_id: 'op-clerk-user-abc',
     selling_operator_display_name: 'Layla Hassan',
     tender_lines: [
-      { tender_line_id: 'tl-1', tender_type: 'cash', amount_applied_minor: 4000, change_due_minor: 500 },
-      { tender_line_id: 'tl-2', tender_type: 'cash', amount_applied_minor: 2000, change_due_minor: 0 },
+      {
+        tender_line_id: 'tl-1',
+        tender_type: 'cash',
+        amount_applied_minor: 4000,
+        change_due_minor: 500,
+      },
+      {
+        tender_line_id: 'tl-2',
+        tender_type: 'cash',
+        amount_applied_minor: 2000,
+        change_due_minor: 0,
+      },
     ],
   };
   db.run(
