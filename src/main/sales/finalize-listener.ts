@@ -209,6 +209,18 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
   let startupRecoveryFired = false;
   let intervalHandle: NodeJS.Timeout | null = null;
 
+  // ─── Per-sale success caches for startup recovery (CR7 on PR #266) ────────
+  //
+  // Without these, a successful print-recovery dispatch followed by a
+  // throwing drawer-recovery dispatch would cause the next
+  // runStartupRecovery() call to re-dispatch the print (because the
+  // startupRecoveryFired flag stayed false, and the SQL scan still matches
+  // the same row). The Sets remember per-sale work that already completed
+  // so retries narrow to the failed sub-scan only.
+
+  const completedPrintRecoverySaleIds = new Set<string>();
+  const completedDrawerRecoverySaleIds = new Set<string>();
+
   return {
     runTickOnce(): void {
       // Single-flight guard — re-entrant calls during an in-progress tick
@@ -229,33 +241,31 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
 
     runStartupRecovery(): void {
       if (startupRecoveryFired) return;
-      // Per CR2 on PR #266 — flip the fired flag AFTER both sub-scans
-      // complete. If a dispatch callback throws, the flag stays false so
-      // the next start-up still has a chance to recover; the thrown
-      // error propagates so the caller can decide whether to crash or
-      // retry. Setting the flag before recovery (as the prior version
-      // did) would permanently disable recovery on a single transient
-      // dispatch error.
-      try {
-        if (dispatchPrintRecovery !== undefined) {
-          const printRows = printRecoveryStmt.all(tenant_id, branch_id, terminal_id);
-          for (const row of printRows) {
-            dispatchPrintRecovery(row.sale_id);
-          }
+      // Per CR2 + CR7 on PR #266 — flip the fired flag AFTER both sub-scans
+      // complete. On throw, leave the flag false so the next
+      // runStartupRecovery() call retries. The per-sale completion caches
+      // (completedPrintRecoverySaleIds / completedDrawerRecoverySaleIds)
+      // ensure that already-successful dispatches are NOT replayed on
+      // retry — only the failed sub-scan re-fires. The thrown error
+      // propagates so the caller (main entry point) can log + decide
+      // whether to retry or crash.
+      if (dispatchPrintRecovery !== undefined) {
+        const printRows = printRecoveryStmt.all(tenant_id, branch_id, terminal_id);
+        for (const row of printRows) {
+          if (completedPrintRecoverySaleIds.has(row.sale_id)) continue;
+          dispatchPrintRecovery(row.sale_id);
+          completedPrintRecoverySaleIds.add(row.sale_id);
         }
-        if (dispatchDrawerRecovery !== undefined) {
-          const drawerRows = drawerRecoveryStmt.all(tenant_id, branch_id, terminal_id);
-          for (const row of drawerRows) {
-            dispatchDrawerRecovery(row.sale_id);
-          }
-        }
-        startupRecoveryFired = true;
-      } catch (err) {
-        // Leave the flag false so the next runStartupRecovery() call has
-        // a chance to retry. Re-throw so the caller (main entry point)
-        // can decide whether to log + continue or crash.
-        throw err;
       }
+      if (dispatchDrawerRecovery !== undefined) {
+        const drawerRows = drawerRecoveryStmt.all(tenant_id, branch_id, terminal_id);
+        for (const row of drawerRows) {
+          if (completedDrawerRecoverySaleIds.has(row.sale_id)) continue;
+          dispatchDrawerRecovery(row.sale_id);
+          completedDrawerRecoverySaleIds.add(row.sale_id);
+        }
+      }
+      startupRecoveryFired = true;
     },
 
     /* c8 ignore start — start/stop driver wiring is exercised by the main entry point smoke + Electron manual smoke; unit tests use runTickOnce directly */

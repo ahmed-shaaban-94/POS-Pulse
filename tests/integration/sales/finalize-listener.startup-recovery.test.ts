@@ -274,6 +274,50 @@ describe('T092 — print recovery one-shot sub-scan at startup', () => {
     expect(dispatchedPrint).toEqual(['sale-this-branch']);
   });
 
+  it('successful print dispatches are NOT replayed when a later drawer dispatch throws (CR7 on PR #266)', () => {
+    // Regression for CR7 — without per-sale completion caches, a print
+    // recovery that succeeds followed by a drawer recovery that throws
+    // would re-dispatch the print on the next runStartupRecovery() call.
+    seedSale({ sale_id: 'sale-needs-print', cash_inclusive: true });
+
+    let throwOnceOnDrawer = true;
+    const dispatchedPrint: string[] = [];
+    const dispatchedDrawer: string[] = [];
+    const listener = createFinalizeListener({
+      db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      dispatch: () => {},
+      dispatchPrintRecovery: (sale_id) => {
+        dispatchedPrint.push(sale_id);
+      },
+      dispatchDrawerRecovery: (sale_id) => {
+        if (throwOnceOnDrawer) {
+          throwOnceOnDrawer = false;
+          throw new Error('simulated transient drawer dispatch failure');
+        }
+        dispatchedDrawer.push(sale_id);
+      },
+      tickIntervalMs: 200,
+      now: () => '2026-05-28T10:00:00.000Z',
+    });
+
+    // First attempt — print succeeds, drawer throws.
+    expect(() => {
+      listener.runStartupRecovery();
+    }).toThrow(/simulated transient drawer dispatch failure/);
+    expect(dispatchedPrint).toEqual(['sale-needs-print']);
+    expect(dispatchedDrawer).toEqual([]);
+
+    // Retry — print MUST NOT re-dispatch (already cached as completed);
+    // drawer MUST dispatch (was not cached because the throw happened
+    // before the success-set add).
+    listener.runStartupRecovery();
+    expect(dispatchedPrint).toEqual(['sale-needs-print']); // unchanged — no duplicate
+    expect(dispatchedDrawer).toEqual(['sale-needs-print']); // now succeeds
+  });
+
   it('runStartupRecovery DOES NOT flip its fired flag if a dispatch throws (CR2 on PR #266)', () => {
     seedSale({ sale_id: 'sale-needs-print' });
 
