@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-28 (four passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. (4) Second-pass Slice 2 environmental audit recorded same-PR: Tahoma Arabic-font assumption flagged for §A5 hardware-pair smoke; `src/shared/formatters/` absence flagged as Slice 2 T160 precursor. See §"Second-pass environmental audit" below).
+**Last updated:** 2026-05-28 (five passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. (4) Second-pass Slice 2 environmental audit recorded same-PR: Tahoma Arabic-font assumption flagged for §A5 hardware-pair smoke; `src/shared/formatters/` absence flagged as Slice 2 T160 precursor. (5) Slice 3 prep audit recorded post-PR #269 merge: 3 print-pipeline findings — printer config provenance (Ahmed: extend 002 handshake same as Slice 1 Q2 path; folds into pending backend PR), retry policy (Ahmed: bounded exp backoff 3 retries 1s/4s/16s), receipt-byte hand-off type (engineering recommendation: `ReceiptRenderOutput` shape). Adds 2 §A5 checklist items. T094a backend PR scope grows by 3 printer-config fields. See §"Slice 3 prep audit: print pipeline upstream gaps" below).
 
 **Change log (oldest → newest):**
 
@@ -576,3 +576,126 @@ The environmental gaps are markedly lower severity than the data-field gaps. Non
 - [x] **Claude** — record both new findings in this section (this commit).
 - [ ] **§A5 production-readiness gate** — Tahoma Arabic-rendering smoke test on actual hardware-matrix Windows 11 box BEFORE sign-off. If any glyph falls back, bundle Noto Sans Arabic / Cairo into the Electron app.
 - [ ] **Slice 2 T160 author** — implement `src/shared/formatters/receipt-formatters.ts` as a precursor to the template engine. Export `formatCurrencyMinor`, `formatLocalCalendarDay`, `formatLocalTime`, all Latin-digit per FR-066.
+
+---
+
+## 2026-05-28 — Slice 3 prep audit: print pipeline upstream gaps
+
+> **Status:** **CLOSED — 2 business decisions captured + 1 engineering recommendation locked.** Adds 3 printer-config fields to T094a's backend PR scope + 2 §A5 checklist items. No new T-task IDs (changes fold into existing Phase 5 tasks).
+>
+> **Discovered by:** Claude session on 2026-05-28 while running an upstream-gap audit on Slice 3 (print pipeline) post-PR #269 merge. Same read-only field-source verification discipline that surfaced gaps in Slice 1 and Slice 2.
+>
+> **Scope:** Audit covered 10 inputs the print pipeline needs (ESC/POS adapter, printer detection, command vocabulary, OS-print fallback, print_events schema, retry queue, failure banner, dispatch hooks, manual-override handler, receipt-byte contract). **8 of 10 are already known tasks in Phase 5** (T200-T303) — flagged but not new. **3 are genuine upstream gaps** the plan didn't account for.
+
+### Inherited finding (already-documented; resolves automatically)
+
+Slice 3 inherits Slice 1's backend-coordination blocker (T094a) for one new reason recorded below: the printer config fields must come from the same pairing-handshake extension. See Q1 below — Ahmed's decision folds the printer fields into the same pending backend PR rather than opening a parallel coordination thread.
+
+### New finding #1 — Printer config field provenance
+
+**Finding:** Slice 3 must connect to the Epson TM-T20III via USB. No source in the codebase carries the device's `vendor_id` (0x04B8) or `product_id` (0x0202 for TM-T20III). Verified by grep across `plan.md`, `research.md`, `spec.md`, and `docs/hardware-matrix.md`: no field, no config, no convention. `src/main/pairing/store.ts` `terminal_assignment` schema has no printer columns. **Same gap shape as Slice 1's `branch_name` / `branch_address` / `tenant_tax_registration_id` gap** — the plan implicitly assumed terminal-scoped hardware config exists somewhere, but nothing supplies it.
+
+**Failure mode if unresolved:** Slice 3 T201 (pick the ESC/POS library) cannot complete the printer-discovery bootstrap without knowing where to look. Either a code change ships per-printer-model (every new pharmacy hardware requires a release), or the binary refuses to start on any non-default hardware.
+
+### Decision Q1 (Ahmed, 2026-05-28)
+
+**Extend 002 pairing handshake with printer config fields.** Same architectural decision as Slice 1 Q2: the backend pairing-handshake response carries `printer_vendor_id` (string, hex format), `printer_product_id` (string, hex format), and optional `printer_com_port` (string | null) fields. Persisted in `terminal_assignment` schema. Slice 3 bootstrap reads from `readPairingTerminalAssignment()`.
+
+**Why this option** (vs the two alternatives — first-launch USB scan, hard-code v1):
+
+| Criterion | A (extend handshake) | B (first-launch USB scan + safeStorage) | C (hard-code TM-T20III IDs for v1) |
+|:--|:--|:--|:--|
+| Central admin control | ✅ — IT manages all terminals from backend | ❌ — local; differs per-machine | ❌ — code-level; release per model |
+| Multi-printer-model support | ✅ — works for any backend-configured device | ✅ — works if vendor_id present in USB enumeration | ❌ — TM-T20III only; future printers need code changes |
+| Avoids backend dependency | ❌ — same blocker as T094a | ✅ — purely local | ✅ — purely local |
+| Compliance (Egyptian Tax Authority may require known fiscal device per terminal) | ✅ — backend record of "this terminal has THIS printer" | ⚠️ — local record only; harder to audit | ⚠️ — local; assumed-uniform |
+| First-terminal onboarding UX | ✅ — plug-and-play once paired | ⚠️ — admin must respond to multi-match prompt on first launch | ✅ — plug-and-play if correct hardware |
+
+**Decisive factor**: Egyptian Tax Authority compliance + central IT admin model. Same reasoning as Slice 1 Q2. The cost of the backend dependency is the same backend PR that's already pending for T094a — Ahmed can add the printer fields to that same backend PR. The marginal cost of adding three more fields to an already-pending PR is near-zero; opening a parallel local-config primitive (option B) would introduce a new architecture pattern just for printers.
+
+**Implementation impact**: T094a's scope grows by three fields. The same backend OpenAPI PR that adds `branch_name`/`branch_address`/`tenant_tax_registration_id` should also add `printer_vendor_id`/`printer_product_id`/`printer_com_port`. Documentation update only in this PR; backend coordination remains Ahmed's task.
+
+### New finding #2 — Retry policy schedule
+
+**Finding:** `plan.md` references retry semantics in multiple places (lines 252, 288, 456, 457, 610, 716, 727, 729, 803, 834) but does NOT pin a timing schedule, attempt limit, or backoff curve. Slice 3 task entries T250-T253 say "retry flow" without quantifying it. `spec.md` FR-052 ("print-retry-success-treated-as-first-print") is silent on schedule.
+
+**Failure mode if unresolved:** Slice 3 T250 implementer either invents a schedule unilaterally (likely producing different behavior than expected) or stops mid-implementation to design the policy.
+
+### Decision Q2 (Ahmed, 2026-05-28)
+
+**Bounded exponential backoff: 3 retries max with 1s → 4s → 16s delays.** After the 3rd retry fails, the persistent printer-failure banner stays up indefinitely until the cashier acts via the renderer affordances (retry / reprint / manual-override). No further automatic retries.
+
+**Why this option** (vs the two alternatives — 200ms-forever AD-2-style, single-retry-then-banner):
+
+| Criterion | A (bounded exp 3 retries) | B (200ms forever, no cap) | C (single retry then banner) |
+|:--|:--|:--|:--|
+| Covers transient hardware faults | ✅ — 3 retries catches paper-jam-recovery, USB hiccups | ✅ — keeps retrying | ⚠️ — one retry only |
+| Avoids log-spam / runaway behavior on stuck printer | ✅ — bounded at 3 | ❌ — risks endless retry on dead printer | ✅ — single attempt |
+| Customer wait time before banner shows | ~21 seconds max | indefinite (banner never shows automatically) | 2 seconds |
+| Matches cashier intuition (most failures are structural, not transient) | ⚠️ — could feel long to cashier | ❌ — cashier never sees banner | ✅ — fastest user feedback |
+| Code complexity | Moderate (timer + counter) | Low (matches AD-2 pattern) | Low (one timer) |
+
+**Decisive factor**: Egyptian pharmacy environments have moderate USB stability with occasional brownouts; 3 retries catches the realistic transient cases without making customers wait absurdly long. The 21-second max-wait is acceptable for a fiscal receipt (compared to "permanent loss" if option C's single retry also fails on a transient fault). The bounded retry count avoids the runaway-log scenario from option B.
+
+**Implementation impact**: T250 (retry-flow test) + T251 (retry-flow impl) tasks already exist in Phase 5; their descriptions get an explicit schedule call-out at implementation time. Adds the schedule constants to a new `src/main/receipts/retry-policy.ts` module (or inline in the retry handler).
+
+### New finding #3 — Receipt-byte hand-off type contract
+
+**Finding:** Slice 2's AD-6 template engine (T160) must emit **two outputs from one source** per the plan: ESC/POS bytes (for the thermal printer) AND HTML/canvas (for the on-screen preview). The return type of `renderReceipt(payload, variant)` is not declared anywhere — not in `src/shared/receipts/types.ts`, not in `data-model.md`, not in `contracts/bridge-api.md`. Without this type, Slice 2 T160 (template engine) and Slice 3 T240 (print-on-finalize integration) cannot agree on the hand-off shape.
+
+**Failure mode if unresolved:** Slice 2 T160 author invents the return shape; Slice 3 T240 author either accommodates whatever T160 chose (likely fine) or expects a different shape (likely a 1-day refactor). The shape also impacts test mocks — once T160 ships, changing it costs more.
+
+### Engineering recommendation Q3 (Claude, 2026-05-28; no Ahmed business decision needed)
+
+**Type contract:**
+
+```typescript
+// src/shared/receipts/types.ts (new addition)
+export interface ReceiptRenderOutput {
+  /** ESC/POS bytes ready for direct USB write to the thermal printer.
+      Code-page commands + content + cut byte. Buffer is the natural
+      Node.js shape; render in Slice 2, consume in Slice 3. */
+  readonly escpos: Buffer;
+  /** HTML/canvas-renderable string for the renderer's <ReceiptPreview>
+      surface. UTF-8; bilingual; safe to inject via setInnerHTML in
+      the contextIsolation: true context (renderer cannot reach main). */
+  readonly html: string;
+  /** Width metadata for consumer display. Matches paper width pinned
+      in visual-direction (42 chars @ 80mm for TM-T20III). */
+  readonly width_chars: number;
+}
+```
+
+**Why this shape** (vs alternatives):
+- **`Buffer` + `string`** is the natural Node.js shape; no need for base64-encoding overhead.
+- **Both outputs from one render call** matches AD-6's "single source, dual output" architectural decision (plan §AD-6).
+- **Returning a discriminated union** (e.g., `{ kind: 'escpos', bytes } | { kind: 'html', body }`) would force the renderer to call render twice — wasteful, and the contracts say "from one source" specifically to avoid that.
+- **`width_chars` included** for downstream layout decisions (e.g., `<ReceiptPreview>` uses it for monospace font sizing).
+
+This is a pure engineering type-design call; no business decision needed. Recording here so Slice 2 T160 author knows to use this shape from the start.
+
+### Implementation impact (consolidated)
+
+| Touchpoint | Change | Status |
+|:--|:--|:--|
+| **T094a backend PR scope (Ahmed owns)** | Adds 3 more fields to TerminalPairResponse: `printer_vendor_id`, `printer_product_id`, `printer_com_port`. Same backend PR as the existing T094a coordination. | BLOCKED-BY backend (same as Slice 1 Q2 path) |
+| **T094a POS-Pulse update** | terminal_assignment migration (the same one extending for branch_name etc.) adds 3 printer config columns. Pairing store row shape gains 3 fields. Service.ts persist call passes them through. | BLOCKED-BY snapshot refresh |
+| **T250 description update at implementation time** | Explicit "bounded exponential backoff (3 retries, 1s → 4s → 16s) then banner-persists-for-cashier" wording added to T250 PR description | Folds into T250 implementation PR |
+| **New `src/main/receipts/retry-policy.ts`** | Module with `RETRY_DELAYS_MS = [1000, 4000, 16000] as const` + `MAX_RETRIES = 3` constants + helper to compute next delay | Lands as part of T250 |
+| **`src/shared/receipts/types.ts` — add `ReceiptRenderOutput`** | New interface per Q3 recommendation. Slice 2 T160 imports and returns this shape. Slice 3 T240 imports and consumes. | Add to Slice 2 T140 (the first task that creates the types) or earlier — needs to land BEFORE T160 starts |
+
+### §A5 production-readiness flags added
+
+- [ ] **Printer config integrity** — verify on actual TM-T20III hardware that the persisted `printer_vendor_id`/`printer_product_id` correctly identify the connected printer; verify printer-detection failure path produces a friendly cashier banner (not a crash). Smoke at S6 hardware bring-up.
+- [ ] **Retry-policy timing** — verify on actual TM-T20III hardware that the 3-retry exponential-backoff sequence produces correct user-visible behavior under simulated paper-out + USB-disconnect faults. Smoke at S6.
+
+### Action items (Slice 3 prep audit)
+
+- [x] **Claude** — run upstream-gap audit on Slice 3 (closed 2026-05-28).
+- [x] **Ahmed Q1 answer** — printer config provenance (closed 2026-05-28: extend 002 pairing handshake; merge with T094a backend PR).
+- [x] **Ahmed Q2 answer** — retry policy (closed 2026-05-28: bounded exponential backoff 3 retries, 1s→4s→16s).
+- [x] **Claude Q3 recommendation** — receipt-byte hand-off type contract (closed 2026-05-28: `ReceiptRenderOutput` shape recommended; no business decision needed).
+- [ ] **Ahmed** — fold the 3 printer-config fields (`printer_vendor_id`, `printer_product_id`, `printer_com_port`) into the same backend PR being prepared for T094a's branch-detail fields.
+- [ ] **Claude (after T094a unblocks)** — update T094a task description in tasks.md to include the 3 printer fields. Update T094a's POS-Pulse-side implementation scope accordingly.
+- [ ] **Claude (at Slice 2 prep moment)** — add `ReceiptRenderOutput` interface to `src/shared/receipts/types.ts` at the natural Slice 2 prep moment (likely T140 — the first task that creates receipt-related types).
+- [ ] **§A5 production-readiness gate** — both new checklist items above.
