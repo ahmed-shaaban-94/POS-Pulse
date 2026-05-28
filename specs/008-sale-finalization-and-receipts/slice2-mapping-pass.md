@@ -16,6 +16,48 @@
 Net: the v1 slip is a faithful subset of §(a) — every persisted field is exact;
 the two unpersistable fields (second name line, shift) are dropped, not faked.
 
+## Decision 3 (engine-design, 2026-05-28) — VAT rate label at tax=0
+
+§(a) decision 10 hard-codes a "VAT (14%):" label. But `total_tax_minor = 0` in
+v1 (Egyptian VAT is a §A5/v2 item). Rendering the layout literally would print
+"VAT (14%): 0.00 EGP" with "Subtotal ex-VAT == Total inc-VAT" on a *fiscal*
+receipt — a misleading rate label on a tax document. Consistent with the
+single-name / no-shift v1-subset posture: **drive the VAT block from
+`total_tax_minor`; suppress the "14%" rate label when tax is 0** (render the
+tax amount, no rate). The "14%" label returns in v2 when real VAT computation
+lands. Same class as Gaps 2/3 — render-what's-true, don't fake the spec.
+
+## Engine architecture (T160) — compose-once, two serializers
+
+Per design review: NOT parallel renderEscPos/renderHtml (they drift). Instead a
+single `compose(payload) → Band[]` intermediate (each Band = {text, align,
+weight, height} or marker/separator), then mechanical `toEscPos(bands)` +
+`toHtml(bands)` serializers. 42-col word-wrap + hanging indent happen IN compose
+so both outputs break identically. `preview` resolves to the SAME band set as
+`first_print` (byte-equal by construction); `reprint_duplicate` = that set +
+prepended marker band + appended `Reprinted:` line. Determinism: format from
+stored ISO strings (never `new Date()`), no `toLocaleString`/`Intl` for dates
+(locale-dependent → breaks byte-stability), money via `money.ts` only, iterate
+arrays not maps. ESC/POS Arabic codepage (CP864 vs 1256) is a Slice 3 hardware
+concern — v1 emits structurally-correct control codes with a documented encoding
+assumption; T301/T302 confirm on the TM-T20III.
+
+## T161/T162/T163 deviation — no separate `.template` asset files
+
+tasks.md T160 framed the engine as "parses a template asset," and T161/T162/T163
+as authoring three `*.bilingual.template` files (first_print / reprint_duplicate
+/ preview). The compose-once IR architecture supersedes that: the layout is the
+`compose()` function (the single first-party "template"), and the three variants
+are the `ReceiptTemplateVariant` branches inside it (marker band + reprint line
+for `reprint_duplicate`; `preview` ≡ `first_print` by band-selection). Authoring
+three external asset files the engine never reads would be dead code and would
+RISK byte-stability (a parsed-asset layer is exactly the indirection R-6 rejected
+when it ruled out Handlebars/EJS/Mustache). So T161/T162/T163 are satisfied **in
+code** by the variant branches in `template-engine.ts`, not by separate files.
+The §A1-approved layouts (a)/(b)/(c) remain the visual spec the compose logic is
+written against. This is an implementation detail within the locked AD-6
+decision ("first-party single-source dual-output engine"), not a scope change.
+
 
 Before writing any Slice 2 test, mapped every field the §(a) `first_print` slip
 layout renders (visual-direction/README.md line 44+) against `ReceiptPayload`

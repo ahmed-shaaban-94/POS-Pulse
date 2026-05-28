@@ -149,6 +149,15 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T160 — 008 Slice 2 AD-6 template engine. Spec §A5 requires ≥95% on
+        // the template engine. compose + both serialisers exercised by
+        // tests/unit/main/receipts/template-engine.test.ts.
+        'src/main/receipts/template-engine.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         'src/main/sales/audit-emitter.ts': {
           lines: 95,
           branches: 95,
