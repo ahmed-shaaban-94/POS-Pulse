@@ -17,6 +17,7 @@
 
 import type { SessionEndCause } from '../operator/session-end-cause.js';
 import type { ActionCategory } from './event-shape.js';
+import type { SaleFinalizationRefusalReason } from '../sales/types.js';
 
 // ─── shift.open ────────────────────────────────────────────────────────────
 
@@ -217,11 +218,7 @@ export interface SaleFinalizedPayload {
 export interface SaleFinalizationRefusedPayload {
   envelope_handoff_action_id: string;
   refused_at: string;
-  refusal_reason:
-    | 'force_failed_attempt'
-    | 'reversal_pending_line'
-    | 'source_attempt_not_settled'
-    | 'forbidden_field_in_tender_summary';
+  refusal_reason: SaleFinalizationRefusalReason;
   attribution_operator_id: string;
 }
 

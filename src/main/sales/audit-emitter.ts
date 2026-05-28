@@ -31,7 +31,7 @@
  */
 
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
-import type { SalesTenderType, SalesRefusalReason } from '../../shared/sales/types.js';
+import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
 
 // ─── 008 audit category union (subset reachable from this file) ─────────────
 //
@@ -90,7 +90,7 @@ export interface EmitSaleFinalizedInput extends BaseAuditContext {
 export interface EmitSaleFinalizationRefusedInput extends BaseAuditContext {
   envelope_handoff_action_id: string;
   refused_at: string;
-  refusal_reason: SalesRefusalReason;
+  refusal_reason: SaleFinalizationRefusalReason;
 }
 
 // ─── Emitter event shape (sink-facing) ──────────────────────────────────────

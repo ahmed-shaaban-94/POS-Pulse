@@ -1,0 +1,449 @@
+/**
+ * T091 — AD-2 atomic finalize transaction (S1c.1 unit tests, RED).
+ *
+ * One test file covers T050 (atomicity) + T051 (idempotency) +
+ * T055/T056/T057 (refusal guard) + T060/T061/T062 (forbidden-field guard),
+ * because all of these exercise the same entry point
+ * `bindFinalizeTransaction(deps).finalize(input)` with the same sql.js +
+ * migrations setup. Splitting into 8 test files would duplicate ~80 lines of
+ * fixture setup per file.
+ *
+ * The kill-mid-flight test (T053) and startup-recovery test (T054) live in
+ * tests/integration/ because they model process-lifecycle behaviour; they
+ * land in S1c.2 with the polling worker (T090/T092).
+ *
+ * Reference data-model.md §"Entity: Sale" + plan §AD-2 + spec FR-001,
+ * FR-005/045/046/047, FR-070-074.
+ */
+
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import { bindFinalizeTransaction } from '../../../../src/main/sales/finalize-transaction.js';
+import { bindSalesRepository } from '../../../../src/main/sales/repositories/sales.repository.js';
+import { bindSaleSyncOutboxRepository } from '../../../../src/main/sync-outbox/sale-sync-outbox.repository.js';
+import { bindSaleNumberAllocator } from '../../../../src/main/sales/sale-number-allocator.js';
+import { createSaleAuditEmitter } from '../../../../src/main/sales/audit-emitter.js';
+import { makeSqlJsHandle } from '../cart/__helpers__/sql-js-handle.js';
+
+const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..');
+const MIGRATIONS = [
+  // 006 schema needed for the refusal-guard fixtures.
+  '0012_create_payment_attempts.sql',
+  '0013_payment_attempts_partial_unique_started.sql',
+  '0014_create_payment_tender_lines.sql',
+  // 008 Slice 1a schema.
+  '0020_create_sales.sql',
+  '0021_sales_append_only_trigger.sql',
+  '0024_create_sale_sync_outbox.sql',
+  '0025_create_sale_number_sequences.sql',
+].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
+
+let SQL: SqlJsStatic;
+beforeAll(async () => {
+  SQL = await initSqlJs();
+});
+
+let db: SqlJsDatabase;
+let captured: Array<Record<string, unknown>>;
+
+beforeEach(() => {
+  db = new SQL.Database();
+  db.exec('PRAGMA foreign_keys = ON;');
+  for (const sql of MIGRATIONS) db.exec(sql);
+  captured = [];
+});
+
+// ─── Test-fixture helpers ──────────────────────────────────────────────────
+
+interface SeedAttemptOpts {
+  attempt_id?: string;
+  handoff_action_id?: string;
+  state?: 'started' | 'settled' | 'cancelled' | 'failed' | 'force_failed';
+  failure_reason?: string | null;
+  force_fail_attribution_operator_id?: string | null;
+}
+
+function seedPaymentAttempt(opts: SeedAttemptOpts = {}): string {
+  const attempt_id = opts.attempt_id ?? 'pa-1';
+  const handoff_action_id = opts.handoff_action_id ?? 'handoff-1';
+  const state = opts.state ?? 'settled';
+  const failure_reason =
+    opts.failure_reason ??
+    (state === 'failed' || state === 'force_failed' ? 'internal_error' : null);
+  const force_fail_attr =
+    opts.force_fail_attribution_operator_id ?? (state === 'force_failed' ? 'mgr-abc' : null);
+  const settled_at = state === 'settled' ? '2026-05-27T10:00:00.000Z' : null;
+
+  db.exec(
+    `INSERT INTO payment_attempts (
+       payment_attempt_id, tenant_id, branch_id, terminal_id,
+       acting_operator_id, operator_session_id,
+       envelope_handoff_action_id, envelope_cart_id, envelope_subtotal_minor,
+       state, started_at, settled_at, failure_reason, force_fail_attribution_operator_id,
+       last_action_id
+     ) VALUES (
+       '${attempt_id}', 'tenant-1', 'branch-1', 'terminal-1',
+       'op-clerk-user-abc', 'sess-1',
+       '${handoff_action_id}', 'cart-1', 1500,
+       '${state}', '2026-05-27T09:59:00.000Z',
+       ${settled_at ? `'${settled_at}'` : 'NULL'},
+       ${failure_reason ? `'${failure_reason}'` : 'NULL'},
+       ${force_fail_attr ? `'${force_fail_attr}'` : 'NULL'},
+       'action-1'
+     )`,
+  );
+  return attempt_id;
+}
+
+interface SeedTenderLineOpts {
+  tender_line_id?: string;
+  payment_attempt_id?: string;
+  tender_type?: 'cash' | 'external_card_terminal' | 'internal_voucher';
+  amount_applied_minor?: number;
+  state?: 'applying' | 'applied' | 'refused' | 'reversed' | 'reversal_pending';
+  apply_order?: number;
+}
+
+function seedTenderLine(opts: SeedTenderLineOpts = {}): void {
+  const id = opts.tender_line_id ?? 'tl-1';
+  const attempt = opts.payment_attempt_id ?? 'pa-1';
+  const type = opts.tender_type ?? 'cash';
+  const amount = opts.amount_applied_minor ?? 1500;
+  const state = opts.state ?? 'applied';
+  const order = opts.apply_order ?? 1;
+
+  db.exec(
+    `INSERT INTO payment_tender_lines (
+       tender_line_id, payment_attempt_id, tender_type, amount_applied_minor,
+       state, applied_at, attribution_operator_id, apply_order, last_action_id
+     ) VALUES (
+       '${id}', '${attempt}', '${type}', ${String(amount)},
+       '${state}', '2026-05-27T10:00:00.000Z', 'op-clerk-user-abc', ${String(order)}, 'action-1'
+     )`,
+  );
+}
+
+function buildDeps(now: string = '2026-05-27T10:00:00.500Z') {
+  const handle = makeSqlJsHandle(db);
+  return {
+    db: handle,
+    salesRepo: bindSalesRepository(handle),
+    outboxRepo: bindSaleSyncOutboxRepository(handle),
+    allocator: bindSaleNumberAllocator(handle),
+    auditEmitter: createSaleAuditEmitter({
+      sink: {
+        write: (e) => {
+          captured.push(e);
+        },
+      },
+    }),
+    now: () => now,
+    saleIdGenerator: () => 'sale-uuid-1',
+    outboxRowIdGenerator: () => 'ob-uuid-1',
+  };
+}
+
+function buildInput(
+  overrides: Partial<Parameters<ReturnType<typeof bindFinalizeTransaction>['finalize']>[0]> = {},
+) {
+  return {
+    envelope_handoff_action_id: 'handoff-1',
+    payment_attempt_id: 'pa-1',
+    envelope_cart_id: 'cart-1',
+    tenant_id: 'tenant-1',
+    branch_id: 'branch-1',
+    terminal_id: 'terminal-1',
+    terminal_label: 'TERM-01',
+    selling_operator_id: 'op-clerk-user-abc',
+    selling_operator_display_name: 'Ahmed',
+    selling_operator_session_id: 'sess-1',
+    subtotal_minor: 1500,
+    total_tax_minor: 0,
+    total_change_due_minor: 0,
+    tender_lines_summary: [{ tender_type: 'cash' as const, amount_applied_minor: 1500 }],
+    settled_at: '2026-05-27T10:00:00.000Z',
+    tenant_tax_registration_id: 'TRN-123',
+    branch_name: 'Maadi Branch',
+    branch_address: '12 Road 9, Maadi',
+    local_calendar_day: '2026-05-27',
+    ...overrides,
+  };
+}
+
+// ─── T050 — AD-2 atomic finalize transaction ────────────────────────────────
+
+describe('T050 — AD-2 atomic finalize transaction', () => {
+  it('allocates sale_number, inserts sale, inserts outbox row, emits audit — all atomic', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(buildInput());
+
+    expect(result.kind).toBe('finalized');
+    if (result.kind !== 'finalized') return;
+    expect(result.sale_id).toBe('sale-uuid-1');
+    expect(result.sale_number).toBe('TERM-01-2026-05-27-000001');
+
+    // sales row present.
+    const saleRow = db.exec("SELECT sale_number FROM sales WHERE sale_id = 'sale-uuid-1'");
+    expect(saleRow[0]?.values[0]?.[0]).toBe('TERM-01-2026-05-27-000001');
+
+    // outbox row present.
+    const outboxRow = db.exec("SELECT state FROM sale_sync_outbox WHERE sale_id = 'sale-uuid-1'");
+    expect(outboxRow[0]?.values[0]?.[0]).toBe('pending');
+
+    // audit row emitted.
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.action_category).toBe('sale.finalized');
+  });
+
+  it('writes all four rows inside one SQLite transaction (forensic check)', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+    finalize.finalize(buildInput());
+
+    // After commit, all four rows present together.
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    const outbox = db.exec('SELECT COUNT(*) FROM sale_sync_outbox');
+    const seq = db.exec('SELECT COUNT(*) FROM sale_number_sequences');
+    expect(sales[0]?.values[0]?.[0]).toBe(1);
+    expect(outbox[0]?.values[0]?.[0]).toBe(1);
+    expect(seq[0]?.values[0]?.[0]).toBe(1);
+    expect(captured).toHaveLength(1);
+  });
+
+  it('persists the redacted tender_lines_summary_json in the sales row', () => {
+    seedPaymentAttempt();
+    seedTenderLine({ tender_type: 'external_card_terminal' });
+    const finalize = bindFinalizeTransaction(buildDeps());
+    finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'external_card_terminal' as const,
+            amount_applied_minor: 1500,
+            external_reference: 'CARD-AUTH-AB12XY',
+          },
+        ],
+      }),
+    );
+    const row = db.exec(
+      "SELECT tender_lines_summary_json FROM sales WHERE sale_id = 'sale-uuid-1'",
+    );
+    const json = row[0]?.values[0]?.[0] as string;
+    // Cleartext must never reach the persisted row.
+    expect(json).not.toContain('CARD-AUTH-AB12XY');
+    expect(json).toContain('*****');
+  });
+});
+
+// ─── T051 — Idempotency on duplicate handoff_action_id ─────────────────────
+
+describe('T051 — duplicate finalize on the same envelope_handoff_action_id is a no-op', () => {
+  it('returns the existing sale_id; does not write a second row anywhere', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const first = finalize.finalize(buildInput());
+    expect(first.kind).toBe('finalized');
+    const second = finalize.finalize(buildInput());
+    expect(second.kind).toBe('finalized_idempotent');
+    if (second.kind !== 'finalized_idempotent') return;
+    if (first.kind !== 'finalized') return;
+    expect(second.sale_id).toBe(first.sale_id);
+
+    // Exactly one row in each downstream table; exactly one audit event.
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    const outbox = db.exec('SELECT COUNT(*) FROM sale_sync_outbox');
+    expect(sales[0]?.values[0]?.[0]).toBe(1);
+    expect(outbox[0]?.values[0]?.[0]).toBe(1);
+    expect(captured).toHaveLength(1);
+  });
+});
+
+// ─── T055/T056/T057 — Refusal guard ────────────────────────────────────────
+
+describe('T055 — refuse when source attempt is force_failed', () => {
+  it('emits sale.finalization_refused; no sales row created', () => {
+    seedPaymentAttempt({ state: 'force_failed' });
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(buildInput());
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('force_failed_attempt');
+
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    expect(sales[0]?.values[0]?.[0]).toBe(0);
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.action_category).toBe('sale.finalization_refused');
+    expect((captured[0]?.payload as Record<string, unknown>).refusal_reason).toBe(
+      'force_failed_attempt',
+    );
+  });
+});
+
+describe('T056 — refuse when any tender line is in reversal_pending', () => {
+  it('emits sale.finalization_refused with reversal_pending_line', () => {
+    seedPaymentAttempt();
+    seedTenderLine({ tender_line_id: 'tl-1', state: 'applied' });
+    seedTenderLine({
+      tender_line_id: 'tl-2',
+      state: 'reversal_pending',
+      apply_order: 2,
+    });
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(buildInput());
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('reversal_pending_line');
+
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    expect(sales[0]?.values[0]?.[0]).toBe(0);
+  });
+});
+
+describe('T057 — refuse when source attempt is not settled', () => {
+  it('refuses started / cancelled / failed', () => {
+    for (const state of ['started', 'cancelled', 'failed'] as const) {
+      // Fresh DB per pass since beforeEach only fires once per `it`.
+      db = new SQL.Database();
+      db.exec('PRAGMA foreign_keys = ON;');
+      for (const sql of MIGRATIONS) db.exec(sql);
+      captured = [];
+
+      seedPaymentAttempt({ state });
+      const finalize = bindFinalizeTransaction(buildDeps());
+      const result = finalize.finalize(buildInput());
+      expect(result.kind).toBe('refused');
+      if (result.kind !== 'refused') continue;
+      expect(result.refusal_reason).toBe('source_attempt_not_settled');
+    }
+  });
+});
+
+// ─── T060/T061/T062 — Forbidden-field guard ────────────────────────────────
+
+describe('T060 — refuse on forbidden card-data keys in tender_lines_summary', () => {
+  it('refuses with forbidden_field_in_tender_summary on PAN-shaped key', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'external_card_terminal' as const,
+            amount_applied_minor: 1500,
+            // PAN-shaped forbidden key (FR-070):
+            pan: '4111111111111111',
+          } as unknown as { tender_type: 'external_card_terminal'; amount_applied_minor: number },
+        ],
+      }),
+    );
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('forbidden_field_in_tender_summary');
+
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    expect(sales[0]?.values[0]?.[0]).toBe(0);
+  });
+});
+
+describe('T061 — refuse on forbidden voucher keys', () => {
+  it('refuses on voucher_code', () => {
+    seedPaymentAttempt();
+    seedTenderLine({ tender_type: 'internal_voucher' });
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'internal_voucher' as const,
+            amount_applied_minor: 1500,
+            voucher_code: 'VC-LEAK',
+          } as unknown as { tender_type: 'internal_voucher'; amount_applied_minor: number },
+        ],
+      }),
+    );
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('forbidden_field_in_tender_summary');
+  });
+
+  it('refuses on voucher_redemption_intent_token', () => {
+    seedPaymentAttempt();
+    seedTenderLine({ tender_type: 'internal_voucher' });
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'internal_voucher' as const,
+            amount_applied_minor: 1500,
+            voucher_redemption_intent_token: 'TOK-LEAK',
+          } as unknown as { tender_type: 'internal_voucher'; amount_applied_minor: number },
+        ],
+      }),
+    );
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('forbidden_field_in_tender_summary');
+  });
+});
+
+describe('T062 — refuse on forbidden secret/envelope keys', () => {
+  it('refuses on PIN key', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'cash' as const,
+            amount_applied_minor: 1500,
+            pin: '1234',
+          } as unknown as { tender_type: 'cash'; amount_applied_minor: number },
+        ],
+      }),
+    );
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('forbidden_field_in_tender_summary');
+  });
+
+  it('refuses on envelope_payload key (raw envelope leak)', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+
+    const result = finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'cash' as const,
+            amount_applied_minor: 1500,
+            envelope_payload: { secret: 'leak' },
+          } as unknown as { tender_type: 'cash'; amount_applied_minor: number },
+        ],
+      }),
+    );
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('forbidden_field_in_tender_summary');
+  });
+});

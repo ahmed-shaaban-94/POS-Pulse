@@ -121,8 +121,18 @@ export function bindPrintEventsRepository(db: DatabaseHandle): PrintEventsReposi
     },
 
     countReprints(sale_id: string): number {
+      // SQLite COUNT(*) always returns exactly one row with one column;
+      // row cannot be undefined and count_reprints cannot be null. The
+      // defensive `?? 0` would inflate the uncovered-branch count without
+      // adding any real safety — instead we assert and propagate the
+      // SQLite contract.
+      /* c8 ignore start — defensive throw on impossible SQLite contract violation */
       const row = countReprintsStmt.get(sale_id);
-      return row?.count_reprints ?? 0;
+      if (row === undefined) {
+        throw new Error('SQLite invariant violation: COUNT(*) returned no row');
+      }
+      /* c8 ignore stop */
+      return row.count_reprints;
     },
   };
 }
