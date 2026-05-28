@@ -772,3 +772,155 @@ Mirror of POS-Pulse commit `454914a` ("feat(006): T200-T203 pin voucher V-A cont
 - [ ] **Claude (next)** — execute T094a's POS-Pulse-side implementation: terminal_assignment migration + store/network/service.ts changes. Now unblocked.
 - [ ] **Claude (after T094a)** — T094b dispatch projection module at `src/main/sales/finalize-dispatch.ts`.
 - [ ] **Claude (after T094b)** — T094c main bootstrap + T028a lines_json migration (folded together per Slice 2 prep audit decision).
+
+---
+
+## Slice 1 closeout — T111 / T112 human smoke checklist
+
+**Status:** T028a + T094b + T094c merged to `main` 2026-05-28 (PR #276). The AD-2
+finalize pipeline is live behind the `sale_finalization` flag. The remaining
+`[HUMAN]` smokes below are the last gate before Slice 1 sign-off (T113).
+
+**Who runs this:** a human on a Windows dev machine (these cannot be run by an
+agent — they need a real Electron dev build + manual UI interaction).
+
+### Dev launch — three env vars
+
+The build must be **unpackaged** (`app.isPackaged === false`, i.e. `npm run dev`)
+and all three flags truthy (`1` / `true` / `yes` / `on`):
+
+| Env var | Effect |
+|:--|:--|
+| `POS_PULSE_FEATURE_SALE_FINALIZATION` | Turns on the 008 worker + `sales.*` bridge. Fail-closed default is OFF. |
+| `POS_PULSE_DEV_SKIP_PAIRING` | Seeds the fixture pairing row (`dev-tenant` / `dev-branch` / `dev-terminal` / label `Dev Terminal`) so the renderer routes past `/pairing`. |
+| `POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN` | Seeds a fixture `manager` session (`dev-tenant` / `dev-branch`) so the renderer routes past `/sign-in`. |
+
+PowerShell one-liner (run from the repo root; type it with the `!` prefix in the
+Claude prompt or paste into a terminal):
+
+```powershell
+$env:POS_PULSE_FEATURE_SALE_FINALIZATION='1'; $env:POS_PULSE_DEV_SKIP_PAIRING='1'; $env:POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN='1'; npm run dev
+```
+
+**On a successful boot, expect this main-process log line** (proves the worker
+started against the fixture scope):
+
+```
+finalize_listener:started   { terminal_id: "dev-branch" }
+```
+
+> Note the `terminal_id` logs as **`dev-branch`**, NOT `dev-terminal`. That is the
+> intended F-007 alignment: 006 stamps `originating_terminal_id = session.branch_id`
+> into the `payment.settled` audit row, so the AD-2 scan is scoped to `branch_id`.
+> If you instead see `dev-terminal` here, the F-007 fix regressed and the smoke
+> will silently finalize nothing — stop and report.
+
+### Inspecting the SQLite DB
+
+The dev DB lives at the Electron `userData` path:
+
+```
+%APPDATA%\pos-pulse\pos-pulse.db
+```
+
+(i.e. `C:\Users\<you>\AppData\Roaming\pos-pulse\pos-pulse.db`). Open it read-only
+with any SQLite viewer (DB Browser for SQLite, or `sqlite3` CLI). **Tip:** to
+start each smoke from a clean slate, close the app and delete this file before
+launching — migrations re-create it on boot.
+
+---
+
+### T111 — happy-path finalization
+
+**Goal:** a cash-only 006 settlement produces a durable Sale.
+
+1. Launch with the three env vars above; confirm the `finalize_listener:started`
+   log line shows `terminal_id: "dev-branch"`.
+2. In the POS UI, build a cart with ≥ 1 item, hand it off to payment, choose
+   **Cash**, tender ≥ the subtotal, and **Confirm** the payment (006 settles it →
+   writes a `payment.settled` audit row).
+3. Within ~1 second (the worker ticks every 200 ms), the AD-2 worker should
+   finalize. Watch for the main-process log:
+   `finalize_dispatch:finalized   { handoff_action_id: "...", kind: "finalized" }`
+4. Query the DB and assert:
+
+   ```sql
+   -- exactly one sale row for the settlement
+   SELECT sale_number, receipt_number, subtotal_minor, total_change_due_minor,
+          selling_operator_display_name, lines_json
+     FROM sales ORDER BY finalized_at DESC LIMIT 1;
+
+   -- one outbox row in 'pending' state, FK'd to that sale
+   SELECT state FROM sale_sync_outbox ORDER BY enqueued_at DESC LIMIT 1;
+
+   -- the sale.finalized audit event was emitted
+   SELECT action_category FROM audit_events
+    WHERE action_category = 'sale.finalized' ORDER BY created_at DESC LIMIT 1;
+   ```
+
+   **Pass criteria:**
+   - [ ] `sale_number` matches `Dev Terminal-<YYYY-MM-DD>-000001` (the AD-7 format;
+     `<YYYY-MM-DD>` is the **UTC** date of `settled_at` — see the v2 caveat below).
+   - [ ] `receipt_number === sale_number` (008 v1 invariant).
+   - [ ] `selling_operator_display_name` is the fixture manager's name (proves the
+     persist-at-settlement plumbing — it came from the audit payload, not a live
+     session lookup).
+   - [ ] `lines_json` is a non-empty JSON array matching the cart's items.
+   - [ ] exactly one `sale_sync_outbox` row, `state = 'pending'`.
+   - [ ] exactly one `sale.finalized` audit row for this settlement.
+   - [ ] a second cash sale on the same day allocates `...-000002` (monotonic).
+
+> **v2 caveat (not a failure):** `local_calendar_day` / the date in `sale_number`
+> uses **UTC**, not Egypt local time. A sale after ~22:00 Cairo time will show the
+> next UTC day. Sale numbers stay unique + monotonic; only the day-bucket label is
+> affected. Tracked as the documented `localCalendarDayFor` v2 item.
+
+---
+
+### T112 — crash-recovery finalization
+
+**Goal:** a settlement whose finalize was interrupted is recovered on the next
+boot by the startup recovery scan.
+
+1. Launch with the three env vars. Build a cart and confirm a **Cash** payment
+   so 006 writes a `payment.settled` row.
+2. **Immediately kill the process** before the worker's next tick finalizes it
+   — the tightest window is to confirm payment and kill within ~200 ms. To make
+   this reliable, temporarily widen the window: set the worker tick slow by
+   editing the `tickIntervalMs: 200` in `src/main/index.ts` to e.g. `5000` for
+   this smoke (revert after), OR kill fast. Either way, after the kill, verify
+   the DB has the `payment.settled` audit row but **no** matching `sales` row:
+
+   ```sql
+   SELECT COUNT(*) AS settled FROM audit_events WHERE action_category='payment.settled';
+   SELECT COUNT(*) AS sales   FROM sales;
+   -- expect settled >= 1 and sales = 0 (the interrupted state)
+   ```
+3. **Relaunch** with the same three env vars. On boot, `runStartupRecovery()`
+   runs, then the steady-state worker's first tick picks up the orphaned
+   `payment.settled` row (its `NOT EXISTS sales` clause matches) and finalizes it.
+4. Query again:
+
+   ```sql
+   SELECT sale_number, envelope_handoff_action_id FROM sales ORDER BY finalized_at DESC LIMIT 1;
+   ```
+
+   **Pass criteria:**
+   - [ ] after relaunch, a `sales` row now exists for the interrupted settlement.
+   - [ ] its `envelope_handoff_action_id` matches the `handoff_action_id` in the
+     pre-kill `payment.settled` audit payload (the idempotency anchor).
+   - [ ] re-confirming nothing: only **one** sale row exists (no double-finalize).
+   - [ ] (remember to revert the `tickIntervalMs` edit if you made one.)
+
+---
+
+### T113 — Slice 1 sign-off (after T111 + T112 pass)
+
+Record the result below: reviewer, date, outcome (`pass` / `pass-with-notes` /
+`fail`), the observed `sale_number` from T111, and confirmation that T112
+recovered. Then tick T111/T112/T113 in `tasks.md` and flip the 008 banner in
+`CLAUDE.md` to "Slice 1 ✅". §A2 no-op + §A3/§A4 sign-offs are already
+cross-referenced above.
+
+**Sign-off:** _[reviewer]_ · _[date]_ · _[outcome]_ · sale_number observed: _____ · T112 recovered: _____
+
