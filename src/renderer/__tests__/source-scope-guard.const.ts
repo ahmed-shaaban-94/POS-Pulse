@@ -79,3 +79,31 @@ export const FEAT_006_PAYMENTS_EXEMPT_PREFIXES = [
   'src/shared/api-types.ts',
   'scripts/openapi-snapshot.json',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `feat/008-t094a-*` branches implement 008 T094a's POS-Pulse-side
+ * pairing extension: six new `TerminalAssignmentRow` fields
+ * (branch_name, branch_address, tenant_tax_registration_id,
+ * printer_vendor_id, printer_product_id, printer_com_port) populated
+ * from the post-PR #272 pinned `TerminalPairResponse`. Touches
+ * `src/main/pairing/` store + service + dev fixture (002's territory)
+ * because the contract pin from #272 cannot be consumed without
+ * extending the row shape it's projected into.
+ *
+ * Authority: 008 plan §AD-12 + Slice 1 closeout-gap audit (POS-Pulse
+ * PRs #267 / #268 / #271) + Slice 3 prep audit (PR #270) + the
+ * contract pin landed in PR #272. Upstream contract: Data-Pulse-2
+ * PR #388, merge commit 6c9dda2.
+ *
+ * Exemption is narrow: ONLY `src/main/pairing/`. All other forbidden
+ * prefixes (`src/main/secrets/`, `src/shared/api-types.ts`,
+ * `scripts/codegen-api.ts`, `scripts/openapi-snapshot.json`,
+ * `.github/workflows/`) remain blocked on `feat/008-t094a-*`
+ * branches. This exemption does NOT extend to other 008 work
+ * (T094b/T094c/T028a etc. all touch their own non-forbidden
+ * territory and need no exemption).
+ */
+export const FEAT_008_T094A_BRANCH_PREFIX = 'feat/008-t094a-' as const;
+export const FEAT_008_T094A_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];
