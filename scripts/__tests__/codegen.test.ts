@@ -81,7 +81,7 @@ describe('verifyCodegen', () => {
   // tipping these tests over the 5 s edge reliably. The assertions
   // themselves are unchanged.
   //
-  // The "missing" test (line 105) does NOT call generateApiTypes()
+  // The "missing" test (line 117) does NOT call generateApiTypes()
   // first, so it stays at the default 5 s timeout.
   it('returns "match" when the committed file equals fresh codegen', async () => {
     const committed = path.join(tmpDir, 'committed.ts');
