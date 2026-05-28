@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-28 (two passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. See §"Backend-coordination blocker on T094a" below).
+**Last updated:** 2026-05-28 (four passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. (4) Second-pass Slice 2 environmental audit recorded same-PR: Tahoma Arabic-font assumption flagged for §A5 hardware-pair smoke; `src/shared/formatters/` absence flagged as Slice 2 T160 precursor. See §"Second-pass environmental audit" below).
 
 **Change log (oldest → newest):**
 
@@ -470,3 +470,109 @@ Slice 1 is effectively paused until the backend PR lands. Parallel work that cou
 - [ ] **T111/T112 manual smokes** — BLOCKED-BY T094c. Will be unblocked once T094c lands.
 - [ ] **T113 Slice 1 sign-off** — BLOCKED-BY T111/T112.
 - [ ] **§A5 production-readiness gate** — flagged: re-open Q1 (Egyptian VAT compliance) before sign-off.
+
+---
+
+## 2026-05-28 — Slice 2 prep audit: line-snapshot persistence (`AD-6` receipt template engine)
+
+> **Status:** **CLOSED — Ahmed picked Option A (lines_json column on sales row).** Adds T028a (new migration) to Slice 1's migration set.
+>
+> **Discovered by:** Claude session on 2026-05-28 while running an upstream-gap audit on Slice 2 (post-PR #268 merge). The audit applied the same field-source verification discipline that surfaced Slice 1's gap, looking for fields the receipt template needs but the codebase doesn't supply.
+
+### Audit scope
+
+Slice 2 (Phase 4 in tasks.md) ships the AD-6 receipt template engine — single source, dual output (ESC/POS bytes for thermal printer + HTML/canvas for on-screen preview). FR-015 requires byte-stable reprints: a receipt reprinted 6 months later MUST render identically to the original. The audit verified each input field the template needs against a real source in the codebase.
+
+### Inherited finding (already-documented; no action needed here)
+
+The audit confirmed Slice 2 inherits Slice 1's 4-field gap (`branch_name`, `branch_address`, `tenant_tax_registration_id`, `total_tax_minor`) because the template reads them from the persisted `sales` row. Resolution is automatic when T094a/b/c land — the sales row is the seam for both slices.
+
+### New finding (Slice-2-specific)
+
+**Receipt line snapshots are not persisted anywhere.** The template MUST render per-line item names, quantities, unit prices, and line subtotals — for the original sale AND for byte-stable reprints months later. The codebase as of 2026-05-28 has:
+
+- `src/shared/cart/handoff-envelope.ts:1-11` — `PaymentIntentEnvelope.lines: LineSnapshot[]` exists at payment-time (item_ref, display_name, quantity, unit_price_minor, line_subtotal_minor, note)
+- `migrations/0020_create_sales.sql:9-32` — `sales` row has **NO column for persisted line snapshots**. No `lines_json`. No separate `sale_line_items` table.
+- `src/main/sales/finalize-transaction.ts` — does NOT save the line snapshots anywhere; cart rows are not durable post-handoff
+
+**Failure mode if unresolved:** 6 months after a sale, when a customer requests a reprint, the template would either crash (no source) or print **stale data different from what the customer originally received** (if it falls back to querying the current catalogue). This violates FR-015 byte-stability and is a regulatory + consumer-trust failure.
+
+### Decision (Ahmed, 2026-05-28)
+
+**Option A — `lines_json` column on the `sales` row.** A new migration (`0027_extend_sales_with_lines_json.sql`) adds a `lines_json TEXT NOT NULL DEFAULT '[]'` column. T091 finalize-transaction serializes `PaymentIntentEnvelope.lines` into JSON and writes it atomically with the rest of the sale row. Receipt template reads + parses on reprint.
+
+**Why Option A** (vs the two rejected alternatives):
+
+| Criterion | A (lines_json) | B (separate `sale_line_items` table) | C (re-derive at reprint time) |
+|:--|:--|:--|:--|
+| FR-015 byte-stable reprints months later | ✅ | ✅ | ❌ **VIOLATES SPEC** (prices/names change over time) |
+| Migration complexity | 1 column ALTER | New table + append-only trigger + FK + indexes | None |
+| Match AD-3 append-only invariant | ✅ free (sales row is already triggered by 0021) | Requires separate append-only trigger | N/A |
+| Match existing 008 patterns | ✅ `sales.tender_lines_summary_json` already exists at `0020_create_sales.sql:26` as `TEXT NOT NULL` JSON | Departs from established pattern | N/A |
+| Read cost on reprint | One row read + JSON.parse | Join + N row reads | Variable |
+| Compliance auditability | One row = one full sale | Distributed across tables | Receipt may differ from original |
+
+**Decisive factor**: `sales.tender_lines_summary_json` already exists in the merged schema (line 26 of `0020_create_sales.sql`) using exactly the pattern Option A proposes. Adding `lines_json` matches the established convention. Option B would introduce a new pattern for sub-entities inconsistent with what's already merged.
+
+**Cart-size concern (the strongest argument against A)**: negligible. A typical pharmacy cart is 5-20 lines. At ~150 bytes/line that's 750-3,000 bytes per sale row — well within SQLite's comfortable range. If a future product-recall scenario needs "all sales containing item X", a virtual JSON1 index (`json_extract(lines_json, '$[*].item_ref')`) provides that without a schema change.
+
+### Implementation impact
+
+The decision adds a **new task T028a** to Slice 1a's migration set, with corresponding updates to T091 (finalize-transaction) and T094b (dispatch-projection):
+
+| Touchpoint | Change |
+|:--|:--|
+| **T028a (NEW)** | Migration `migrations/0027_extend_sales_with_lines_json.sql`: `ALTER TABLE sales ADD COLUMN lines_json TEXT NOT NULL DEFAULT '[]'`. The DEFAULT lets the migration run cleanly against existing dev fixtures already past 0020. RED-GREEN tests: schema-evolution test + insert/read round-trip. |
+| **T091 update** | `finalize-transaction.ts` serializes `input.lines` to JSON and includes it in the sales INSERT. Existing T091 implementation is merged in PR #264; this is a small additive change. |
+| **T094b update** | Dispatch-projection module reads `PaymentIntentEnvelope.lines` from the cart envelope JSON and includes it on `FinalizeInput`. |
+| **Sales repository update** | `readById()` returns parsed `lines: LineSnapshot[]`. |
+| **`FinalizeInput` shape** | Add `lines: readonly LineSnapshot[]` field. |
+
+Cost: ~80-120 LoC across the four touchpoints plus the migration. The new T028a is `[BLOCKED-BY T094a]` transitively because T091 also writes the four T094a-blocked fields — they must land together.
+
+### Action items (this section)
+
+- [x] **Claude** — run upstream-gap audit on Slice 2 (closed 2026-05-28).
+- [x] **Ahmed** — line-snapshot persistence decision (closed 2026-05-28: Option A, lines_json column).
+- [x] **Claude** — author T028a task entry + update T091/T094b descriptions (this PR).
+- [ ] **T028a PR** — folds into the eventual T094a/b/c PR chain (specifically, the migration lands as part of T094a-or-equivalent unblocking work; T091 + T094b updates land within their respective implementation PRs).
+- [ ] **§A5 production-readiness gate** — flagged: confirm reprint byte-stability test passes against a sale that's been in the DB for ≥30 days before sign-off.
+
+### Second-pass environmental audit (2026-05-28, post-data-field audit)
+
+> **Scope:** After the data-field audit above resolved the line-snapshot question, ran a second-pass audit on the AD-6 template engine's *environmental* inputs — template assets, fonts, formatters, paper width, locale handling, etc. Same read-only discipline. Goal: surface remaining Slice 2 prerequisites before T160 craft begins.
+
+**10 environmental fields audited**; 3 are already-documented gaps (printed-slip layouts deferred to Ahmed per §A1 sign-off — tracked in "Open coordination follow-ups" above), 5 are fine (paper-width pinned to 42 chars @ 80mm in visual-direction; receipt number locked to sale_number; DUPLICATE COPY marker spec-locked at FR-029; ESC/POS Arabic encoding is Slice 3's job not Slice 2's; logo/branding explicitly out of 008 v1 scope), and **2 are new findings worth recording**:
+
+#### NEW finding #1 — Arabic font: Tahoma assumption is untested
+
+**Finding:** [visual-direction/README.md §"(c) `preview` printed-slip content"](./visual-direction/README.md) specifies Windows `Tahoma` system font as the Arabic canvas fallback for `<ReceiptPreview>`. Tahoma ships by default with Windows 10/11 Pro (POS-Pulse's target platform per Constitution Hardware Matrix), so the assumption is *likely* safe — but no automated test verifies that every Arabic glyph required by the receipt template actually renders in Tahoma. Some Arabic ligatures or Egyptian-specific characters (e.g., `ج.م` for Egyptian Pound) may fall back to Unicode replacement boxes silently.
+
+**Failure mode if untested:** Customer demo on a fresh Windows 11 machine shows `□□□` boxes instead of Arabic text. The bug is invisible in unit/integration tests (which run against JSDOM, not real font rendering).
+
+**Resolution:** Add a §A5 production-readiness checklist item: on the actual hardware-matrix pair (Epson TM-T20III + the dev Windows 11 box), open `<ReceiptPreview>` with a real Arabic sale and verify all bilingual content renders correctly. If any glyphs fall back, bundle a fallback Arabic font (Noto Sans Arabic or Cairo) into the Electron app at T173 craft time.
+
+#### NEW finding #2 — `src/shared/formatters/` module is absent
+
+**Finding:** Slice 2 T160 (template engine) and T164 (receipt-payload generator) need `formatCurrency(minor_units, locale)`, `formatDate(iso, locale)`, `formatTime(iso, locale)` to compose receipt content. The codebase has `src/shared/money.ts` defining the `CurrencyCode = 'EGP'` type contract + minor-unit divisor, but no display formatter functions exist anywhere. Visual-direction/README.md §"Composition decisions" (line 118) requires Latin digits per FR-066 — the formatters must enforce this regardless of locale.
+
+**Failure mode if untracked:** Slice 2 T160 author either (a) inlines ad-hoc format functions inside the template engine (violates Constitution §II's "no copy-paste from `_reference/Data-Pulse/`" / DRY discipline and risks per-template Latin-digit bugs), or (b) discovers the gap mid-T160 and stops to author the formatters out of order.
+
+**Resolution:** Not a blocker — Slice 2 T160 can author `src/shared/formatters/receipt-formatters.ts` as a precursor sub-task. Flagged here so it isn't forgotten in the template-engine work itself. The module should export `formatCurrencyMinor(minor: number): string`, `formatLocalCalendarDay(iso: string): string`, `formatLocalTime(iso: string): string`, all returning Latin-digit strings per FR-066.
+
+### Severity comparison
+
+| Audit | Severity | Resolution path |
+|:--|:--|:--|
+| Slice 1 data fields (PRs #267 / #268) | P0 — hard-blocks finalize | Backend coordination + multi-task PR chain |
+| Slice 2 data fields (this section, above) | P0 — hard-blocks byte-stable reprint | New migration T028a |
+| **Slice 2 environmental (this sub-section)** | **P1 — Slice 2 craft prerequisites** | Tahoma → §A5 checklist; formatters → T160 precursor |
+
+The environmental gaps are markedly lower severity than the data-field gaps. None of them invalidate Slice 1 or require Slice 1 rollback. None of them require Ahmed business decisions. They are pure engineering prerequisites that Slice 2 T160's author will encounter and resolve as part of the craft work.
+
+### Action items (environmental audit)
+
+- [x] **Claude** — run second-pass environmental audit (closed 2026-05-28).
+- [x] **Claude** — record both new findings in this section (this commit).
+- [ ] **§A5 production-readiness gate** — Tahoma Arabic-rendering smoke test on actual hardware-matrix Windows 11 box BEFORE sign-off. If any glyph falls back, bundle Noto Sans Arabic / Cairo into the Electron app.
+- [ ] **Slice 2 T160 author** — implement `src/shared/formatters/receipt-formatters.ts` as a precursor to the template engine. Export `formatCurrencyMinor`, `formatLocalCalendarDay`, `formatLocalTime`, all Latin-digit per FR-066.
