@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-28 (two passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. See §"Backend-coordination blocker on T094a" below).
+**Last updated:** 2026-05-28 (three passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. See §"Slice 2 prep audit: line-snapshot persistence" below).
 
 **Change log (oldest → newest):**
 
@@ -470,3 +470,70 @@ Slice 1 is effectively paused until the backend PR lands. Parallel work that cou
 - [ ] **T111/T112 manual smokes** — BLOCKED-BY T094c. Will be unblocked once T094c lands.
 - [ ] **T113 Slice 1 sign-off** — BLOCKED-BY T111/T112.
 - [ ] **§A5 production-readiness gate** — flagged: re-open Q1 (Egyptian VAT compliance) before sign-off.
+
+---
+
+## 2026-05-28 — Slice 2 prep audit: line-snapshot persistence (`AD-6` receipt template engine)
+
+> **Status:** **CLOSED — Ahmed picked Option A (lines_json column on sales row).** Adds T028a (new migration) to Slice 1's migration set.
+>
+> **Discovered by:** Claude session on 2026-05-28 while running an upstream-gap audit on Slice 2 (post-PR #268 merge). The audit applied the same field-source verification discipline that surfaced Slice 1's gap, looking for fields the receipt template needs but the codebase doesn't supply.
+
+### Audit scope
+
+Slice 2 (Phase 4 in tasks.md) ships the AD-6 receipt template engine — single source, dual output (ESC/POS bytes for thermal printer + HTML/canvas for on-screen preview). FR-015 requires byte-stable reprints: a receipt reprinted 6 months later MUST render identically to the original. The audit verified each input field the template needs against a real source in the codebase.
+
+### Inherited finding (already-documented; no action needed here)
+
+The audit confirmed Slice 2 inherits Slice 1's 4-field gap (`branch_name`, `branch_address`, `tenant_tax_registration_id`, `total_tax_minor`) because the template reads them from the persisted `sales` row. Resolution is automatic when T094a/b/c land — the sales row is the seam for both slices.
+
+### New finding (Slice-2-specific)
+
+**Receipt line snapshots are not persisted anywhere.** The template MUST render per-line item names, quantities, unit prices, and line subtotals — for the original sale AND for byte-stable reprints months later. The codebase as of 2026-05-28 has:
+
+- `src/shared/cart/handoff-envelope.ts:1-11` — `PaymentIntentEnvelope.lines: LineSnapshot[]` exists at payment-time (item_ref, display_name, quantity, unit_price_minor, line_subtotal_minor, note)
+- `migrations/0020_create_sales.sql:9-32` — `sales` row has **NO column for persisted line snapshots**. No `lines_json`. No separate `sale_line_items` table.
+- `src/main/sales/finalize-transaction.ts` — does NOT save the line snapshots anywhere; cart rows are not durable post-handoff
+
+**Failure mode if unresolved:** 6 months after a sale, when a customer requests a reprint, the template would either crash (no source) or print **stale data different from what the customer originally received** (if it falls back to querying the current catalogue). This violates FR-015 byte-stability and is a regulatory + consumer-trust failure.
+
+### Decision (Ahmed, 2026-05-28)
+
+**Option A — `lines_json` column on the `sales` row.** A new migration (`0027_extend_sales_with_lines_json.sql`) adds a `lines_json TEXT NOT NULL DEFAULT '[]'` column. T091 finalize-transaction serializes `PaymentIntentEnvelope.lines` into JSON and writes it atomically with the rest of the sale row. Receipt template reads + parses on reprint.
+
+**Why Option A** (vs the two rejected alternatives):
+
+| Criterion | A (lines_json) | B (separate `sale_line_items` table) | C (re-derive at reprint time) |
+|:--|:--|:--|:--|
+| FR-015 byte-stable reprints months later | ✅ | ✅ | ❌ **VIOLATES SPEC** (prices/names change over time) |
+| Migration complexity | 1 column ALTER | New table + append-only trigger + FK + indexes | None |
+| Match AD-3 append-only invariant | ✅ free (sales row is already triggered by 0021) | Requires separate append-only trigger | N/A |
+| Match existing 008 patterns | ✅ `sales.tender_lines_summary_json` already exists at `0020_create_sales.sql:26` as `TEXT NOT NULL` JSON | Departs from established pattern | N/A |
+| Read cost on reprint | One row read + JSON.parse | Join + N row reads | Variable |
+| Compliance auditability | One row = one full sale | Distributed across tables | Receipt may differ from original |
+
+**Decisive factor**: `sales.tender_lines_summary_json` already exists in the merged schema (line 26 of `0020_create_sales.sql`) using exactly the pattern Option A proposes. Adding `lines_json` matches the established convention. Option B would introduce a new pattern for sub-entities inconsistent with what's already merged.
+
+**Cart-size concern (the strongest argument against A)**: negligible. A typical pharmacy cart is 5-20 lines. At ~150 bytes/line that's 750-3,000 bytes per sale row — well within SQLite's comfortable range. If a future product-recall scenario needs "all sales containing item X", a virtual JSON1 index (`json_extract(lines_json, '$[*].item_ref')`) provides that without a schema change.
+
+### Implementation impact
+
+The decision adds a **new task T028a** to Slice 1a's migration set, with corresponding updates to T091 (finalize-transaction) and T094b (dispatch-projection):
+
+| Touchpoint | Change |
+|:--|:--|
+| **T028a (NEW)** | Migration `migrations/0027_extend_sales_with_lines_json.sql`: `ALTER TABLE sales ADD COLUMN lines_json TEXT NOT NULL DEFAULT '[]'`. The DEFAULT lets the migration run cleanly against existing dev fixtures already past 0020. RED-GREEN tests: schema-evolution test + insert/read round-trip. |
+| **T091 update** | `finalize-transaction.ts` serializes `input.lines` to JSON and includes it in the sales INSERT. Existing T091 implementation is merged in PR #264; this is a small additive change. |
+| **T094b update** | Dispatch-projection module reads `PaymentIntentEnvelope.lines` from the cart envelope JSON and includes it on `FinalizeInput`. |
+| **Sales repository update** | `readById()` returns parsed `lines: LineSnapshot[]`. |
+| **`FinalizeInput` shape** | Add `lines: readonly LineSnapshot[]` field. |
+
+Cost: ~80-120 LoC across the four touchpoints plus the migration. The new T028a is `[BLOCKED-BY T094a]` transitively because T091 also writes the four T094a-blocked fields — they must land together.
+
+### Action items (this section)
+
+- [x] **Claude** — run upstream-gap audit on Slice 2 (closed 2026-05-28).
+- [x] **Ahmed** — line-snapshot persistence decision (closed 2026-05-28: Option A, lines_json column).
+- [x] **Claude** — author T028a task entry + update T091/T094b descriptions (this PR).
+- [ ] **T028a PR** — folds into the eventual T094a/b/c PR chain (specifically, the migration lands as part of T094a-or-equivalent unblocking work; T091 + T094b updates land within their respective implementation PRs).
+- [ ] **§A5 production-readiness gate** — flagged: confirm reprint byte-stability test passes against a sale that's been in the DB for ≥30 days before sign-off.
