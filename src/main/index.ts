@@ -832,11 +832,24 @@ app
           mainLogger.info({ handoff_action_id, kind: result.kind }, 'finalize_dispatch:finalized');
         };
 
+        // F-007 alignment — the AD-2 scan filters `audit_events` by
+        // `originating_terminal_id`, which 006 writes as the payment
+        // attempt's `terminal_id`. That value comes from
+        // `paymentsSessionAdapter`, which (per the documented F-007 shortcut)
+        // sets `terminal_id: sess.branch_id` because 004's session record
+        // carries no separate terminal id. So the value 006 stamps into
+        // `originating_terminal_id` is the BRANCH id, not the pairing row's
+        // real terminal_id. The scan MUST bind the same value 006 wrote, or
+        // it matches zero settled rows and finalizes nothing. We therefore
+        // scope the worker with terminal_id = branch_id, tagged to the same
+        // F-007 debt: when the real terminal id is plumbed through 004, BOTH
+        // the payments adapter and this scope flip together.
+        const payments006TerminalId = pairingStatus.branch_id; // F-007
         const finalizeListener = createFinalizeListener({
           db: dbHandle,
           tenant_id: pairingStatus.tenant_id,
           branch_id: pairingStatus.branch_id,
-          terminal_id: pairingStatus.terminal_id,
+          terminal_id: payments006TerminalId,
           dispatch,
           // Print + drawer recovery dispatchers land in Slice 3 / Slice 4;
           // log placeholders keep the recovery scan inert until then.
