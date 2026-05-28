@@ -297,9 +297,9 @@ describe('T092 — print recovery one-shot sub-scan at startup', () => {
     });
 
     // First attempt throws — flag must stay false so a retry can succeed.
-    expect(() => { listener.runStartupRecovery(); }).toThrow(
-      /simulated transient print dispatch failure/,
-    );
+    expect(() => {
+      listener.runStartupRecovery();
+    }).toThrow(/simulated transient print dispatch failure/);
     expect(dispatchedPrint).toEqual([]);
 
     // Retry — succeeds + the flag now flips so a third call is a no-op.
