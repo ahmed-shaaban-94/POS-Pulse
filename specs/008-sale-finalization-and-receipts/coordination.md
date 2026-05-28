@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-28 (S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. See §"Slice 1 closeout gap discovery" below).
+**Last updated:** 2026-05-28 (two passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. See §"Backend-coordination blocker on T094a" below).
 
 **Change log (oldest → newest):**
 
@@ -401,15 +401,72 @@ This flag is recorded here so it cannot be forgotten when Slice 6 (production-re
 
 Sequencing: T094a → T094b → T094c. Each lands as its own PR. T111/T112/T113 are explicitly blocked-by-T094c.
 
+### Backend-coordination blocker on T094a (discovered 2026-05-28, post-PR #267 merge)
+
+> **Status:** **T094a BLOCKED-BY backend OpenAPI change.** T094b and T094c inherit the block transitively.
+
+**Finding:** Q2's chosen path ("extend 002 pairing handshake") requires a change to the backend API contract that POS-Pulse cannot make alone. `src/shared/api-types.ts` is auto-generated from `scripts/openapi-snapshot.json` (per spec 001 research §"Codegen: openapi-typescript v7 from a pinned snapshot in 001"). The snapshot is a frozen copy of the backend's OpenAPI spec; the source of truth lives in the `smartdatapulse.tech` backend repo.
+
+**Current `TerminalPairResponse` snapshot shape (5 required fields):**
+
+```json
+{
+  "device_token": "string (SECRET)",
+  "tenant_id": "string",
+  "branch_id": "string",
+  "terminal_id": "string",
+  "terminal_label": "string",
+  "expires_at": "ISO 8601 | null (optional)"
+}
+```
+
+**Required new fields (per Q2 decision):** `branch_name`, `branch_address`, `tenant_tax_registration_id` — all `string`, all required.
+
+### Backend-coordination decision (resolved 2026-05-28 by Ahmed)
+
+**Ahmed owns the backend coordination.** Ahmed will open a backend PR against `smartdatapulse.tech` to extend `TerminalPairResponse` with the three new fields. Once that backend PR merges and a fresh `scripts/openapi-snapshot.json` is committed in POS-Pulse, T094a (the POS-Pulse-side work) becomes unblocked.
+
+POS-Pulse must NOT stub the snapshot locally ahead of the backend change — that would risk a contract divergence bug if the backend ships a different shape, and the `codegen:verify` CI gate would catch the divergence loudly on the next sync.
+
+### Updated S1c.3 dependency graph
+
+| Task | Status | Blocker |
+|:--|:--|:--|
+| **T094a** | BLOCKED | Backend PR + fresh OpenAPI snapshot (Ahmed owns) |
+| **T094b** | BLOCKED | T094a (needs the three new fields in `terminal_assignment` to project into `FinalizeInput`) |
+| **T094c** | BLOCKED | T094b (bootstrap calls T094b's projection module) |
+| **T111** | BLOCKED | T094c |
+| **T112** | BLOCKED | T094c |
+| **T113** | BLOCKED | T111 + T112 |
+
+### What can proceed in the meantime
+
+Slice 1 is effectively paused until the backend PR lands. Parallel work that could fill the time:
+
+- **Slice 0 follow-ups** still open per the original §A1 sign-off:
+  - [ ] (a)/(b)/(c) printed-slip layouts (Ahmed-authored, MUST land before T173 craft fires in Slice 2)
+- **Slice 2 prep work** that doesn't depend on Slice 1 closure:
+  - Reading 008's spec.md + plan.md §AD-6 (receipt template engine) + research.md §R-6 to refresh context
+  - Drafting Slice 2's task entries in tasks.md if not already present
+- **Coverage tightening / refactor** on existing merged 008 modules (no test changes; only structural)
+
+### Action items (this section)
+
+- [x] **Claude** — verify Q2 path against `scripts/openapi-snapshot.json` (closed 2026-05-28: confirmed `TerminalPairResponse` lacks the three new fields).
+- [x] **Ahmed** — backend-coordination decision (closed 2026-05-28: Ahmed owns the backend PR).
+- [ ] **Ahmed** — open backend PR against `smartdatapulse.tech` adding `branch_name`, `branch_address`, `tenant_tax_registration_id` to `TerminalPairResponse` (required fields).
+- [ ] **Ahmed** — once backend PR merges, regenerate `scripts/openapi-snapshot.json` here via `npm run codegen:api` (or equivalent) + commit. This unblocks T094a.
+- [ ] **Claude (after snapshot lands)** — execute T094a per the original task entry in tasks.md.
+
 ### Action items
 
 - [x] **Ahmed Q1 answer** — recorded 2026-05-28: "Zero for v1 (no VAT)" with §A5 production-readiness flag.
 - [x] **Ahmed Q2 answer** — recorded 2026-05-28: "Extend 002 pairing handshake, attribute to 008".
 - [x] **Claude** — collapse memo to chosen-path form (this commit).
 - [x] **Claude** — author T094a / T094b / T094c task entries in tasks.md (closed 2026-05-28 in this same PR #267 commit; see `tasks.md` lines 216-223).
-- [ ] **T094a PR** — `feat(008): extend 002 pairing handshake for branch detail (T094a)`. Subsequent session.
-- [ ] **T094b PR** — `feat(008): dispatch-projection module + RED-GREEN tests (T094b)`. After T094a merges.
-- [ ] **T094c PR** — `feat(008): wire AD-2 worker + sales.* bridge into main (T094c, closes S1c.3)`. After T094b merges.
+- [ ] **T094a PR** — `feat(008): extend 002 pairing handshake for branch detail (T094a)`. **BLOCKED-BY backend OpenAPI change (Ahmed owns)** — see §"Backend-coordination blocker on T094a" above.
+- [ ] **T094b PR** — `feat(008): dispatch-projection module + RED-GREEN tests (T094b)`. After T094a merges (transitively blocked by backend).
+- [ ] **T094c PR** — `feat(008): wire AD-2 worker + sales.* bridge into main (T094c, closes S1c.3)`. After T094b merges (transitively blocked by backend).
 - [ ] **T111/T112 manual smokes** — BLOCKED-BY T094c. Will be unblocked once T094c lands.
 - [ ] **T113 Slice 1 sign-off** — BLOCKED-BY T111/T112.
 - [ ] **§A5 production-readiness gate** — flagged: re-open Q1 (Egyptian VAT compliance) before sign-off.
