@@ -242,6 +242,50 @@ describe('T050 — AD-2 atomic finalize transaction', () => {
     expect(json).not.toContain('CARD-AUTH-AB12XY');
     expect(json).toContain('*****');
   });
+
+  it('persists change_due_minor on cash tender lines', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+    finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'cash' as const,
+            amount_applied_minor: 2000,
+            change_due_minor: 500,
+          },
+        ],
+      }),
+    );
+    const row = db.exec(
+      "SELECT tender_lines_summary_json FROM sales WHERE sale_id = 'sale-uuid-1'",
+    );
+    const json = row[0]?.values[0]?.[0] as string;
+    expect(json).toContain('"change_due_minor":500');
+  });
+
+  it('persists voucher_authority_redemption_id on internal_voucher tender lines', () => {
+    seedPaymentAttempt();
+    seedTenderLine({ tender_type: 'internal_voucher' });
+    const finalize = bindFinalizeTransaction(buildDeps());
+    finalize.finalize(
+      buildInput({
+        tender_lines_summary: [
+          {
+            tender_type: 'internal_voucher' as const,
+            amount_applied_minor: 1500,
+            voucher_authority_redemption_id: 'vauth-12345',
+          },
+        ],
+      }),
+    );
+    const row = db.exec(
+      "SELECT tender_lines_summary_json FROM sales WHERE sale_id = 'sale-uuid-1'",
+    );
+    const json = row[0]?.values[0]?.[0] as string;
+    expect(json).toContain('"voucher_authority_redemption_id":"vauth-12345"');
+  });
 });
 
 // ─── T051 — Idempotency on duplicate handoff_action_id ─────────────────────
@@ -268,7 +312,68 @@ describe('T051 — duplicate finalize on the same envelope_handoff_action_id is 
     expect(captured).toHaveLength(1);
   });
 
-  it('in-transaction TOCTOU re-check returns the existing sale_id without writing', () => {
+  it('in-transaction TOCTOU re-check fires when the fast-path read sees no row but a concurrent INSERT wins the race', () => {
+    // The fast-path findByHandoffActionId returns null (no duplicate seen
+    // initially), but a concurrent writer commits a sales row in between.
+    // The in-txn re-check at the top of db.transaction(...) must catch
+    // that and return finalized_idempotent without writing anything.
+    //
+    // We model this by wrapping the real repo: first call returns null,
+    // subsequent calls return the seeded row. The behaviour reproduces
+    // the production TOCTOU window per CR2 on PR #264.
+    seedPaymentAttempt();
+    seedTenderLine();
+    db.exec(
+      `INSERT INTO sales (
+         sale_id, sale_number, receipt_number, envelope_handoff_action_id, payment_attempt_id,
+         envelope_cart_id, tenant_id, branch_id, terminal_id, terminal_label,
+         selling_operator_id, selling_operator_display_name, selling_operator_session_id,
+         subtotal_minor, total_tax_minor, total_change_due_minor, tender_lines_summary_json,
+         settled_at, finalized_at, tenant_tax_registration_id, branch_name, branch_address,
+         local_calendar_day
+       ) VALUES (
+         'sale-toctou-winner', 'TERM-01-2026-05-27-000777', 'TERM-01-2026-05-27-000777',
+         'handoff-1', 'pa-1',
+         'cart-1', 'tenant-1', 'branch-1', 'terminal-1', 'TERM-01',
+         'op-clerk-user-abc', 'Ahmed', 'sess-1',
+         1500, 0, 0, '[]',
+         '2026-05-27T09:55:00.000Z', '2026-05-27T09:55:00.500Z', 'TRN', 'B', 'A',
+         '2026-05-27'
+       )`,
+    );
+
+    const realDeps = buildDeps();
+    const realRepo = realDeps.salesRepo;
+    let callCount = 0;
+    const wrappedRepo: typeof realRepo = {
+      ...realRepo,
+      findByHandoffActionId(handoff_action_id) {
+        callCount += 1;
+        // First call (fast-path) returns null; subsequent calls
+        // (the in-txn re-check + the post-txn re-read) return the real row.
+        if (callCount === 1) return null;
+        return realRepo.findByHandoffActionId(handoff_action_id);
+      },
+    };
+    const finalize = bindFinalizeTransaction({ ...realDeps, salesRepo: wrappedRepo });
+
+    const result = finalize.finalize(buildInput());
+    expect(result.kind).toBe('finalized_idempotent');
+    if (result.kind !== 'finalized_idempotent') return;
+    expect(result.sale_id).toBe('sale-toctou-winner');
+    expect(result.sale_number).toBe('TERM-01-2026-05-27-000777');
+
+    // Still exactly one sales row — no second insert.
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    expect(sales[0]?.values[0]?.[0]).toBe(1);
+    // No allocator sequence row — the txn short-circuited before allocate.
+    const seq = db.exec('SELECT COUNT(*) FROM sale_number_sequences');
+    expect(seq[0]?.values[0]?.[0]).toBe(0);
+    // No audit emitted.
+    expect(captured).toHaveLength(0);
+  });
+
+  it('fast-path idempotency short-circuits before entering the transaction', () => {
     // Per CR2 on PR #264 — the in-txn re-check closes the window between
     // the fast-path read and the INSERT. We simulate it by seeding a
     // pre-existing sales row directly (the same handoff_action_id that
@@ -358,6 +463,22 @@ describe('T056 — refuse when any tender line is in reversal_pending', () => {
 });
 
 describe('T057 — refuse when source attempt is not settled', () => {
+  it('refuses with source_attempt_not_settled when the payment_attempt_id has no row at all', () => {
+    // No seedPaymentAttempt — the AD-2 worker handed us a handoff_action_id
+    // pointing at a payment_attempt_id that doesn't exist (e.g. legacy
+    // outbox row from a feature-flag flip). Refuse rather than crash.
+    const finalize = bindFinalizeTransaction(buildDeps());
+    const result = finalize.finalize(buildInput());
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.refusal_reason).toBe('source_attempt_not_settled');
+
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    expect(sales[0]?.values[0]?.[0]).toBe(0);
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.action_category).toBe('sale.finalization_refused');
+  });
+
   it('refuses started / cancelled / failed', () => {
     for (const state of ['started', 'cancelled', 'failed'] as const) {
       // Fresh DB per pass since beforeEach only fires once per `it`.
