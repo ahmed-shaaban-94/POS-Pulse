@@ -27,12 +27,28 @@ import type { PairingStore } from './store.js';
 
 export const DEV_BYPASS_FIXTURE_TOKEN = 'DEV-BYPASS-NOT-A-REAL-TOKEN';
 
-/** Fixture values written to the store when the bypass runs. */
+/**
+ * Fixture values written to the store when the bypass runs.
+ *
+ * The six fields after `terminal_label` were added 2026-05-28 by 008
+ * T094a alongside migration 0027. They carry realistic-shaped fixture
+ * data so the dev bypass exercises the receipt + print pipelines the
+ * same way a real pairing would. The printer fields point at Epson
+ * TM-T20III (the committed hardware-matrix pair per
+ * docs/hardware-matrix.md). `printer_com_port` is null because the
+ * TM-T20III is connected via USB in the matrix.
+ */
 export const DEV_BYPASS_FIXTURE_ASSIGNMENT = {
   tenant_id: 'dev-tenant',
   branch_id: 'dev-branch',
   terminal_id: 'dev-terminal',
   terminal_label: 'Dev Terminal',
+  branch_name: 'Dev Pharmacy',
+  branch_address: '12 Dev Road, Dev City',
+  tenant_tax_registration_id: '123456789',
+  printer_vendor_id: '0x04B8',
+  printer_product_id: '0x0202',
+  printer_com_port: null,
 } as const;
 
 export interface DevSkipPairingDeps {

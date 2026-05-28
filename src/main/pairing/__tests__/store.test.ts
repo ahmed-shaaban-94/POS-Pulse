@@ -52,7 +52,34 @@ const MIGRATION_SQL = readFileSync(
   'utf8',
 );
 
+// 008 T094a — load migration 0027 alongside 0003 so the sql.js harness
+// builds the post-extension schema. The 6 new columns added by 0027
+// are exercised below in §"008 T094a — six new fields …".
+const MIGRATION_0027_SQL = readFileSync(
+  path.join(REPO_ROOT, 'migrations', '0027_extend_terminal_assignment.sql'),
+  'utf8',
+);
+
 const DEVICE_TOKEN_KEY: SecretKey = makeSecretKey('terminal.device-token');
+
+/**
+ * Stub for the 6 new fields added by 008 T094a alongside migration 0027.
+ * Existing tests that pre-date T094a use this spread to satisfy the
+ * `TerminalAssignmentRow` shape without affecting their behaviour — all
+ * six fields are pure data carriers on the row, no read-side branching
+ * in the store gates on their values.
+ *
+ * The dedicated T094a test block below uses realistic values to verify
+ * round-tripping.
+ */
+const T094A_STUB_FIELDS = {
+  branch_name: null,
+  branch_address: null,
+  tenant_tax_registration_id: null,
+  printer_vendor_id: null,
+  printer_product_id: null,
+  printer_com_port: null,
+} as const;
 
 interface TestHarness {
   db: SqlJsDatabase;
@@ -69,8 +96,15 @@ interface TestHarness {
 function makeSqlJsAdapter(db: SqlJsDatabase): PairingStoreDb {
   return {
     readAssignment() {
+      // 11-column SELECT mirrors production `bindPairingStoreDb`
+      // (post-T094a). The 6 new columns may be NULL on rows written
+      // before migration 0027 ran, hence the explicit
+      // `as string | null` coercion via the row property reads.
       const stmt = db.prepare(
-        'SELECT tenant_id, branch_id, terminal_id, terminal_label, paired_at FROM terminal_assignment WHERE id = 1',
+        `SELECT tenant_id, branch_id, terminal_id, terminal_label, paired_at,
+                branch_name, branch_address, tenant_tax_registration_id,
+                printer_vendor_id, printer_product_id, printer_com_port
+         FROM terminal_assignment WHERE id = 1`,
       );
       try {
         if (!stmt.step()) return null;
@@ -81,19 +115,39 @@ function makeSqlJsAdapter(db: SqlJsDatabase): PairingStoreDb {
           terminal_id: row['terminal_id'] as string,
           terminal_label: row['terminal_label'] as string,
           paired_at: row['paired_at'] as number,
+          branch_name: (row['branch_name'] as string | null) ?? null,
+          branch_address: (row['branch_address'] as string | null) ?? null,
+          tenant_tax_registration_id: (row['tenant_tax_registration_id'] as string | null) ?? null,
+          printer_vendor_id: (row['printer_vendor_id'] as string | null) ?? null,
+          printer_product_id: (row['printer_product_id'] as string | null) ?? null,
+          printer_com_port: (row['printer_com_port'] as string | null) ?? null,
         };
       } finally {
         stmt.free();
       }
     },
     writeAssignment(row) {
-      // INSERT OR REPLACE keeps the single-row invariant honest under the
-      // CHECK (id = 1) constraint without first DELETing.
+      // INSERT OR REPLACE writes all 11 columns. Mirrors production
+      // `bindPairingStoreDb.writeAssignment` post-T094a.
       db.run(
         `INSERT OR REPLACE INTO terminal_assignment
-           (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)
-         VALUES (1, ?, ?, ?, ?, ?)`,
-        [row.tenant_id, row.branch_id, row.terminal_id, row.terminal_label, row.paired_at],
+           (id, tenant_id, branch_id, terminal_id, terminal_label, paired_at,
+            branch_name, branch_address, tenant_tax_registration_id,
+            printer_vendor_id, printer_product_id, printer_com_port)
+         VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          row.tenant_id,
+          row.branch_id,
+          row.terminal_id,
+          row.terminal_label,
+          row.paired_at,
+          row.branch_name,
+          row.branch_address,
+          row.tenant_tax_registration_id,
+          row.printer_vendor_id,
+          row.printer_product_id,
+          row.printer_com_port,
+        ],
       );
     },
     deleteAssignment() {
@@ -131,6 +185,9 @@ async function makeHarness(opts: { secretStore?: SecretStore } = {}): Promise<Te
   const SQL = await initSqlJs();
   const db = new SQL.Database();
   db.run(MIGRATION_SQL);
+  // Apply 0027 right after 0003 so the table is in its post-extension
+  // shape for every test.
+  db.run(MIGRATION_0027_SQL);
   const storeDb = makeSqlJsAdapter(db);
   const secretStore = opts.secretStore ?? createInMemorySecretStore();
   const store = createPairingStore({
@@ -163,9 +220,16 @@ describe('createPairingStore.getStatus()', () => {
       terminal_id: 'terminal-C',
       terminal_label: 'Counter 1',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     const status = await h.store.getStatus();
+    // Note: `PairingStatus.paired` carries only the 5 baseline fields by
+    // design — getStatus() does NOT project the 6 new T094a fields out
+    // through this discriminated-union surface. The new fields are read
+    // directly from the store row by callers that need them (receipt
+    // template, print pipeline). Keeps the renderer-visible status
+    // surface narrow per Constitution VII (minimum disclosure).
     expect(status).toEqual<PairingStatus>({
       kind: 'paired',
       tenant_id: 'tenant-A',
@@ -184,6 +248,7 @@ describe('createPairingStore.getStatus()', () => {
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     const status = await h.store.getStatus();
@@ -211,6 +276,7 @@ describe('createPairingStore.getStatus()', () => {
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     const status = await h.store.getStatus();
@@ -237,6 +303,7 @@ describe('createPairingStore.getStatus()', () => {
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     await h.store.getStatus();
@@ -264,6 +331,7 @@ describe('createPairingStore.persist()', () => {
       terminal_id: 'terminal-C',
       terminal_label: 'Counter 1',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBe('opaque-token-value');
@@ -274,6 +342,7 @@ describe('createPairingStore.persist()', () => {
       terminal_id: 'terminal-C',
       terminal_label: 'Counter 1',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
   });
 
@@ -303,6 +372,7 @@ describe('createPairingStore.persist()', () => {
         terminal_id: 'term',
         terminal_label: 'Counter',
         paired_at: 1735689600,
+        ...T094A_STUB_FIELDS,
       }),
     ).rejects.toThrow(/forced SQL failure/);
 
@@ -321,6 +391,7 @@ describe('createPairingStore.persist()', () => {
       terminal_id: 'term1',
       terminal_label: 'First',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
     await h.store.persist({
       device_token: 'second',
@@ -329,6 +400,7 @@ describe('createPairingStore.persist()', () => {
       terminal_id: 'term2',
       terminal_label: 'Second',
       paired_at: 1735689700,
+      ...T094A_STUB_FIELDS,
     });
 
     expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBe('second');
@@ -338,6 +410,7 @@ describe('createPairingStore.persist()', () => {
       terminal_id: 'term2',
       terminal_label: 'Second',
       paired_at: 1735689700,
+      ...T094A_STUB_FIELDS,
     });
   });
 });
@@ -358,6 +431,7 @@ describe('createPairingStore.clear()', () => {
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     await h.store.clear();
@@ -382,6 +456,7 @@ describe('createPairingStore.clear()', () => {
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     await h.store.clear();
@@ -430,6 +505,7 @@ describe('createPairingStore.getStatus() — US7 invalid reason discriminator (T
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     const status = await h.store.getStatus();
@@ -446,6 +522,7 @@ describe('createPairingStore.getStatus() — US7 invalid reason discriminator (T
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     const status = await h.store.getStatus();
@@ -477,6 +554,7 @@ describe('createPairingStore.clear() — US7 token-leak guard (T071)', () => {
       terminal_id: 'term',
       terminal_label: 'Counter',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     });
 
     const deleteSpy = vi.spyOn(h.secretStore, 'delete');
@@ -501,6 +579,135 @@ describe('createPairingStore.clear() — US7 token-leak guard (T071)', () => {
  * adapter wires the prepared statements correctly and prepares them
  * lazily.
  */
+
+// =========================================================================
+// 008 T094a — six new fields round-trip through migration 0027 +
+//             post-extension store SQL.
+// =========================================================================
+//
+// Verifies the post-T094a contract:
+//   - Migration 0027 adds 6 nullable columns to `terminal_assignment`.
+//   - `writeAssignment` persists all 11 columns (5 baseline + 6 new).
+//   - `readAssignment` projects all 11 columns.
+//   - A row written with non-null new fields round-trips byte-for-byte.
+//   - A row written with null new fields round-trips as null (forward-
+//     compatibility with pre-T094a paired terminals).
+//   - `persist()` propagates the 6 new fields from PersistInput into
+//     the underlying writeAssignment call.
+//
+describe('008 T094a — six new fields round-trip (branch + tax + printer config)', () => {
+  let h: TestHarness | undefined;
+  afterEach(() => {
+    h?.db.close();
+    h = undefined;
+  });
+
+  const T094A_REAL_FIELDS = {
+    branch_name: 'Maadi Pharmacy Branch 3',
+    branch_address: '12 Road 9, Maadi, Cairo',
+    tenant_tax_registration_id: '123456789',
+    printer_vendor_id: '0x04B8',
+    printer_product_id: '0x0202',
+    printer_com_port: null, // USB-only printer; COM port is genuinely null
+  } as const;
+
+  it('writeAssignment persists all six new fields and readAssignment returns them byte-for-byte', async () => {
+    h = await makeHarness();
+    h.storeDb.writeAssignment({
+      tenant_id: 'tenant-A',
+      branch_id: 'branch-B',
+      terminal_id: 'terminal-C',
+      terminal_label: 'Counter 1',
+      paired_at: 1735689600,
+      ...T094A_REAL_FIELDS,
+    });
+
+    const row = h.storeDb.readAssignment();
+    expect(row).not.toBeNull();
+    expect(row?.branch_name).toBe('Maadi Pharmacy Branch 3');
+    expect(row?.branch_address).toBe('12 Road 9, Maadi, Cairo');
+    expect(row?.tenant_tax_registration_id).toBe('123456789');
+    expect(row?.printer_vendor_id).toBe('0x04B8');
+    expect(row?.printer_product_id).toBe('0x0202');
+    expect(row?.printer_com_port).toBeNull();
+  });
+
+  it('the six new fields round-trip as null when written as null (pre-T094a re-pair scenario)', async () => {
+    // Forward-compat invariant: a terminal that was paired before
+    // 2026-05-28 has a row in terminal_assignment with NULL for the
+    // six new fields. The store MUST NOT crash on read; it MUST
+    // surface the nulls so the renderer / receipt template can fall
+    // back gracefully (or refuse to render if the field is
+    // load-bearing for that surface).
+    h = await makeHarness();
+    h.storeDb.writeAssignment({
+      tenant_id: 'tenant-A',
+      branch_id: 'branch-B',
+      terminal_id: 'terminal-C',
+      terminal_label: 'Counter 1',
+      paired_at: 1735689600,
+      ...T094A_STUB_FIELDS, // all six are null
+    });
+
+    const row = h.storeDb.readAssignment();
+    expect(row).not.toBeNull();
+    expect(row?.branch_name).toBeNull();
+    expect(row?.branch_address).toBeNull();
+    expect(row?.tenant_tax_registration_id).toBeNull();
+    expect(row?.printer_vendor_id).toBeNull();
+    expect(row?.printer_product_id).toBeNull();
+    expect(row?.printer_com_port).toBeNull();
+  });
+
+  it('persist() propagates all six new fields from PersistInput into the row write', async () => {
+    h = await makeHarness();
+    await h.store.persist({
+      device_token: 'opaque-token-value',
+      tenant_id: 'tenant-A',
+      branch_id: 'branch-B',
+      terminal_id: 'terminal-C',
+      terminal_label: 'Counter 1',
+      paired_at: 1735689600,
+      ...T094A_REAL_FIELDS,
+    });
+
+    const row = h.storeDb.readAssignment();
+    expect(row?.branch_name).toBe('Maadi Pharmacy Branch 3');
+    expect(row?.branch_address).toBe('12 Road 9, Maadi, Cairo');
+    expect(row?.tenant_tax_registration_id).toBe('123456789');
+    expect(row?.printer_vendor_id).toBe('0x04B8');
+    expect(row?.printer_product_id).toBe('0x0202');
+    expect(row?.printer_com_port).toBeNull();
+  });
+
+  it('persist() rollback on SQL failure also rolls back the six new fields (no orphan token)', async () => {
+    // Reproduces the persist()-atomicity contract: SecretStore write
+    // followed by SQL transaction; on SQL failure, the SecretStore
+    // entry is compensated by delete. The six new fields participate
+    // in the same transactional unit — a SQL failure during their
+    // write rolls back the entire row, and the token is purged.
+    h = await makeHarness();
+    // Trigger a SQL failure by closing the underlying sql.js handle
+    // BEFORE persist runs.
+    h.db.close();
+    await expect(
+      h.store.persist({
+        device_token: 'will-be-rolled-back',
+        tenant_id: 'tenant-A',
+        branch_id: 'branch-B',
+        terminal_id: 'terminal-C',
+        terminal_label: 'Counter 1',
+        paired_at: 1735689600,
+        ...T094A_REAL_FIELDS,
+      }),
+    ).rejects.toThrow();
+    // Token compensated.
+    expect(await h.secretStore.get(DEVICE_TOKEN_KEY)).toBeNull();
+    // We can't read the row (db is closed); the in-process compensation
+    // is what we're asserting here.
+  });
+});
+
 describe('bindPairingStoreDb', () => {
   type SelectStmt = {
     get: ReturnType<typeof vi.fn>;
@@ -524,7 +731,10 @@ describe('bindPairingStoreDb', () => {
 
     const prepareSpy = vi.fn((sql: string) => {
       if (/INSERT OR REPLACE INTO terminal_assignment/i.test(sql)) return insertStmt;
-      if (/SELECT .* FROM terminal_assignment WHERE id = 1/i.test(sql)) return selectStmt;
+      // dotAll flag (`s`) so the SELECT regex matches the post-T094a
+      // multi-line column list. Pre-T094a the SELECT fit on one line;
+      // 11 columns no longer do.
+      if (/SELECT .* FROM terminal_assignment WHERE id = 1/is.test(sql)) return selectStmt;
       if (/DELETE FROM terminal_assignment WHERE id = 1/i.test(sql)) return deleteStmt;
       return { get: vi.fn(), run: vi.fn() };
     });
@@ -574,6 +784,7 @@ describe('bindPairingStoreDb', () => {
       terminal_id: 'term',
       terminal_label: 'Counter 1',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     };
     const m = makeMockHandle({ selectRow: row });
     const db = bindPairingStoreDb(m.handle);
@@ -589,6 +800,7 @@ describe('bindPairingStoreDb', () => {
       terminal_id: 'term',
       terminal_label: 'Counter 1',
       paired_at: 1735689600,
+      ...T094A_STUB_FIELDS,
     };
     db.writeAssignment(row);
     expect(m.insertStmt.run).toHaveBeenCalledWith(
@@ -597,6 +809,14 @@ describe('bindPairingStoreDb', () => {
       'term',
       'Counter 1',
       1735689600,
+      // Six T094a fields appended after paired_at (positional). When
+      // the row uses T094A_STUB_FIELDS, all six are null.
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
     );
   });
 
@@ -630,7 +850,9 @@ describe('bindPairingStoreDb', () => {
     // The SELECT statement was prepared exactly once; subsequent reads
     // hit the cached statement.
     const selectPrepares = m.prepareSpy.mock.calls.filter((c) =>
-      /SELECT .* FROM terminal_assignment/i.test(c[0] as string),
+      // dotAll flag (`s`) per the prepareSpy comment above —
+      // 11-column SELECT spans multiple lines post-T094a.
+      /SELECT .* FROM terminal_assignment/is.test(c[0] as string),
     );
     expect(selectPrepares).toHaveLength(1);
   });

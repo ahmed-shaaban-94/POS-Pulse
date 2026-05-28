@@ -1,0 +1,76 @@
+-- 008-sale-finalization-and-receipts T094a — extend terminal_assignment
+-- with 6 new columns to capture the branch + tenant + printer config the
+-- backend now supplies via the pinned `TerminalPairResponse` (Data-Pulse-2
+-- PR #388, pinned in POS-Pulse PR #272 / commit 7a0c25f).
+--
+-- ## Why this migration exists
+--
+-- The original `0003_terminal_assignment` migration (002-terminal-pairing
+-- T008) modelled the terminal as a tuple of (tenant_id, branch_id,
+-- terminal_id, terminal_label, paired_at). 008's Slice 1 closeout-gap
+-- audit (PRs #267 / #268 / #271) + Slice 3 prep audit (PR #270) found
+-- that the receipt template engine + print pipeline need six additional
+-- fields that the existing schema cannot hold:
+--
+--   - `branch_name`                  receipt header (008 AD-6)
+--   - `branch_address`               receipt header (008 AD-6)
+--   - `tenant_tax_registration_id`   receipt footer (Egyptian ETA
+--                                    e-invoicing — every fiscal
+--                                    receipt MUST display this)
+--   - `printer_vendor_id`            print pipeline USB discovery
+--                                    (008 Slice 3 / T201)
+--   - `printer_product_id`           print pipeline USB discovery
+--   - `printer_com_port`             optional RS-232 serial fallback
+--
+-- ## Nullability posture
+--
+-- All six new columns are added as NULLABLE in this migration. The
+-- task brief (tasks.md T094a) calls them "nullable temporarily, then
+-- enforced NOT NULL after data backfill in dev fixtures." Rationale:
+--
+--   1. Existing dev terminals already have a row in
+--      terminal_assignment from a prior pairing. A NOT NULL ADD
+--      COLUMN without DEFAULT would fail SQLite's ALTER TABLE
+--      contract on those existing rows.
+--   2. A `DEFAULT ''` would pass the SQLite contract but lie about
+--      the data — the existing row's branch_name is genuinely
+--      unknown, not the empty string.
+--   3. Subsequent re-pair operations (via the updated
+--      `createPairingStore.persist()`) will write all six new
+--      fields with backend-supplied values. The store row's
+--      effective shape is "all six fields present after the next
+--      successful pair."
+--   4. A future migration (after every dev fixture has been
+--      re-paired) can ALTER COLUMN to NOT NULL once the field
+--      is guaranteed non-null across the install base.
+--
+-- The store row TypeScript interface (`TerminalAssignmentRow` in
+-- src/main/pairing/store.ts) declares the six new fields as
+-- `string | null` (and `printer_com_port` as `string | null` even
+-- post-backfill, since RS-232 is genuinely optional). The pairing
+-- service (`src/main/pairing/service.ts`) writes them from
+-- `pairResult.body.<field>` on every successful pair.
+--
+-- ## What this migration does NOT do
+--
+-- This migration does NOT add CHECK constraints, indexes, or
+-- triggers on the new columns. The single-row invariant from 0003
+-- (CHECK (id = 1) + integer PK) carries forward unchanged. The new
+-- columns are pure data extensions.
+--
+-- ## SQLite ALTER TABLE compatibility
+--
+-- SQLite's ALTER TABLE ADD COLUMN supports nullable columns without
+-- a DEFAULT clause. Each statement is idempotent in the sense that
+-- the migration runner (`src/main/db/migrate.ts`) records this file
+-- in `schema_migrations` after a successful apply; running it twice
+-- against the same DB fails on the second attempt (column exists),
+-- which is the runner's expected protection against duplicate
+-- apply.
+
+ALTER TABLE terminal_assignment ADD COLUMN branch_name TEXT;
+ALTER TABLE terminal_assignment ADD COLUMN branch_address TEXT;
+ALTER TABLE terminal_assignment ADD COLUMN tenant_tax_registration_id TEXT;
+ALTER TABLE terminal_assignment ADD COLUMN printer_vendor_id TEXT;
+ALTER TABLE terminal_assignment ADD COLUMN printer_product_id TEXT;
+ALTER TABLE terminal_assignment ADD COLUMN printer_com_port TEXT;
