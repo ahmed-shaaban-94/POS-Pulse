@@ -777,11 +777,44 @@ app
     // reach a POS surface at all (the renderer is walled at /pairing), so a
     // non-paired status here means "nothing to finalize" and we skip start.
     if (getAppConfig().features?.saleFinalization === true) {
+      const salesRepo = bindSalesRepository(dbHandle);
+      const printEventsRepo = bindPrintEventsRepository(dbHandle);
+      const drawerEventsRepo = bindDrawerEventsRepository(dbHandle);
+
+      // Read-only `sales.*` bridge for the renderer (preview / lookup).
+      // Registered UNCONDITIONALLY whenever the flag is on — NOT gated on
+      // pairing status. Pairing happens in-renderer (PairingForm navigates
+      // to /paired without a process relaunch), so a terminal that boots
+      // unpaired and pairs later in the same process must still have these
+      // handlers; otherwise `sales.read`/`findByNumber` reject at the IPC
+      // layer. The bridge gates on the live session at call time, so it is
+      // inert until an operator signs in regardless of pairing timing.
+      const salesBridge = createSalesBridge({
+        getCurrentSession: () => {
+          const sess = operatorSessionManager.getCurrent();
+          if (sess === null) return null;
+          return {
+            role: sess.role,
+            operator_id: sess.operator_id,
+            operator_session_id: sess.id,
+            tenant_id: sess.tenant_id,
+            branch_id: sess.branch_id,
+            terminal_id: sess.branch_id,
+          };
+        },
+        salesRepo,
+        printEventsRepo,
+        drawerEventsRepo,
+      });
+      registerSalesHandlers(ipcMain, { salesBridge });
+
+      // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
+      // starts for an already-paired terminal — it needs the pairing row's
+      // scope to filter the scan. A terminal paired mid-process picks up the
+      // worker on the next launch; the startup recovery scan re-fires any
+      // settled-but-unfinalized rows then, so nothing is lost.
       const pairingStatus = await pairingStore.getStatus();
       if (pairingStatus.kind === 'paired') {
-        const salesRepo = bindSalesRepository(dbHandle);
-        const printEventsRepo = bindPrintEventsRepository(dbHandle);
-        const drawerEventsRepo = bindDrawerEventsRepository(dbHandle);
         const outboxRepo = bindSaleSyncOutboxRepository(dbHandle);
         const allocator = bindSaleNumberAllocator(dbHandle);
         const saleAuditEmitter = createSaleAuditEmitter({
@@ -862,26 +895,6 @@ app
           tickIntervalMs: 200,
           now: () => new Date().toISOString(),
         });
-
-        // Read-only sales.* bridge for the renderer (preview / lookup).
-        const salesBridge = createSalesBridge({
-          getCurrentSession: () => {
-            const sess = operatorSessionManager.getCurrent();
-            if (sess === null) return null;
-            return {
-              role: sess.role,
-              operator_id: sess.operator_id,
-              operator_session_id: sess.id,
-              tenant_id: sess.tenant_id,
-              branch_id: sess.branch_id,
-              terminal_id: sess.branch_id,
-            };
-          },
-          salesRepo,
-          printEventsRepo,
-          drawerEventsRepo,
-        });
-        registerSalesHandlers(ipcMain, { salesBridge });
 
         // Recovery scan first (re-fires any settled-but-unfinalized rows from
         // a prior crash), then install the steady-state tick driver.
