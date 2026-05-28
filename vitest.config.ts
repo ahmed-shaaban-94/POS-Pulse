@@ -116,6 +116,46 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T091 / T093 / T081-T084 — 008 Slice 1c. Spec §A5 requires ≥95%
+        // on the AD-2 atomic finalize transaction, the sale audit emitter,
+        // and the four repositories. All paths are exhaustively exercised
+        // by tests/unit/main/sales/* + tests/unit/main/sync-outbox/*.
+        'src/main/sales/finalize-transaction.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/sales/audit-emitter.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/sales/repositories/sales.repository.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/sales/repositories/print-events.repository.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/sales/repositories/drawer-events.repository.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/sync-outbox/sale-sync-outbox.repository.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
       },
     },
   },

@@ -1,0 +1,445 @@
+/**
+ * T091 — AD-2 atomic finalize transaction (008 Slice 1c).
+ *
+ * The load-bearing module of 008. Composes the work that turns a settled
+ * 006 payment attempt into a durable 008 Sale row + outbox enqueue + audit
+ * emission, all inside ONE SQLite transaction so a crash before COMMIT
+ * leaves no partial state for the AD-2 v3 recovery scan (T092) to clean up.
+ *
+ * The caller is the AD-2 v3 polling worker (T090, lands in S1c.2): it
+ * scans `audit_events.payment.settled` rows whose `handoff_action_id` has
+ * no matching `sales` row, then invokes `finalize(input)` once per match.
+ * Idempotency on `envelope_handoff_action_id` (FR-001 / SC-009) means the
+ * worker may safely dispatch the same input across a crash boundary.
+ *
+ * Seven steps per plan §AD-2:
+ *
+ *   1. Idempotency check — return `finalized_idempotent` if a sales row
+ *      already exists for this handoff_action_id.
+ *   2. Source-attempt refusal guard — refuse if the bound payment_attempts
+ *      row is force_failed, not settled, or has a reversal_pending line
+ *      (FR-005, FR-045, FR-046, FR-047). Emits `sale.finalization_refused`.
+ *   3. Forbidden-field scan on `tender_lines_summary` (FR-070..FR-074 +
+ *      CR3 from PR #261). Emits `sale.finalization_refused` with
+ *      refusal_reason='forbidden_field_in_tender_summary' on hit.
+ *   4. Allocate `sale_number` via the AD-7 allocator (T085).
+ *   5. INSERT the `sales` row.
+ *   6. INSERT the `sale_sync_outbox` row with state='pending'.
+ *   7. Emit the `sale.finalized` audit event.
+ *
+ * Steps 4-7 run inside `db.transaction(...)` so a failure between
+ * (4) and (7) rolls back the allocator's sequence increment too — the
+ * sequence-table row is the only mutable state in 008 and is the only
+ * piece that needs rollback discipline. (The unit test sale-number-
+ * allocator.txn-rollback.test.ts is the canonical proof.)
+ *
+ * The refusal-guard branch (step 2-3) does NOT need a transaction wrapper
+ * because no INSERT happens — only the audit emit, which is itself an
+ * INSERT but is acceptable as an out-of-band side effect (refusals are
+ * audit-only, no Sale state to roll back).
+ */
+
+import type { DatabaseHandle } from '../db/client.js';
+import type { SalesRepository } from './repositories/sales.repository.js';
+import type { SaleSyncOutboxRepository } from '../sync-outbox/sale-sync-outbox.repository.js';
+import type { SaleNumberAllocator } from './sale-number-allocator.js';
+import type { SaleAuditEmitter } from './audit-emitter.js';
+import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
+import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
+
+// ─── Narrow better-sqlite3 surface (mirrors repositories) ───────────────────
+
+interface PrepareGet<Row> {
+  get(...params: unknown[]): Row | undefined;
+}
+
+interface PrepareAll<Row> {
+  all(...params: unknown[]): Row[];
+}
+
+// ─── Input shape ────────────────────────────────────────────────────────────
+
+/**
+ * Closed-set tender-line summary as received from the AD-2 worker. The
+ * worker derives this from 006's `payment_tender_lines` + envelope context;
+ * by the time it reaches us the cleartext `external_reference` may be
+ * present (it's the legitimate card-terminal reference, redacted to `*****`
+ * by the audit emitter before persistence). Voucher fields, card data,
+ * envelope bodies are NOT permitted here — the forbidden-field scan
+ * refuses the finalize if any leak through.
+ */
+export interface FinalizeTenderLineSummary {
+  tender_type: SalesTenderType;
+  amount_applied_minor: number;
+  change_due_minor?: number;
+  external_reference?: string;
+  voucher_authority_redemption_id?: string;
+}
+
+export interface FinalizeInput {
+  envelope_handoff_action_id: string;
+  payment_attempt_id: string;
+  envelope_cart_id: string;
+  tenant_id: string;
+  branch_id: string;
+  terminal_id: string;
+  terminal_label: string;
+  selling_operator_id: string;
+  selling_operator_display_name: string;
+  selling_operator_session_id: string;
+  subtotal_minor: number;
+  total_tax_minor: number;
+  total_change_due_minor: number;
+  tender_lines_summary: readonly FinalizeTenderLineSummary[];
+  settled_at: string;
+  tenant_tax_registration_id: string;
+  branch_name: string;
+  branch_address: string;
+  local_calendar_day: string;
+}
+
+// ─── Result shapes ──────────────────────────────────────────────────────────
+
+export interface FinalizeFinalized {
+  kind: 'finalized';
+  sale_id: string;
+  sale_number: string;
+  receipt_number: string;
+  finalized_at: string;
+}
+
+export interface FinalizeFinalizedIdempotent {
+  kind: 'finalized_idempotent';
+  sale_id: string;
+  sale_number: string;
+  receipt_number: string;
+}
+
+export interface FinalizeRefused {
+  kind: 'refused';
+  refusal_reason: SaleFinalizationRefusalReason;
+}
+
+export type FinalizeResult = FinalizeFinalized | FinalizeFinalizedIdempotent | FinalizeRefused;
+
+// ─── DI ─────────────────────────────────────────────────────────────────────
+
+export interface FinalizeTransactionDependencies {
+  db: DatabaseHandle;
+  salesRepo: SalesRepository;
+  outboxRepo: SaleSyncOutboxRepository;
+  allocator: SaleNumberAllocator;
+  auditEmitter: SaleAuditEmitter;
+  /** Injected clock (returns ISO 8601). */
+  now: () => string;
+  /** Injected UUID v4 generators (R9: deterministic tests). */
+  saleIdGenerator: () => string;
+  outboxRowIdGenerator: () => string;
+}
+
+export interface FinalizeTransaction {
+  finalize(input: FinalizeInput): FinalizeResult;
+}
+
+// ─── Forbidden-key scan (composes 004 + 008-local sets) ─────────────────────
+
+/**
+ * Same set as `src/main/sales/audit-emitter.ts` SALES_FORBIDDEN_KEYS. Kept
+ * local rather than exported so the audit emitter and the finalize
+ * transaction can evolve their defensive scans independently — both
+ * compose the shared 004 list as the root of trust.
+ */
+const FINALIZE_FORBIDDEN_KEYS = new Set<string>([
+  // FR-070 — card-data PAN / track / CVV / cardholder / expiry / auth_payload / cryptogram
+  'pan',
+  'cvv',
+  'cvc',
+  'track',
+  'track1',
+  'track2',
+  'cardholder',
+  'cardholder_name',
+  'expiry',
+  'auth_payload',
+  'cryptogram',
+  // FR-071 — voucher
+  'voucher_code',
+  'voucher_balance',
+  'voucher_redemption_intent_token',
+  'authority_payload',
+  // FR-072 — secret credentials beyond 004's shared list
+  'jwt',
+  // FR-073 — envelope handoff raw
+  'envelope_handoff_action_id_raw',
+  // FR-074 — raw envelope
+  'envelope_payload',
+  'raw_envelope',
+  // CR3 — issuer identity / PIN record id
+  'issuer_name',
+  'pin_record_id',
+]);
+
+function findForbiddenKey(node: unknown): string | null {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findForbiddenKey(item);
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+  if (node !== null && typeof node === 'object') {
+    for (const key of Object.keys(node)) {
+      if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) {
+        return key;
+      }
+      if (FINALIZE_FORBIDDEN_KEYS.has(key)) return key;
+      const hit = findForbiddenKey((node as Record<string, unknown>)[key]);
+      if (hit !== null) return hit;
+    }
+  }
+  return null;
+}
+
+// ─── 006 read shapes (narrow projections used by the refusal guard) ────────
+
+interface PaymentAttemptProjection {
+  state: string;
+}
+
+interface TenderLineStateProjection {
+  state: string;
+}
+
+// ─── Factory ────────────────────────────────────────────────────────────────
+
+export function bindFinalizeTransaction(
+  deps: FinalizeTransactionDependencies,
+): FinalizeTransaction {
+  const {
+    db,
+    salesRepo,
+    outboxRepo,
+    allocator,
+    auditEmitter,
+    now,
+    saleIdGenerator,
+    outboxRowIdGenerator,
+  } = deps;
+
+  const readAttemptStmt = db.prepare(
+    `SELECT state FROM payment_attempts WHERE payment_attempt_id = ?`,
+  ) as PrepareGet<PaymentAttemptProjection>;
+
+  const readTenderStatesStmt = db.prepare(
+    `SELECT state FROM payment_tender_lines WHERE payment_attempt_id = ?`,
+  ) as PrepareAll<TenderLineStateProjection>;
+
+  function emitRefusal(
+    input: FinalizeInput,
+    reason: SaleFinalizationRefusalReason,
+  ): FinalizeRefused {
+    auditEmitter.emitSaleFinalizationRefused({
+      tenant_id: input.tenant_id,
+      branch_id: input.branch_id,
+      originating_terminal_id: input.terminal_id,
+      session_id: input.selling_operator_session_id,
+      attribution_operator_id: input.selling_operator_id,
+      envelope_handoff_action_id: input.envelope_handoff_action_id,
+      refused_at: now(),
+      refusal_reason: reason,
+    });
+    return { kind: 'refused', refusal_reason: reason };
+  }
+
+  function buildRedactedTenderLinesSummary(input: FinalizeInput): Array<Record<string, unknown>> {
+    return input.tender_lines_summary.map((line) => {
+      const out: Record<string, unknown> = {
+        tender_type: line.tender_type,
+        amount_applied_minor: line.amount_applied_minor,
+      };
+      if (line.tender_type === 'cash' && line.change_due_minor !== undefined) {
+        out.change_due_minor = line.change_due_minor;
+      }
+      if (line.tender_type === 'external_card_terminal' && line.external_reference !== undefined) {
+        out.external_reference = '*****';
+      }
+      if (
+        line.tender_type === 'internal_voucher' &&
+        line.voucher_authority_redemption_id !== undefined
+      ) {
+        out.voucher_authority_redemption_id = line.voucher_authority_redemption_id;
+      }
+      return out;
+    });
+  }
+
+  return {
+    finalize(input: FinalizeInput): FinalizeResult {
+      // Step 1 — Fast-path idempotency check (read-only, outside the txn).
+      //
+      // This is a courtesy check that lets the typical case (no duplicate)
+      // skip the refusal-guard work too. It is NOT load-bearing — the real
+      // protection is the unique index on `sales.envelope_handoff_action_id`
+      // (migration 0020) combined with the re-check inside the transaction
+      // below. The re-check closes the TOCTOU window between this read and
+      // the INSERT (per CR2 on PR #264). In production, AD-2's per-terminal
+      // serialisation makes concurrent finalize calls for the same
+      // handoff_action_id virtually impossible, but the DB-layer uniqueness
+      // is the defence-in-depth guarantee.
+      const existing = salesRepo.findByHandoffActionId(input.envelope_handoff_action_id);
+      if (existing !== null) {
+        return {
+          kind: 'finalized_idempotent',
+          sale_id: existing.sale_id,
+          sale_number: existing.sale_number,
+          receipt_number: existing.receipt_number,
+        };
+      }
+
+      // Step 2 — Source-attempt refusal guard.
+      const attempt = readAttemptStmt.get(input.payment_attempt_id);
+      if (attempt === undefined) {
+        return emitRefusal(input, 'source_attempt_not_settled');
+      }
+      if (attempt.state === 'force_failed') {
+        return emitRefusal(input, 'force_failed_attempt');
+      }
+      if (attempt.state !== 'settled') {
+        return emitRefusal(input, 'source_attempt_not_settled');
+      }
+      const tenderStates = readTenderStatesStmt.all(input.payment_attempt_id);
+      if (tenderStates.some((row) => row.state === 'reversal_pending')) {
+        return emitRefusal(input, 'reversal_pending_line');
+      }
+
+      // Step 3 — Forbidden-field scan.
+      const forbidden = findForbiddenKey(input.tender_lines_summary);
+      if (forbidden !== null) {
+        return emitRefusal(input, 'forbidden_field_in_tender_summary');
+      }
+
+      // Steps 4-7 — Atomic write + audit.
+      //
+      // Per CR2 on PR #264 — re-check idempotency INSIDE the transaction
+      // before allocating the sequence to close the TOCTOU window between
+      // the fast-path check above and this INSERT. On hit, return a
+      // sentinel that the outer code translates into the idempotent
+      // result without writing any state.
+      type TxnResult =
+        | {
+            kind: 'inserted';
+            sale_id: string;
+            sale_number: string;
+            receipt_number: string;
+            finalized_at: string;
+          }
+        | { kind: 'duplicate_detected_in_txn'; existing_sale_id: string };
+
+      const txn = db.transaction((): TxnResult => {
+        const concurrent = salesRepo.findByHandoffActionId(input.envelope_handoff_action_id);
+        if (concurrent !== null) {
+          return { kind: 'duplicate_detected_in_txn', existing_sale_id: concurrent.sale_id };
+        }
+        const sale_number = allocator.allocate({
+          terminal_id: input.terminal_id,
+          terminal_label: input.terminal_label,
+          local_calendar_day: input.local_calendar_day,
+        });
+        const sale_id = saleIdGenerator();
+        const finalized_at = now();
+        const receipt_number = sale_number; // 008 v1: receipt_number === sale_number (data-model.md).
+        const tenderLinesJson = JSON.stringify(buildRedactedTenderLinesSummary(input));
+
+        salesRepo.insert({
+          sale_id,
+          sale_number,
+          receipt_number,
+          envelope_handoff_action_id: input.envelope_handoff_action_id,
+          payment_attempt_id: input.payment_attempt_id,
+          envelope_cart_id: input.envelope_cart_id,
+          tenant_id: input.tenant_id,
+          branch_id: input.branch_id,
+          terminal_id: input.terminal_id,
+          terminal_label: input.terminal_label,
+          selling_operator_id: input.selling_operator_id,
+          selling_operator_display_name: input.selling_operator_display_name,
+          selling_operator_session_id: input.selling_operator_session_id,
+          subtotal_minor: input.subtotal_minor,
+          total_tax_minor: input.total_tax_minor,
+          total_change_due_minor: input.total_change_due_minor,
+          tender_lines_summary_json: tenderLinesJson,
+          settled_at: input.settled_at,
+          finalized_at,
+          tenant_tax_registration_id: input.tenant_tax_registration_id,
+          branch_name: input.branch_name,
+          branch_address: input.branch_address,
+          local_calendar_day: input.local_calendar_day,
+        });
+
+        outboxRepo.insert({
+          outbox_row_id: outboxRowIdGenerator(),
+          sale_id,
+          envelope_handoff_action_id: input.envelope_handoff_action_id,
+          tenant_id: input.tenant_id,
+          branch_id: input.branch_id,
+          terminal_id: input.terminal_id,
+          state: 'pending',
+          enqueued_at: finalized_at,
+        });
+
+        auditEmitter.emitSaleFinalized({
+          tenant_id: input.tenant_id,
+          branch_id: input.branch_id,
+          originating_terminal_id: input.terminal_id,
+          session_id: input.selling_operator_session_id,
+          attribution_operator_id: input.selling_operator_id,
+          sale_id,
+          sale_number,
+          payment_attempt_id: input.payment_attempt_id,
+          envelope_handoff_action_id: input.envelope_handoff_action_id,
+          finalized_at,
+          subtotal_minor: input.subtotal_minor,
+          total_tax_minor: input.total_tax_minor,
+          tender_lines_summary: input.tender_lines_summary,
+        });
+
+        return {
+          kind: 'inserted',
+          sale_id,
+          sale_number,
+          receipt_number,
+          finalized_at,
+        };
+      });
+
+      const result = txn();
+      if (result.kind === 'duplicate_detected_in_txn') {
+        // Re-read the durable row outside the (now-committed empty) txn
+        // so we return the canonical sale_number / receipt_number. The
+        // existing row's content can't change once written — it's
+        // append-only at the SQL layer.
+        const existing = salesRepo.readById(result.existing_sale_id);
+        /* c8 ignore start — defensive throw on impossible "row found in txn but vanished after" */
+        if (existing === null) {
+          throw new Error(
+            `finalize-transaction: duplicate detected in-txn but row ${result.existing_sale_id} not readable after commit`,
+          );
+        }
+        /* c8 ignore stop */
+        return {
+          kind: 'finalized_idempotent',
+          sale_id: existing.sale_id,
+          sale_number: existing.sale_number,
+          receipt_number: existing.receipt_number,
+        };
+      }
+      return {
+        kind: 'finalized',
+        sale_id: result.sale_id,
+        sale_number: result.sale_number,
+        receipt_number: result.receipt_number,
+        finalized_at: result.finalized_at,
+      };
+    },
+  };
+}

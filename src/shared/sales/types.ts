@@ -129,3 +129,31 @@ export const SALES_REFUSAL_REASONS = [
   'forbidden_field_in_request',
 ] as const;
 export type SalesRefusalReason = (typeof SALES_REFUSAL_REASONS)[number];
+
+// ── Finalization-internal refusal reason (main-side T091 vocabulary) ─────────
+
+/**
+ * Refusal reasons emitted by the AD-2 atomic finalize transaction
+ * (`src/main/sales/finalize-transaction.ts`). These NEVER cross the bridge
+ * to the renderer — they're audit-payload values only, recorded in the
+ * `sale.finalization_refused` audit event per data-model.md §
+ * "sale.finalization_refused payload".
+ *
+ * Distinct from `SALES_REFUSAL_REASONS` (above), which is the
+ * bridge-handler refusal vocabulary visible to the renderer. The two
+ * vocabularies are deliberately separate:
+ *   • `SALES_REFUSAL_REASONS` covers session / role / tenant / not-found /
+ *     reprint-precondition / IPC-input-defensive refusals — things the
+ *     cashier sees as a generic refusal copy.
+ *   • `SALE_FINALIZATION_REFUSAL_REASONS` covers source-006-attempt
+ *     conditions + tender-summary forbidden-field hits — things the
+ *     cashier never sees because the finalize is a background AD-2
+ *     listener, not a renderer-initiated action.
+ */
+export const SALE_FINALIZATION_REFUSAL_REASONS = [
+  'force_failed_attempt',
+  'reversal_pending_line',
+  'source_attempt_not_settled',
+  'forbidden_field_in_tender_summary',
+] as const;
+export type SaleFinalizationRefusalReason = (typeof SALE_FINALIZATION_REFUSAL_REASONS)[number];

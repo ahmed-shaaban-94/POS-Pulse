@@ -131,6 +131,20 @@ const OPERATOR_REDACTED_KEYS = [
 const CART_REDACTED_KEYS = ['note', 'attribution_operator_id', 'payload_json'] as const;
 
 /**
+ * 008-sale-finalization-and-receipts T093 / NFR — sale-event log redaction.
+ *
+ * The card-terminal `external_reference` is a legitimate audit-payload field
+ * (substituted to `*****` in the audit row by `createSaleAuditEmitter`), but
+ * a contributor who logs a `payment.settled` envelope or a request/response
+ * object directly may inadvertently emit the cleartext to a pino sink. This
+ * tuple scrubs it at the logger layer for defence-in-depth (Constitution
+ * §P11 / §VII).
+ *
+ * MUST NOT shrink.
+ */
+const SALES_REDACTED_KEYS = ['external_reference'] as const;
+
+/**
  * 004-operator-session T050 — audit-event payload defence-in-depth keys.
  *
  * The `FORBIDDEN_PAYLOAD_KEYS` list (from `shared/audit/forbidden-keys.ts`)
@@ -149,6 +163,7 @@ const PRIOR_REDACTED_KEYS_SET = new Set<string>([
   ...PAIRING_REDACTED_KEYS,
   ...OPERATOR_REDACTED_KEYS,
   ...CART_REDACTED_KEYS,
+  ...SALES_REDACTED_KEYS,
 ]);
 const AUDIT_REDACTED_KEYS = FORBIDDEN_PAYLOAD_KEYS.filter(
   (key) => !PRIOR_REDACTED_KEYS_SET.has(key),
@@ -158,6 +173,7 @@ const ALL_REDACTED_KEYS = [
   ...PAIRING_REDACTED_KEYS,
   ...OPERATOR_REDACTED_KEYS,
   ...CART_REDACTED_KEYS,
+  ...SALES_REDACTED_KEYS,
   ...AUDIT_REDACTED_KEYS,
 ] as const;
 const REDACTION_PATHS: string[] = ALL_REDACTED_KEYS.flatMap((key) => [

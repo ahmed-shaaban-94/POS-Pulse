@@ -17,6 +17,7 @@
 
 import type { SessionEndCause } from '../operator/session-end-cause.js';
 import type { ActionCategory } from './event-shape.js';
+import type { SaleFinalizationRefusalReason } from '../sales/types.js';
 
 // ─── shift.open ────────────────────────────────────────────────────────────
 
@@ -175,6 +176,72 @@ export interface CartDiscardedOnSessionEndPayload {
   discard_cause: SessionEndCause;
 }
 
+// ─── 008-sale-finalization-and-receipts (AD-9 / Slice 1c T093) ────────────
+//
+// Ten new categories. The two used by Slice 1c (T091 finalize transaction)
+// have shaped payloads; the eight S2/S3/S4-owned categories are declared
+// as open-ended records here so the AuditPayloadMap stays exhaustive
+// against ActionCategory. The shaped versions land alongside their
+// emitting callers — per CLAUDE.md "don't design for hypothetical future
+// requirements".
+
+/**
+ * `sale.finalized` — fires from `src/main/sales/finalize-transaction.ts`
+ * inside the AD-2 atomic finalize transaction. Mirrors
+ * `EmitSaleFinalizedInput` minus the redirected attribution / context
+ * fields the emitter routes to top-level columns. `external_reference` on
+ * card tender lines is substituted to `*****` by the emitter (008 §P11).
+ */
+export interface SaleFinalizedPayload {
+  sale_id: string;
+  sale_number: string;
+  payment_attempt_id: string;
+  envelope_handoff_action_id: string;
+  finalized_at: string;
+  subtotal_minor: number;
+  total_tax_minor: number;
+  attribution_operator_id: string;
+  tender_lines_summary: ReadonlyArray<{
+    tender_type: 'cash' | 'external_card_terminal' | 'internal_voucher';
+    amount_applied_minor: number;
+    change_due_minor?: number;
+    /** Card-terminal reference; redacted to `*****` by the emitter. */
+    external_reference?: string;
+  }>;
+}
+
+/**
+ * `sale.finalization_refused` — fires when AD-2 refuses to finalize a
+ * settled payment attempt (force_failed / reversal_pending_line /
+ * source_attempt_not_settled / forbidden_field_in_tender_summary).
+ */
+export interface SaleFinalizationRefusedPayload {
+  envelope_handoff_action_id: string;
+  refused_at: string;
+  refusal_reason: SaleFinalizationRefusalReason;
+  attribution_operator_id: string;
+}
+
+/**
+ * Slice 2/3 categories — receipt lifecycle. Shape lands with each
+ * category's emitting caller (S3 print pipeline; S5 reprint flow). The
+ * placeholder shape locks in the map's exhaustiveness against
+ * ActionCategory without prescribing fields that S3/S5 haven't authored
+ * yet.
+ */
+export type SaleReceiptPrintedPayload = Readonly<Record<string, unknown>>;
+export type SaleReceiptReprintedPayload = Readonly<Record<string, unknown>>;
+export type SaleReceiptPrintFailedPayload = Readonly<Record<string, unknown>>;
+export type SaleReceiptPrintRetriedSuccessPayload = Readonly<Record<string, unknown>>;
+export type SaleReceiptManualOverridePayload = Readonly<Record<string, unknown>>;
+
+/**
+ * Slice 4 categories — drawer lifecycle. Same placeholder posture.
+ */
+export type SaleDrawerOpenedPayload = Readonly<Record<string, unknown>>;
+export type SaleDrawerSuppressedPayload = Readonly<Record<string, unknown>>;
+export type SaleDrawerFailedPayload = Readonly<Record<string, unknown>>;
+
 // ─── Discriminated map (ActionCategory → payload type) ────────────────────
 
 /**
@@ -198,6 +265,18 @@ export type AuditPayloadMap = {
   'cart.cancel.post_handoff': CartCancelPostHandoffPayload;
   'cart.discount.above_threshold': CartDiscountAboveThresholdPayload;
   'cart.discarded_on_session_end': CartDiscardedOnSessionEndPayload;
+  // 008-sale-finalization-and-receipts (AD-9 / Slice 1c T093 — shaped;
+  // S2/S3/S4 placeholders pending their emitting callers)
+  'sale.finalized': SaleFinalizedPayload;
+  'sale.finalization_refused': SaleFinalizationRefusedPayload;
+  'sale.receipt.printed': SaleReceiptPrintedPayload;
+  'sale.receipt.reprinted': SaleReceiptReprintedPayload;
+  'sale.receipt.print_failed': SaleReceiptPrintFailedPayload;
+  'sale.receipt.print_retried_success': SaleReceiptPrintRetriedSuccessPayload;
+  'sale.receipt.manual_override': SaleReceiptManualOverridePayload;
+  'sale.drawer.opened': SaleDrawerOpenedPayload;
+  'sale.drawer.suppressed': SaleDrawerSuppressedPayload;
+  'sale.drawer.failed': SaleDrawerFailedPayload;
 };
 
 // Compile-time assertions: AuditPayloadMap and ActionCategory are in sync.
