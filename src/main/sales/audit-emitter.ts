@@ -33,12 +33,22 @@
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
 import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
 
-// ─── 008 audit category union (subset reachable from this file) ─────────────
+// ─── 008 audit category unions ──────────────────────────────────────────────
 //
 // The full 10-category list is in src/shared/audit/event-shape.ts under
-// AUDIT_ACTION_CATEGORIES. This narrower union limits emitRaw's category to
-// the 008 namespace so a 006 category cannot be routed through this emitter
-// by accident.
+// AUDIT_ACTION_CATEGORIES.
+//
+// We expose TWO unions here. The full one (`SaleAuditCategory`) types the
+// internal sink-facing event shape so the closed-set entry points
+// (`emitSaleFinalized` / `emitSaleFinalizationRefused`) compile against the
+// matching event categories. The narrower one (`SaleRawAuditCategory`)
+// types the `emitRaw` escape hatch — it OMITS the two categories whose
+// only valid emit path is through their typed entry points, so the type
+// system prevents a caller from bypassing `emitSaleFinalized`'s
+// `external_reference` substitution or `emitSaleFinalizationRefused`'s
+// closed-set refusal-reason routing. A runtime guard inside `emitRaw`
+// repeats the check as defence in depth in case a caller uses `as` to
+// narrow past the type system (per CR1 on PR #264).
 
 export type SaleAuditCategory =
   | 'sale.finalized'
@@ -51,6 +61,16 @@ export type SaleAuditCategory =
   | 'sale.drawer.opened'
   | 'sale.drawer.suppressed'
   | 'sale.drawer.failed';
+
+export type SaleRawAuditCategory = Exclude<
+  SaleAuditCategory,
+  'sale.finalized' | 'sale.finalization_refused'
+>;
+
+const EMIT_RAW_FORBIDDEN_CATEGORIES = new Set<SaleAuditCategory>([
+  'sale.finalized',
+  'sale.finalization_refused',
+]);
 
 // ─── Emitter input shapes (closed-set typed payloads) ───────────────────────
 
@@ -152,6 +172,32 @@ const SALES_FORBIDDEN_KEYS = new Set<string>([
 
 // ─── Emitter ────────────────────────────────────────────────────────────────
 
+/**
+ * Narrowed sink event for `emitRaw`. The category is restricted to the 8
+ * S2/S3/S4-bound categories; the two finalize-namespace categories are
+ * unreachable here at compile time. The runtime guard inside emitRaw
+ * checks the same invariant for defence in depth.
+ */
+export interface SaleRawAuditEvent {
+  action_category: SaleRawAuditCategory;
+  attribution_operator_id: string;
+  tenant_id: string;
+  branch_id: string;
+  originating_terminal_id: string;
+  session_id: string | null;
+  created_at: string;
+  payload: Readonly<Record<string, unknown>>;
+}
+
+export class EmitRawForbiddenCategoryError extends Error {
+  readonly category: string;
+  constructor(category: string) {
+    super(`emitRaw refused: category "${category}" must be emitted via its typed entry point`);
+    this.name = 'EmitRawForbiddenCategoryError';
+    this.category = category;
+  }
+}
+
 export interface SaleAuditEmitter {
   emitSaleFinalized(input: EmitSaleFinalizedInput): void;
   emitSaleFinalizationRefused(input: EmitSaleFinalizationRefusedInput): void;
@@ -160,8 +206,15 @@ export interface SaleAuditEmitter {
    * tests. Refuses any payload whose tree contains a forbidden field name
    * at any nesting depth — combines 004's shared `FORBIDDEN_PAYLOAD_KEYS`
    * with the 008-local `SALES_FORBIDDEN_KEYS` set above.
+   *
+   * Categories `sale.finalized` and `sale.finalization_refused` are
+   * REFUSED here (both at compile time via `SaleRawAuditCategory` and at
+   * runtime via `EMIT_RAW_FORBIDDEN_CATEGORIES`) — their only valid emit
+   * path is through the typed entry points above so the inline
+   * `external_reference` redaction and closed-set refusal-reason routing
+   * cannot be bypassed.
    */
-  emitRaw(event: SaleAuditEvent): void;
+  emitRaw(event: SaleRawAuditEvent): void;
 }
 
 export function createSaleAuditEmitter(deps: SaleAuditEmitterDependencies): SaleAuditEmitter {
@@ -252,7 +305,13 @@ export function createSaleAuditEmitter(deps: SaleAuditEmitterDependencies): Sale
       });
     },
 
-    emitRaw(event: SaleAuditEvent): void {
+    emitRaw(event: SaleRawAuditEvent): void {
+      // Defence-in-depth: even if a caller used `as` to narrow past the
+      // SaleRawAuditCategory union, refuse the call rather than let it
+      // bypass the typed-entry-point redaction discipline (CR1).
+      if (EMIT_RAW_FORBIDDEN_CATEGORIES.has(event.action_category)) {
+        throw new EmitRawForbiddenCategoryError(event.action_category);
+      }
       emit(event);
     },
   };

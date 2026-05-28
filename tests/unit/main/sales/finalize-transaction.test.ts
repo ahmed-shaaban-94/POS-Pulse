@@ -267,6 +267,51 @@ describe('T051 — duplicate finalize on the same envelope_handoff_action_id is 
     expect(outbox[0]?.values[0]?.[0]).toBe(1);
     expect(captured).toHaveLength(1);
   });
+
+  it('in-transaction TOCTOU re-check returns the existing sale_id without writing', () => {
+    // Per CR2 on PR #264 — the in-txn re-check closes the window between
+    // the fast-path read and the INSERT. We simulate it by seeding a
+    // pre-existing sales row directly (the same handoff_action_id that
+    // the test will then try to finalize). The finalize call must
+    // return finalized_idempotent and write nothing new.
+    seedPaymentAttempt();
+    seedTenderLine();
+    db.exec(
+      `INSERT INTO sales (
+         sale_id, sale_number, receipt_number, envelope_handoff_action_id, payment_attempt_id,
+         envelope_cart_id, tenant_id, branch_id, terminal_id, terminal_label,
+         selling_operator_id, selling_operator_display_name, selling_operator_session_id,
+         subtotal_minor, total_tax_minor, total_change_due_minor, tender_lines_summary_json,
+         settled_at, finalized_at, tenant_tax_registration_id, branch_name, branch_address,
+         local_calendar_day
+       ) VALUES (
+         'sale-pre-existing', 'TERM-01-2026-05-27-000999', 'TERM-01-2026-05-27-000999',
+         'handoff-1', 'pa-1',
+         'cart-1', 'tenant-1', 'branch-1', 'terminal-1', 'TERM-01',
+         'op-clerk-user-abc', 'Ahmed', 'sess-1',
+         1500, 0, 0, '[]',
+         '2026-05-27T09:55:00.000Z', '2026-05-27T09:55:00.500Z', 'TRN', 'B', 'A',
+         '2026-05-27'
+       )`,
+    );
+
+    const finalize = bindFinalizeTransaction(buildDeps());
+    const result = finalize.finalize(buildInput());
+    expect(result.kind).toBe('finalized_idempotent');
+    if (result.kind !== 'finalized_idempotent') return;
+    expect(result.sale_id).toBe('sale-pre-existing');
+    expect(result.sale_number).toBe('TERM-01-2026-05-27-000999');
+
+    // Still exactly one sales row — no second row created.
+    const sales = db.exec('SELECT COUNT(*) FROM sales');
+    expect(sales[0]?.values[0]?.[0]).toBe(1);
+    // No sale_number_sequences row should have been created either,
+    // because the in-txn re-check short-circuited before allocator.allocate.
+    const seq = db.exec('SELECT COUNT(*) FROM sale_number_sequences');
+    expect(seq[0]?.values[0]?.[0]).toBe(0);
+    // No audit emitted — idempotent return is silent.
+    expect(captured).toHaveLength(0);
+  });
 });
 
 // ─── T055/T056/T057 — Refusal guard ────────────────────────────────────────
@@ -345,8 +390,10 @@ describe('T060 — refuse on forbidden card-data keys in tender_lines_summary', 
           {
             tender_type: 'external_card_terminal' as const,
             amount_applied_minor: 1500,
-            // PAN-shaped forbidden key (FR-070):
-            pan: '4111111111111111',
+            // PAN-shaped forbidden key (FR-070). Synthetic non-numeric token
+            // so the test never carries a realistic card number, even in
+            // commit history (per CR3 on PR #264).
+            pan: 'TEST_PAN_TOKEN_NOT_A_REAL_CARD',
           } as unknown as { tender_type: 'external_card_terminal'; amount_applied_minor: number },
         ],
       }),

@@ -17,6 +17,7 @@
  */
 
 import type { DatabaseHandle } from '../../db/client.js';
+import type { PrintEventOutcome, PrintEventPurpose } from '../../../shared/sales/types.js';
 
 interface PrepareRun {
   run(...params: unknown[]): { changes: number; lastInsertRowid: number | bigint };
@@ -30,10 +31,14 @@ interface PrepareAll<Row> {
   all(...params: unknown[]): Row[];
 }
 
-// ── Closed enums (mirror data-model.md §"Entity: PrintEvent" + migration 0022) ──
+// ── Closed enums ─────────────────────────────────────────────────────────────
+//
+// PrintEventOutcome + PrintEventPurpose live in `src/shared/sales/types.ts`
+// (S1b) — re-using the canonical tuples keeps repository row shape and the
+// renderer-facing summary projection in lockstep (per Nit1 on PR #264).
+// PrintEventRenderPath stays local because it's a main-only field
+// (Constitution §P15 minimisation; never crosses the bridge).
 
-export type PrintEventOutcome = 'success' | 'failure' | 'manual_override';
-export type PrintEventPurpose = 'first_print' | 'reprint' | 'retry_after_failure';
 export type PrintEventRenderPath = 'escpos_direct' | 'os_print';
 export type PrintEventFailureReason =
   | 'printer_offline'

@@ -29,6 +29,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { createSaleAuditEmitter } from '../../../../src/main/sales/audit-emitter.js';
+import type { SaleRawAuditEvent } from '../../../../src/main/sales/audit-emitter.js';
+import { SALE_FINALIZATION_REFUSAL_REASONS } from '../../../../src/shared/sales/types.js';
 
 const fixedBase = {
   tenant_id: 'tenant-1',
@@ -152,12 +154,10 @@ describe('T093 — sale.finalization_refused event', () => {
     const emitter = createSaleAuditEmitter({
       sink: { write: (e) => captured.push(e) },
     });
-    const reasons = [
-      'force_failed_attempt',
-      'reversal_pending_line',
-      'source_attempt_not_settled',
-      'forbidden_field_in_tender_summary',
-    ] as const;
+    // Derive from the canonical tuple so a future extension to
+    // SALE_FINALIZATION_REFUSAL_REASONS is automatically covered (per Nit2
+    // on PR #264). The tuple lives in src/shared/sales/types.ts.
+    const reasons = SALE_FINALIZATION_REFUSAL_REASONS;
     for (const reason of reasons) {
       emitter.emitSaleFinalizationRefused({
         ...fixedBase,
@@ -175,7 +175,7 @@ describe('T093 — forbidden-field defence-in-depth', () => {
     const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
     expect(() => {
       emitter.emitRaw({
-        action_category: 'sale.finalized',
+        action_category: 'sale.receipt.printed',
         attribution_operator_id: 'op-x',
         tenant_id: 'tenant-1',
         branch_id: 'branch-1',
@@ -194,7 +194,7 @@ describe('T093 — forbidden-field defence-in-depth', () => {
     const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
     expect(() => {
       emitter.emitRaw({
-        action_category: 'sale.finalized',
+        action_category: 'sale.receipt.printed',
         attribution_operator_id: 'op-x',
         tenant_id: 'tenant-1',
         branch_id: 'branch-1',
@@ -210,7 +210,7 @@ describe('T093 — forbidden-field defence-in-depth', () => {
     const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
     expect(() => {
       emitter.emitRaw({
-        action_category: 'sale.finalized',
+        action_category: 'sale.receipt.printed',
         attribution_operator_id: 'op-x',
         tenant_id: 'tenant-1',
         branch_id: 'branch-1',
@@ -222,11 +222,54 @@ describe('T093 — forbidden-field defence-in-depth', () => {
     }).toThrow(/forbidden field name: envelope_payload/);
   });
 
+  it('emitRaw refuses sale.finalized category at runtime (defence-in-depth)', () => {
+    // CR1 on PR #264 — the type system narrows SaleRawAuditCategory to exclude
+    // sale.finalized / sale.finalization_refused, but a caller could still
+    // narrow past with `as`. The runtime guard rejects the call.
+    const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
+    const smuggledEvent = {
+      action_category: 'sale.finalized',
+      attribution_operator_id: 'op-x',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      originating_terminal_id: 'terminal-1',
+      session_id: 'sess-1',
+      created_at: '2026-05-27T10:09:00.000Z',
+      payload: {
+        sale_id: 'sale-x',
+        // Note: a malicious caller could have an unredacted cleartext
+        // external_reference here — the runtime guard refuses before any
+        // sink.write is reached.
+        tender_lines_summary: [{ external_reference: 'CLEARTEXT-CARD-REF' }],
+      },
+    } as unknown as SaleRawAuditEvent;
+    expect(() => {
+      emitter.emitRaw(smuggledEvent);
+    }).toThrow(/emitRaw refused: category "sale.finalized"/);
+  });
+
+  it('emitRaw refuses sale.finalization_refused category at runtime', () => {
+    const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
+    const smuggledEvent = {
+      action_category: 'sale.finalization_refused',
+      attribution_operator_id: 'op-x',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      originating_terminal_id: 'terminal-1',
+      session_id: 'sess-1',
+      created_at: '2026-05-27T10:10:00.000Z',
+      payload: { envelope_handoff_action_id: 'handoff-x' },
+    } as unknown as SaleRawAuditEvent;
+    expect(() => {
+      emitter.emitRaw(smuggledEvent);
+    }).toThrow(/emitRaw refused: category "sale.finalization_refused"/);
+  });
+
   it('refuses emitRaw payload containing voucher_code', () => {
     const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
     expect(() => {
       emitter.emitRaw({
-        action_category: 'sale.finalized',
+        action_category: 'sale.receipt.printed',
         attribution_operator_id: 'op-x',
         tenant_id: 'tenant-1',
         branch_id: 'branch-1',

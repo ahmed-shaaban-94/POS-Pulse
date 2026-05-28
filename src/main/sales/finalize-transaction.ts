@@ -275,7 +275,17 @@ export function bindFinalizeTransaction(
 
   return {
     finalize(input: FinalizeInput): FinalizeResult {
-      // Step 1 — Idempotency.
+      // Step 1 — Fast-path idempotency check (read-only, outside the txn).
+      //
+      // This is a courtesy check that lets the typical case (no duplicate)
+      // skip the refusal-guard work too. It is NOT load-bearing — the real
+      // protection is the unique index on `sales.envelope_handoff_action_id`
+      // (migration 0020) combined with the re-check inside the transaction
+      // below. The re-check closes the TOCTOU window between this read and
+      // the INSERT (per CR2 on PR #264). In production, AD-2's per-terminal
+      // serialisation makes concurrent finalize calls for the same
+      // handoff_action_id virtually impossible, but the DB-layer uniqueness
+      // is the defence-in-depth guarantee.
       const existing = salesRepo.findByHandoffActionId(input.envelope_handoff_action_id);
       if (existing !== null) {
         return {
@@ -309,7 +319,27 @@ export function bindFinalizeTransaction(
       }
 
       // Steps 4-7 — Atomic write + audit.
-      const txn = db.transaction(() => {
+      //
+      // Per CR2 on PR #264 — re-check idempotency INSIDE the transaction
+      // before allocating the sequence to close the TOCTOU window between
+      // the fast-path check above and this INSERT. On hit, return a
+      // sentinel that the outer code translates into the idempotent
+      // result without writing any state.
+      type TxnResult =
+        | {
+            kind: 'inserted';
+            sale_id: string;
+            sale_number: string;
+            receipt_number: string;
+            finalized_at: string;
+          }
+        | { kind: 'duplicate_detected_in_txn'; existing_sale_id: string };
+
+      const txn = db.transaction((): TxnResult => {
+        const concurrent = salesRepo.findByHandoffActionId(input.envelope_handoff_action_id);
+        if (concurrent !== null) {
+          return { kind: 'duplicate_detected_in_txn', existing_sale_id: concurrent.sale_id };
+        }
         const sale_number = allocator.allocate({
           terminal_id: input.terminal_id,
           terminal_label: input.terminal_label,
@@ -373,11 +403,36 @@ export function bindFinalizeTransaction(
           tender_lines_summary: input.tender_lines_summary,
         });
 
-        return { sale_id, sale_number, receipt_number, finalized_at };
+        return {
+          kind: 'inserted',
+          sale_id,
+          sale_number,
+          receipt_number,
+          finalized_at,
+        };
       });
 
       const result = txn();
-
+      if (result.kind === 'duplicate_detected_in_txn') {
+        // Re-read the durable row outside the (now-committed empty) txn
+        // so we return the canonical sale_number / receipt_number. The
+        // existing row's content can't change once written — it's
+        // append-only at the SQL layer.
+        const existing = salesRepo.readById(result.existing_sale_id);
+        /* c8 ignore start — defensive throw on impossible "row found in txn but vanished after" */
+        if (existing === null) {
+          throw new Error(
+            `finalize-transaction: duplicate detected in-txn but row ${result.existing_sale_id} not readable after commit`,
+          );
+        }
+        /* c8 ignore stop */
+        return {
+          kind: 'finalized_idempotent',
+          sale_id: existing.sale_id,
+          sale_number: existing.sale_number,
+          receipt_number: existing.receipt_number,
+        };
+      }
       return {
         kind: 'finalized',
         sale_id: result.sale_id,
