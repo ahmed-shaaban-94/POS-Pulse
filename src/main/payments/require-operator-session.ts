@@ -43,6 +43,14 @@ export interface OperatorSessionForPayments {
   readonly tenant_id: string;
   readonly branch_id: string;
   readonly terminal_id: string;
+  /**
+   * Human-readable operator name from the live 004 session record. Carried
+   * here so `payment.settled` can persist it into the audit payload for
+   * 008's session-independent finalize worker (T094b). Required: the live
+   * session always has it (Clerk-derived at sign-in), and the downstream
+   * `sales.selling_operator_display_name` column is NOT NULL.
+   */
+  readonly display_name: string;
 }
 
 /**

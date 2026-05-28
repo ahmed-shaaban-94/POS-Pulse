@@ -260,6 +260,7 @@ export function createPaymentsConfirmHandler(
       handoff_action_id: row.envelope_handoff_action_id,
       settled_at: fsmOutcome.settled_at,
       attribution_operator_id: row.acting_operator_id,
+      selling_operator_display_name: session.display_name,
       tenant_id: row.tenant_id,
       branch_id: row.branch_id,
       originating_terminal_id: row.terminal_id,

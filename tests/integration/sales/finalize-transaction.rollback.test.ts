@@ -51,6 +51,7 @@ const MIGRATIONS = [
   '0021_sales_append_only_trigger.sql',
   '0024_create_sale_sync_outbox.sql',
   '0025_create_sale_number_sequences.sql',
+  '0028_extend_sales_with_lines_json.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
@@ -112,6 +113,19 @@ function buildInput() {
     branch_name: 'Maadi',
     branch_address: '12 Road 9',
     local_calendar_day: '2026-05-28',
+    lines: [
+      {
+        line_id: 'line-1',
+        item_ref: 'SKU-001',
+        display_name: 'Paracetamol 500mg',
+        quantity: 1,
+        unit_price_minor: 1500,
+        line_subtotal_minor: 1500,
+        note: null,
+        version: 1,
+        last_action_id: 'action-1',
+      },
+    ],
   };
 }
 

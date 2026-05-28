@@ -26,7 +26,11 @@ import { makeSqlJsHandle } from '../../cart/__helpers__/sql-js-handle.js';
 
 const __dirnameForFile = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirnameForFile, '..', '..', '..', '..', '..');
-const MIGRATIONS = ['0020_create_sales.sql', '0021_sales_append_only_trigger.sql'].map((f) =>
+const MIGRATIONS = [
+  '0020_create_sales.sql',
+  '0021_sales_append_only_trigger.sql',
+  '0028_extend_sales_with_lines_json.sql',
+].map((f) =>
   readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'),
 );
 
@@ -67,6 +71,7 @@ function buildSaleRow(overrides: Record<string, unknown> = {}) {
     branch_name: 'Maadi Branch',
     branch_address: '12 Road 9, Maadi',
     local_calendar_day: '2026-05-27',
+    lines_json: '[]',
     ...overrides,
   };
 }

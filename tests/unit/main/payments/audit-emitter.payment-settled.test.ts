@@ -72,6 +72,43 @@ describe('T092 — payment.settled audit payload', () => {
     expect(JSON.stringify(payload)).not.toContain('AB12XY');
   });
 
+  it('carries selling_operator_display_name in the payload (008 T094b source)', () => {
+    // 008's finalize worker runs session-independently (boot recovery, no
+    // live session), so the selling operator's human-readable name MUST be
+    // persisted into the payment.settled payload at confirm-time — sourced
+    // from the live session, where it is the only place the name exists.
+    // Ahmed's persist-at-settlement decision (2026-05-29).
+    const captured: Array<Record<string, unknown>> = [];
+    const emitter = createPaymentAuditEmitter({
+      sink: { write: (evt) => captured.push(evt) },
+    });
+    emitter.emitPaymentSettled({
+      payment_attempt_id: 'pa-1',
+      cart_id: 'cart-1',
+      handoff_action_id: 'handoff-1',
+      settled_at: '2026-05-22T10:00:05.000Z',
+      attribution_operator_id: 'op-clerk-user-abc',
+      selling_operator_display_name: 'Layla Hassan',
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      originating_terminal_id: 'terminal-1',
+      session_id: 'sess-1',
+      tender_lines: [
+        {
+          tender_line_id: 'tl-1',
+          tender_type: 'cash',
+          amount_applied_minor: 2000,
+          change_due_minor: 0,
+          applied_at: '2026-05-22T10:00:01.000Z',
+          attribution_operator_id: 'op-clerk-user-abc',
+        },
+      ],
+    });
+    const evt = captured[0] as Record<string, unknown>;
+    const payload = evt.payload as Record<string, unknown>;
+    expect(payload.selling_operator_display_name).toBe('Layla Hassan');
+  });
+
   it('omits change_due_minor on non-cash lines', () => {
     const captured: Array<Record<string, unknown>> = [];
     const emitter = createPaymentAuditEmitter({

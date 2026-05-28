@@ -591,6 +591,9 @@ app
         tenant_id: sess.tenant_id,
         branch_id: sess.branch_id,
         terminal_id: sess.branch_id,
+        // 008 T094b — persist the human-readable name into payment.settled
+        // so the session-independent finalize worker can stamp the Sale row.
+        display_name: sess.display_name,
       };
     };
 

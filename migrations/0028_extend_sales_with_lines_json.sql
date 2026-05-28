@@ -1,0 +1,46 @@
+-- 008-sale-finalization-and-receipts T028a — extend `sales` with a
+-- `lines_json` column holding a frozen snapshot of the cart's item lines.
+--
+-- ## Why this migration exists
+--
+-- The receipt template engine (Slice 2, AD-6) renders the itemised body of
+-- the slip — item display name, quantity, unit price, line subtotal, note —
+-- from the Sale row. FR-015 requires reprints to be byte-stable: a reprint
+-- weeks later must render the SAME item lines the customer originally saw,
+-- even if the catalogue price has since changed or the cart was edited.
+--
+-- The cart's line detail lives in two mutable places (`cart_lines` rows and
+-- the frozen `carts.handoff_envelope_json`). Reading either of those at
+-- reprint time risks drift. The Slice 2 prep audit (Ahmed's Option A —
+-- coordination.md §"Slice 2 prep audit: line-snapshot persistence") chose
+-- to snapshot the envelope's `lines` array onto the durable Sale row at
+-- finalize time, so the reprint path reads a single immutable source.
+--
+-- Each snapshot element mirrors `LineSnapshot` from
+-- `src/shared/cart/handoff-envelope.ts`: line_id, item_ref, display_name,
+-- quantity, unit_price_minor, line_subtotal_minor, note, version,
+-- last_action_id. The finalize transaction (T091) serialises
+-- `JSON.stringify(input.lines)` into this column.
+--
+-- ## DEFAULT '[]' posture
+--
+-- The column is NOT NULL with DEFAULT '[]'. Rationale:
+--
+--   1. SQLite's ALTER TABLE ADD COLUMN with NOT NULL REQUIRES a DEFAULT
+--      (or the statement fails against any existing rows). '[]' is the
+--      honest empty-array sentinel — a sale with no recorded line snapshot
+--      renders an empty body, which the template engine handles gracefully.
+--   2. Dev fixtures and any sales rows written between 0020 and this
+--      migration get '[]' automatically; they predate line-snapshot
+--      persistence and have no recoverable line detail anyway.
+--   3. Post-migration, every finalize writes the real serialised array, so
+--      the '[]' default only ever applies to pre-0028 rows.
+--
+-- ## Append-only compatibility
+--
+-- `sales` carries BEFORE UPDATE / BEFORE DELETE deny triggers (migration
+-- 0021, AD-3). ALTER TABLE ADD COLUMN is DDL, not a row UPDATE, so it is
+-- not intercepted by those triggers — SQLite applies the schema change
+-- directly. No trigger change is required.
+
+ALTER TABLE sales ADD COLUMN lines_json TEXT NOT NULL DEFAULT '[]';

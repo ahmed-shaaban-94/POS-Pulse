@@ -45,6 +45,7 @@ import type { SaleSyncOutboxRepository } from '../sync-outbox/sale-sync-outbox.r
 import type { SaleNumberAllocator } from './sale-number-allocator.js';
 import type { SaleAuditEmitter } from './audit-emitter.js';
 import type { SalesTenderType, SaleFinalizationRefusalReason } from '../../shared/sales/types.js';
+import type { LineSnapshot } from '../../shared/cart/handoff-envelope.js';
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
 
 // ─── Narrow better-sqlite3 surface (mirrors repositories) ───────────────────
@@ -96,6 +97,13 @@ export interface FinalizeInput {
   branch_name: string;
   branch_address: string;
   local_calendar_day: string;
+  /**
+   * Frozen snapshot of the cart's item lines from the source
+   * `PaymentIntentEnvelope`. Persisted verbatim (JSON) onto the Sale row
+   * for byte-stable reprints (FR-015 / FR-016). The projection module
+   * (T094b) derives this from `carts.handoff_envelope_json`.
+   */
+  lines: readonly LineSnapshot[];
 }
 
 // ─── Result shapes ──────────────────────────────────────────────────────────
@@ -374,6 +382,7 @@ export function bindFinalizeTransaction(
           branch_name: input.branch_name,
           branch_address: input.branch_address,
           local_calendar_day: input.local_calendar_day,
+          lines_json: JSON.stringify(input.lines),
         });
 
         outboxRepo.insert({
