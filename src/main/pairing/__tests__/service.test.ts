@@ -127,6 +127,14 @@ describe('PairingService.submit — success path (T022)', () => {
       terminal_id: SUCCESS_BODY.terminal_id,
       terminal_label: SUCCESS_BODY.terminal_label,
       paired_at: PAIRED_AT,
+      // 6 fields added 2026-05-28 by 008 T094a; service.ts forwards
+      // them straight from `pairResult.body` into `store.persist`.
+      branch_name: SUCCESS_BODY.branch_name,
+      branch_address: SUCCESS_BODY.branch_address,
+      tenant_tax_registration_id: SUCCESS_BODY.tenant_tax_registration_id,
+      printer_vendor_id: SUCCESS_BODY.printer_vendor_id,
+      printer_product_id: SUCCESS_BODY.printer_product_id,
+      printer_com_port: SUCCESS_BODY.printer_com_port,
     });
   });
 
