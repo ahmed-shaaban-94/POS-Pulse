@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-27 (post-parallel-sign-off cleanup — roll up change log for four merged sister PRs; flip §A3 + §A4 rows in tasks.md gate ledger; refresh top-of-tasks.md status line. All 008 implementation gates (§A1 / §A3 / §A4) now ✅ cleared; §A5 remains the production-readiness Slice 6 sign-off only).
+**Last updated:** 2026-05-28 (S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. See §"Slice 1 closeout gap discovery" below).
 
 **Change log (oldest → newest):**
 
@@ -322,3 +322,94 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 - [x] **T010 commission** — closed 2026-05-26. PR #254 (merged) landed the renderer-portion shape draft for (d)/(e)/(f)/(g) authored by `/impeccable shape`. (a)/(b)/(c) printed-slip portion accepted-with-deferred-authoring in the §A1 sign-off above.
 - [x] **T011 §A1 sign-off** — closed 2026-05-26 by this PR (§"§A1 sign-off (T011)" block above filled in).
 - [ ] **(a)/(b)/(c) printed-slip layouts — DEFERRED COMMITMENT** — Ahmed to author the `first_print` printed slip + `reprint_duplicate` printed slip with bilingual duplicate-copy marker + `preview` content confirmation in a follow-up commit to [./visual-direction/README.md](./visual-direction/README.md). MUST land BEFORE Slice 2's T173 craft fires. Tracked as a Slice 2 commission gate, not a Slice 1 blocker.
+
+---
+
+## 2026-05-28 — Slice 1 closeout gap discovery (`FinalizeInput` upstream)
+
+> **Status:** **OPEN — blocks T111/T112/T113 manual smokes and any real-process finalize.** Surfaces TWO business decisions that must be made before any wire-up code lands.
+>
+> **Discovered by:** Claude session on 2026-05-28 while preparing the AD-2 worker + `sales.*` bridge bootstrap into `src/main/index.ts` (the wire-up was scoped as the natural follow-up to PR #266's merge).
+>
+> **Not a regression.** PR #266 ships 191/191 GREEN tests and is correctly merged. The gap was concealed by the fact that every test hand-constructs `FinalizeInput`, so no test exercises the upstream production code path that would have to produce one.
+
+### Finding
+
+`bindFinalizeTransaction.finalize(input: FinalizeInput)` requires **18 fields**. The natural caller — the AD-2 polling worker's `dispatch(handoff_action_id)` closure — must produce a `FinalizeInput` from the audit row + joined production state. Investigation of each field's source:
+
+| `FinalizeInput` field | Source in current codebase | Verdict |
+|:--|:--|:--|
+| `envelope_handoff_action_id` | 006 `payment.settled` payload | ✅ |
+| `payment_attempt_id` | 006 `payment.settled` payload | ✅ |
+| `envelope_cart_id` | 006 `payment.settled` payload (renamed `cart_id`) | ✅ |
+| `tenant_id`, `branch_id`, `terminal_id` | 006 `payment.settled` payload (`originating_terminal_id`) | ✅ |
+| `selling_operator_id`, `selling_operator_session_id` | 006 `payment.settled` payload (`attribution_operator_id`, `session_id`) | ✅ |
+| `settled_at` | 006 `payment.settled` payload | ✅ |
+| `terminal_label` | `src/main/pairing/store.ts` — `readPairingTerminalAssignment()` | ✅ accessor exists |
+| `selling_operator_display_name` | `src/main/operator/backend-client.ts` `display_name` field | ⚠️ reader needs to be assembled (per-session cache or per-operator lookup) |
+| `subtotal_minor` | `PaymentIntentEnvelope.subtotal_minor` (cart envelope JSON) | ⚠️ reader from `payment_attempts.envelope_json` |
+| `tender_lines_summary` | `payment_tender_lines` rows joined by `payment_attempt_id` | ✅ accessor exists |
+| `total_change_due_minor` | Derived: sum of `change_due_minor` over applied cash lines | ✅ pure compute |
+| `local_calendar_day` | Derived: `settled_at` → terminal-local TZ → `YYYY-MM-DD` | ✅ pure compute |
+| **`total_tax_minor`** | **NOT computed or persisted anywhere in 005/006** | ❌ **GAP** |
+| **`tenant_tax_registration_id`** | **No source — no pairing/branch/tenant accessor exists** | ❌ **GAP** |
+| **`branch_name`** | **No source — `terminal_assignment` row has terminal_label only** | ❌ **GAP** |
+| **`branch_address`** | **No source — `terminal_assignment` row has terminal_label only** | ❌ **GAP** |
+
+### Schema severity
+
+`migrations/0020_create_sales.sql` declares all 18 columns `NOT NULL`. The four gap columns (`total_tax_minor`, `tenant_tax_registration_id`, `branch_name`, `branch_address`) cannot be inserted as NULL without a schema migration. Until either (a) upstream sources land or (b) the schema is relaxed, **no real-process finalize can succeed** end-to-end on this codebase. The 191 GREEN tests in PR #266 pass because they hand-construct `FinalizeInput` with literal values like `branch_name: 'Maadi'`.
+
+### Evidence chain
+
+1. **006 `payment.settled` payload shape:** `src/main/payments/handlers/payments-confirm.ts:257-268` calls `auditEmitter.emitPaymentSettled` with 9 fields + `tender_lines[]`. No tax, no branch detail, no tax-registration id.
+2. **Cart envelope shape:** `src/shared/cart/handoff-envelope.ts` defines `PaymentIntentEnvelope` with `subtotal_minor` only. No `total_tax_minor`.
+3. **Pairing record shape:** `src/main/pairing/store.ts:47` defines the `terminal_assignment` row as `(id, tenant_id, branch_id, terminal_id, terminal_label, paired_at)`. No branch name/address, no tenant tax-registration id.
+4. **Hand-constructed test data:** `tests/integration/sales/finalize-transaction.rollback.test.ts:112-113` literally writes `branch_name: 'Maadi'`, `branch_address: '12 Road 9'` — confirming no production code path computes them.
+
+### Business decisions (resolved 2026-05-28 by Ahmed)
+
+Two product-scope decisions that 008's plan implicitly assumed away. Both answered by Ahmed in the same session as the gap discovery, immediately before T094 authoring:
+
+1. **Q1 — Tax model: where does `total_tax_minor` come from?**
+   **DECIDED → Zero for v1 (no VAT).** `total_tax_minor` is hardcoded to `0` in the dispatch-projection module. Egyptian VAT computation is deferred to a future feature. The projection module carries an explicit `// TODO(008-v2): Egyptian VAT compliance — see coordination.md §"Slice 1 closeout gap discovery"` comment at the hardcoded site.
+
+2. **Q2 — Branch detail + tax-registration id: where do they live?**
+   **DECIDED → Extend 002 pairing handshake.** The 002 pairing-handshake response is extended to return `branch_name`, `branch_address`, `tenant_tax_registration_id`. The `terminal_assignment` schema gains three new columns; the pairing store persists them at pair-completion. 008's bootstrap reads from `readPairingTerminalAssignment()`. Cross-feature work (touches 002's tree) is attributed to 008 per Ahmed's instruction 2026-05-28.
+
+### Egyptian VAT compliance flag (§A5 production-readiness)
+
+> **MUST resolve BEFORE §A5 sign-off — added 2026-05-28 as a direct consequence of Q1's "zero-for-v1" answer.**
+
+Q1's answer ships receipts that legally **do not comply** with Egyptian Tax Authority e-invoicing rules (mandatory tax-line + tax-registration-number on every fiscal receipt). This is acceptable for development + internal testing but BLOCKS any production customer-facing use. The 008 §A5 production-readiness gate MUST require:
+
+- [ ] Re-open Q1 (tax model) before §A5 sign-off and pick one of the non-zero options (cart-computes or 008-computes).
+- [ ] Add a regression test confirming `total_tax_minor > 0` on a non-VAT-exempt sale before merging to a production-tagged release.
+- [ ] Confirm receipt template (Slice 2 AD-6) renders a tax line + tenant tax-registration number once the non-zero tax model lands.
+
+This flag is recorded here so it cannot be forgotten when Slice 6 (production-readiness gate) lands. Slice 2's receipt template will already display `tenant_tax_registration_id` from the 002-handshake extension (T094a) — only the tax-line value remains to be computed in a future feature.
+
+### Chosen resolution path
+
+**Path B (revised — three new tasks).** Both answers above collapse the original three-path matrix to a single concrete plan. Three new task entries between T093 and T100 in tasks.md:
+
+| Task | Description | Cost estimate |
+|:--|:--|:--|
+| **T094a** | Extend 002 pairing-handshake response + `terminal_assignment` schema with `branch_name`, `branch_address`, `tenant_tax_registration_id`. Touches `src/main/pairing/store.ts`, `src/main/pairing/network.ts`, `src/main/pairing/service.ts`, plus a new `migrations/00XX_extend_terminal_assignment.sql`. Attributed to 008 (PR title prefix `feat(008): …`) per Ahmed 2026-05-28. | ~150-250 LoC + RED-GREEN tests |
+| **T094b** | 008 dispatch-projection module at `src/main/sales/finalize-dispatch.ts`. Reads `audit_events` row by `handoff_action_id`, joins `payment_attempts` + `payment_tender_lines` + `terminal_assignment` (post-T094a) + operator-display-name reader; projects to `FinalizeInput`. `total_tax_minor` hardcoded to `0` with the v2 TODO comment per Q1. | ~250-350 LoC + RED-GREEN tests |
+| **T094c** | Main-process bootstrap at `src/main/index.ts`. Wires `createFinalizeListener` + `createSalesBridge` behind `featureFlags.sale_finalization`. `dispatch` closure calls T094b's projection module + `bindFinalizeTransaction.finalize()`. Recovery dispatchers stubbed as `logger.warn` (real impls land S3/S4). Calls `runStartupRecovery()` then `start()`. `stop()` is called from the `app.quit` handler. | ~60-100 LoC + smoke verification |
+
+Sequencing: T094a → T094b → T094c. Each lands as its own PR. T111/T112/T113 are explicitly blocked-by-T094c.
+
+### Action items
+
+- [x] **Ahmed Q1 answer** — recorded 2026-05-28: "Zero for v1 (no VAT)" with §A5 production-readiness flag.
+- [x] **Ahmed Q2 answer** — recorded 2026-05-28: "Extend 002 pairing handshake, attribute to 008".
+- [x] **Claude** — collapse memo to chosen-path form (this commit).
+- [x] **Claude** — author T094a / T094b / T094c task entries in tasks.md (closed 2026-05-28 in this same PR #267 commit; see `tasks.md` lines 216-223).
+- [ ] **T094a PR** — `feat(008): extend 002 pairing handshake for branch detail (T094a)`. Subsequent session.
+- [ ] **T094b PR** — `feat(008): dispatch-projection module + RED-GREEN tests (T094b)`. After T094a merges.
+- [ ] **T094c PR** — `feat(008): wire AD-2 worker + sales.* bridge into main (T094c, closes S1c.3)`. After T094b merges.
+- [ ] **T111/T112 manual smokes** — BLOCKED-BY T094c. Will be unblocked once T094c lands.
+- [ ] **T113 Slice 1 sign-off** — BLOCKED-BY T111/T112.
+- [ ] **§A5 production-readiness gate** — flagged: re-open Q1 (Egyptian VAT compliance) before sign-off.
