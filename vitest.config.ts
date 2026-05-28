@@ -131,6 +131,15 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T094b — 008 Slice 1c.3 payment.settled → FinalizeInput projection.
+        // Spec §A5 requires ≥95%. All read sources + refusal branches are
+        // exercised by tests/unit/main/sales/finalize-dispatch.test.ts.
+        'src/main/sales/finalize-dispatch.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         'src/main/sales/audit-emitter.ts': {
           lines: 95,
           branches: 95,
