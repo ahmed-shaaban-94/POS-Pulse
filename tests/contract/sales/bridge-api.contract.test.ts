@@ -52,9 +52,11 @@ import type {
 
 describe('T030 — 008 Slice 1b sales.* bridge contract', () => {
   describe('closed-enum tuples', () => {
-    it('SALES_REFUSAL_REASONS contains the 8 contract-defined values exactly', () => {
+    it('SALES_REFUSAL_REASONS contains the 9 contract-defined values exactly', () => {
       // Per contracts/bridge-api.md §"Refusal envelope" — the closed reason
       // union across all 008 sales.* + receipts.* handlers.
+      // 'not_implemented' added in S1c.2 to match 005's CartRefusalReason
+      // posture for the sales.subscribe stub (push primitive deferred).
       expect(SALES_REFUSAL_REASONS).toEqual([
         'no_session',
         'role_denied',
@@ -64,6 +66,7 @@ describe('T030 — 008 Slice 1b sales.* bridge contract', () => {
         'idempotency_payload_mismatch',
         'printer_unavailable',
         'forbidden_field_in_request',
+        'not_implemented',
       ]);
     });
 

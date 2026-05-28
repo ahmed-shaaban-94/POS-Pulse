@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { cart } from './cart.js';
 import { payments, tender, vouchers } from './payments.js';
+import { sales } from './sales.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -132,6 +133,9 @@ const api: PreloadBridgeAPI = {
   payments,
   tender,
   vouchers,
+  // 008-sale-finalization-and-receipts Slice 1c.2 — read-only sales.*
+  // namespace. subscribe + unsubscribe are stubs (push primitive deferred).
+  sales,
 };
 
 contextBridge.exposeInMainWorld('api', api);
