@@ -733,3 +733,42 @@ This is a pure engineering type-design call; no business decision needed. Record
 - [ ] **Claude (after T094a unblocks)** — update T094a task description in tasks.md to include the 3 printer fields. Update T094a's POS-Pulse-side implementation scope accordingly.
 - [ ] **Claude (at Slice 2 prep moment)** — add `ReceiptRenderOutput` interface to `src/shared/receipts/types.ts` at the natural Slice 2 prep moment (likely T140 — the first task that creates receipt-related types).
 - [ ] **§A5 production-readiness gate** — both new checklist items above.
+
+---
+
+## 2026-05-28 — T094a contract pin complete (Data-Pulse-2 PR #388 merged)
+
+> **Status:** **TerminalPairResponse 6 new fields pinned into POS-Pulse snapshot.** T094a's POS-Pulse-side execution (terminal_assignment migration + pairing store row shape + service.ts pass-through) is now UNBLOCKED.
+
+### What landed
+
+**Data-Pulse-2 PR #388** — `feat(pos-008): author Terminal Pairing OpenAPI contract for POS-Pulse Slice 1c.3 + Slice 3` — merged 2026-05-28 at 19:50Z by Ahmed. Squash commit `6c9dda2` on Data-Pulse-2 main. Authored by Claude in worktree `dp2-pos-008-terminal-pairing` per Data-Pulse-2's Maestro / Agent OS slice protocol. Two files: `packages/contracts/openapi/pos-terminal-pairing.openapi.yaml` (393 LoC) + `apps/api/test/pos-terminal-pairing/pairing.contract.spec.ts` (584 LoC, 46 conformance assertions).
+
+CodeRabbit review on PR #388 produced 5 findings: CR1-CR4 (all real, fixed in commit `6d9fcd0` on the same PR — pin TerminalPairRequest schema exactly, assert Retry-After 429 contract, reconcile auth narrative, fix printer-config prose/schema mismatch) plus CR5 (defended — `nullable: true` is the repo-wide convention across all Data-Pulse-2 top-level contracts).
+
+### POS-Pulse pin (this PR)
+
+Mirror of POS-Pulse commit `454914a` ("feat(006): T200-T203 pin voucher V-A contract + regenerate api-types"). **Surgical pin (Option 1 per the in-session brief)** — extends the existing `/api/v1/terminals/pair` endpoint's `TerminalPairResponse` schema with the 6 new fields rather than replacing the entire endpoint with DP2's authored `/api/pos/v1/terminals/pair` path + `posPairTerminal` operationId. Rationale: minimal blast radius (POS-Pulse 002's `network.ts` `PAIR_PATH` constant + `service.ts` keep working as-is); path-rename can be its own follow-up slice if 002 modernization happens.
+
+**Snapshot change:**
+- `scripts/openapi-snapshot.json` — `TerminalPairResponse` properties: 6 → 12 (added `branch_name`, `branch_address`, `tenant_tax_registration_id`, `printer_vendor_id`, `printer_product_id`, `printer_com_port`); required: 5 → 11.
+- `src/shared/api-types.ts` — regenerated via `npm run codegen:api`; `codegen:verify` clean.
+
+**Test fixture updates:**
+- `src/main/pairing/__tests__/service.test.ts` — `SUCCESS_BODY` fixture extended with 6 new fields.
+- `src/main/observability/__tests__/sentry-pairing.test.ts` — pair-response mock body extended with 6 new fields.
+
+**Validation:** typecheck ✅ · lint + prettier ✅ · vitest 3804 passed / 0 failed / 3 skipped ✅
+
+### Unblocked
+
+- **T094a (POS-Pulse-side)** — the actual `terminal_assignment` migration + `src/main/pairing/store.ts` row shape gain + `src/main/pairing/network.ts` + `src/main/pairing/service.ts` parse-through changes. Now ready to be authored as a separate POS-Pulse feature PR. The contract bytes are pinned; the implementation work has all type information available.
+- **Transitive chain** — T094b (dispatch projection) → T094c (main bootstrap) → T111/T112 (manual smokes) → T113 (Slice 1 sign-off) — all still blocked-by their immediate predecessor, but the cross-repo coordination block on T094a is now cleared.
+
+### Updated action items
+
+- [x] **Claude** — author Data-Pulse-2 slice for pos-terminal-pairing contract (closed 2026-05-28 via DP2 PR #388).
+- [x] **Claude** — pin Data-Pulse-2 PR #388 bytes into POS-Pulse snapshot + regenerate types (closed 2026-05-28 in this PR).
+- [ ] **Claude (next)** — execute T094a's POS-Pulse-side implementation: terminal_assignment migration + store/network/service.ts changes. Now unblocked.
+- [ ] **Claude (after T094a)** — T094b dispatch projection module at `src/main/sales/finalize-dispatch.ts`.
+- [ ] **Claude (after T094b)** — T094c main bootstrap + T028a lines_json migration (folded together per Slice 2 prep audit decision).
