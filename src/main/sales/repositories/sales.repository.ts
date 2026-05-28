@@ -57,6 +57,14 @@ export interface SaleRow {
   branch_name: string;
   branch_address: string;
   local_calendar_day: string;
+  /**
+   * JSON-serialised snapshot of the cart's item lines (the
+   * `PaymentIntentEnvelope.lines` array — `LineSnapshot[]`) captured at
+   * finalize time. Read back at reprint time so the slip body is
+   * byte-stable regardless of later catalogue/cart drift (FR-015 / FR-016).
+   * Defaults to '[]' at the SQL layer (migration 0028) for pre-T028a rows.
+   */
+  lines_json: string;
 }
 
 export type InsertSaleRowInput = SaleRow;
@@ -89,14 +97,14 @@ export function bindSalesRepository(db: DatabaseHandle): SalesRepository {
        selling_operator_id, selling_operator_display_name, selling_operator_session_id,
        subtotal_minor, total_tax_minor, total_change_due_minor, tender_lines_summary_json,
        settled_at, finalized_at, tenant_tax_registration_id, branch_name, branch_address,
-       local_calendar_day
+       local_calendar_day, lines_json
      ) VALUES (
        ?, ?, ?, ?, ?,
        ?, ?, ?, ?, ?,
        ?, ?, ?,
        ?, ?, ?, ?,
        ?, ?, ?, ?, ?,
-       ?
+       ?, ?
      )`,
   ) as PrepareRun;
 
@@ -140,6 +148,7 @@ export function bindSalesRepository(db: DatabaseHandle): SalesRepository {
         row.branch_name,
         row.branch_address,
         row.local_calendar_day,
+        row.lines_json,
       );
     },
 

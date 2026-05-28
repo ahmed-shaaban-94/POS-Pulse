@@ -55,6 +55,15 @@ export interface EmitPaymentSettledInput extends BaseAuditContext {
   cart_id: string;
   handoff_action_id: string;
   settled_at: string;
+  /**
+   * Human-readable selling-operator name, sourced from the live operator
+   * session at confirm-time. Persisted into the payload so 008's finalize
+   * worker (T094b) can stamp it onto the durable Sale row even when it
+   * dispatches session-independently during boot recovery (T112) — there
+   * is no durable operator_id → display_name lookup table. Not a forbidden
+   * field; `sales.selling_operator_display_name` is NOT NULL (migration 0020).
+   */
+  selling_operator_display_name: string;
   tender_lines: readonly EmitTenderLineBreakdown[];
 }
 
@@ -318,6 +327,7 @@ export function createPaymentAuditEmitter(
           handoff_action_id: input.handoff_action_id,
           settled_at: input.settled_at,
           attribution_operator_id: input.attribution_operator_id,
+          selling_operator_display_name: input.selling_operator_display_name,
           tender_lines: input.tender_lines.map(redactedLineBreakdown),
         },
       });

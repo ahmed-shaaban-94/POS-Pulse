@@ -35,6 +35,18 @@ import {
 } from './payments/voucher-authority/reverse.js';
 import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
 import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
+// 008-sale-finalization-and-receipts Slice 1c.3 (T094c) — AD-2 worker + sales.* bridge.
+import { registerSalesHandlers } from './ipc/sales.js';
+import { bindSalesRepository } from './sales/repositories/sales.repository.js';
+import { bindPrintEventsRepository } from './sales/repositories/print-events.repository.js';
+import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.repository.js';
+import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
+import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
+import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
+import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
+import { buildFinalizeInput } from './sales/finalize-dispatch.js';
+import { createFinalizeListener } from './sales/finalize-listener.js';
+import { createSalesBridge } from './sales/sales-bridge.js';
 import { randomUUID } from 'node:crypto';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
@@ -216,6 +228,14 @@ function resolveMigrationsDir(): string {
  * Accessed only from the main process — never exposed to the renderer.
  */
 let dbHandle: DatabaseHandle | null = null;
+
+/**
+ * 008 (T094c) — process-lifetime AD-2 finalize worker. Started in
+ * `app.whenReady()` behind the `sale_finalization` flag, stopped on quit so
+ * the setInterval driver never outlives the process. `null` when the flag
+ * is off or before bootstrap.
+ */
+let finalizeListenerStop: (() => void) | null = null;
 
 app
   .whenReady()
@@ -591,6 +611,9 @@ app
         tenant_id: sess.tenant_id,
         branch_id: sess.branch_id,
         terminal_id: sess.branch_id,
+        // 008 T094b — persist the human-readable name into payment.settled
+        // so the session-independent finalize worker can stamp the Sale row.
+        display_name: sess.display_name,
       };
     };
 
@@ -742,6 +765,150 @@ app
       );
     });
 
+    // ── 008-sale-finalization-and-receipts Slice 1c.3 (T094c) ──────────────
+    //
+    // Wire the AD-2 finalize worker + read-only `sales.*` bridge behind the
+    // `sale_finalization` feature flag (fail-closed default off). When the
+    // flag is off, 006 still settles payments but no Sale rows are written —
+    // the cashier falls back to manual receipts (see runbook T525).
+    //
+    // The worker is terminal-scoped: it only fires for the paired terminal.
+    // We read the scope from the pairing status; an unpaired terminal cannot
+    // reach a POS surface at all (the renderer is walled at /pairing), so a
+    // non-paired status here means "nothing to finalize" and we skip start.
+    if (getAppConfig().features?.saleFinalization === true) {
+      const salesRepo = bindSalesRepository(dbHandle);
+      const printEventsRepo = bindPrintEventsRepository(dbHandle);
+      const drawerEventsRepo = bindDrawerEventsRepository(dbHandle);
+
+      // Read-only `sales.*` bridge for the renderer (preview / lookup).
+      // Registered UNCONDITIONALLY whenever the flag is on — NOT gated on
+      // pairing status. Pairing happens in-renderer (PairingForm navigates
+      // to /paired without a process relaunch), so a terminal that boots
+      // unpaired and pairs later in the same process must still have these
+      // handlers; otherwise `sales.read`/`findByNumber` reject at the IPC
+      // layer. The bridge gates on the live session at call time, so it is
+      // inert until an operator signs in regardless of pairing timing.
+      const salesBridge = createSalesBridge({
+        getCurrentSession: () => {
+          const sess = operatorSessionManager.getCurrent();
+          if (sess === null) return null;
+          return {
+            role: sess.role,
+            operator_id: sess.operator_id,
+            operator_session_id: sess.id,
+            tenant_id: sess.tenant_id,
+            branch_id: sess.branch_id,
+            terminal_id: sess.branch_id,
+          };
+        },
+        salesRepo,
+        printEventsRepo,
+        drawerEventsRepo,
+      });
+      registerSalesHandlers(ipcMain, { salesBridge });
+
+      // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
+      // starts for an already-paired terminal — it needs the pairing row's
+      // scope to filter the scan. A terminal paired mid-process picks up the
+      // worker on the next launch; the startup recovery scan re-fires any
+      // settled-but-unfinalized rows then, so nothing is lost.
+      const pairingStatus = await pairingStore.getStatus();
+      if (pairingStatus.kind === 'paired') {
+        const outboxRepo = bindSaleSyncOutboxRepository(dbHandle);
+        const allocator = bindSaleNumberAllocator(dbHandle);
+        const saleAuditEmitter = createSaleAuditEmitter({
+          sink: {
+            write: (evt: SaleAuditEvent): void => {
+              auditEventsStore.insertIgnore({
+                event_id: randomUUID(),
+                tenant_id: evt.tenant_id,
+                branch_id: evt.branch_id,
+                originating_terminal_id: evt.originating_terminal_id,
+                acting_operator_id: evt.attribution_operator_id,
+                session_id: evt.session_id,
+                shift_id: null,
+                action_category: evt.action_category,
+                created_at: evt.created_at,
+                approving_supervisor_id: null,
+                payload: evt.payload,
+              });
+            },
+          },
+        });
+        const finalizeTransaction = bindFinalizeTransaction({
+          db: dbHandle,
+          salesRepo,
+          outboxRepo,
+          allocator,
+          auditEmitter: saleAuditEmitter,
+          now: () => new Date().toISOString(),
+          saleIdGenerator: () => randomUUID(),
+          outboxRowIdGenerator: () => randomUUID(),
+        });
+
+        // The AD-2 dispatch closure: project the settled payment into a
+        // FinalizeInput (T094b), then run the atomic finalize (T091). A
+        // projection refusal is logged and skipped — the worker re-scans
+        // the same row on the next tick (idempotent NOT EXISTS clause).
+        const finalizeDb = dbHandle;
+        const dispatch = (handoff_action_id: string): void => {
+          const projected = buildFinalizeInput({ db: finalizeDb, handoff_action_id });
+          if (projected.kind === 'refused') {
+            mainLogger.warn(
+              { handoff_action_id, reason: projected.reason },
+              'finalize_dispatch:projection_refused',
+            );
+            return;
+          }
+          const result = finalizeTransaction.finalize(projected.input);
+          mainLogger.info({ handoff_action_id, kind: result.kind }, 'finalize_dispatch:finalized');
+        };
+
+        // F-007 alignment — the AD-2 scan filters `audit_events` by
+        // `originating_terminal_id`, which 006 writes as the payment
+        // attempt's `terminal_id`. That value comes from
+        // `paymentsSessionAdapter`, which (per the documented F-007 shortcut)
+        // sets `terminal_id: sess.branch_id` because 004's session record
+        // carries no separate terminal id. So the value 006 stamps into
+        // `originating_terminal_id` is the BRANCH id, not the pairing row's
+        // real terminal_id. The scan MUST bind the same value 006 wrote, or
+        // it matches zero settled rows and finalizes nothing. We therefore
+        // scope the worker with terminal_id = branch_id, tagged to the same
+        // F-007 debt: when the real terminal id is plumbed through 004, BOTH
+        // the payments adapter and this scope flip together.
+        const payments006TerminalId = pairingStatus.branch_id; // F-007
+        const finalizeListener = createFinalizeListener({
+          db: dbHandle,
+          tenant_id: pairingStatus.tenant_id,
+          branch_id: pairingStatus.branch_id,
+          terminal_id: payments006TerminalId,
+          dispatch,
+          // Print + drawer recovery dispatchers land in Slice 3 / Slice 4;
+          // log placeholders keep the recovery scan inert until then.
+          dispatchPrintRecovery: (sale_id: string): void => {
+            mainLogger.warn({ sale_id }, 'finalize_recovery:print_recovery_stub');
+          },
+          dispatchDrawerRecovery: (sale_id: string): void => {
+            mainLogger.warn({ sale_id }, 'finalize_recovery:drawer_recovery_stub');
+          },
+          tickIntervalMs: 200,
+          now: () => new Date().toISOString(),
+        });
+
+        // Recovery scan first (re-fires any settled-but-unfinalized rows from
+        // a prior crash), then install the steady-state tick driver.
+        finalizeListener.runStartupRecovery();
+        finalizeListener.start();
+        finalizeListenerStop = () => {
+          finalizeListener.stop();
+        };
+        mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'finalize_listener:started');
+      } else {
+        mainLogger.info('finalize_listener:skipped_unpaired');
+      }
+    }
+
     createWindow();
     mainLogger.info('app:ready');
     app.on('activate', () => {
@@ -759,6 +926,16 @@ app
   });
 
 function closeDbHandle(): void {
+  // 008 (T094c) — stop the AD-2 finalize worker BEFORE closing the DB so a
+  // mid-flight tick cannot run against a closed handle.
+  if (finalizeListenerStop !== null) {
+    try {
+      finalizeListenerStop();
+    } catch (err) {
+      console.error('[pos-pulse] failed to stop finalize listener:', err);
+    }
+    finalizeListenerStop = null;
+  }
   if (dbHandle !== null) {
     try {
       dbHandle.close();

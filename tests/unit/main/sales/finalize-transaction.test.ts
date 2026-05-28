@@ -41,6 +41,8 @@ const MIGRATIONS = [
   '0021_sales_append_only_trigger.sql',
   '0024_create_sale_sync_outbox.sql',
   '0025_create_sale_number_sequences.sql',
+  // T028a — lines_json column for byte-stable reprints.
+  '0028_extend_sales_with_lines_json.sql',
 ].map((f) => readFileSync(path.join(REPO_ROOT, 'migrations', f), 'utf8'));
 
 let SQL: SqlJsStatic;
@@ -171,6 +173,19 @@ function buildInput(
     branch_name: 'Maadi Branch',
     branch_address: '12 Road 9, Maadi',
     local_calendar_day: '2026-05-27',
+    lines: [
+      {
+        line_id: 'line-1',
+        item_ref: 'SKU-001',
+        display_name: 'Paracetamol 500mg',
+        quantity: 1,
+        unit_price_minor: 1500,
+        line_subtotal_minor: 1500,
+        note: null,
+        version: 1,
+        last_action_id: 'action-1',
+      },
+    ],
     ...overrides,
   };
 }
@@ -241,6 +256,36 @@ describe('T050 — AD-2 atomic finalize transaction', () => {
     // Cleartext must never reach the persisted row.
     expect(json).not.toContain('CARD-AUTH-AB12XY');
     expect(json).toContain('*****');
+  });
+
+  it('persists the cart line snapshot as lines_json in the sales row (T028a)', () => {
+    seedPaymentAttempt();
+    seedTenderLine();
+    const finalize = bindFinalizeTransaction(buildDeps());
+    const input = buildInput({
+      lines: [
+        {
+          line_id: 'line-1',
+          item_ref: 'SKU-001',
+          display_name: 'Paracetamol 500mg',
+          quantity: 2,
+          unit_price_minor: 1500,
+          line_subtotal_minor: 3000,
+          note: 'fridge item',
+          version: 1,
+          last_action_id: 'action-1',
+        },
+      ],
+    });
+    finalize.finalize(input);
+    const row = db.exec("SELECT lines_json FROM sales WHERE sale_id = 'sale-uuid-1'");
+    const json = row[0]?.values[0]?.[0] as string;
+    // Byte-identical to JSON.stringify of the input lines (FR-015 / FR-016).
+    expect(json).toBe(JSON.stringify(input.lines));
+    // Spot-check a couple of fields survived the round-trip.
+    const parsed = JSON.parse(json) as Array<Record<string, unknown>>;
+    expect(parsed[0]?.display_name).toBe('Paracetamol 500mg');
+    expect(parsed[0]?.line_subtotal_minor).toBe(3000);
   });
 
   it('persists change_due_minor on cash tender lines', () => {
