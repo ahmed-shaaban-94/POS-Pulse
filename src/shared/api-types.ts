@@ -13015,8 +13015,18 @@ export interface components {
          * @description Successful pairing envelope. The device_token is a SECRET - stored only via SecretStore, never logged or echoed to the renderer. tenant_id / branch_id / terminal_id / terminal_label populate the single-row terminal_assignment table.
          */
         TerminalPairResponse: {
+            /**
+             * Branch Address
+             * @description Human-readable branch address (free-form). Printed on receipts per POS-Pulse 008 AD-6. Pinned 2026-05-28 from Data-Pulse-2 PR #388.
+             */
+            branch_address: string;
             /** Branch Id */
             branch_id: string;
+            /**
+             * Branch Name
+             * @description Human-readable branch / store name. Printed on receipts per POS-Pulse 008 AD-6. Pinned 2026-05-28 from Data-Pulse-2 PR #388 (Slice 1 closeout-gap audit).
+             */
+            branch_name: string;
             /**
              * Device Token
              * @description Long-lived device token. SECRET - stored exclusively via SecretStore.
@@ -13027,8 +13037,28 @@ export interface components {
              * @description Optional ISO-8601 expiry hint. Ignored by 002-terminal-pairing.
              */
             expires_at?: string | null;
+            /**
+             * Printer Com Port
+             * @description OPTIONAL additional COM port set ONLY when an RS-232 serial path is also available alongside the required USB connection. NULL for USB-only printers. Pinned 2026-05-28 from Data-Pulse-2 PR #388.
+             */
+            printer_com_port: string | null;
+            /**
+             * Printer Product Id
+             * @description USB product ID of the receipt printer, as a hex string (e.g. `0x0202` for Epson TM-T20III). Paired with printer_vendor_id. Pinned 2026-05-28 from Data-Pulse-2 PR #388.
+             */
+            printer_product_id: string;
+            /**
+             * Printer Vendor Id
+             * @description USB vendor ID of the receipt printer, as a hex string (e.g. `0x04B8` for Epson). Used by the POS print pipeline (008 Slice 3). Pinned 2026-05-28 from Data-Pulse-2 PR #388 (Slice 3 prep audit).
+             */
+            printer_vendor_id: string;
             /** Tenant Id */
             tenant_id: string;
+            /**
+             * Tenant Tax Registration Id
+             * @description Tenant's tax-registration identifier (Egyptian Tax Authority format: 9-digit numeric, stored as string for forward compatibility). Printed on every fiscal receipt per Egyptian e-invoicing rules. Pinned 2026-05-28 from Data-Pulse-2 PR #388.
+             */
+            tenant_tax_registration_id: string;
             /** Terminal Id */
             terminal_id: string;
             /** Terminal Label */

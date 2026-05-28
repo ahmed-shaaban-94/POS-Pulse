@@ -69,6 +69,13 @@ function makeNetwork(
             branch_id: 'b1',
             terminal_id: 'term-1',
             terminal_label: 'Counter 1',
+            // 6 new fields pinned 2026-05-28 from Data-Pulse-2 PR #388.
+            branch_name: 'Test Branch',
+            branch_address: '12 Test Road',
+            tenant_tax_registration_id: '123456789',
+            printer_vendor_id: '0x04B8',
+            printer_product_id: '0x0202',
+            printer_com_port: null,
           },
         });
       }
