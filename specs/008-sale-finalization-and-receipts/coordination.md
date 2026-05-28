@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-28 (five passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge: Q2's chosen path requires a backend OpenAPI change to `smartdatapulse.tech` that POS-Pulse cannot make alone; Ahmed owns the backend PR; T094a-T094c + T111-T113 all transitively BLOCKED-BY backend snapshot refresh. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. (4) Second-pass Slice 2 environmental audit recorded same-PR: Tahoma Arabic-font assumption flagged for §A5 hardware-pair smoke; `src/shared/formatters/` absence flagged as Slice 2 T160 precursor. (5) Slice 3 prep audit recorded post-PR #269 merge: 3 print-pipeline findings — printer config provenance (Ahmed: extend 002 handshake same as Slice 1 Q2 path; folds into pending backend PR), retry policy (Ahmed: bounded exp backoff 3 retries 1s/4s/16s), receipt-byte hand-off type (engineering recommendation: `ReceiptRenderOutput` shape). Adds 2 §A5 checklist items. T094a backend PR scope grows by 3 printer-config fields. See §"Slice 3 prep audit: print pipeline upstream gaps" below).
+**Last updated:** 2026-05-28 (six passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge — framed as "Ahmed owns the backend PR" — **SUPERSEDED by pass (6); see §"Correction" below**. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. (4) Second-pass Slice 2 environmental audit recorded same-PR: Tahoma Arabic-font assumption flagged for §A5 hardware-pair smoke; `src/shared/formatters/` absence flagged as Slice 2 T160 precursor. (5) Slice 3 prep audit recorded post-PR #269 merge: 3 print-pipeline findings — printer config provenance (Ahmed: extend 002 handshake same as Slice 1 Q2 path; folds into pending backend PR — **also SUPERSEDED by pass (6)**), retry policy (Ahmed: bounded exp backoff 3 retries 1s/4s/16s), receipt-byte hand-off type (engineering recommendation: `ReceiptRenderOutput` shape). Adds 2 §A5 checklist items. T094a backend PR scope grows by 3 printer-config fields. (6) Correction to passes (2) + (5) recorded post-PR #270 author-time: the "Ahmed owns the backend PR" framing was wrong. The OpenAPI snapshot is speculative per research.md §5 — contract authoring lives in Data-Pulse-2 and is Claude-doable, not Ahmed-blocked. Past pattern: Data-Pulse-2 PR #316 (vouchers V-A) + POS-Pulse commit `454914a`. See §"Correction (2026-05-28, post-PR #270 author-time discovery)" below.
 
 **Change log (oldest → newest):**
 
@@ -453,10 +453,44 @@ Slice 1 is effectively paused until the backend PR lands. Parallel work that cou
 ### Action items (this section)
 
 - [x] **Claude** — verify Q2 path against `scripts/openapi-snapshot.json` (closed 2026-05-28: confirmed `TerminalPairResponse` lacks the three new fields).
-- [x] **Ahmed** — backend-coordination decision (closed 2026-05-28: Ahmed owns the backend PR).
-- [ ] **Ahmed** — open backend PR against `smartdatapulse.tech` adding `branch_name`, `branch_address`, `tenant_tax_registration_id` to `TerminalPairResponse` (required fields).
-- [ ] **Ahmed** — once backend PR merges, regenerate `scripts/openapi-snapshot.json` here via `npm run codegen:api` (or equivalent) + commit. This unblocks T094a.
-- [ ] **Claude (after snapshot lands)** — execute T094a per the original task entry in tasks.md.
+- [x] **Ahmed** — backend-coordination decision (closed 2026-05-28: Ahmed owns the backend PR). **SUPERSEDED — see Correction (2026-05-28, post-PR #270) below.**
+- [ ] ~~**Ahmed** — open backend PR against `smartdatapulse.tech` adding `branch_name`, `branch_address`, `tenant_tax_registration_id` to `TerminalPairResponse` (required fields).~~ **SUPERSEDED — Correction below.**
+- [ ] ~~**Ahmed** — once backend PR merges, regenerate `scripts/openapi-snapshot.json` here via `npm run codegen:api` (or equivalent) + commit. This unblocks T094a.~~ **SUPERSEDED — Correction below.**
+- [ ] ~~**Claude (after snapshot lands)** — execute T094a per the original task entry in tasks.md.~~ **SUPERSEDED — Claude authors the Data-Pulse-2 contract slice directly. See Correction below.**
+
+### Correction (2026-05-28, post-PR #270 author-time discovery)
+
+> **The "Ahmed owns the backend PR" framing above was wrong.** Documented here rather than rewritten in place so the audit trail is intact and future readers can trace the discovery sequence. Original text is struck-through above; this Correction supersedes.
+
+**What was wrong**: PR #268's memo (the original sub-section above) framed T094a as blocked-by-Ahmed-must-do-a-backend-PR. PR #270 (Slice 3 prep audit) inherited the same framing for the additional 3 printer-config fields. Both implied the only person who could unblock T094a was Ahmed.
+
+**What's actually true** — verified 2026-05-28 by reading `specs/001-foundation/research.md` §5 (lines 145-149) and checking git history for prior contract-pin precedents:
+
+1. **The OpenAPI snapshot at `scripts/openapi-snapshot.json` is speculative / forward-looking.** Per research §5: *"the constitution pins the API URL but the platform may not yet expose `/openapi.json` at the time 001 lands. A pinned snapshot decouples 001 from platform readiness."*
+
+2. **Contract authoring happens in Data-Pulse-2 (the backend repo), not directly on `smartdatapulse.tech`.** Data-Pulse-2 owns `packages/contracts/openapi/**` — the source of truth for what API contracts look like, regardless of whether the live server implements them yet.
+
+3. **Anyone with Data-Pulse-2 repo access can author the contract slice** — including Claude. Verified by past pattern:
+   - **Data-Pulse-2 PR #316** (merged 2026-05-24, headRef `feat/pos-006-voucher-va-contract`) authored 006's voucher V-A OpenAPI contract: 604 LoC contract tests + 629 LoC yaml. Pure contract authoring; no live server implementation required at the same time.
+   - **POS-Pulse commit `454914a`** pinned PR #316's contract bytes into the snapshot: `feat(006): T200-T203 pin voucher V-A contract + regenerate api-types`. Standard pin-then-regen workflow.
+
+4. **The 281-path POS-Pulse snapshot was bootstrapped from the legacy (Python/FastAPI) `Data-Pulse` repo (archived 2026-05-06)** — that's why it has `TerminalPairResponse` even though Data-Pulse-2 (the current TypeScript backend) does NOT yet have a pairing endpoint or schema. Most of the 281 paths are speculative; they describe contracts that Data-Pulse-2 will catch up to over time.
+
+5. **Therefore T094a's real unblock path is**: author a Data-Pulse-2 slice (similar shape to PR #316 — OpenAPI yaml + contract tests, no live server implementation) → pin into POS-Pulse snapshot → regenerate types → execute T094a's POS-Pulse-side migration + pairing-store + service.ts changes.
+
+### Corrected action items
+
+- [x] **Claude** — verify the snapshot's speculative-contract framing against research.md §5 + git history (closed 2026-05-28: confirmed via PR #316 precedent + commit `454914a`).
+- [x] **Ahmed** — confirm Claude proceeds with the Data-Pulse-2 slice authoring (closed 2026-05-28: Ahmed authorized in this session).
+- [ ] **Claude** — open a Data-Pulse-2 slice authoring the pos-terminal-pairing OpenAPI contract: `packages/contracts/openapi/pos-terminal-pairing.yaml` (or sibling-named) + `apps/api/test/pos-terminal-pairing/pairing.contract.spec.ts`. **Six** new fields: `branch_name`, `branch_address`, `tenant_tax_registration_id` (Slice 1 closeout gap), `printer_vendor_id`, `printer_product_id`, `printer_com_port` (Slice 3 prep audit). Follow Data-Pulse-2's Maestro/Agent OS slice protocol (slice brief with `[GATED]` for `packages/contracts/openapi/**`, validation block, contract conformance tests). Ahmed reviews the slice brief before any code lands.
+- [ ] **Claude (after Data-Pulse-2 PR merges)** — pin the new contract bytes into POS-Pulse `scripts/openapi-snapshot.json` and regenerate `src/shared/api-types.ts` via `npm run codegen:api`. Mirror commit `454914a`'s shape.
+- [ ] **Claude (after pin + regen lands)** — execute T094a per the task entry in tasks.md (the POS-Pulse-side terminal_assignment migration + store + service.ts pass-through). This was previously documented as "BLOCKED-BY backend"; the actual sequencing is "BLOCKED-BY Data-Pulse-2 contract slice + POS-Pulse pin commit".
+
+### Why this correction matters
+
+Without it, future Claude sessions (and human readers) re-reading PR #268's memo would re-discover the same wrong assumption: "wait for Ahmed to do the backend PR." That's been wrong since the snapshot was first authored under research §5's speculative-contract design. The correction makes the actual workflow legible.
+
+This is also a useful reference for **Slices 2-6**: any time a future audit identifies a "backend-blocked" finding, check first whether the contract is in the speculative portion of the snapshot. If yes, the work is a Data-Pulse-2 slice (Claude-doable); if no, it's a real live-server change (Ahmed-required). Most 008 work will be the former.
 
 ### Action items
 
