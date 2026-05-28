@@ -61,9 +61,13 @@ function seedSale(opts: {
   sale_id: string;
   handoff_action_id?: string;
   cash_inclusive?: boolean;
+  tenant_id?: string;
+  branch_id?: string;
   terminal_id?: string;
 }): void {
   const handoff_action_id = opts.handoff_action_id ?? `handoff-${opts.sale_id}`;
+  const tenant_id = opts.tenant_id ?? 'tenant-1';
+  const branch_id = opts.branch_id ?? 'branch-1';
   const terminal_id = opts.terminal_id ?? 'terminal-1';
   const tender_lines_summary_json = opts.cash_inclusive
     ? '[{"tender_type":"cash","amount_applied_minor":1500}]'
@@ -79,7 +83,7 @@ function seedSale(opts: {
      ) VALUES (
        '${opts.sale_id}', '${opts.sale_id}-num', '${opts.sale_id}-num',
        '${handoff_action_id}', 'pa-${opts.sale_id}',
-       'cart-${opts.sale_id}', 'tenant-1', 'branch-1', '${terminal_id}', 'TERM-01',
+       'cart-${opts.sale_id}', '${tenant_id}', '${branch_id}', '${terminal_id}', 'TERM-01',
        'op-abc', 'Ahmed', 'sess-1',
        1500, 0, 0, '${tender_lines_summary_json}',
        '2026-05-28T10:00:00.000Z', '2026-05-28T10:00:00.500Z', 'TRN', 'B', 'A',
@@ -146,6 +150,8 @@ describe('T054 — AD-2 audit-events recovery on first tick', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -185,6 +191,8 @@ describe('T092 — print recovery one-shot sub-scan at startup', () => {
     const dispatchedPrint: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: () => {},
       dispatchPrintRecovery: (sale_id) => {
@@ -207,6 +215,8 @@ describe('T092 — print recovery one-shot sub-scan at startup', () => {
     const dispatchedPrint: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: () => {},
       dispatchPrintRecovery: (sale_id) => {
@@ -220,12 +230,96 @@ describe('T092 — print recovery one-shot sub-scan at startup', () => {
     expect(dispatchedPrint).toEqual(['sale-this-term']);
   });
 
+  it('print recovery is scoped to the current tenant (cross-tenant isolation, CR1 on PR #266)', () => {
+    seedSale({ sale_id: 'sale-this-tenant', tenant_id: 'tenant-1' });
+    seedSale({ sale_id: 'sale-other-tenant', tenant_id: 'tenant-OTHER' });
+
+    const dispatchedPrint: string[] = [];
+    const listener = createFinalizeListener({
+      db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      dispatch: () => {},
+      dispatchPrintRecovery: (sale_id) => {
+        dispatchedPrint.push(sale_id);
+      },
+      tickIntervalMs: 200,
+      now: () => '2026-05-28T10:00:00.000Z',
+    });
+    listener.runStartupRecovery();
+
+    expect(dispatchedPrint).toEqual(['sale-this-tenant']);
+  });
+
+  it('print recovery is scoped to the current branch (cross-branch isolation, CR1 on PR #266)', () => {
+    seedSale({ sale_id: 'sale-this-branch', branch_id: 'branch-1' });
+    seedSale({ sale_id: 'sale-other-branch', branch_id: 'branch-OTHER' });
+
+    const dispatchedPrint: string[] = [];
+    const listener = createFinalizeListener({
+      db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      dispatch: () => {},
+      dispatchPrintRecovery: (sale_id) => {
+        dispatchedPrint.push(sale_id);
+      },
+      tickIntervalMs: 200,
+      now: () => '2026-05-28T10:00:00.000Z',
+    });
+    listener.runStartupRecovery();
+
+    expect(dispatchedPrint).toEqual(['sale-this-branch']);
+  });
+
+  it('runStartupRecovery DOES NOT flip its fired flag if a dispatch throws (CR2 on PR #266)', () => {
+    seedSale({ sale_id: 'sale-needs-print' });
+
+    let throwOnce = true;
+    const dispatchedPrint: string[] = [];
+    const listener = createFinalizeListener({
+      db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      dispatch: () => {},
+      dispatchPrintRecovery: (sale_id) => {
+        if (throwOnce) {
+          throwOnce = false;
+          throw new Error('simulated transient print dispatch failure');
+        }
+        dispatchedPrint.push(sale_id);
+      },
+      tickIntervalMs: 200,
+      now: () => '2026-05-28T10:00:00.000Z',
+    });
+
+    // First attempt throws — flag must stay false so a retry can succeed.
+    expect(() => { listener.runStartupRecovery(); }).toThrow(
+      /simulated transient print dispatch failure/,
+    );
+    expect(dispatchedPrint).toEqual([]);
+
+    // Retry — succeeds + the flag now flips so a third call is a no-op.
+    listener.runStartupRecovery();
+    expect(dispatchedPrint).toEqual(['sale-needs-print']);
+
+    // Third call: flag is now true → no-op (the sale-needs-print row still
+    // matches the WHERE clause but the gate short-circuits before query).
+    listener.runStartupRecovery();
+    expect(dispatchedPrint).toEqual(['sale-needs-print']);
+  });
+
   it('print recovery does not re-run on subsequent startup-recovery invocations', () => {
     seedSale({ sale_id: 'sale-needs-print' });
 
     const dispatchedPrint: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: () => {},
       dispatchPrintRecovery: (sale_id) => {
@@ -253,6 +347,8 @@ describe('T092 — drawer recovery one-shot sub-scan at startup', () => {
     const dispatchedDrawer: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: () => {},
       dispatchDrawerRecovery: (sale_id) => {
@@ -284,6 +380,8 @@ describe('T092 — drawer recovery one-shot sub-scan at startup', () => {
     const dispatchedDrawer: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: () => {},
       dispatchDrawerRecovery: (sale_id) => {
@@ -314,6 +412,8 @@ describe('T092 — startup recovery is decoupled from the steady-state tick', ()
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);

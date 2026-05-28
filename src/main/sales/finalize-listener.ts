@@ -72,6 +72,16 @@ const SCAN_LIMIT_PER_TICK = 32;
 
 export interface FinalizeListenerConfig {
   db: DatabaseHandle;
+  /**
+   * Full (tenant_id, branch_id, terminal_id) scoping triple per
+   * Constitution §P17. The audit-events scan can rely on
+   * `originating_terminal_id` alone (since terminal_id is globally unique
+   * in production), but startup recovery sub-scans MUST filter by all
+   * three columns to prevent cross-tenant leakage in a misconfigured
+   * dev fixture or a multi-tenant database snapshot (per CR1 on PR #266).
+   */
+  tenant_id: string;
+  branch_id: string;
   terminal_id: string;
   /** Steady-state worker: invoked for each pending payment.settled row. */
   dispatch: (handoff_action_id: string) => void;
@@ -128,7 +138,15 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
     );
   }
 
-  const { db, terminal_id, dispatch, dispatchPrintRecovery, dispatchDrawerRecovery } = config;
+  const {
+    db,
+    tenant_id,
+    branch_id,
+    terminal_id,
+    dispatch,
+    dispatchPrintRecovery,
+    dispatchDrawerRecovery,
+  } = config;
 
   // ─── Canonical scan SELECT (steady-state worker) ─────────────────────────
 
@@ -146,10 +164,16 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
   ) as PrepareAll<AuditEventScanRow>;
 
   // ─── Print recovery SELECT (T092 sub-scan #1) ────────────────────────────
+  //
+  // Scoped by (tenant_id, branch_id, terminal_id) per Constitution §P17
+  // and CR1 on PR #266. Terminal_id alone would leak across tenants in a
+  // multi-tenant DB snapshot.
 
   const printRecoveryStmt = db.prepare(
     `SELECT sale_id FROM sales
-      WHERE terminal_id = ?
+      WHERE tenant_id = ?
+        AND branch_id = ?
+        AND terminal_id = ?
         AND NOT EXISTS (
           SELECT 1 FROM print_events
            WHERE print_events.sale_id = sales.sale_id
@@ -159,16 +183,19 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
 
   // ─── Drawer recovery SELECT (T092 sub-scan #2) ───────────────────────────
   //
-  // Cash-inclusive heuristic: tender_lines_summary_json contains a JSON
-  // object with `"tender_type":"cash"`. SQLite's LIKE is sufficient here
-  // because the JSON is produced by the finalize-transaction's
-  // JSON.stringify with a stable key order; the JSON1 extension could
-  // give us a structural test (`json_extract(..., '$[*].tender_type')`)
-  // but the LIKE form is portable to sql.js too.
+  // Same tenant/branch/terminal scoping as print recovery. Cash-inclusive
+  // heuristic: tender_lines_summary_json contains a JSON object with
+  // `"tender_type":"cash"`. SQLite's LIKE is sufficient here because the
+  // JSON is produced by the finalize-transaction's JSON.stringify with a
+  // stable key order; the JSON1 extension could give us a structural test
+  // (`json_extract(..., '$[*].tender_type')`) but the LIKE form is
+  // portable to sql.js too.
 
   const drawerRecoveryStmt = db.prepare(
     `SELECT sale_id FROM sales
-      WHERE terminal_id = ?
+      WHERE tenant_id = ?
+        AND branch_id = ?
+        AND terminal_id = ?
         AND tender_lines_summary_json LIKE '%"tender_type":"cash"%'
         AND NOT EXISTS (
           SELECT 1 FROM drawer_events
@@ -202,19 +229,32 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
 
     runStartupRecovery(): void {
       if (startupRecoveryFired) return;
-      startupRecoveryFired = true;
-
-      if (dispatchPrintRecovery !== undefined) {
-        const printRows = printRecoveryStmt.all(terminal_id);
-        for (const row of printRows) {
-          dispatchPrintRecovery(row.sale_id);
+      // Per CR2 on PR #266 — flip the fired flag AFTER both sub-scans
+      // complete. If a dispatch callback throws, the flag stays false so
+      // the next start-up still has a chance to recover; the thrown
+      // error propagates so the caller can decide whether to crash or
+      // retry. Setting the flag before recovery (as the prior version
+      // did) would permanently disable recovery on a single transient
+      // dispatch error.
+      try {
+        if (dispatchPrintRecovery !== undefined) {
+          const printRows = printRecoveryStmt.all(tenant_id, branch_id, terminal_id);
+          for (const row of printRows) {
+            dispatchPrintRecovery(row.sale_id);
+          }
         }
-      }
-      if (dispatchDrawerRecovery !== undefined) {
-        const drawerRows = drawerRecoveryStmt.all(terminal_id);
-        for (const row of drawerRows) {
-          dispatchDrawerRecovery(row.sale_id);
+        if (dispatchDrawerRecovery !== undefined) {
+          const drawerRows = drawerRecoveryStmt.all(tenant_id, branch_id, terminal_id);
+          for (const row of drawerRows) {
+            dispatchDrawerRecovery(row.sale_id);
+          }
         }
+        startupRecoveryFired = true;
+      } catch (err) {
+        // Leave the flag false so the next runStartupRecovery() call has
+        // a chance to retry. Re-throw so the caller (main entry point)
+        // can decide whether to log + continue or crash.
+        throw err;
       }
     },
 

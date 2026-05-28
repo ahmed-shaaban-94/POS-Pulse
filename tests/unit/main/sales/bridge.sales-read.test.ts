@@ -231,7 +231,7 @@ describe('T073 — sales.read: forbidden-field-in-request guard', () => {
     const bridge = buildBridge();
     const result = await bridge.read({
       sale_id: 'sale-1',
-      pan: '4111111111111111', // forbidden key
+      pan: 'TEST_PAN_TOKEN_NOT_A_REAL_CARD', // forbidden key (synthetic non-numeric token per CR4 on PR #266)
     } as unknown as { sale_id: string });
     expect(result.kind).toBe('refused');
     if (result.kind !== 'refused') return;
@@ -255,7 +255,7 @@ describe('T073 — sales.read: forbidden-field-in-request guard', () => {
     const bridge = buildBridge();
     const result = await bridge.read({
       sale_id: 'sale-1',
-      items: [{ pan: '0000000000000000' }],
+      items: [{ pan: 'TEST_PAN_TOKEN_NOT_A_REAL_CARD' }],
     } as unknown as { sale_id: string });
     expect(result.kind).toBe('refused');
     if (result.kind !== 'refused') return;

@@ -7,8 +7,11 @@
  * not yet implemented in the codebase — 005's `cart.subscribe` is a stub
  * returning `refuse('not_implemented')`. 008's `sales.subscribe` mirrors
  * that posture for S1c.2 (per user decision in brainstorm). A future
- * task implements the primitive properly; until then, both subscribe
- * and unsubscribe return the stub refusal.
+ * task implements the primitive properly. Until then:
+ *   - `sales.subscribe` returns `{ kind: 'refused', reason: 'not_implemented' }`.
+ *   - `sales.unsubscribe` is intentionally a no-op returning `{ kind: 'ok' }`
+ *     (the shared `SalesUnsubscribeResponse` type has no refusal branch;
+ *     since no registry exists, unsubscribing any token is trivially safe).
  *
  * The contract-side topics (`'recent'` and `'banner_state'`) are
  * accepted at the type level but the runtime behaviour is the same
@@ -99,5 +102,38 @@ describe('T072 — sales.subscribe: stub matching 005 cart.subscribe', () => {
     });
     const result = await bridge.unsubscribe({ subscription_token: 'tok-1' });
     expect(result.kind).toBe('ok');
+  });
+});
+
+describe('T072 — sales.subscribe + unsubscribe: forbidden-field guard (CR3 on PR #266)', () => {
+  it('subscribe refuses with forbidden_field_in_request when payload contains a forbidden key', async () => {
+    const bridge = createSalesBridge({
+      getCurrentSession: () => SESSION,
+      salesRepo: STUB_SALES_REPO,
+      printEventsRepo: STUB_PRINT_REPO,
+      drawerEventsRepo: STUB_DRAWER_REPO,
+    });
+    const result = await bridge.subscribe({
+      topic: 'recent',
+      pan: 'TEST_PAN_TOKEN_NOT_A_REAL_CARD',
+    } as unknown as { topic: 'recent' });
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.reason).toBe('forbidden_field_in_request');
+  });
+
+  it('unsubscribe throws when payload contains a forbidden key (SalesUnsubscribeResponse has no refusal branch)', async () => {
+    const bridge = createSalesBridge({
+      getCurrentSession: () => SESSION,
+      salesRepo: STUB_SALES_REPO,
+      printEventsRepo: STUB_PRINT_REPO,
+      drawerEventsRepo: STUB_DRAWER_REPO,
+    });
+    await expect(
+      bridge.unsubscribe({
+        subscription_token: 'tok-1',
+        voucher_redemption_intent_token: 'TOKEN',
+      } as unknown as { subscription_token: string }),
+    ).rejects.toThrow(/forbidden field in request/);
   });
 });

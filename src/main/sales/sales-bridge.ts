@@ -282,7 +282,13 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
     },
 
     async subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse> {
-      void req; // stub — no subscription registry yet
+      // Forbidden-field-in-request guard FIRST (§A4 #2 + CR3 on PR #266).
+      // Defence-in-depth: even though the typed request shape is
+      // `{ topic }`, callers can smuggle additional keys at the IPC layer.
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
+      }
       const session = getCurrentSession();
       if (session === null) {
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
@@ -294,7 +300,19 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
     },
 
     async unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse> {
-      void req; // stub — no subscription registry yet
+      // Forbidden-field guard at handler entry (§A4 #2 + CR3 on PR #266).
+      // SalesUnsubscribeResponse has no refusal branch in the shared type,
+      // so a forbidden-key hit surfaces as a rejected promise — IPC
+      // translates that into an exception on the renderer side. Same
+      // posture as an unhandled main-process throw on any handler:
+      // visible to the renderer as a generic "bridge invocation failed"
+      // and to the support bundle as an exception trace (without the
+      // forbidden key value, which never reaches the log).
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        throw new Error('sales.unsubscribe: refused — forbidden field in request');
+      }
+      // Stub no-op — no subscription registry yet.
       // STUB — no subscription registry exists yet (subscribe also returns
       // not_implemented), so unsubscribing any token is a no-op. Returning
       // `kind: 'ok'` matches the shared SalesUnsubscribeResponse type

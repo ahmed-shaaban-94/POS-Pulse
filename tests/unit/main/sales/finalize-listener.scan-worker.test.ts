@@ -125,6 +125,8 @@ describe('T052 — AD-2 v3 scan worker: canonical SELECT', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -145,6 +147,8 @@ describe('T052 — AD-2 v3 scan worker: canonical SELECT', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -172,6 +176,8 @@ describe('T052 — AD-2 v3 scan worker: canonical SELECT', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -199,6 +205,8 @@ describe('T052 — AD-2 v3 scan worker: canonical SELECT', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -223,6 +231,8 @@ describe('T052 — AD-2 v3 scan worker: canonical SELECT', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -244,6 +254,8 @@ describe('T052 — AD-2 v3 scan worker: canonical SELECT', () => {
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatched.push(handoff_action_id);
@@ -271,6 +283,8 @@ describe('T052 — AD-2 v3 scan worker: single-flight per tick', () => {
     const dispatchOrder: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
       terminal_id: 'terminal-1',
       dispatch: (handoff_action_id) => {
         dispatchInFlight += 1;

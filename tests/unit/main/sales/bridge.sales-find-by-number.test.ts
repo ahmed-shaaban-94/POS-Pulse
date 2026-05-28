@@ -153,7 +153,7 @@ describe('T071 — sales.findByNumber: tenant-isolated lookup', () => {
     const bridge = buildBridge();
     const result = await bridge.findByNumber({
       sale_number: 'TERM-01-2026-05-28-000001',
-      pan: '0000000000000000',
+      pan: 'TEST_PAN_TOKEN_NOT_A_REAL_CARD',
     } as unknown as { sale_number: string });
     expect(result.kind).toBe('refused');
     if (result.kind !== 'refused') return;

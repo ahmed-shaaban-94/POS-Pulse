@@ -37,6 +37,11 @@ export default defineConfig({
         // branchable logic). Covered by the bridge-api contract test
         // (compile-time) and the manual Electron smoke.
         'src/preload/payments.ts',
+        // 008 S1c.2: sales-specific preload entry — same posture as
+        // src/preload/payments.ts above. Thin ipcRenderer.invoke
+        // wire-up; correctness is proven by the SalesBridgeAPI typing
+        // and the manual Electron smoke (T111).
+        'src/preload/sales.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',
