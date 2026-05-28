@@ -156,6 +156,28 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T090 + T092 — 008 Slice 1c.2 AD-2 v3 polling worker + startup
+        // recovery. Spec §A5 requires ≥95%. The start()/stop() driver
+        // wiring is exercised only via the Electron manual smoke
+        // (c8 ignore) — pure-JS scan logic + recovery sub-scans hit ≥95%
+        // via tests/unit/main/sales/finalize-listener.scan-worker.test.ts
+        // + tests/integration/sales/finalize-listener.startup-recovery.test.ts.
+        'src/main/sales/finalize-listener.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        // T100-T102 — 008 Slice 1c.2 sales.* bridge handlers. Spec §A5
+        // requires ≥95% on bridge handlers (§A4 #2/#6/#8 checklist
+        // items are the load-bearing security tests; coverage gate
+        // protects against regression).
+        'src/main/sales/sales-bridge.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
       },
     },
   },

@@ -127,6 +127,11 @@ export const SALES_REFUSAL_REASONS = [
   'idempotency_payload_mismatch',
   'printer_unavailable',
   'forbidden_field_in_request',
+  // S1c.2 addition — mirrors 005's CartRefusalReason posture for the
+  // sales.subscribe stub. The push-subscription primitive isn't yet
+  // implemented; subscribe refuses with this reason until a follow-up
+  // task lands the webContents.send + token registry.
+  'not_implemented',
 ] as const;
 export type SalesRefusalReason = (typeof SALES_REFUSAL_REASONS)[number];
 

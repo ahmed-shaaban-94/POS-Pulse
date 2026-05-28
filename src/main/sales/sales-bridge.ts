@@ -1,0 +1,306 @@
+/**
+ * T100 + T101 + T102 — `sales.*` bridge handlers (008 Slice 1c.2).
+ *
+ * The renderer-facing trust boundary for sale-reads. Three handlers:
+ *
+ *   • `sales.read({ sale_id })` — read a single sale by id.
+ *   • `sales.findByNumber({ sale_number })` — read by cashier-quotable
+ *     number; tenant-scoped to (session.tenant_id, branch_id, terminal_id).
+ *   • `sales.subscribe({ topic })` + `sales.unsubscribe({ subscription_token })`
+ *     — STUB returning `not_implemented` matching 005's cart.subscribe
+ *     posture. The push-subscription primitive (webContents.send + token
+ *     registry) lands in a future task; 008 v1 doesn't require it for the
+ *     S1 acceptance scenarios.
+ *
+ * Per contracts/bridge-api.md (§A4 CLEARED 2026-05-26):
+ *   • Every handler is gated by an active session (`no_session` refusal).
+ *   • Cross-tenant misses on `findByNumber` refuse with `sale_not_found`
+ *     NOT `tenant_isolation` (§A4 #6 — no information leak).
+ *   • Main-only fields (envelope_handoff_action_id, payment_attempt_id,
+ *     envelope_cart_id, tenant_tax_registration_id) MUST NOT cross the
+ *     bridge (Constitution §P15).
+ *   • Defensive forbidden-field-in-request guard refuses any request
+ *     payload containing voucher tokens, card data, secrets, etc.
+ *     (§A4 #2).
+ *   • `sales.read` includes projected `latest_print_event` and
+ *     `latest_drawer_event` — populated when rows exist (post-S2/S3),
+ *     omitted otherwise.
+ */
+
+import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
+import type { SalesRepository, TenantScope } from './repositories/sales.repository.js';
+import type {
+  PrintEventsRepository,
+  PrintEventRow,
+} from './repositories/print-events.repository.js';
+import type {
+  DrawerEventsRepository,
+  DrawerEventRow,
+} from './repositories/drawer-events.repository.js';
+import type {
+  SalesBridgeAPI,
+  SalesReadRequest,
+  SalesReadResponse,
+  SalesFindByNumberRequest,
+  SalesFindByNumberResponse,
+  SalesSubscribeRequest,
+  SalesSubscribeResponse,
+  SalesUnsubscribeRequest,
+  SalesUnsubscribeResponse,
+  SaleSummary,
+} from '../../shared/bridge-api.js';
+import type { SaleId, SaleNumber, TenderLineSummary } from '../../shared/sales/types.js';
+
+// ─── Session shape (mirrors 006's OperatorSessionForPayments) ──────────────
+//
+// The session shape is sales-specific because 008 doesn't need the
+// payment-attempt-state vocabulary that 006's OperatorSessionForPayments
+// carries. Tenant/branch/terminal + operator identity is all the bridge
+// handlers gate on.
+
+export interface OperatorSessionForSales {
+  readonly role: 'cashier' | 'manager' | 'admin';
+  readonly operator_id: string;
+  readonly operator_session_id: string;
+  readonly tenant_id: string;
+  readonly branch_id: string;
+  readonly terminal_id: string;
+}
+
+// ─── Bridge factory interface (implements SalesBridgeAPI) ───────────────────
+//
+// Request/Response/Subscribe types live in src/shared/bridge-api.ts (S1b);
+// this factory implements the SalesBridgeAPI surface so the preload can
+// wire ipcRenderer.invoke calls directly to its methods.
+
+export type SalesBridge = SalesBridgeAPI;
+
+export interface SalesBridgeDependencies {
+  getCurrentSession: () => OperatorSessionForSales | null;
+  salesRepo: Pick<
+    SalesRepository,
+    'readById' | 'findByNumber' | 'findByHandoffActionId' | 'insert'
+  >;
+  printEventsRepo: Pick<
+    PrintEventsRepository,
+    'readBySale' | 'hasSuccessfulPrint' | 'countReprints' | 'insert'
+  >;
+  drawerEventsRepo: Pick<
+    DrawerEventsRepository,
+    'readBySale' | 'findLastSuccessfulOpenForTerminal' | 'insert'
+  >;
+}
+
+// ─── Forbidden-field-in-request scan ────────────────────────────────────────
+
+const SALES_BRIDGE_FORBIDDEN_KEYS = new Set<string>([
+  // Card data
+  'pan',
+  'cvv',
+  'cvc',
+  'track',
+  'track1',
+  'track2',
+  'cardholder',
+  'cardholder_name',
+  'expiry',
+  'auth_payload',
+  'cryptogram',
+  // Voucher tokens
+  'voucher_code',
+  'voucher_balance',
+  'voucher_redemption_intent_token',
+  'authority_payload',
+  // Raw envelope
+  'envelope_payload',
+  'raw_envelope',
+  // Identifiers we never want renderers to send
+  'issuer_name',
+  'pin_record_id',
+]);
+
+function findForbiddenKey(node: unknown): string | null {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const hit = findForbiddenKey(item);
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+  if (node !== null && typeof node === 'object') {
+    for (const key of Object.keys(node)) {
+      if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) return key;
+      if (SALES_BRIDGE_FORBIDDEN_KEYS.has(key)) return key;
+      const hit = findForbiddenKey((node as Record<string, unknown>)[key]);
+      if (hit !== null) return hit;
+    }
+  }
+  return null;
+}
+
+// ─── Projection helpers ─────────────────────────────────────────────────────
+
+function projectLatestPrintEvent(rows: PrintEventRow[]): SaleSummary['latest_print_event'] {
+  if (rows.length === 0) return undefined;
+  // Repo returns ordered by printed_at DESC, so rows[0] is latest.
+  const latest = rows[0];
+  if (latest === undefined) return undefined;
+  const projection: NonNullable<SaleSummary['latest_print_event']> = {
+    print_event_id: latest.print_event_id,
+    outcome: latest.outcome,
+    purpose: latest.purpose,
+    printed_at: latest.printed_at,
+  };
+  if (latest.duplicate_copy_sequence_number !== null) {
+    projection.duplicate_copy_sequence_number = latest.duplicate_copy_sequence_number;
+  }
+  return projection;
+}
+
+function projectLatestDrawerEvent(row: DrawerEventRow | null): SaleSummary['latest_drawer_event'] {
+  if (row === null) return undefined;
+  return {
+    drawer_event_id: row.drawer_event_id,
+    outcome: row.outcome,
+    attempted_at: row.attempted_at,
+  };
+}
+
+function projectSaleForRenderer(
+  saleRow: {
+    sale_id: string;
+    sale_number: string;
+    receipt_number: string;
+    tenant_id: string;
+    branch_id: string;
+    terminal_id: string;
+    terminal_label: string;
+    selling_operator_id: string;
+    selling_operator_display_name: string;
+    subtotal_minor: number;
+    total_tax_minor: number;
+    total_change_due_minor: number;
+    tender_lines_summary_json: string;
+    finalized_at: string;
+  },
+  printEvents: PrintEventRow[],
+  drawerEvent: DrawerEventRow | null,
+): SaleSummary {
+  const view: SaleSummary = {
+    sale_id: saleRow.sale_id as SaleId,
+    sale_number: saleRow.sale_number as SaleNumber,
+    receipt_number: saleRow.receipt_number,
+    tenant_id: saleRow.tenant_id,
+    branch_id: saleRow.branch_id,
+    terminal_id: saleRow.terminal_id,
+    terminal_label: saleRow.terminal_label,
+    selling_operator_id: saleRow.selling_operator_id,
+    selling_operator_display_name: saleRow.selling_operator_display_name,
+    subtotal_minor: saleRow.subtotal_minor,
+    total_tax_minor: saleRow.total_tax_minor,
+    total_change_due_minor: saleRow.total_change_due_minor,
+    tender_lines_summary: JSON.parse(saleRow.tender_lines_summary_json) as TenderLineSummary[],
+    finalized_at: saleRow.finalized_at,
+  };
+  const latestPrint = projectLatestPrintEvent(printEvents);
+  if (latestPrint !== undefined) view.latest_print_event = latestPrint;
+  const latestDrawer = projectLatestDrawerEvent(drawerEvent);
+  if (latestDrawer !== undefined) view.latest_drawer_event = latestDrawer;
+  return view;
+}
+
+// ─── Factory ────────────────────────────────────────────────────────────────
+
+export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
+  const { getCurrentSession, salesRepo, printEventsRepo, drawerEventsRepo } = deps;
+
+  return {
+    async read(req: SalesReadRequest): Promise<SalesReadResponse> {
+      // Defensive forbidden-field-in-request guard FIRST (§A4 #2).
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
+      }
+
+      const session = getCurrentSession();
+      if (session === null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      }
+
+      const saleRow = salesRepo.readById(req.sale_id);
+      if (saleRow === null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+      }
+
+      // Tenant-isolation: session scope MUST match sale scope.
+      if (
+        saleRow.tenant_id !== session.tenant_id ||
+        saleRow.branch_id !== session.branch_id ||
+        saleRow.terminal_id !== session.terminal_id
+      ) {
+        return await Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' });
+      }
+
+      const printEvents = printEventsRepo.readBySale(saleRow.sale_id);
+      const drawerEvent = drawerEventsRepo.readBySale(saleRow.sale_id);
+      return await Promise.resolve({
+        kind: 'ok',
+        sale: projectSaleForRenderer(saleRow, printEvents, drawerEvent),
+      });
+    },
+
+    async findByNumber(req: SalesFindByNumberRequest): Promise<SalesFindByNumberResponse> {
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'forbidden_field_in_request' });
+      }
+
+      const session = getCurrentSession();
+      if (session === null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      }
+
+      // Scope to the session's (tenant, branch, terminal). Cross-scope misses
+      // refuse with sale_not_found NOT tenant_isolation (§A4 #6 — no
+      // information leak via existence-distinguishing reasons).
+      const scope: TenantScope = {
+        tenant_id: session.tenant_id,
+        branch_id: session.branch_id,
+        terminal_id: session.terminal_id,
+      };
+      const saleRow = salesRepo.findByNumber(req.sale_number, scope);
+      if (saleRow === null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+      }
+
+      const printEvents = printEventsRepo.readBySale(saleRow.sale_id);
+      const drawerEvent = drawerEventsRepo.readBySale(saleRow.sale_id);
+      return await Promise.resolve({
+        kind: 'ok',
+        sale: projectSaleForRenderer(saleRow, printEvents, drawerEvent),
+      });
+    },
+
+    async subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse> {
+      void req; // stub — no subscription registry yet
+      const session = getCurrentSession();
+      if (session === null) {
+        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      }
+      // STUB matching 005 cart.subscribe posture. The push-subscription
+      // primitive (webContents.send + token registry) lands in a future
+      // task — see brainstorm decision in PR description.
+      return await Promise.resolve({ kind: 'refused', reason: 'not_implemented' });
+    },
+
+    async unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse> {
+      void req; // stub — no subscription registry yet
+      // STUB — no subscription registry exists yet (subscribe also returns
+      // not_implemented), so unsubscribing any token is a no-op. Returning
+      // `kind: 'ok'` matches the shared SalesUnsubscribeResponse type
+      // (which has no refusal branch). When the push primitive lands, this
+      // becomes a real token-detach against the registry.
+      return await Promise.resolve({ kind: 'ok' });
+    },
+  };
+}
