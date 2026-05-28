@@ -30,6 +30,18 @@ export const AUDIT_ACTION_CATEGORIES = [
   'cart.cancel.post_handoff',
   'cart.discount.above_threshold',
   'cart.discarded_on_session_end',
+  // 008-sale-finalization-and-receipts §AD-9 (S1c T093) — 10 new categories.
+  // Migration 0026 is a no-op SELECT 1; the closed-set enforcement lives here.
+  'sale.finalized',
+  'sale.finalization_refused',
+  'sale.receipt.printed',
+  'sale.receipt.reprinted',
+  'sale.receipt.print_failed',
+  'sale.receipt.print_retried_success',
+  'sale.receipt.manual_override',
+  'sale.drawer.opened',
+  'sale.drawer.suppressed',
+  'sale.drawer.failed',
 ] as const;
 export type ActionCategory = (typeof AUDIT_ACTION_CATEGORIES)[number];
 
