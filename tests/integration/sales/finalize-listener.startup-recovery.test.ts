@@ -274,6 +274,78 @@ describe('T092 — print recovery one-shot sub-scan at startup', () => {
     expect(dispatchedPrint).toEqual(['sale-this-branch']);
   });
 
+  it('per-sale drawer cache prevents duplicate dispatch when a later sale in the same scan throws (CR7 branch coverage)', () => {
+    // Two cash-inclusive sales; drawer dispatch succeeds for sale-1 then
+    // throws for sale-2. Retry — sale-1 hit by cache, sale-2 fires fresh.
+    // Covers the completedDrawerRecoverySaleIds.has() === true branch.
+    seedSale({ sale_id: 'sale-1', cash_inclusive: true });
+    seedSale({ sale_id: 'sale-2', cash_inclusive: true });
+
+    let throwOnceOnSecond = true;
+    const dispatchedDrawer: string[] = [];
+    const listener = createFinalizeListener({
+      db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      dispatch: () => {},
+      dispatchDrawerRecovery: (sale_id) => {
+        if (sale_id === 'sale-2' && throwOnceOnSecond) {
+          throwOnceOnSecond = false;
+          throw new Error('simulated drawer failure for sale-2');
+        }
+        dispatchedDrawer.push(sale_id);
+      },
+      tickIntervalMs: 200,
+      now: () => '2026-05-28T10:00:00.000Z',
+    });
+
+    expect(() => {
+      listener.runStartupRecovery();
+    }).toThrow(/simulated drawer failure for sale-2/);
+    expect(dispatchedDrawer).toEqual(['sale-1']); // sale-1 succeeded before throw
+
+    // Retry — sale-1 cache-skipped, sale-2 fires fresh and succeeds.
+    listener.runStartupRecovery();
+    expect(dispatchedDrawer).toEqual(['sale-1', 'sale-2']);
+  });
+
+  it('successful runs cache per-sale completions so a manual second call after success is fully idempotent (CR7 branch coverage)', () => {
+    // After a successful runStartupRecovery the fired-flag is true and a
+    // second call short-circuits at the top — that's the "completed Set
+    // has(sale_id) returns true" branch we need for ≥95% coverage on
+    // finalize-listener.ts. Calls dispatch sets that DO complete fully,
+    // then asserts second invocation is fully silent.
+    seedSale({ sale_id: 'sale-A', cash_inclusive: true });
+
+    const dispatchedPrint: string[] = [];
+    const dispatchedDrawer: string[] = [];
+    const listener = createFinalizeListener({
+      db: makeSqlJsHandle(db),
+      tenant_id: 'tenant-1',
+      branch_id: 'branch-1',
+      terminal_id: 'terminal-1',
+      dispatch: () => {},
+      dispatchPrintRecovery: (sale_id) => {
+        dispatchedPrint.push(sale_id);
+      },
+      dispatchDrawerRecovery: (sale_id) => {
+        dispatchedDrawer.push(sale_id);
+      },
+      tickIntervalMs: 200,
+      now: () => '2026-05-28T10:00:00.000Z',
+    });
+
+    listener.runStartupRecovery();
+    expect(dispatchedPrint).toEqual(['sale-A']);
+    expect(dispatchedDrawer).toEqual(['sale-A']);
+
+    // Second call: fired-flag is true, returns immediately, no duplicates.
+    listener.runStartupRecovery();
+    expect(dispatchedPrint).toEqual(['sale-A']); // unchanged
+    expect(dispatchedDrawer).toEqual(['sale-A']); // unchanged
+  });
+
   it('successful print dispatches are NOT replayed when a later drawer dispatch throws (CR7 on PR #266)', () => {
     // Regression for CR7 — without per-sale completion caches, a print
     // recovery that succeeds followed by a drawer recovery that throws

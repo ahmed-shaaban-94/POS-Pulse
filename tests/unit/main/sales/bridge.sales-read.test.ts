@@ -250,6 +250,34 @@ describe('T073 — sales.read: forbidden-field-in-request guard', () => {
     expect(result.reason).toBe('forbidden_field_in_request');
   });
 
+  it('refuses requests with a shared FORBIDDEN_PAYLOAD_KEYS key (covers shared-list branch)', async () => {
+    // pin is on the shared FORBIDDEN_PAYLOAD_KEYS list (not the bridge-local
+    // denylist). Confirms the bridge guard composes both layers.
+    seedSale();
+    const bridge = buildBridge();
+    const result = await bridge.read({
+      sale_id: 'sale-1',
+      pin: '1234',
+    } as unknown as { sale_id: string });
+    expect(result.kind).toBe('refused');
+    if (result.kind !== 'refused') return;
+    expect(result.reason).toBe('forbidden_field_in_request');
+  });
+
+  it('terminates on cyclic payloads instead of stack-overflowing (CR10 on PR #266)', async () => {
+    // Build a cyclic object. Without the WeakSet visited-tracker, the
+    // recursive scan would never return. Bridge must complete and reach
+    // the session check.
+    seedSale();
+    const bridge = buildBridge();
+    type Cyclic = { sale_id: string; self?: Cyclic };
+    const cyclic: Cyclic = { sale_id: 'sale-1' };
+    cyclic.self = cyclic;
+    const result = await bridge.read(cyclic as unknown as { sale_id: string });
+    // No forbidden keys, no isolation issues — read succeeds.
+    expect(result.kind).toBe('ok');
+  });
+
   it('refuses requests with forbidden keys nested inside an array (recursive scan)', async () => {
     seedSale();
     const bridge = buildBridge();

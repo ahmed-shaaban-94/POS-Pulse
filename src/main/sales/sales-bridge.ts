@@ -119,21 +119,30 @@ const SALES_BRIDGE_FORBIDDEN_KEYS = new Set<string>([
   'pin_record_id',
 ]);
 
-function findForbiddenKey(node: unknown): string | null {
+function findForbiddenKey(node: unknown, seen: WeakSet<object> = new WeakSet()): string | null {
+  // Per CR10 on PR #266 — Electron's IPC structured-clone preserves
+  // cycles (per HTML structured-clone algorithm), so a malicious renderer
+  // could in principle ship a cyclic payload across `ipcRenderer.invoke`
+  // and reach this scan. The WeakSet tracks already-visited nodes so the
+  // recursion terminates on a cycle. The renderer is already inside the
+  // trust boundary (contextIsolation: true + sandbox: true), so this is
+  // defence-in-depth, not load-bearing.
+  if (node === null || typeof node !== 'object') return null;
+  if (seen.has(node)) return null;
+  seen.add(node);
+
   if (Array.isArray(node)) {
     for (const item of node) {
-      const hit = findForbiddenKey(item);
+      const hit = findForbiddenKey(item, seen);
       if (hit !== null) return hit;
     }
     return null;
   }
-  if (node !== null && typeof node === 'object') {
-    for (const key of Object.keys(node)) {
-      if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) return key;
-      if (SALES_BRIDGE_FORBIDDEN_KEYS.has(key)) return key;
-      const hit = findForbiddenKey((node as Record<string, unknown>)[key]);
-      if (hit !== null) return hit;
-    }
+  for (const key of Object.keys(node)) {
+    if ((FORBIDDEN_PAYLOAD_KEYS as readonly string[]).includes(key)) return key;
+    if (SALES_BRIDGE_FORBIDDEN_KEYS.has(key)) return key;
+    const hit = findForbiddenKey((node as Record<string, unknown>)[key], seen);
+    if (hit !== null) return hit;
   }
   return null;
 }
@@ -143,8 +152,10 @@ function findForbiddenKey(node: unknown): string | null {
 function projectLatestPrintEvent(rows: PrintEventRow[]): SaleSummary['latest_print_event'] {
   if (rows.length === 0) return undefined;
   // Repo returns ordered by printed_at DESC, so rows[0] is latest.
+  /* c8 ignore start — defensive: rows.length > 0 above guarantees rows[0] is defined */
   const latest = rows[0];
   if (latest === undefined) return undefined;
+  /* c8 ignore stop */
   const projection: NonNullable<SaleSummary['latest_print_event']> = {
     print_event_id: latest.print_event_id,
     outcome: latest.outcome,

@@ -272,7 +272,17 @@ export function createFinalizeListener(config: FinalizeListenerConfig): Finalize
     start(): NodeJS.Timeout {
       if (intervalHandle !== null) return intervalHandle;
       intervalHandle = setInterval(() => {
-        this.runTickOnce();
+        // Per CR9 on PR #266 — catch errors at the setInterval boundary
+        // so a thrown dispatch doesn't take down the main process. The
+        // next tick still fires; the NOT EXISTS clause picks up the
+        // same row again on the next pass (idempotent). runTickOnce()
+        // itself still throws on direct invocation (preserving test
+        // assertions); only the setInterval driver catches.
+        try {
+          this.runTickOnce();
+        } catch (err) {
+          console.error('[finalize-listener] tick failed; will retry on next interval', err);
+        }
       }, config.tickIntervalMs);
       return intervalHandle;
     },
