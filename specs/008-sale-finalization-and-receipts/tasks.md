@@ -14,7 +14,7 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 **Visual direction:** `specs/008-sale-finalization-and-receipts/visual-direction/README.md` (to be produced in Slice 0 under §A1)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-27 (three same-day passes: (1) initial generation by `/speckit-tasks`; (2) `/speckit-analyze` remediation — added T520a perf-budget + T403a receipt-number-invariance, tightened T522 Sentry decision-tree; (3) CodeRabbit review response — rewrote T052/T090/T092 against the AD-2 v3 polling worker per CR1, fixed FR-055 audit-category mismatch per CR2 + R2 cleanup, added `issuer_name` + `pin_record_id` to forbidden-fields per CR3, reconciled 187-vs-185 count per CR4)
+**Last updated:** 2026-05-28 (four passes total: (1) initial generation by `/speckit-tasks` 2026-05-27; (2) `/speckit-analyze` remediation 2026-05-27 — added T520a perf-budget + T403a receipt-number-invariance, tightened T522 Sentry decision-tree; (3) CodeRabbit review response 2026-05-27 — rewrote T052/T090/T092 against the AD-2 v3 polling worker per CR1, fixed FR-055 audit-category mismatch per CR2 + R2 cleanup, added `issuer_name` + `pin_record_id` to forbidden-fields per CR3, reconciled 187-vs-185 count per CR4; (4) S1c.3 closeout-gap response 2026-05-28 — added T094a/T094b/T094c between T093 and T100 to bridge the 4-field upstream gap discovered while preparing the AD-2 main bootstrap; marked T111/T112/T113 as BLOCKED-BY T094c; total task count 187 → 190; Phase-3 count 47 → 50)
 **Status:** **Slice 0 ✅ complete 2026-05-26** · **§A1 ✅ + §A3 ✅ + §A4 ✅ all signed 2026-05-26 (PRs #255/#256/#257 authored 2026-05-26, merged 2026-05-27); hardware-matrix committed (PR #258); printed-slip (a)/(b)/(c) authored (PR #259)** · **Slice 1 (load-bearing) STARTABLE — no remaining human-action gates; sequential implementation from S1 → S6** · **§A5 remains a Slice 6 production-readiness sign-off (not a slice-merge blocker)**
 **Embed:** `[IMPECCABLE shape|craft|polish]` markers on T010 / T173 / T290 / T360 / T450 / T512 delegate UI direction and polish to the `/impeccable` skill per `docs/impeccable-embed-preflight.md §4`. Pre-craft red-bar check (per `docs/impeccable-embed-preflight.md §4.2`) is mandatory before invoking any craft marker.
 
@@ -666,13 +666,13 @@ Phase Final (T600–T605) — Polish + closeout
 | `receipts.manualOverride` flow | ≥ 95 % | T500–T504, T510 |
 | Full-suite roll-up | per above | T520 |
 
-**Total task count: 187** distinct task IDs (after the 2026-05-27 `/speckit-analyze` remediation pass added T520a + T403a; T522 was tightened in place, not renumbered). Per-phase breakdown:
+**Total task count: 190** distinct task IDs (was 187 pre-2026-05-28; T094a + T094b + T094c added 2026-05-28 to bridge the S1c.3 closeout gap — see coordination.md §"Slice 1 closeout gap discovery"). Per-phase breakdown:
 
 | Phase | Tasks | Count |
 |:--|:--|--:|
 | Phase 1 — Setup | T001–T007 | 7 |
 | Phase 2 — Slice 0 visual direction | T010–T011 | 2 |
-| Phase 3 — Slice 1 *(load-bearing)* — finalize + persistence | T020–T028 (§A3 migrations), T030–T033 (shared types), T040–T043 (AD-7 allocator), T050–T057 (AD-2 transaction + listener), T060–T062 (forbidden-field defence), T070–T073 (`sales.*` bridge tests), T080–T085 (persistence impl), T090–T093 (listener impl), T100–T104 (`sales.*` bridge impl + §A4 sign-off), T110–T113 (verification) | 47 |
+| Phase 3 — Slice 1 *(load-bearing)* — finalize + persistence | T020–T028 (§A3 migrations), T030–T033 (shared types), T040–T043 (AD-7 allocator), T050–T057 (AD-2 transaction + listener), T060–T062 (forbidden-field defence), T070–T073 (`sales.*` bridge tests), T080–T085 (persistence impl), T090–T093 (listener impl), T094a–T094c (S1c.3 closeout-gap bridge — added 2026-05-28), T100–T104 (`sales.*` bridge impl + §A4 sign-off), T110–T113 (verification) | 50 |
 | Phase 4 — Slice 2 — receipt payload + preview | T120–T125 (template engine tests), T130–T134 (minimisation tests), T140–T142 (`receipts.preview` bridge tests), T150–T152 (preview UI tests), T160–T164 (engine + asset impl), T170–T173 (bridge + UI impl), T180–T182 (verification) | 26 |
 | Phase 5 — Slice 3 *(load-bearing)* — print pipeline | T200–T202 (§A3 hardware), T210–T212 (path selection), T220–T221 (ESC/POS adapter), T230 (OS-print fallback), T240–T242 (first-print + audit + redaction), T250–T253 (retry flow), T260–T263 (printer-failure banner), T270–T273 (impl), T280–T281 (retry bridge impl), T290–T291 (banner impl), T300–T303 (verification) | 30 |
 | Phase 6 — Slice 4 — drawer-kick + drawer-failure banner | T310–T313 (gating tests), T320–T321 (mechanism tests), T330–T332 (banner tests), T340 (audit redaction), T350–T352 (drawer impl), T360–T361 (banner impl), T370–T374 (verification) | 19 |
@@ -681,7 +681,7 @@ Phase Final (T600–T605) — Polish + closeout
 | Phase Final — Polish | T600–T605 | 6 |
 | Renderer banner-host wiring + cross-slice infra | T011, T028, T067-equivalent §A3 sign-offs counted within their slices | (counted within phases above) |
 
-The remaining tasks beyond the explicit per-phase ranges (e.g. some sub-tasks under hardware verification and coordination updates) are counted within their phases above. **The canonical total is 187 distinct task IDs**, verifiable by `grep -cE "^- \[ \] \*\*T[0-9]{3}[a-z]?\*\*" tasks.md`. *(Earlier draft of this paragraph said "185" — that was the pre-remediation count; the discrepancy with the "187" rollup at the top of this section was the issue CodeRabbit CR4 flagged.)*
+The remaining tasks beyond the explicit per-phase ranges (e.g. some sub-tasks under hardware verification and coordination updates) are counted within their phases above. **The canonical total is 190 distinct task IDs**, verifiable by `grep -cE "^- \[[ Xx]\] \*\*T[0-9]{3}[a-z]?\*\*" tasks.md`. *(Earlier drafts: "185" pre-remediation, "187" after the 2026-05-27 `/speckit-analyze` remediation, and "190" after the 2026-05-28 S1c.3 closeout-gap pass added T094a/T094b/T094c. The 187 → 190 jump is recorded in the §"Last updated" pass (4) above.)*
 
 ---
 

@@ -7,7 +7,7 @@
 **Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
-**Last updated:** 2026-05-27 (post-parallel-sign-off cleanup — roll up change log for four merged sister PRs; flip §A3 + §A4 rows in tasks.md gate ledger; refresh top-of-tasks.md status line. All 008 implementation gates (§A1 / §A3 / §A4) now ✅ cleared; §A5 remains the production-readiness Slice 6 sign-off only).
+**Last updated:** 2026-05-28 (S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. See §"Slice 1 closeout gap discovery" below).
 
 **Change log (oldest → newest):**
 
@@ -406,7 +406,7 @@ Sequencing: T094a → T094b → T094c. Each lands as its own PR. T111/T112/T113 
 - [x] **Ahmed Q1 answer** — recorded 2026-05-28: "Zero for v1 (no VAT)" with §A5 production-readiness flag.
 - [x] **Ahmed Q2 answer** — recorded 2026-05-28: "Extend 002 pairing handshake, attribute to 008".
 - [x] **Claude** — collapse memo to chosen-path form (this commit).
-- [ ] **Claude** — author T094a / T094b / T094c task entries in tasks.md (this commit, separately from S1c.3 implementation PRs).
+- [x] **Claude** — author T094a / T094b / T094c task entries in tasks.md (closed 2026-05-28 in this same PR #267 commit; see `tasks.md` lines 216-223).
 - [ ] **T094a PR** — `feat(008): extend 002 pairing handshake for branch detail (T094a)`. Subsequent session.
 - [ ] **T094b PR** — `feat(008): dispatch-projection module + RED-GREEN tests (T094b)`. After T094a merges.
 - [ ] **T094c PR** — `feat(008): wire AD-2 worker + sales.* bridge into main (T094c, closes S1c.3)`. After T094b merges.
