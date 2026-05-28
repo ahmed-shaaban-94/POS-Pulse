@@ -39,6 +39,30 @@ import type { SaleId, SaleNumber, TenderLineSummary } from '../sales/types.js';
 export const RECEIPT_TEMPLATE_VARIANTS = ['first_print', 'reprint_duplicate', 'preview'] as const;
 export type ReceiptTemplateVariant = (typeof RECEIPT_TEMPLATE_VARIANTS)[number];
 
+// ── Receipt line item (the itemised slip body; FR-017) ───────────────────────
+
+/**
+ * One item line on the printed slip body, derived from the Sale row's
+ * `lines_json` snapshot (the frozen `LineSnapshot[]` captured at finalize per
+ * T028a). Carries ONLY the non-sensitive display fields the §(a) layout
+ * renders.
+ *
+ * **v1 single-name note (Ahmed 2026-05-28):** the durable cart snapshot carries
+ * a single `display_name` per line — there is no `name_ar`/`name_en` split in
+ * 005's cart schema (catalogue integration is a stub). So v1 renders one name
+ * line per item; the bilingual two-name composition in the §(a) layout
+ * (decision 8) is a v2 item pending catalogue integration. See
+ * slice2-mapping-pass.md.
+ */
+export interface ReceiptLineItem {
+  item_ref: string;
+  display_name: string;
+  quantity: number;
+  unit_price_minor: number;
+  line_subtotal_minor: number;
+  note: string | null;
+}
+
 // ── ReceiptPayload (FR-017 canonical fields) ─────────────────────────────────
 
 /**
@@ -85,6 +109,9 @@ export interface ReceiptPayload {
   subtotal_minor: number;
   total_tax_minor: number;
   total_change_due_minor: number;
+
+  // ── Itemised body (FR-017; derived from the Sale row's lines_json) ──────
+  lines: readonly ReceiptLineItem[];
 
   // ── Tender breakdown (non-sensitive only; FR-017) ──────────────────────
   tender_lines_summary: TenderLineSummary[];

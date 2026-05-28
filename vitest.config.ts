@@ -140,6 +140,15 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T164 — 008 Slice 2 receipt-payload derivation. Spec §A5 requires
+        // ≥95% on the payload generator. Exercised by
+        // tests/unit/main/receipts/receipts-payload.test.ts.
+        'src/main/receipts/receipts-payload.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         'src/main/sales/audit-emitter.ts': {
           lines: 95,
           branches: 95,
