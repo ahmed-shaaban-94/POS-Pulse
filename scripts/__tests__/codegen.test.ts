@@ -71,6 +71,18 @@ describe('generateApiTypes — determinism', () => {
 });
 
 describe('verifyCodegen', () => {
+  // Timeout raised to 15 s on three tests that call generateApiTypes()
+  // before the verify step. Same rationale as the sibling determinism
+  // test at line 53 (PR #37): two back-to-back openapiTS calls plus
+  // V8 coverage instrumentation and subprocess cold-start can exceed
+  // the default 5 s on slow CI runners — and the post-2026-05-28
+  // snapshot expansion (PR #272's 6 new TerminalPairResponse fields
+  // + future contract pins) pushes the codegen pass slightly longer,
+  // tipping these tests over the 5 s edge reliably. The assertions
+  // themselves are unchanged.
+  //
+  // The "missing" test (line 105) does NOT call generateApiTypes()
+  // first, so it stays at the default 5 s timeout.
   it('returns "match" when the committed file equals fresh codegen', async () => {
     const committed = path.join(tmpDir, 'committed.ts');
     await generateApiTypes({ source: 'local', snapshotPath: SNAPSHOT_PATH, outPath: committed });
@@ -82,7 +94,7 @@ describe('verifyCodegen', () => {
 
     expect(result.status).toBe('match');
     expect(result.exitCode).toBe(0);
-  });
+  }, 15_000);
 
   it('returns "drifted" with a non-zero exit code when the committed file was edited', async () => {
     const committed = path.join(tmpDir, 'committed.ts');
@@ -100,7 +112,7 @@ describe('verifyCodegen', () => {
     expect(result.status).toBe('drifted');
     expect(result.exitCode).not.toBe(0);
     expect(result.message).toMatch(/codegen:api/);
-  });
+  }, 15_000);
 
   it('returns "missing" with a non-zero exit code when the committed file does not exist', async () => {
     const result = await verifyCodegen({
@@ -124,7 +136,7 @@ describe('verifyCodegen', () => {
     // The verify routine creates and deletes its own temp file; the count
     // of leftover pos-pulse-verify-* files in os.tmpdir() must not grow.
     expect(after.length).toBeLessThanOrEqual(before.length);
-  });
+  }, 15_000);
 });
 
 function listTempCodegenFiles(): string[] {
