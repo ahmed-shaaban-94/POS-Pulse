@@ -48,11 +48,38 @@ interface LineSnapshotJson {
   note: string | null;
 }
 
+/**
+ * Thrown when a persisted JSON column on the Sale row is structurally
+ * unparseable. The Sale row's JSON is always engine-written
+ * (`JSON.stringify`), so this is defence-in-depth — but `receipts.preview` is
+ * renderer-facing, so a corrupt row must surface as a controlled failure the
+ * bridge can map to a refusal, never an unstructured throw across IPC.
+ */
+export class ReceiptPayloadDerivationError extends Error {
+  constructor(field: string, options?: { cause?: unknown }) {
+    super(`deriveReceiptPayload: invalid ${field}`, options);
+    this.name = 'ReceiptPayloadDerivationError';
+  }
+}
+
+function parseJsonArray<T>(raw: string, field: string): T[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new ReceiptPayloadDerivationError(field, { cause: error });
+  }
+  if (!Array.isArray(parsed)) {
+    throw new ReceiptPayloadDerivationError(field);
+  }
+  return parsed as T[];
+}
+
 export function deriveReceiptPayload(
   row: SaleRow,
   opts: DeriveReceiptPayloadOptions,
 ): ReceiptPayload {
-  const snapshot = JSON.parse(row.lines_json) as LineSnapshotJson[];
+  const snapshot = parseJsonArray<LineSnapshotJson>(row.lines_json, 'lines_json');
   const lines: ReceiptLineItem[] = snapshot.map((l) => ({
     item_ref: l.item_ref,
     display_name: l.display_name,
@@ -62,7 +89,10 @@ export function deriveReceiptPayload(
     note: l.note,
   }));
 
-  const tender_lines_summary = JSON.parse(row.tender_lines_summary_json) as TenderLineSummary[];
+  const tender_lines_summary = parseJsonArray<TenderLineSummary>(
+    row.tender_lines_summary_json,
+    'tender_lines_summary_json',
+  );
 
   const payload: ReceiptPayload = {
     variant: opts.variant,

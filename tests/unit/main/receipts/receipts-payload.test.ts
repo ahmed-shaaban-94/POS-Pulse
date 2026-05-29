@@ -147,6 +147,24 @@ describe('T164 — deriveReceiptPayload', () => {
     expect(p.lines).toEqual([]);
   });
 
+  it('throws a typed error on malformed lines_json (defence-in-depth)', () => {
+    expect(() =>
+      deriveReceiptPayload(saleRow({ lines_json: '{not json' }), { variant: 'preview' }),
+    ).toThrow(/invalid lines_json/);
+  });
+
+  it('throws a typed error when lines_json is valid JSON but not an array', () => {
+    expect(() =>
+      deriveReceiptPayload(saleRow({ lines_json: '{"oops":true}' }), { variant: 'preview' }),
+    ).toThrow(/invalid lines_json/);
+  });
+
+  it('throws a typed error on malformed tender_lines_summary_json', () => {
+    expect(() =>
+      deriveReceiptPayload(saleRow({ tender_lines_summary_json: 'nope' }), { variant: 'preview' }),
+    ).toThrow(/invalid tender_lines_summary_json/);
+  });
+
   it('derivation is pure — same row yields a deeply-equal payload each call', () => {
     const row = saleRow();
     const a = deriveReceiptPayload(row, { variant: 'first_print' });

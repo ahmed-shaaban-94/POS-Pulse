@@ -113,8 +113,18 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       // S2: preview always renders the `preview` variant (byte-equal to
       // first_print content per AD-6). The reprint_duplicate preview lands with
       // the reprint flow in Slice 5.
-      const payload = deriveReceiptPayload(row, { variant: 'preview' });
-      const { html } = renderReceipt(payload);
+      //
+      // A corrupt persisted JSON column (engine-written, so unreachable in
+      // practice) throws a typed derivation error; we map it to sale_not_found
+      // so the renderer shows the preview error state rather than the IPC call
+      // rejecting with an unstructured failure.
+      let html: string;
+      try {
+        const payload = deriveReceiptPayload(row, { variant: 'preview' });
+        html = renderReceipt(payload).html;
+      } catch {
+        return await Promise.resolve({ kind: 'refused', reason: 'sale_not_found' });
+      }
 
       return await Promise.resolve({
         kind: 'ok',

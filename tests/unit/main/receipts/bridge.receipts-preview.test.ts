@@ -119,6 +119,14 @@ describe('T140 — receipts.preview happy path', () => {
   });
 });
 
+describe('receipts.preview — corrupt persisted row degrades to a refusal', () => {
+  it('refuses sale_not_found (not an unstructured throw) on malformed lines_json', async () => {
+    const { bridge } = makeBridge({ row: saleRow({ lines_json: '{not json' }) });
+    const res = await bridge.preview({ sale_id: 'sale-1', idempotency_key: 'idem-1' });
+    expect(res).toEqual({ kind: 'refused', reason: 'sale_not_found' });
+  });
+});
+
 describe('T141 — receipts.preview has no side effects', () => {
   it('never calls salesRepo.insert (no Sale mutation)', async () => {
     const { bridge, insert } = makeBridge({ row: saleRow() });

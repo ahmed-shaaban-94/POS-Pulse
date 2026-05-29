@@ -272,15 +272,15 @@ description: "Task list for 008-sale-finalization-and-receipts — startable, fi
 ### TDD test tasks — renderer preview surface
 
 - [X] **T150** [P] [US1] Test (failing): `<ReceiptPreview>` component fetches via `receipts.preview` and renders the HTML output in a scrollable panel; visually mirrors the printed slip (44×44 floor on any interactive control per FR-068) — `tests/unit/renderer/receipts/ReceiptPreview.test.tsx`
-- [X] **T151** [P] [US1] Test (failing): `<ReceiptPreview>` does not block the cashier from starting the next sale; preview panel is dismissible without side-effect — `tests/unit/renderer/receipts/ReceiptPreview.non-blocking.test.tsx`
-- [X] **T152** [P] [US1] Test (failing): accessibility — `<ReceiptPreview>` is keyboard-operable (tab to close, escape to dismiss); axe-rule clean on default state (FR-069, P14 / 004 NFR-005) — `tests/unit/renderer/receipts/ReceiptPreview.a11y.test.tsx`
+- [X] **T151** [P] [US1] Test (failing): `<ReceiptPreview>` does not block the cashier from starting the next sale; preview panel is dismissible without side-effect — `tests/unit/renderer/receipts/ReceiptPreview.test.tsx` *(consolidated into the single ReceiptPreview.test.tsx, not a separate non-blocking file)*
+- [X] **T152** [P] [US1] Test (failing): accessibility — `<ReceiptPreview>` is keyboard-operable (tab to close, escape to dismiss); axe-rule clean on default state (FR-069, P14 / 004 NFR-005) — `tests/unit/renderer/receipts/ReceiptPreview.test.tsx` *(consolidated into the single ReceiptPreview.test.tsx, not a separate a11y file)*
 
 ### Implementation tasks — template engine + assets
 
-- [X] **T160** [US1] Implement the AD-6 template engine: parses a template asset (data + layout description), takes a `ReceiptPayload`, emits ESC/POS bytes + HTML from one render call. ≤ 200 LOC first-party module (R-6: no Handlebars / EJS / Mustache dependency) — `src/main/receipts/templates/engine.ts`
-- [X] **T161** [P] [US1] Author the `first_print.bilingual.template` asset (data + layout description for Arabic-first RTL header, body, sale-level VAT footer) signed off by §A1 — `src/main/receipts/templates/first-print.bilingual.template`
-- [X] **T162** [P] [US1] Author the `reprint_duplicate.bilingual.template` asset — same body as `first_print` but with the prominent bilingual duplicate-copy marker in the header band — `src/main/receipts/templates/reprint-duplicate.bilingual.template`
-- [X] **T163** [P] [US1] Author the `preview.bilingual.template` asset — same content as `first_print` for the renderer preview panel (FR-025 / R-14 byte-stability) — `src/main/receipts/templates/preview.bilingual.template`
+- [X] **T160** [US1] Implement the AD-6 template engine: takes a `ReceiptPayload`, emits ESC/POS bytes + HTML from one render call. First-party `compose(payload) → Band[]` then mechanical `toEscPos` / `toHtml` serialisers (R-6: no Handlebars / EJS / Mustache dependency) — `src/main/receipts/template-engine.ts`
+- [X] **T161** [P] [US1] `first_print` layout — satisfied IN CODE by the `compose` variant branches in `src/main/receipts/template-engine.ts` (NOT a separate `.template` asset; the parsed-asset indirection is what R-6 rejected — see slice2-mapping-pass.md "T161/T162/T163 deviation"). §A1-approved §(a) layout is the visual spec.
+- [X] **T162** [P] [US1] `reprint_duplicate` layout (prepended bilingual duplicate-copy marker band) — satisfied IN CODE by the `reprint_duplicate` branch in `compose`, `src/main/receipts/template-engine.ts`.
+- [X] **T163** [P] [US1] `preview` layout (byte-equal to `first_print` content, FR-025 / R-14) — satisfied IN CODE: `preview` resolves to the same band set as `first_print` in `compose`, `src/main/receipts/template-engine.ts`.
 - [X] **T164** [P] [US1] Implement `receipts-payload.ts` — derives the canonical `ReceiptPayload` from a persisted `sales` row (and the cached fields it carries); never re-reads `cart_lines`, never calls catalogue API, never re-validates voucher (FR-015) — `src/main/receipts/receipts-payload.ts`
 
 ### Implementation tasks — bridge + renderer
