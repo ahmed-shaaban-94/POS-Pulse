@@ -49,6 +49,11 @@ import { createFinalizeListener } from './sales/finalize-listener.js';
 import { createSalesBridge } from './sales/sales-bridge.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
+import { createPrintPipeline } from './receipts/print-pipeline.js';
+import { createEscposAdapter } from './receipts/escpos-adapter.js';
+import { createOsPrintAdapter } from './receipts/os-print-adapter.js';
+import { createPrintDispatcher } from './receipts/print-dispatcher.js';
+import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
 import { randomUUID } from 'node:crypto';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
@@ -857,10 +862,50 @@ app
           outboxRowIdGenerator: () => randomUUID(),
         });
 
+        // ── T272/T273 — print pipeline + dispatcher (Slice 3) ──────────────
+        //
+        // The real ESC/POS transport (node-thermal-printer against the Epson
+        // TM-T20III) + the offscreen `webContents.print` window are the §A3
+        // HARDWARE bring-up (T200), deferred to the hardware session. Until
+        // then we wire an honest STUB transport: it reports `offline`, so each
+        // auto-fired first print records a clean `printer_offline` failure
+        // `print_events` row + raises the persistent banner, while the Sale
+        // stays durable. No fake "success" is ever recorded for a print that
+        // did not physically happen. T200 swaps these two adapters for the
+        // real transports; the dispatcher + seam below are unchanged.
+        const printPipeline = createPrintPipeline({
+          escposAdapter: createEscposAdapter({
+            transport: {
+              write: () => Promise.resolve(),
+              pollStatus: () => Promise.resolve('offline' as const),
+            },
+            statusTimeoutMs: 3000,
+          }),
+          osPrintAdapter: createOsPrintAdapter({
+            print: (_html, cb) => {
+              cb(false, 'os_print_transport_not_wired_until_T200');
+            },
+          }),
+          // No real printer attached pre-T200 → never claim ESC/POS support.
+          probeEscposSupport: () => Promise.resolve(false),
+        });
+        const printDispatcher = createPrintDispatcher({
+          pipeline: printPipeline,
+          printEventsRepo,
+          auditEmitter: saleAuditEmitter,
+          now: () => new Date().toISOString(),
+          newPrintEventId: () => randomUUID(),
+          logger: mainLogger,
+        });
+
         // The AD-2 dispatch closure: project the settled payment into a
         // FinalizeInput (T094b), then run the atomic finalize (T091). A
         // projection refusal is logged and skipped — the worker re-scans
         // the same row on the next tick (idempotent NOT EXISTS clause).
+        // After a FRESH finalize commits, fire the first print asynchronously
+        // (T273) — NOT part of the atomic transaction; the Sale is already
+        // durable. Idempotent replays do NOT re-print (extracted + unit-tested
+        // in dispatch-first-print-on-finalize.ts).
         const finalizeDb = dbHandle;
         const dispatch = (handoff_action_id: string): void => {
           const projected = buildFinalizeInput({ db: finalizeDb, handoff_action_id });
@@ -873,6 +918,14 @@ app
           }
           const result = finalizeTransaction.finalize(projected.input);
           mainLogger.info({ handoff_action_id, kind: result.kind }, 'finalize_dispatch:finalized');
+          void dispatchFirstPrintOnFinalize(result, { salesRepo, printDispatcher }).catch(
+            (err: unknown) => {
+              mainLogger.error(
+                { handoff_action_id, err },
+                'finalize_dispatch:print_seam_unexpected',
+              );
+            },
+          );
         };
 
         // F-007 alignment — the AD-2 scan filters `audit_events` by
@@ -894,10 +947,18 @@ app
           branch_id: pairingStatus.branch_id,
           terminal_id: payments006TerminalId,
           dispatch,
-          // Print + drawer recovery dispatchers land in Slice 3 / Slice 4;
-          // log placeholders keep the recovery scan inert until then.
+          // Print recovery (T273): a sale that crashed before a successful
+          // first print is re-attempted via the SAME print dispatcher. Reuses
+          // the finalize→print seam by synthesising a `finalized` result for
+          // the recovered sale_id (the seam reads the row + derives the
+          // payload). Drawer recovery lands in Slice 4.
           dispatchPrintRecovery: (sale_id: string): void => {
-            mainLogger.warn({ sale_id }, 'finalize_recovery:print_recovery_stub');
+            void dispatchFirstPrintOnFinalize(
+              { kind: 'finalized', sale_id, sale_number: '', receipt_number: '', finalized_at: '' },
+              { salesRepo, printDispatcher },
+            ).catch((err: unknown) => {
+              mainLogger.error({ sale_id, err }, 'finalize_recovery:print_recovery_unexpected');
+            });
           },
           dispatchDrawerRecovery: (sale_id: string): void => {
             mainLogger.warn({ sale_id }, 'finalize_recovery:drawer_recovery_stub');
