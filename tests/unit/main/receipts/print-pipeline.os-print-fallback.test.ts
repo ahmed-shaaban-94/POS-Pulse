@@ -54,4 +54,38 @@ describe('T230 — OS-print fallback', () => {
     const adapter = createOsPrintAdapter({ print: vi.fn() });
     expect(adapter.render_path).toBe('os_print');
   });
+
+  it('resolves os_print_error when the print callback never fires (timeout)', async () => {
+    vi.useFakeTimers();
+    // A print that never invokes its callback (destroyed webContents / crash).
+    const printFn: OsPrintFn = vi.fn();
+    const adapter = createOsPrintAdapter({ print: printFn, timeoutMs: 500 });
+    const resultPromise = adapter.print(RENDERED);
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await resultPromise;
+    expect(result).toEqual({
+      ok: false,
+      render_path: 'os_print',
+      failure_reason: 'os_print_error',
+    });
+    vi.useRealTimers();
+  });
+
+  it('a late callback after timeout does not double-resolve', async () => {
+    vi.useFakeTimers();
+    let captured: ((success: boolean) => void) | undefined;
+    const printFn: OsPrintFn = vi.fn<OsPrintFn>((_html, cb) => {
+      captured = cb;
+    });
+    const adapter = createOsPrintAdapter({ print: printFn, timeoutMs: 500 });
+    const resultPromise = adapter.print(RENDERED);
+    await vi.advanceTimersByTimeAsync(500);
+    const result = await resultPromise;
+    expect(result.ok).toBe(false);
+    // Fire the callback AFTER the timeout already settled — must be a no-op.
+    captured?.(true);
+    await Promise.resolve();
+    expect(result.ok).toBe(false);
+    vi.useRealTimers();
+  });
 });

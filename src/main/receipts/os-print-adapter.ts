@@ -9,6 +9,12 @@
  * The print function is injected (a stand-in for `webContents.print`'s
  * `(options, callback)` signature, pre-bound to the HTML render), so the
  * adapter is unit-testable without an Electron BrowserWindow (T230).
+ *
+ * Timeout (CodeRabbit #280): Electron's `webContents.print` callback is NOT
+ * guaranteed to fire in all failure modes (destroyed webContents, renderer
+ * crash). Without a deadline the adapter would hang forever, leaving the Sale
+ * with no print_events row and no banner. A configured timeout maps a
+ * non-firing callback to `os_print_error` so the failure is recorded loudly.
  */
 
 import type { PrintAdapter, PrintAdapterResult, RenderedReceipt } from './print-pipeline.js';
@@ -26,26 +32,44 @@ export type OsPrintFn = (
 
 export interface OsPrintAdapterConfig {
   print: OsPrintFn;
+  /** Callback deadline (ms). On overrun → os_print_error. Defaults to 10_000. */
+  timeoutMs?: number;
 }
+
+const DEFAULT_OS_PRINT_TIMEOUT_MS = 10_000;
 
 export function createOsPrintAdapter(config: OsPrintAdapterConfig): PrintAdapter {
   const { print } = config;
+  const timeoutMs = config.timeoutMs ?? DEFAULT_OS_PRINT_TIMEOUT_MS;
+  const OS_PRINT_ERROR: PrintAdapterResult = {
+    ok: false,
+    render_path: 'os_print',
+    failure_reason: 'os_print_error',
+  };
 
   return {
     render_path: 'os_print',
 
     print(rendered: RenderedReceipt): Promise<PrintAdapterResult> {
       return new Promise<PrintAdapterResult>((resolve) => {
+        let settled = false;
+        const settle = (result: PrintAdapterResult): void => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutHandle);
+          resolve(result);
+        };
+        // A callback that never fires (destroyed webContents / crash) loses to
+        // the deadline → os_print_error (the Sale stays durable, banner raised).
+        const timeoutHandle = setTimeout(() => {
+          settle(OS_PRINT_ERROR);
+        }, timeoutMs);
         try {
           print(rendered.html, (success) => {
-            resolve(
-              success
-                ? { ok: true, render_path: 'os_print' }
-                : { ok: false, render_path: 'os_print', failure_reason: 'os_print_error' },
-            );
+            settle(success ? { ok: true, render_path: 'os_print' } : OS_PRINT_ERROR);
           });
         } catch {
-          resolve({ ok: false, render_path: 'os_print', failure_reason: 'os_print_error' });
+          settle(OS_PRINT_ERROR);
         }
       });
     },

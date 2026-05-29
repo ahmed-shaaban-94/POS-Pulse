@@ -253,4 +253,20 @@ describe('receipts.retryPrint — gate refusals', () => {
     } as unknown as Parameters<ReturnType<typeof bridgeWith>['retryPrint']>[0]);
     expect(res).toEqual({ kind: 'refused', reason: 'forbidden_field_in_request' });
   });
+
+  it('degrades to sale_not_found when the dispatcher throws an INFRA error', async () => {
+    // No-unhandled-rejection guard (CodeRabbit #280): a dispatcher throw must
+    // not reject the IPC call with an unstructured error.
+    const handle = makeSqlJsHandle(db);
+    const bridge = createReceiptsBridge({
+      getCurrentSession: () => SESSION,
+      salesRepo: bindSalesRepository(handle),
+      printEventsRepo: bindPrintEventsRepository(handle),
+      printDispatcher: {
+        dispatchRetryPrint: vi.fn(() => Promise.reject(new Error('db exploded'))),
+      },
+    });
+    const res = await bridge.retryPrint({ sale_id: 'sale-1' as SaleId, idempotency_key: 'k' });
+    expect(res).toEqual({ kind: 'refused', reason: 'sale_not_found' });
+  });
 });

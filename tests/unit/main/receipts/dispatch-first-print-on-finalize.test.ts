@@ -138,4 +138,22 @@ describe('T273 — dispatchFirstPrintOnFinalize', () => {
     ).resolves.toBeUndefined();
     expect(d.dispatchFirstPrint).not.toHaveBeenCalled();
   });
+
+  it('catches + logs an INFRA throw from the dispatcher (resolves void; no rejection)', async () => {
+    // No-unhandled-rejection safety net (CodeRabbit #280): a dispatcher that
+    // throws an infra error (render/INSERT/emit bug) must not reject this
+    // fire-and-forget seam.
+    const thrower = vi.fn(() => Promise.reject(new Error('db exploded')));
+    const logError = vi.fn();
+    await expect(
+      dispatchFirstPrintOnFinalize(FINALIZED, {
+        salesRepo: { readById: vi.fn(() => saleRow()) },
+        printDispatcher: { dispatchFirstPrint: thrower } as unknown as Parameters<
+          typeof dispatchFirstPrintOnFinalize
+        >[1]['printDispatcher'],
+        logError,
+      }),
+    ).resolves.toBeUndefined();
+    expect(logError).toHaveBeenCalledTimes(1);
+  });
 });

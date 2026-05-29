@@ -153,6 +153,9 @@ describe('T241 — print failure keeps the Sale durable', () => {
     const failed = events.find((e) => e.action_category === 'sale.receipt.print_failed');
     expect(failed).toBeDefined();
     expect(failed?.payload.failure_reason).toBe('printer_out_of_paper');
+    // render_path is structural metadata present on BOTH success + failure
+    // audits (CodeRabbit #280) — T242-safe (not slip content).
+    expect(failed?.payload.render_path).toBe('escpos_direct');
 
     // Sale row durable: subtotal/finalized_at unchanged, exactly one row.
     const saleStmt = db.prepare(`SELECT subtotal_minor, finalized_at FROM sales WHERE sale_id = ?`);

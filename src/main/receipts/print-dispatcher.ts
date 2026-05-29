@@ -8,10 +8,21 @@
  * all DB/audit side-effects to one place.
  *
  * Durability invariant (T241 / US1 scenario 8): the print is NOT part of the
- * AD-2 atomic transaction. A print failure writes a failure `print_events` row
- * + a `sale.receipt.print_failed` audit event and returns `{ ok:false }`, but
- * NEVER touches the Sale row and NEVER throws — the caller (finalize-listener)
- * keeps the Sale durable and the renderer raises the persistent banner.
+ * AD-2 atomic transaction. A genuine print FAILURE (the pipeline ran and got a
+ * failure ack) writes a failure `print_events` row + a
+ * `sale.receipt.print_failed` audit event and returns `{ ok:false }`, never
+ * touching the Sale row.
+ *
+ * Infra errors are a DIFFERENT class: if the pipeline render, the
+ * `print_events` INSERT, or the audit emit themselves THROW (a code/DB bug,
+ * not a printer fault), this method propagates the throw rather than
+ * mislabelling it as a hardware `failure_reason` — none of the closed enum
+ * fits, and a DB-insert failure cannot reliably record a failure row anyway.
+ * The Sale is already durably committed before dispatch, so the throw is an
+ * operational error to make loud, not data loss to mask. The two TESTABLE
+ * callers enforce no-unhandled-rejection: the retry bridge wraps the call into
+ * a refusal, and the finalize seam (`dispatchFirstPrintOnFinalize`) catches +
+ * logs so it resolves void.
  *
  * Redaction (T242 / FR-071 / AD-9): the rendered slip (HTML + ESC/POS bytes)
  * stays inside the pipeline. The audit + log payloads carry ONLY structural
@@ -66,10 +77,11 @@ export interface PrintDispatcherDependencies {
 
 export interface PrintDispatcher {
   /**
-   * Dispatch a first-print attempt for a freshly-finalized sale. Always
-   * resolves (never throws): success → success row + `sale.receipt.printed`;
-   * failure → failure row + `sale.receipt.print_failed`. Returns the pipeline
-   * result so the caller can decide banner state.
+   * Dispatch a first-print attempt for a freshly-finalized sale. Resolves with
+   * the print outcome: success → success row + `sale.receipt.printed`; a
+   * genuine print failure → failure row + `sale.receipt.print_failed`. Infra
+   * errors (render/INSERT/emit throwing) PROPAGATE — see the module doc; the
+   * caller (`dispatchFirstPrintOnFinalize`) catches them.
    */
   dispatchFirstPrint(
     payload: ReceiptPayload,
@@ -185,7 +197,14 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
       originating_terminal_id: ctx.terminal_id,
       session_id: ctx.session_id,
       created_at,
-      payload: { sale_id: ctx.sale_id, print_event_id, failure_reason: result.failure_reason },
+      payload: {
+        sale_id: ctx.sale_id,
+        print_event_id,
+        // Structural metadata (T242-safe — not slip content); present on both
+        // success and failure audits, mirroring the DB row.
+        render_path: result.render_path,
+        failure_reason: result.failure_reason,
+      },
     });
     logger.warn({
       msg: 'receipt.print_failed',

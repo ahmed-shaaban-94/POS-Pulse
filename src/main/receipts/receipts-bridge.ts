@@ -232,11 +232,21 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         attribution_operator_id: session.operator_id,
       };
 
-      const { result, print_event_id, printed_at } = await printDispatcher.dispatchRetryPrint(
-        payload,
-        ctx,
-        previousFailedPrintEventIds,
-      );
+      // An INFRA throw inside the dispatcher (render/INSERT/emit bug — not a
+      // printer fault) must NOT reject the IPC call with an unstructured error.
+      // Degrade to sale_not_found (the generic refusal); the Sale is durable
+      // and the renderer's banner stays raised for another retry.
+      let dispatched;
+      try {
+        dispatched = await printDispatcher.dispatchRetryPrint(
+          payload,
+          ctx,
+          previousFailedPrintEventIds,
+        );
+      } catch {
+        return { kind: 'refused', reason: 'sale_not_found' };
+      }
+      const { result, print_event_id, printed_at } = dispatched;
 
       if (result.ok) {
         return {

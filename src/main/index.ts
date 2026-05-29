@@ -863,7 +863,11 @@ app
             cb(false, 'os_print_transport_not_wired_until_T200');
           },
         }),
-        probeEscposSupport: () => Promise.resolve(false),
+        // Pre-T200: route to the ESC/POS path so the `offline` stub produces a
+        // clean `printer_offline` failure (matching the wiring comment), NOT
+        // the OS-print `os_print_error`. T200 replaces the probe with a real
+        // status-byte check.
+        probeEscposSupport: () => Promise.resolve(true),
       });
       const printDispatcher = createPrintDispatcher({
         pipeline: printPipeline,
@@ -927,14 +931,15 @@ app
           }
           const result = finalizeTransaction.finalize(projected.input);
           mainLogger.info({ handoff_action_id, kind: result.kind }, 'finalize_dispatch:finalized');
-          void dispatchFirstPrintOnFinalize(result, { salesRepo, printDispatcher }).catch(
-            (err: unknown) => {
-              mainLogger.error(
-                { handoff_action_id, err },
-                'finalize_dispatch:print_seam_unexpected',
-              );
+          void dispatchFirstPrintOnFinalize(result, {
+            salesRepo,
+            printDispatcher,
+            logError: (err: unknown) => {
+              mainLogger.error({ handoff_action_id, err }, 'finalize_dispatch:print_seam_infra');
             },
-          );
+          }).catch((err: unknown) => {
+            mainLogger.error({ handoff_action_id, err }, 'finalize_dispatch:print_seam_unexpected');
+          });
         };
 
         // F-007 alignment — the AD-2 scan filters `audit_events` by

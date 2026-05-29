@@ -28,6 +28,13 @@ import type { FinalizeResult } from '../sales/finalize-transaction.js';
 export interface DispatchFirstPrintOnFinalizeDependencies {
   salesRepo: Pick<SalesRepository, 'readById'>;
   printDispatcher: PrintDispatcher;
+  /**
+   * Optional structural logger for the no-unhandled-rejection safety net: if
+   * the dispatcher throws an INFRA error (render/INSERT/emit bug — not a
+   * printer fault), we log + swallow so this seam resolves void. The Sale is
+   * already durable; the startup print-recovery sub-scan will re-attempt.
+   */
+  logError?: (err: unknown) => void;
 }
 
 function toContext(row: SaleRow): PrintDispatchContext {
@@ -65,5 +72,12 @@ export async function dispatchFirstPrintOnFinalize(
     return;
   }
 
-  await deps.printDispatcher.dispatchFirstPrint(payload, toContext(row));
+  // No-unhandled-rejection safety net: a genuine print failure resolves to a
+  // failure result (handled inside the dispatcher); an INFRA throw is caught,
+  // logged, and swallowed here so this fire-and-forget seam resolves void.
+  try {
+    await deps.printDispatcher.dispatchFirstPrint(payload, toContext(row));
+  } catch (err) {
+    deps.logError?.(err);
+  }
 }
