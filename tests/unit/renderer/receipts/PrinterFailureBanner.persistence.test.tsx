@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method --
- * vi.fn-typed bridge spies trigger this rule on expect(...) assertions. Same
- * posture as the ReceiptPreview + payments bridge tests.
- */
 /**
  * T260 — `<PrinterFailureBanner>` persistence + affordances (RED).
  *

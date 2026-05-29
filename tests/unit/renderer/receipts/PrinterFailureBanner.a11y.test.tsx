@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method --
- * vi.fn-typed bridge spies trigger this rule on expect(...) assertions.
- */
 /**
  * T263 — `<PrinterFailureBanner>` accessibility (RED).
  *

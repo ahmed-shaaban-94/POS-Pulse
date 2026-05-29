@@ -13,11 +13,6 @@
  * print. The handler reuses the print dispatcher's retry path.
  */
 
-/* eslint-disable @typescript-eslint/unbound-method --
- * vi.fn-typed spies trigger this rule on expect(...) assertions. Same posture
- * as the payments bridge tests.
- */
-
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 import { readFileSync } from 'fs';
