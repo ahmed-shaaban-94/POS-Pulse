@@ -348,16 +348,17 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
           banner_state: projector.projectBannerState(scope),
         });
       }
-      if (req.topic === 'recent') {
-        return await Promise.resolve({
-          kind: 'ok',
-          subscription_token,
-          recent: projector.projectRecentSale(scope),
-        });
-      }
+      // `SalesSubscribeTopic` is the closed union `'recent' | 'banner_state'`,
+      // so after the `banner_state` branch `req.topic` is narrowed to `'recent'`
+      // — handle it directly (a redundant `if (topic === 'recent')` is an
+      // always-true comparison eslint rejects). A future-added topic surfaces as
+      // a compile error on the `never` assignment below, NOT a silent fallthrough.
+      const exhaustiveTopic: 'recent' = req.topic;
+      void exhaustiveTopic;
       return await Promise.resolve({
-        kind: 'refused',
-        reason: 'not_implemented',
+        kind: 'ok',
+        subscription_token,
+        recent: projector.projectRecentSale(scope),
       });
     },
 
