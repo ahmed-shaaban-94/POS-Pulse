@@ -27,6 +27,7 @@ import type {
 import { deriveReceiptPayload } from './receipts-payload.js';
 import { renderReceipt } from './template-engine.js';
 import type { PrintDispatcher, PrintDispatchContext } from './print-dispatcher.js';
+import type { DrawerKickDispatcher } from '../drawer/drawer-kick.js';
 
 /** 80 mm Font A column width — the v1 printed-slip dimension (§(a) layout). */
 const PREVIEW_WIDTH_CHARS = 42;
@@ -86,6 +87,15 @@ export interface ReceiptsBridgeDependencies {
   printEventsRepo: Pick<PrintEventsRepository, 'readBySale'>;
   /** S3 retryPrint: re-runs the print pipeline + writes the retry row. */
   printDispatcher: Pick<PrintDispatcher, 'dispatchRetryPrint'>;
+  /**
+   * S4 (optional): chains the drawer-kick after a retry that SUCCEEDS. Per
+   * FR-052, a retry-success IS the canonical first print, so it runs the same
+   * drawer gating a first-print success would (cash-inclusive → kick). Absent
+   * in Slice-3-era construction / tests; when absent, retry behaves exactly as
+   * before. The dispatcher's `readBySale` guard keeps it idempotent — a sale
+   * that already opened/suppressed its drawer is a no-op.
+   */
+  drawerKickDispatcher?: DrawerKickDispatcher;
 }
 
 /**
@@ -98,7 +108,8 @@ type ScopedSale =
   | { ok: false; reason: 'no_session' | 'sale_not_found' };
 
 export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): ReceiptsBridge {
-  const { getCurrentSession, salesRepo, printEventsRepo, printDispatcher } = deps;
+  const { getCurrentSession, salesRepo, printEventsRepo, printDispatcher, drawerKickDispatcher } =
+    deps;
 
   function scopedSale(sale_id: string): ScopedSale {
     const session = getCurrentSession();
@@ -249,6 +260,31 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       const { result, print_event_id, printed_at } = dispatched;
 
       if (result.ok) {
+        // FR-052 / Slice 4: a retry that succeeds IS the canonical first print,
+        // so it runs drawer gating exactly like an auto-fired first print
+        // (cash-inclusive → kick). The drawer dispatch is a sibling step — its
+        // own faults never reject this handler (the dispatcher resolves void on
+        // internal faults; the Sale + print are already durable). The
+        // `readBySale` guard makes a re-fired retry idempotent. Attribution is
+        // the retrying operator (FR-024), mirroring the print ctx above.
+        if (drawerKickDispatcher !== undefined) {
+          try {
+            await drawerKickDispatcher.dispatchOnFirstPrintSuccess({
+              sale_id: row.sale_id,
+              tenant_id: row.tenant_id,
+              branch_id: row.branch_id,
+              terminal_id: row.terminal_id,
+              session_id: session.operator_session_id,
+              attribution_operator_id: session.operator_id,
+              tender_lines_summary_json: row.tender_lines_summary_json,
+              triggering_print_event_id: print_event_id,
+            });
+          } catch {
+            // Defence-in-depth: dispatcher resolves void by contract, but a
+            // buggy drawer dispatch must not turn a successful print into a
+            // refused retry. The print already succeeded + is durable.
+          }
+        }
         return {
           kind: 'ok',
           outcome: 'success',

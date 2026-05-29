@@ -141,7 +141,7 @@ describe('T241 — print failure keeps the Sale durable', () => {
     const events: SaleAuditEvent[] = [];
     const dispatcher = failingDispatcher(db, events);
 
-    const result = await dispatcher.dispatchFirstPrint(payload(), CTX);
+    const { result } = await dispatcher.dispatchFirstPrint(payload(), CTX);
 
     expect(result.ok).toBe(false);
 
