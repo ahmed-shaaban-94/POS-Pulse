@@ -23,6 +23,8 @@ import type {
   ReceiptsPreviewResponse,
   ReceiptsRetryPrintRequest,
   ReceiptsRetryPrintResponse,
+  ReceiptsReprintRequest,
+  ReceiptsReprintResponse,
 } from '../../shared/bridge-api.js';
 import { deriveReceiptPayload } from './receipts-payload.js';
 import { renderReceipt } from './template-engine.js';
@@ -83,10 +85,20 @@ export interface ReceiptsBridgeDependencies {
   /** Read-only: preview never writes. `insert` is in the Pick only to share
    *  the repository type; it is never called. */
   salesRepo: Pick<SalesRepository, 'readById' | 'insert'>;
-  /** S3 retryPrint: read prior failed print_events to build the lineage. */
-  printEventsRepo: Pick<PrintEventsRepository, 'readBySale'>;
-  /** S3 retryPrint: re-runs the print pipeline + writes the retry row. */
-  printDispatcher: Pick<PrintDispatcher, 'dispatchRetryPrint'>;
+  /**
+   * S3 retryPrint: read prior failed print_events to build the lineage.
+   * S5 reprint: `hasSuccessfulPrint` (AD-10 precondition) + `countReprints`
+   * (n-th-reprint sequence-number allocation).
+   */
+  printEventsRepo: Pick<
+    PrintEventsRepository,
+    'readBySale' | 'hasSuccessfulPrint' | 'countReprints'
+  >;
+  /**
+   * S3 retryPrint: re-runs the print pipeline + writes the retry row.
+   * S5 reprint: writes the `purpose='reprint'` row + reprinted audit event.
+   */
+  printDispatcher: Pick<PrintDispatcher, 'dispatchRetryPrint' | 'dispatchReprint'>;
   /**
    * S4 (optional): chains the drawer-kick after a retry that SUCCEEDS. Per
    * FR-052, a retry-success IS the canonical first print, so it runs the same
@@ -96,6 +108,14 @@ export interface ReceiptsBridgeDependencies {
    * that already opened/suppressed its drawer is a no-op.
    */
   drawerKickDispatcher?: DrawerKickDispatcher;
+  /**
+   * Injected clock (ISO-8601 UTC). Used by `reprint` to stamp the
+   * `reprinted_at` that flows into the rendered slip, so the slip time matches
+   * the `print_events.printed_at` the dispatcher writes (both must read the SAME
+   * clock — in production `index.ts` wires this and the dispatcher's `now` to
+   * one source). Defaults to wall-clock when omitted (Slice-2/3-era callers).
+   */
+  now?: () => string;
 }
 
 /**
@@ -110,6 +130,7 @@ type ScopedSale =
 export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): ReceiptsBridge {
   const { getCurrentSession, salesRepo, printEventsRepo, printDispatcher, drawerKickDispatcher } =
     deps;
+  const now = deps.now ?? ((): string => new Date().toISOString());
 
   function scopedSale(sale_id: string): ScopedSale {
     const session = getCurrentSession();
@@ -309,6 +330,94 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         print_event_id,
         purpose: 'retry_after_failure',
         failure_reason: result.failure_reason,
+      };
+    },
+
+    async reprint(req: ReceiptsReprintRequest): Promise<ReceiptsReprintResponse> {
+      // §A4 #2 — forbidden-field guard first.
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        return { kind: 'refused', reason: 'forbidden_field_in_request' };
+      }
+
+      // Cashier-permitted (AD-10): scopedSale gates only on an active session +
+      // tenant/branch/terminal isolation — NO role restriction. A cross-scope or
+      // missing sale refuses as `sale_not_found` (no information leak; §A4 #6).
+      const scoped = scopedSale(req.sale_id);
+      if (!scoped.ok) {
+        return { kind: 'refused', reason: scoped.reason };
+      }
+      const { row, session } = scoped;
+
+      // Precondition (FR-028 / data-model Invariant 3): the sale must already
+      // have a successful print. `hasSuccessfulPrint` matches any outcome=success
+      // row, which is a safe superset of "first_print OR retry_after_failure
+      // success" — a success row can only carry one of those purposes (a reprint
+      // success itself requires a prior success, so it can never be the first).
+      if (!printEventsRepo.hasSuccessfulPrint(req.sale_id)) {
+        return { kind: 'refused', reason: 'not_yet_printed' };
+      }
+
+      // The n-th reprint gets duplicate_copy_sequence_number=n. countReprints
+      // counts ONLY successful reprints, so before the first reprint it is 0 → 1.
+      // Reprint is repeatable: no state-keyed idempotency no-op (unlike retry).
+      const duplicateCopySequenceNumber = printEventsRepo.countReprints(req.sale_id) + 1;
+
+      // FR-029 / AD-6: render the reprint_duplicate variant (bilingual
+      // duplicate-copy marker). The sequence number + reprint time flow into the
+      // payload so the marker renders.
+      let payload;
+      try {
+        payload = deriveReceiptPayload(row, {
+          variant: 'reprint_duplicate',
+          duplicate_copy_sequence_number: duplicateCopySequenceNumber,
+          // Injected clock so the slip time matches print_events.printed_at
+          // (the dispatcher reads the SAME clock in production — index.ts).
+          reprinted_at: now(),
+        });
+      } catch {
+        // A corrupt persisted JSON column (engine-written, unreachable in
+        // practice) maps to sale_not_found rather than rejecting the IPC call.
+        return { kind: 'refused', reason: 'sale_not_found' };
+      }
+
+      const ctx: PrintDispatchContext = {
+        sale_id: row.sale_id,
+        tenant_id: row.tenant_id,
+        branch_id: row.branch_id,
+        terminal_id: row.terminal_id,
+        // Attribution is the CURRENT signed-in operator (the REPRINTING
+        // operator), not the selling operator on the Sale row (FR-024 / AD-10).
+        session_id: session.operator_session_id,
+        attribution_operator_id: session.operator_id,
+      };
+
+      // An INFRA throw inside the dispatcher (render/INSERT/emit bug — not a
+      // printer fault) must NOT reject the IPC call with an unstructured error.
+      // Degrade to sale_not_found (the generic refusal); the Sale is durable.
+      let dispatched;
+      try {
+        dispatched = await printDispatcher.dispatchReprint(payload, ctx, {
+          duplicateCopySequenceNumber,
+          sellingOperatorId: row.selling_operator_id,
+        });
+      } catch {
+        return { kind: 'refused', reason: 'sale_not_found' };
+      }
+      const { result, print_event_id, printed_at } = dispatched;
+
+      // Reprint is TWO-way: a print FAILURE refuses with `printer_unavailable`
+      // (NOT retry's ok+failure). NEVER kicks the drawer (FR-030) — no drawer
+      // dispatch is wired on this path at all.
+      if (!result.ok) {
+        return { kind: 'refused', reason: 'printer_unavailable' };
+      }
+      return {
+        kind: 'ok',
+        print_event_id,
+        duplicate_copy_sequence_number: duplicateCopySequenceNumber,
+        reprinted_at: printed_at,
+        render_path: result.render_path,
       };
     },
   };

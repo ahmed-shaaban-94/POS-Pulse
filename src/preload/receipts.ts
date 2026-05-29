@@ -6,6 +6,8 @@ import type {
   ReceiptsPreviewResponse,
   ReceiptsRetryPrintRequest,
   ReceiptsRetryPrintResponse,
+  ReceiptsReprintRequest,
+  ReceiptsReprintResponse,
 } from '../shared/bridge-api.js';
 import { RECEIPTS_IPC_CHANNELS } from '../shared/receipts/channels.js';
 
@@ -16,9 +18,8 @@ import { RECEIPTS_IPC_CHANNELS } from '../shared/receipts/channels.js';
  * with a typed channel constant. Main-process `requireOperatorSession` +
  * tenant-isolation gating is the load-bearing security boundary.
  *
- * Slice 2 exposes `receipts.preview` ONLY — the read-only HTML render. The
- * mutating handlers (reprint / retryPrint / manualOverride) join this surface
- * in Slices 3 / 5 / 6.
+ * Slice 2 exposed `receipts.preview`; Slice 3 added `retryPrint`; Slice 5 adds
+ * `reprint`. The remaining mutating handler (manualOverride) joins in Slice 6.
  */
 export const receipts: ReceiptsBridgeAPI = {
   preview: (req: ReceiptsPreviewRequest) =>
@@ -28,4 +29,6 @@ export const receipts: ReceiptsBridgeAPI = {
       RECEIPTS_IPC_CHANNELS.RETRY_PRINT,
       req,
     ) as Promise<ReceiptsRetryPrintResponse>,
+  reprint: (req: ReceiptsReprintRequest) =>
+    ipcRenderer.invoke(RECEIPTS_IPC_CHANNELS.REPRINT, req) as Promise<ReceiptsReprintResponse>,
 };
