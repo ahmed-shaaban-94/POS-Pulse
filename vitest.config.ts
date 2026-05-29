@@ -158,6 +158,15 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T170 — 008 Slice 2 receipts.preview bridge handler. Spec §A5 ≥95% on
+        // the bridge. All gate/isolation/forbidden/render paths exercised by
+        // tests/unit/main/receipts/bridge.receipts-preview.test.ts.
+        'src/main/receipts/receipts-bridge.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         'src/main/sales/audit-emitter.ts': {
           lines: 95,
           branches: 95,

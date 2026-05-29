@@ -536,6 +536,13 @@ export interface PreloadBridgeAPI {
    * S1 surfaces are consumed by Slice 2 onwards).
    */
   sales?: SalesBridgeAPI;
+  /**
+   * 008-sale-finalization-and-receipts Slice 2: `receipts.*` (mutating)
+   * namespace. S2 exposes `receipts.preview` only (read-only render); the
+   * genuinely-mutating members join in Slices 3 / 5 / 6. Optional for the
+   * same staged-wiring reason as `sales` above.
+   */
+  receipts?: ReceiptsBridgeAPI;
 }
 
 /**
@@ -902,4 +909,56 @@ export interface SalesBridgeAPI {
   subscribe(req: SalesSubscribeRequest): Promise<SalesSubscribeResponse>;
   /** Detach a previously-acquired subscription. */
   unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse>;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// 008-sale-finalization-and-receipts Slice 2: `receipts.*` namespace (mutating)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Schema source of truth:
+//   specs/008-sale-finalization-and-receipts/contracts/bridge-api.md
+//   §"Namespace: receipts.* (mutating)" → "receipts.preview"
+//
+// Slice 2 lands `receipts.preview` ONLY. It is the one read-shaped member of
+// the mutating namespace — it renders the AD-6 engine's HTML for a sale and
+// has NO side effects (no print command, no drawer kick, no Sale mutation).
+// The genuinely-mutating handlers (reprint / retryPrint / manualOverride) land
+// in Slices 3 / 5 / 6. Every handler is gated server-side by
+// `requireOperatorSession`; preview reuses the `SalesRefusalReason` vocabulary
+// (no_session / sale_not_found / forbidden_field_in_request).
+
+// ── receipts.preview ──────────────────────────────────────────────────────────
+
+export interface ReceiptsPreviewRequest {
+  sale_id: SaleId;
+  /**
+   * Present for symmetry with the mutating `receipts.*` handlers; preview is
+   * effectively idempotent (no side effects), so it is not used to dedupe.
+   */
+  idempotency_key: string;
+}
+
+export interface ReceiptPreviewPayload {
+  /** The AD-6 engine's HTML output. The renderer mounts this directly. */
+  html: string;
+  /** ESC/POS column width the printed slip uses (80 mm Font A → 42 in v1). */
+  width_chars: number;
+  /** Locale/direction hint so the preview pane mirrors the printed slip. */
+  bilingual_locale: 'ar-EG-RTL-with-latin-en';
+}
+
+export type ReceiptsPreviewResponse =
+  | { kind: 'ok'; preview: ReceiptPreviewPayload }
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
+// ── ReceiptsBridgeAPI surface ───────────────────────────────────────────────
+
+/**
+ * 008 Slice 2 mutating-namespace bridge surface (preview member only in S2).
+ * Gated server-side by `requireOperatorSession`; tenant/branch/terminal
+ * scoping is derived from the operator session per the §A4 checklist.
+ */
+export interface ReceiptsBridgeAPI {
+  /** Render the read-only HTML preview of a sale's receipt. No side effects. */
+  preview(req: ReceiptsPreviewRequest): Promise<ReceiptsPreviewResponse>;
 }

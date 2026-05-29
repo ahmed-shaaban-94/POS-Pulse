@@ -47,6 +47,8 @@ import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
 import { buildFinalizeInput } from './sales/finalize-dispatch.js';
 import { createFinalizeListener } from './sales/finalize-listener.js';
 import { createSalesBridge } from './sales/sales-bridge.js';
+import { createReceiptsBridge } from './receipts/receipts-bridge.js';
+import { registerReceiptsHandlers } from './ipc/receipts.js';
 import { randomUUID } from 'node:crypto';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
@@ -781,32 +783,40 @@ app
       const printEventsRepo = bindPrintEventsRepository(dbHandle);
       const drawerEventsRepo = bindDrawerEventsRepository(dbHandle);
 
-      // Read-only `sales.*` bridge for the renderer (preview / lookup).
+      // Read-only `sales.*` + `receipts.preview` bridges for the renderer.
       // Registered UNCONDITIONALLY whenever the flag is on — NOT gated on
       // pairing status. Pairing happens in-renderer (PairingForm navigates
       // to /paired without a process relaunch), so a terminal that boots
       // unpaired and pairs later in the same process must still have these
-      // handlers; otherwise `sales.read`/`findByNumber` reject at the IPC
-      // layer. The bridge gates on the live session at call time, so it is
-      // inert until an operator signs in regardless of pairing timing.
+      // handlers; otherwise the renderer's reads reject at the IPC layer. Both
+      // bridges gate on the live session at call time, so they are inert until
+      // an operator signs in regardless of pairing timing.
+      const getCurrentSalesSession = () => {
+        const sess = operatorSessionManager.getCurrent();
+        if (sess === null) return null;
+        return {
+          role: sess.role,
+          operator_id: sess.operator_id,
+          operator_session_id: sess.id,
+          tenant_id: sess.tenant_id,
+          branch_id: sess.branch_id,
+          terminal_id: sess.branch_id,
+        };
+      };
       const salesBridge = createSalesBridge({
-        getCurrentSession: () => {
-          const sess = operatorSessionManager.getCurrent();
-          if (sess === null) return null;
-          return {
-            role: sess.role,
-            operator_id: sess.operator_id,
-            operator_session_id: sess.id,
-            tenant_id: sess.tenant_id,
-            branch_id: sess.branch_id,
-            terminal_id: sess.branch_id,
-          };
-        },
+        getCurrentSession: getCurrentSalesSession,
         salesRepo,
         printEventsRepo,
         drawerEventsRepo,
       });
       registerSalesHandlers(ipcMain, { salesBridge });
+
+      // 008 Slice 2 — receipts.preview (read-only HTML render; no side effects).
+      const receiptsBridge = createReceiptsBridge({
+        getCurrentSession: getCurrentSalesSession,
+        salesRepo,
+      });
+      registerReceiptsHandlers(ipcMain, { receiptsBridge });
 
       // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
       // starts for an already-paired terminal — it needs the pairing row's
