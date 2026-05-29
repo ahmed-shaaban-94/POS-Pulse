@@ -320,10 +320,11 @@
         root.add(grid);
         const selectable = [];
         const groups = [];
-        map.nodes.forEach((node) => {
+        map.nodes.forEach((node, nodeIndex) => {
           const color = colors[node.kind] ?? 0x14b8a6;
           const group = new THREE.Group();
-          group.position.set(...positions[node.id]);
+          const coords = positions[node.id] ?? [0, 0.7, (nodeIndex % 5) - 2];
+          group.position.set(...coords);
           group.userData.node = node;
           const geometry = node.kind === "runtime"
             ? new THREE.CylinderGeometry(0.7, 0.82, 1.55, 7)
