@@ -149,6 +149,72 @@ describe('T500 — receipts.manualOverride success', () => {
     expect(audit?.payload.sale_id).toBe('sale-1');
   });
 
+  it('degrades to sale_not_found when the durable INSERT throws (infra-throw guard, CodeRabbit #294)', async () => {
+    // A code/DB bug in the INSERT (here: a forced throw) must NOT escape as an
+    // unstructured IPC rejection — runManualOverride is called synchronously
+    // inside Promise.resolve(...), so a throw would reject before a typed
+    // refusal could be returned. The handler maps it to sale_not_found (the
+    // generic refusal the sibling handlers use), keeping the banner raised.
+    const handle = makeSqlJsHandle(db);
+    const realRepo = bindPrintEventsRepository(handle);
+    const throwingRepo = {
+      readBySale: realRepo.readBySale.bind(realRepo),
+      hasSuccessfulPrint: realRepo.hasSuccessfulPrint.bind(realRepo),
+      countReprints: realRepo.countReprints.bind(realRepo),
+      insert: (): never => {
+        throw new Error('simulated CHECK / write failure');
+      },
+    };
+    const bridge = createReceiptsBridge({
+      getCurrentSession: () => SESSION,
+      salesRepo: bindSalesRepository(handle),
+      printEventsRepo: throwingRepo,
+      printDispatcher: neverDispatcher(),
+      auditEmitter: createSaleAuditEmitter({ sink: { write: () => {} } }),
+      now: () => '2026-05-27T10:00:11.000Z',
+      newPrintEventId: () => 'pe-mo-1',
+    });
+
+    const res = await bridge.manualOverride({
+      sale_id: 'sale-1' as SaleId,
+      idempotency_key: 'idem-1',
+    });
+
+    expect(res.kind).toBe('refused');
+    if (res.kind === 'refused') expect(res.reason).toBe('sale_not_found');
+  });
+
+  it('succeeds (ok) even when the best-effort audit emit throws (durable row already landed)', async () => {
+    // The override print_events row is written BEFORE the audit emit. An emit
+    // failure (forbidden-category/key guard or a sink fault) is best-effort —
+    // it must NOT turn a recorded override into a refusal. The handler swallows
+    // it and still returns ok.
+    const handle = makeSqlJsHandle(db);
+    const bridge = createReceiptsBridge({
+      getCurrentSession: () => SESSION,
+      salesRepo: bindSalesRepository(handle),
+      printEventsRepo: bindPrintEventsRepository(handle),
+      printDispatcher: neverDispatcher(),
+      auditEmitter: {
+        emitRaw: (): never => {
+          throw new Error('simulated audit sink failure');
+        },
+      },
+      now: () => '2026-05-27T10:00:11.000Z',
+      newPrintEventId: () => 'pe-mo-1',
+    });
+
+    const res = await bridge.manualOverride({
+      sale_id: 'sale-1' as SaleId,
+      idempotency_key: 'idem-1',
+    });
+
+    expect(res.kind).toBe('ok');
+    // The durable override row landed despite the audit failure.
+    const rows = bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
+    expect(rows.find((r) => r.outcome === 'manual_override')).toBeDefined();
+  });
+
   it('falls back to the override timestamp as the print_event_id when no id generator is injected', async () => {
     // No `newPrintEventId` dep → the handler falls back to `overridden_at` for
     // the row PK (Slice-2-era construction omits the generator).

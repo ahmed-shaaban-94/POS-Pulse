@@ -486,32 +486,51 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
     // manual_override row). Attribution is the CURRENT (overriding) operator.
     const overridden_at = now();
     const print_event_id = (deps.newPrintEventId ?? ((): string => overridden_at))();
-    printEventsRepo.insert({
-      print_event_id,
-      sale_id: row.sale_id,
-      outcome: 'manual_override',
-      purpose: 'first_print',
-      render_path: null,
-      acting_operator_id: session.operator_id,
-      acting_operator_session_id: session.operator_session_id,
-      duplicate_copy_sequence_number: null,
-      failure_reason: null,
-      previous_failed_print_event_ids: null,
-      printed_at: overridden_at,
-    });
+
+    // An INFRA throw from the durable INSERT (a code/DB bug — e.g. the
+    // print_events CHECK or a sql.js write failure, not a printer fault) must
+    // NOT escape as an unstructured IPC rejection (this method is called
+    // synchronously inside `Promise.resolve(...)`, so a throw here would reject
+    // before the bridge can return a typed refusal). Degrade to sale_not_found
+    // — the generic refusal the sibling handlers use — so the renderer keeps
+    // its banner raised for another attempt. (CodeRabbit #294, T512 hardening.)
+    try {
+      printEventsRepo.insert({
+        print_event_id,
+        sale_id: row.sale_id,
+        outcome: 'manual_override',
+        purpose: 'first_print',
+        render_path: null,
+        acting_operator_id: session.operator_id,
+        acting_operator_session_id: session.operator_session_id,
+        duplicate_copy_sequence_number: null,
+        failure_reason: null,
+        previous_failed_print_event_ids: null,
+        printed_at: overridden_at,
+      });
+    } catch {
+      return { kind: 'refused', reason: 'sale_not_found' };
+    }
 
     // Emit the audit event (structural only — no slip content). emitRaw allows
     // sale.receipt.manual_override (it is in the non-finalize raw category set).
-    auditEmitter?.emitRaw({
-      action_category: 'sale.receipt.manual_override',
-      attribution_operator_id: session.operator_id,
-      tenant_id: row.tenant_id,
-      branch_id: row.branch_id,
-      originating_terminal_id: row.terminal_id,
-      session_id: session.operator_session_id,
-      created_at: overridden_at,
-      payload: { sale_id: row.sale_id, print_event_id },
-    });
+    // Best-effort: the override row is ALREADY durably written, so an audit
+    // emit failure (forbidden-category/key guard or a sink write fault) must
+    // not turn a recorded override into a refusal. Swallow it here.
+    try {
+      auditEmitter?.emitRaw({
+        action_category: 'sale.receipt.manual_override',
+        attribution_operator_id: session.operator_id,
+        tenant_id: row.tenant_id,
+        branch_id: row.branch_id,
+        originating_terminal_id: row.terminal_id,
+        session_id: session.operator_session_id,
+        created_at: overridden_at,
+        payload: { sale_id: row.sale_id, print_event_id },
+      });
+    } catch {
+      /* audit emit is best-effort; the durable override row already landed */
+    }
 
     return {
       kind: 'ok',

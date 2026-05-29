@@ -223,6 +223,69 @@ describe('T262 — affordance gating', () => {
     expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
   });
 
+  it('locks ALL three actions while one mutation is in flight (single mutation phase, CodeRabbit #294)', async () => {
+    // A cashier must not be able to fire two conflicting mutations against the
+    // same failed print. Starting either mutation moves the shared phase off
+    // `idle`, which disables Retry + Reprint + Manual until it settles.
+    // has_successful_print:true so Reprint is otherwise enabled — proving the
+    // lock (not the AD-10 gate) is what disables it here.
+    let resolveRetry: (r: {
+      kind: 'ok';
+      outcome: 'success';
+      print_event_id: string;
+      purpose: 'retry_after_failure';
+      render_path: 'escpos_direct';
+      printed_at: string;
+    }) => void = () => {};
+    const bridge: ReceiptsBridgeAPI = {
+      preview: vi.fn(),
+      retryPrint: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveRetry = resolve;
+          }),
+      ),
+      manualOverride: vi.fn(),
+    };
+    render(
+      <PrinterFailureBanner
+        printFailure={{
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: true,
+        }}
+        onReprint={() => {}}
+        _testReceiptsBridge={bridge}
+      />,
+    );
+    const retry = screen.getByRole('button', { name: /retry/i });
+    const reprint = screen.getByRole('button', { name: /reprint/i });
+    const manual = screen.getByRole('button', { name: /manual/i });
+
+    expect(reprint).toBeEnabled(); // enabled before any mutation
+    await userEvent.click(retry);
+
+    // Mutation in flight → the shared phase disables all three actions.
+    await waitFor(() => expect(retry).toBeDisabled());
+    expect(reprint).toBeDisabled();
+    expect(manual).toBeDisabled();
+    // The lock held: the manual mutation was never fired.
+    expect(bridge.manualOverride).not.toHaveBeenCalled();
+
+    // Settle the in-flight retry → all three re-enable.
+    resolveRetry({
+      kind: 'ok',
+      outcome: 'success',
+      print_event_id: 'pe-1',
+      purpose: 'retry_after_failure',
+      render_path: 'escpos_direct',
+      printed_at: '2026-05-27T10:00:09.000Z',
+    });
+    await waitFor(() => expect(retry).toBeEnabled());
+    expect(reprint).toBeEnabled();
+    expect(manual).toBeEnabled();
+  });
+
   it('Retry is a no-op when no receipts bridge is available (null resolve, no crash)', async () => {
     // No _testReceiptsBridge and no window.api.receipts → resolveReceiptsBridge null.
     render(

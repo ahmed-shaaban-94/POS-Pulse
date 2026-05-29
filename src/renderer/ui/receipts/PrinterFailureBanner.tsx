@@ -77,7 +77,13 @@ function defaultKeyFactory(): string {
   return globalThis.crypto.randomUUID();
 }
 
-type RetryPhase = 'idle' | 'retrying';
+// A single in-flight phase shared across BOTH mutating actions (Retry +
+// Manual receipt). One shared phase means starting either mutation disables ALL
+// three action buttons until it settles, so a cashier cannot fire two
+// conflicting mutations against the same failed print (CodeRabbit #294). The
+// value records which mutation is active (for future per-action affordances);
+// the lock itself only cares that it is not `idle`.
+type MutationPhase = 'idle' | 'retrying' | 'manual_override';
 
 export function PrinterFailureBanner({
   printFailure,
@@ -87,8 +93,7 @@ export function PrinterFailureBanner({
   _idempotencyKeyFactory,
 }: PrinterFailureBannerProps): JSX.Element | null {
   const messageId = useId();
-  const [retryPhase, setRetryPhase] = useState<RetryPhase>('idle');
-  const [manualPhase, setManualPhase] = useState<RetryPhase>('idle');
+  const [mutationPhase, setMutationPhase] = useState<MutationPhase>('idle');
   const keyFactory = _idempotencyKeyFactory ?? defaultKeyFactory;
 
   const saleId = printFailure?.sale_id ?? null;
@@ -131,36 +136,36 @@ export function PrinterFailureBanner({
   const handleRetry = (): void => {
     const bridge = resolveReceiptsBridge(_testReceiptsBridge);
     if (bridge === null) return;
-    setRetryPhase('retrying');
+    setMutationPhase('retrying');
     void bridge
       .retryPrint({ sale_id: printFailure.sale_id as SaleId, idempotency_key: keyFactory() })
       .then(() => {
         // The banner's mount/unmount is driven by the parent's projected
         // printFailure (refreshed from banner_state). We only clear the local
         // in-flight phase; a still-failed retry leaves the banner up.
-        setRetryPhase('idle');
+        setMutationPhase('idle');
       })
       .catch(() => {
-        setRetryPhase('idle');
+        setMutationPhase('idle');
       });
   };
 
   // T512 — Manual receipt override. Mirrors handleRetry: calls
-  // `receipts.manualOverride` directly with a fresh key, manages a local
+  // `receipts.manualOverride` directly with a fresh key, manages the shared
   // in-flight phase, and lets the parent projection dismiss the banner (the
   // manual_override row supersedes the failure in banner-state-projector — no
   // local force-dismiss).
   const handleManualOverride = (): void => {
     const bridge = resolveReceiptsBridge(_testReceiptsBridge);
     if (bridge === null) return;
-    setManualPhase('retrying');
+    setMutationPhase('manual_override');
     void bridge
       .manualOverride({ sale_id: printFailure.sale_id as SaleId, idempotency_key: keyFactory() })
       .then(() => {
-        setManualPhase('idle');
+        setMutationPhase('idle');
       })
       .catch(() => {
-        setManualPhase('idle');
+        setMutationPhase('idle');
       });
   };
 
@@ -193,7 +198,7 @@ export function PrinterFailureBanner({
           type="button"
           className="btn btn--md btn--primary"
           onClick={handleRetry}
-          disabled={retryPhase === 'retrying'}
+          disabled={mutationPhase !== 'idle'}
           aria-label="Retry print — إعادة المحاولة"
         >
           <span lang="ar">إعادة المحاولة</span>
@@ -203,7 +208,7 @@ export function PrinterFailureBanner({
         <button
           type="button"
           className="btn btn--md btn--secondary"
-          disabled={!reprintEnabled}
+          disabled={!reprintEnabled || mutationPhase !== 'idle'}
           onClick={() => {
             onReprint(printFailure.sale_id);
           }}
@@ -222,7 +227,7 @@ export function PrinterFailureBanner({
           type="button"
           className="btn btn--md btn--ghost"
           onClick={handleManualOverride}
-          disabled={manualPhase === 'retrying'}
+          disabled={mutationPhase !== 'idle'}
           aria-label="Manual receipt — إيصال يدوي"
         >
           <span lang="ar">إيصال يدوي</span>
