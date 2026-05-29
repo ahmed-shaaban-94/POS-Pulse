@@ -75,6 +75,21 @@ export interface PrintDispatcher {
     payload: ReceiptPayload,
     ctx: PrintDispatchContext,
   ): Promise<PrintPipelineResult>;
+
+  /**
+   * Dispatch a retry-after-failure attempt (T250-T252). Writes a
+   * `purpose='retry_after_failure'` row carrying the lineage of the prior
+   * failed print events; on success emits `sale.receipt.print_retried_success`
+   * (a retry success is the canonical first print per FR-052 — no duplicate
+   * marker). A still-failed retry writes a failure row + `print_failed` audit
+   * and returns the failure result (the attempt itself was accepted). Returns
+   * the pipeline result + the new print_event_id.
+   */
+  dispatchRetryPrint(
+    payload: ReceiptPayload,
+    ctx: PrintDispatchContext,
+    previousFailedPrintEventIds: string[],
+  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
 }
 
 const NOOP_LOGGER: PrintDispatchLogger = {
@@ -92,17 +107,93 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
   function baseRow(
     ctx: PrintDispatchContext,
     print_event_id: string,
+    purpose: PrintEventRow['purpose'],
+    previousFailedPrintEventIds: string[] | null,
   ): Omit<PrintEventRow, 'outcome' | 'render_path' | 'failure_reason'> {
     return {
       print_event_id,
       sale_id: ctx.sale_id,
-      purpose: 'first_print',
+      purpose,
       acting_operator_id: ctx.attribution_operator_id,
       acting_operator_session_id: ctx.session_id ?? '',
       duplicate_copy_sequence_number: null,
-      previous_failed_print_event_ids: null,
+      previous_failed_print_event_ids:
+        previousFailedPrintEventIds === null || previousFailedPrintEventIds.length === 0
+          ? null
+          : JSON.stringify(previousFailedPrintEventIds),
       printed_at: now(),
     };
+  }
+
+  /**
+   * Shared attempt recorder for first-print and retry. Writes the print_events
+   * row + emits the matching audit event; never logs/audits slip content
+   * (T242). `successCategory` distinguishes the first-print
+   * (`sale.receipt.printed`) and retry (`sale.receipt.print_retried_success`)
+   * audit categories; failures always emit `sale.receipt.print_failed`.
+   */
+  async function record(
+    payload: ReceiptPayload,
+    ctx: PrintDispatchContext,
+    opts: {
+      purpose: PrintEventRow['purpose'];
+      successCategory: 'sale.receipt.printed' | 'sale.receipt.print_retried_success';
+      previousFailedPrintEventIds: string[] | null;
+    },
+  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+    const result = await pipeline.render(payload);
+    const print_event_id = deps.newPrintEventId();
+    const created_at = now();
+    const base = baseRow(ctx, print_event_id, opts.purpose, opts.previousFailedPrintEventIds);
+    const printed_at = base.printed_at;
+
+    if (result.ok) {
+      printEventsRepo.insert({
+        ...base,
+        outcome: 'success',
+        render_path: result.render_path,
+        failure_reason: null,
+      });
+      auditEmitter.emitRaw({
+        action_category: opts.successCategory,
+        attribution_operator_id: ctx.attribution_operator_id,
+        tenant_id: ctx.tenant_id,
+        branch_id: ctx.branch_id,
+        originating_terminal_id: ctx.terminal_id,
+        session_id: ctx.session_id,
+        created_at,
+        // Structural ONLY — no slip content (T242).
+        payload: { sale_id: ctx.sale_id, print_event_id, render_path: result.render_path },
+      });
+      logger.info({ msg: opts.successCategory, sale_id: ctx.sale_id, print_event_id });
+      return { result, print_event_id, printed_at };
+    }
+
+    printEventsRepo.insert({
+      ...base,
+      outcome: 'failure',
+      // A failed print still chose a path — the print_events CHECK requires
+      // render_path on failure rows too (only manual_override is null).
+      render_path: result.render_path,
+      failure_reason: result.failure_reason,
+    });
+    auditEmitter.emitRaw({
+      action_category: 'sale.receipt.print_failed',
+      attribution_operator_id: ctx.attribution_operator_id,
+      tenant_id: ctx.tenant_id,
+      branch_id: ctx.branch_id,
+      originating_terminal_id: ctx.terminal_id,
+      session_id: ctx.session_id,
+      created_at,
+      payload: { sale_id: ctx.sale_id, print_event_id, failure_reason: result.failure_reason },
+    });
+    logger.warn({
+      msg: 'receipt.print_failed',
+      sale_id: ctx.sale_id,
+      print_event_id,
+      failure_reason: result.failure_reason,
+    });
+    return { result, print_event_id, printed_at };
   }
 
   return {
@@ -110,66 +201,24 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
       payload: ReceiptPayload,
       ctx: PrintDispatchContext,
     ): Promise<PrintPipelineResult> {
-      const result = await pipeline.render(payload);
-      const print_event_id = deps.newPrintEventId();
-      const created_at = now();
-
-      if (result.ok) {
-        printEventsRepo.insert({
-          ...baseRow(ctx, print_event_id),
-          outcome: 'success',
-          render_path: result.render_path,
-          failure_reason: null,
-        });
-        auditEmitter.emitRaw({
-          action_category: 'sale.receipt.printed',
-          attribution_operator_id: ctx.attribution_operator_id,
-          tenant_id: ctx.tenant_id,
-          branch_id: ctx.branch_id,
-          originating_terminal_id: ctx.terminal_id,
-          session_id: ctx.session_id,
-          created_at,
-          // Structural ONLY — no slip content (T242).
-          payload: {
-            sale_id: ctx.sale_id,
-            print_event_id,
-            render_path: result.render_path,
-          },
-        });
-        // Structural log line ONLY — never the rendered payload (T242).
-        logger.info({ msg: 'receipt.printed', sale_id: ctx.sale_id, print_event_id });
-        return result;
-      }
-
-      printEventsRepo.insert({
-        ...baseRow(ctx, print_event_id),
-        outcome: 'failure',
-        // A failed print still chose a path — the print_events CHECK requires
-        // render_path on failure rows too (only manual_override is null).
-        render_path: result.render_path,
-        failure_reason: result.failure_reason,
-      });
-      auditEmitter.emitRaw({
-        action_category: 'sale.receipt.print_failed',
-        attribution_operator_id: ctx.attribution_operator_id,
-        tenant_id: ctx.tenant_id,
-        branch_id: ctx.branch_id,
-        originating_terminal_id: ctx.terminal_id,
-        session_id: ctx.session_id,
-        created_at,
-        payload: {
-          sale_id: ctx.sale_id,
-          print_event_id,
-          failure_reason: result.failure_reason,
-        },
-      });
-      logger.warn({
-        msg: 'receipt.print_failed',
-        sale_id: ctx.sale_id,
-        print_event_id,
-        failure_reason: result.failure_reason,
+      const { result } = await record(payload, ctx, {
+        purpose: 'first_print',
+        successCategory: 'sale.receipt.printed',
+        previousFailedPrintEventIds: null,
       });
       return result;
+    },
+
+    dispatchRetryPrint(
+      payload: ReceiptPayload,
+      ctx: PrintDispatchContext,
+      previousFailedPrintEventIds: string[],
+    ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+      return record(payload, ctx, {
+        purpose: 'retry_after_failure',
+        successCategory: 'sale.receipt.print_retried_success',
+        previousFailedPrintEventIds,
+      });
     },
   };
 }

@@ -7,6 +7,8 @@
  */
 export const RECEIPTS_IPC_CHANNELS = {
   PREVIEW: 'receipts:preview',
+  // S3 — retry a failed print (mutating; gated server-side).
+  RETRY_PRINT: 'receipts:retryPrint',
 } as const;
 
 export type ReceiptsIpcChannel = (typeof RECEIPTS_IPC_CHANNELS)[keyof typeof RECEIPTS_IPC_CHANNELS];

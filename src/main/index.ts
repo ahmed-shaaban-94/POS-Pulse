@@ -816,10 +816,71 @@ app
       });
       registerSalesHandlers(ipcMain, { salesBridge });
 
-      // 008 Slice 2 — receipts.preview (read-only HTML render; no side effects).
+      // 008 Slice 3 — print dispatcher (used by both the auto-fire finalize
+      // seam AND the renderer-callable receipts.retryPrint handler). Built
+      // here (not inside the paired branch) so the receipts bridge can be
+      // registered UNCONDITIONALLY — the T094c lesson: IPC handlers must be
+      // present regardless of pairing, since pairing is in-renderer with no
+      // relaunch. The dispatcher needs only the DB + repos + audit sink, none
+      // of which are pairing-specific; the paired branch reuses it for the
+      // finalize-listener wiring.
+      const saleAuditEmitter = createSaleAuditEmitter({
+        sink: {
+          write: (evt: SaleAuditEvent): void => {
+            auditEventsStore.insertIgnore({
+              event_id: randomUUID(),
+              tenant_id: evt.tenant_id,
+              branch_id: evt.branch_id,
+              originating_terminal_id: evt.originating_terminal_id,
+              acting_operator_id: evt.attribution_operator_id,
+              session_id: evt.session_id,
+              shift_id: null,
+              action_category: evt.action_category,
+              created_at: evt.created_at,
+              approving_supervisor_id: null,
+              payload: evt.payload,
+            });
+          },
+        },
+      });
+      // The real ESC/POS transport (node-thermal-printer ↔ Epson TM-T20III) +
+      // the offscreen `webContents.print` window are the §A3 HARDWARE bring-up
+      // (T200), deferred. Until then an honest STUB transport reports `offline`,
+      // so a print records a clean `printer_offline` failure row + raises the
+      // banner while the Sale stays durable — no fake "success" is recorded.
+      // T200 swaps these two adapters for the real transports; nothing else
+      // changes.
+      const printPipeline = createPrintPipeline({
+        escposAdapter: createEscposAdapter({
+          transport: {
+            write: () => Promise.resolve(),
+            pollStatus: () => Promise.resolve('offline' as const),
+          },
+          statusTimeoutMs: 3000,
+        }),
+        osPrintAdapter: createOsPrintAdapter({
+          print: (_html, cb) => {
+            cb(false, 'os_print_transport_not_wired_until_T200');
+          },
+        }),
+        probeEscposSupport: () => Promise.resolve(false),
+      });
+      const printDispatcher = createPrintDispatcher({
+        pipeline: printPipeline,
+        printEventsRepo,
+        auditEmitter: saleAuditEmitter,
+        now: () => new Date().toISOString(),
+        newPrintEventId: () => randomUUID(),
+        logger: mainLogger,
+      });
+
+      // 008 Slice 2 + 3 — receipts.preview (read-only render) + retryPrint
+      // (mutating; gated server-side). Registered unconditionally (T094c).
       const receiptsBridge = createReceiptsBridge({
         getCurrentSession: getCurrentSalesSession,
         salesRepo,
+        printEventsRepo,
+        printDispatcher,
       });
       registerReceiptsHandlers(ipcMain, { receiptsBridge });
 
@@ -832,25 +893,9 @@ app
       if (pairingStatus.kind === 'paired') {
         const outboxRepo = bindSaleSyncOutboxRepository(dbHandle);
         const allocator = bindSaleNumberAllocator(dbHandle);
-        const saleAuditEmitter = createSaleAuditEmitter({
-          sink: {
-            write: (evt: SaleAuditEvent): void => {
-              auditEventsStore.insertIgnore({
-                event_id: randomUUID(),
-                tenant_id: evt.tenant_id,
-                branch_id: evt.branch_id,
-                originating_terminal_id: evt.originating_terminal_id,
-                acting_operator_id: evt.attribution_operator_id,
-                session_id: evt.session_id,
-                shift_id: null,
-                action_category: evt.action_category,
-                created_at: evt.created_at,
-                approving_supervisor_id: null,
-                payload: evt.payload,
-              });
-            },
-          },
-        });
+        // saleAuditEmitter + printPipeline + printDispatcher are hoisted above
+        // the receipts-bridge registration (T094c — unconditional handlers);
+        // the paired branch reuses them for the finalize-listener wiring.
         const finalizeTransaction = bindFinalizeTransaction({
           db: dbHandle,
           salesRepo,
@@ -860,42 +905,6 @@ app
           now: () => new Date().toISOString(),
           saleIdGenerator: () => randomUUID(),
           outboxRowIdGenerator: () => randomUUID(),
-        });
-
-        // ── T272/T273 — print pipeline + dispatcher (Slice 3) ──────────────
-        //
-        // The real ESC/POS transport (node-thermal-printer against the Epson
-        // TM-T20III) + the offscreen `webContents.print` window are the §A3
-        // HARDWARE bring-up (T200), deferred to the hardware session. Until
-        // then we wire an honest STUB transport: it reports `offline`, so each
-        // auto-fired first print records a clean `printer_offline` failure
-        // `print_events` row + raises the persistent banner, while the Sale
-        // stays durable. No fake "success" is ever recorded for a print that
-        // did not physically happen. T200 swaps these two adapters for the
-        // real transports; the dispatcher + seam below are unchanged.
-        const printPipeline = createPrintPipeline({
-          escposAdapter: createEscposAdapter({
-            transport: {
-              write: () => Promise.resolve(),
-              pollStatus: () => Promise.resolve('offline' as const),
-            },
-            statusTimeoutMs: 3000,
-          }),
-          osPrintAdapter: createOsPrintAdapter({
-            print: (_html, cb) => {
-              cb(false, 'os_print_transport_not_wired_until_T200');
-            },
-          }),
-          // No real printer attached pre-T200 → never claim ESC/POS support.
-          probeEscposSupport: () => Promise.resolve(false),
-        });
-        const printDispatcher = createPrintDispatcher({
-          pipeline: printPipeline,
-          printEventsRepo,
-          auditEmitter: saleAuditEmitter,
-          now: () => new Date().toISOString(),
-          newPrintEventId: () => randomUUID(),
-          logger: mainLogger,
         });
 
         // The AD-2 dispatch closure: project the settled payment into a
