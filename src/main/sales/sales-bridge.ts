@@ -351,10 +351,11 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       // `SalesSubscribeTopic` is the closed union `'recent' | 'banner_state'`,
       // so after the `banner_state` branch `req.topic` is narrowed to `'recent'`
       // — handle it directly (a redundant `if (topic === 'recent')` is an
-      // always-true comparison eslint rejects). A future-added topic surfaces as
-      // a compile error on the `never` assignment below, NOT a silent fallthrough.
-      const exhaustiveTopic: 'recent' = req.topic;
-      void exhaustiveTopic;
+      // always-true comparison eslint rejects). The `satisfies` anchor is a
+      // compile-time guard: a future-added topic widens `req.topic` and breaks
+      // this assertion at build time, rather than silently falling through to
+      // the `recent` projection.
+      req.topic satisfies 'recent';
       return await Promise.resolve({
         kind: 'ok',
         subscription_token,
