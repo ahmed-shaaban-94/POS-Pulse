@@ -35,6 +35,24 @@ function retryBridge(): ReceiptsBridgeAPI {
         printed_at: '2026-05-27T10:00:09.000Z',
       }),
     ),
+    reprint: vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        print_event_id: 'pe-r-1',
+        duplicate_copy_sequence_number: 1,
+        reprinted_at: '2026-05-27T10:00:09.000Z',
+        render_path: 'escpos_direct' as const,
+      }),
+    ),
+    manualOverride: vi.fn(() =>
+      Promise.resolve({
+        kind: 'ok' as const,
+        print_event_id: 'pe-mo-1',
+        purpose: 'first_print' as const,
+        outcome: 'manual_override' as const,
+        overridden_at: '2026-05-27T10:00:11.000Z',
+      }),
+    ),
   };
 }
 
@@ -51,7 +69,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: false,
         }}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={retryBridge()}
       />,
@@ -67,7 +84,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: true,
         }}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={retryBridge()}
       />,
@@ -87,7 +103,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: true,
         }}
-        onManualOverride={() => {}}
         onReprint={onReprint}
         _testReceiptsBridge={retryBridge()}
       />,
@@ -105,7 +120,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: false,
         }}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={bridge}
       />,
@@ -116,8 +130,8 @@ describe('T262 — affordance gating', () => {
     expect(bridge.retryPrint).toHaveBeenCalledWith(expect.objectContaining({ sale_id: 'sale-1' }));
   });
 
-  it('Manual receipt is always enabled while failed and calls onManualOverride', async () => {
-    const onManualOverride = vi.fn();
+  it('Manual receipt is always enabled while failed and calls receipts.manualOverride (T512)', async () => {
+    const bridge = retryBridge();
     render(
       <PrinterFailureBanner
         printFailure={{
@@ -125,15 +139,16 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: false,
         }}
-        onManualOverride={onManualOverride}
         onReprint={() => {}}
-        _testReceiptsBridge={retryBridge()}
+        _testReceiptsBridge={bridge}
       />,
     );
     const manual = screen.getByRole('button', { name: /manual/i });
     expect(manual).toBeEnabled();
     await userEvent.click(manual);
-    expect(onManualOverride).toHaveBeenCalledWith('sale-1');
+    expect(bridge.manualOverride).toHaveBeenCalledWith(
+      expect.objectContaining({ sale_id: 'sale-1' }),
+    );
   });
 
   it('passes a fresh idempotency_key on each Retry (FR-053)', async () => {
@@ -145,7 +160,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: false,
         }}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={bridge}
         _idempotencyKeyFactory={() => 'fixed-key-1'}
@@ -170,7 +184,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: false,
         }}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={rejecting}
       />,
@@ -190,7 +203,6 @@ describe('T262 — affordance gating', () => {
           failure_reason: 'printer_offline',
           has_successful_print: false,
         }}
-        onManualOverride={() => {}}
         onReprint={() => {}}
       />,
     );

@@ -101,9 +101,9 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
             onReprint={() => {
               // Slice 5 (receipts.reprint) — entry-point only for now.
             }}
-            onManualOverride={() => {
-              // Slice 6 (receipts.manualOverride) — entry-point only for now.
-            }}
+            /* T512: Manual receipt now calls receipts.manualOverride directly
+               inside the banner; no onManualOverride prop. The banner dismisses
+               via the banner_state projection once the override row lands. */
           />
           {/* T361 — persistent drawer-failure banner, stacked BELOW the printer
               banner (NFR-008 order). Coexists with it. Manual receipt is an

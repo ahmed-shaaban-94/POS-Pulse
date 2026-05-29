@@ -20,6 +20,8 @@ import type {
   ReceiptsRetryPrintResponse,
   ReceiptsReprintRequest,
   ReceiptsReprintResponse,
+  ReceiptsManualOverrideRequest,
+  ReceiptsManualOverrideResponse,
 } from '../../shared/bridge-api.js';
 
 export interface ReceiptsIpcDeps {
@@ -54,6 +56,17 @@ export function registerReceiptsHandlers(ipcMain: IpcMain, deps: ReceiptsIpcDeps
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<ReceiptsReprintResponse> => {
       if (!isObject(request)) return { kind: 'refused', reason: 'sale_not_found' };
       return receiptsBridge.reprint(request as unknown as ReceiptsReprintRequest);
+    },
+  );
+
+  ipcMain.handle(
+    RECEIPTS_IPC_CHANNELS.MANUAL_OVERRIDE,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<ReceiptsManualOverrideResponse> => {
+      if (!isObject(request)) return { kind: 'refused', reason: 'sale_not_found' };
+      return receiptsBridge.manualOverride(request as unknown as ReceiptsManualOverrideRequest);
     },
   );
 }

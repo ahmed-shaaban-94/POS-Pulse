@@ -53,7 +53,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -71,7 +70,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -90,7 +88,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={null}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -104,7 +101,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     const { unmount } = render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -129,7 +125,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
@@ -145,7 +140,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
@@ -161,7 +155,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -183,7 +176,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     const { unmount } = render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -217,7 +209,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     const { unmount } = render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}

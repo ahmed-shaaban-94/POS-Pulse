@@ -52,7 +52,6 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={okReceiptsBridge()}
       />,
@@ -64,7 +63,6 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
     const { container } = render(
       <PrinterFailureBanner
         printFailure={null}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={okReceiptsBridge()}
       />,
@@ -76,7 +74,6 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={okReceiptsBridge()}
       />,
@@ -95,7 +92,6 @@ describe('T260 — PrinterFailureBanner mounts on failure + carries 3 affordance
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={okReceiptsBridge()}
       />,

@@ -25,7 +25,11 @@ import type { SaleId } from '../../../shared/sales/types.js';
  * `receipts.retryPrint` with a fresh idempotency key per FR-053). Reprint is
  * DISABLED until a prior successful print exists (AD-10 precondition —
  * contract line 310); in the failure state none exists, so it is disabled.
- * Manual receipt is an entry-point only (manual-override is Slice 6 / T512).
+ * Manual receipt (T512) calls `receipts.manualOverride` directly with a fresh
+ * idempotency key, mirroring Retry: a local in-flight phase guards the button,
+ * and the banner dismisses via the parent projection (the manual_override row
+ * is a later print_events row, so banner-state-projector stops surfacing the
+ * failure) — no local force-dismiss.
  */
 
 /** The projected banner state: which sale's print failed + whether reprint is eligible. */
@@ -39,8 +43,6 @@ export interface PrinterFailureState {
 export interface PrinterFailureBannerProps {
   /** Null → the banner is unmounted (not hidden). Non-null → a print failed. */
   printFailure: PrinterFailureState | null;
-  /** Entry-point for the Slice-6 manual-override surface (T512); receives the sale id. */
-  onManualOverride: (saleId: string) => void;
   /**
    * Entry-point for the Slice-5 reprint surface (T4xx — `receipts.reprint`
    * does not exist yet); receives the sale id. REQUIRED (not optional) to
@@ -79,7 +81,6 @@ type RetryPhase = 'idle' | 'retrying';
 
 export function PrinterFailureBanner({
   printFailure,
-  onManualOverride,
   onReprint,
   _testReceiptsBridge,
   _testSalesBridge,
@@ -87,6 +88,7 @@ export function PrinterFailureBanner({
 }: PrinterFailureBannerProps): JSX.Element | null {
   const messageId = useId();
   const [retryPhase, setRetryPhase] = useState<RetryPhase>('idle');
+  const [manualPhase, setManualPhase] = useState<RetryPhase>('idle');
   const keyFactory = _idempotencyKeyFactory ?? defaultKeyFactory;
 
   const saleId = printFailure?.sale_id ?? null;
@@ -140,6 +142,25 @@ export function PrinterFailureBanner({
       })
       .catch(() => {
         setRetryPhase('idle');
+      });
+  };
+
+  // T512 — Manual receipt override. Mirrors handleRetry: calls
+  // `receipts.manualOverride` directly with a fresh key, manages a local
+  // in-flight phase, and lets the parent projection dismiss the banner (the
+  // manual_override row supersedes the failure in banner-state-projector — no
+  // local force-dismiss).
+  const handleManualOverride = (): void => {
+    const bridge = resolveReceiptsBridge(_testReceiptsBridge);
+    if (bridge === null) return;
+    setManualPhase('retrying');
+    void bridge
+      .manualOverride({ sale_id: printFailure.sale_id as SaleId, idempotency_key: keyFactory() })
+      .then(() => {
+        setManualPhase('idle');
+      })
+      .catch(() => {
+        setManualPhase('idle');
       });
   };
 
@@ -200,9 +221,8 @@ export function PrinterFailureBanner({
         <button
           type="button"
           className="btn btn--md btn--ghost"
-          onClick={() => {
-            onManualOverride(printFailure.sale_id);
-          }}
+          onClick={handleManualOverride}
+          disabled={manualPhase === 'retrying'}
           aria-label="Manual receipt — إيصال يدوي"
         >
           <span lang="ar">إيصال يدوي</span>

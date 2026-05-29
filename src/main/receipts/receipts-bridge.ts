@@ -16,6 +16,7 @@
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
 import type { SalesRepository, SaleRow } from '../sales/repositories/sales.repository.js';
 import type { PrintEventsRepository } from '../sales/repositories/print-events.repository.js';
+import type { SaleAuditEmitter } from '../sales/audit-emitter.js';
 import type { OperatorSessionForSales } from '../sales/sales-bridge.js';
 import type {
   ReceiptsBridgeAPI,
@@ -25,6 +26,8 @@ import type {
   ReceiptsRetryPrintResponse,
   ReceiptsReprintRequest,
   ReceiptsReprintResponse,
+  ReceiptsManualOverrideRequest,
+  ReceiptsManualOverrideResponse,
 } from '../../shared/bridge-api.js';
 import { deriveReceiptPayload } from './receipts-payload.js';
 import { renderReceipt } from './template-engine.js';
@@ -92,13 +95,21 @@ export interface ReceiptsBridgeDependencies {
    */
   printEventsRepo: Pick<
     PrintEventsRepository,
-    'readBySale' | 'hasSuccessfulPrint' | 'countReprints'
+    'readBySale' | 'hasSuccessfulPrint' | 'countReprints' | 'insert'
   >;
   /**
    * S3 retryPrint: re-runs the print pipeline + writes the retry row.
    * S5 reprint: writes the `purpose='reprint'` row + reprinted audit event.
    */
   printDispatcher: Pick<PrintDispatcher, 'dispatchRetryPrint' | 'dispatchReprint'>;
+  /**
+   * S6 manualOverride: emits the `sale.receipt.manual_override` audit event via
+   * `emitRaw` + writes the override print_events row directly (no dispatcher —
+   * no slip is rendered). Optional — absent in S2/S3/S5-era construction.
+   */
+  auditEmitter?: Pick<SaleAuditEmitter, 'emitRaw'>;
+  /** S6 manualOverride: id generator for the override print_events PK. */
+  newPrintEventId?: () => string;
   /**
    * S4 (optional): chains the drawer-kick after a retry that SUCCEEDS. Per
    * FR-052, a retry-success IS the canonical first print, so it runs the same
@@ -128,8 +139,14 @@ type ScopedSale =
   | { ok: false; reason: 'no_session' | 'sale_not_found' };
 
 export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): ReceiptsBridge {
-  const { getCurrentSession, salesRepo, printEventsRepo, printDispatcher, drawerKickDispatcher } =
-    deps;
+  const {
+    getCurrentSession,
+    salesRepo,
+    printEventsRepo,
+    printDispatcher,
+    drawerKickDispatcher,
+    auditEmitter,
+  } = deps;
   const now = deps.now ?? ((): string => new Date().toISOString());
 
   function scopedSale(sale_id: string): ScopedSale {
@@ -226,16 +243,17 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
       }
 
       // Idempotency / FR-052 double-print guard (Path A — key-on-state, Ahmed
-      // 2026-05-29). A sale that ALREADY has a successful or manual_override
-      // print must NOT print again — a re-fired retry is a no-op that returns
-      // the original success outcome. This keys idempotency on durable print
-      // state rather than a client token (print_events has no idempotency_key
-      // column; migrations 0020-0027 are sign-off-frozen). The contract's
-      // payload-mismatch arm is unreachable for a sale-scoped key.
+      // 2026-05-29). A sale that ALREADY printed SUCCESSFULLY must NOT print
+      // again — a re-fired retry is a no-op returning the original success.
+      //
+      // NARROWED in Slice 6 (Ahmed 2026-05-30) to outcome='success' ONLY — a
+      // prior `manual_override` is NON-terminal: the cashier may still retry
+      // once the printer is back online (contract §receipts.manualOverride:
+      // "The cashier can still invoke receipts.retryPrint later"). So an
+      // override no longer blocks the retry — the retry-success becomes the
+      // canonical first print (FR-052), and drawer gating runs on it (T502/T503).
       const priorEvents = printEventsRepo.readBySale(req.sale_id);
-      const alreadyPrinted = priorEvents.find(
-        (e) => e.outcome === 'success' || e.outcome === 'manual_override',
-      );
+      const alreadyPrinted = priorEvents.find((e) => e.outcome === 'success');
       if (alreadyPrinted !== undefined) {
         return {
           kind: 'ok',
@@ -420,5 +438,87 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         render_path: result.render_path,
       };
     },
+
+    manualOverride(req: ReceiptsManualOverrideRequest): Promise<ReceiptsManualOverrideResponse> {
+      // Synchronous internally (one INSERT + one emit, no awaited I/O) but the
+      // bridge contract is Promise-returning; resolve the computed result. (Not
+      // `async` — there is no await, which lint would flag.)
+      return Promise.resolve(runManualOverride(req));
+    },
   };
+
+  function runManualOverride(req: ReceiptsManualOverrideRequest): ReceiptsManualOverrideResponse {
+    // §A4 #2 — forbidden-field guard first.
+    const forbidden = findForbiddenKey(req);
+    if (forbidden !== null) {
+      return { kind: 'refused', reason: 'forbidden_field_in_request' };
+    }
+
+    const scoped = scopedSale(req.sale_id);
+    if (!scoped.ok) {
+      return { kind: 'refused', reason: scoped.reason };
+    }
+    const { row, session } = scoped;
+
+    // Idempotency (T504, Path A — key-on-state): a sale that ALREADY has a
+    // manual_override is a no-op returning the original row. print_events has
+    // no idempotency_key column (migrations frozen), so the durable state IS
+    // the key. The contract's payload-mismatch arm is unreachable for a
+    // sale-scoped key. (A manual_override is distinct from a print SUCCESS —
+    // a sale can be overridden then later print successfully on retry, so we
+    // key only on a prior manual_override here, not on any success.)
+    const priorOverride = printEventsRepo
+      .readBySale(req.sale_id)
+      .find((e) => e.outcome === 'manual_override');
+    if (priorOverride !== undefined) {
+      return {
+        kind: 'ok',
+        print_event_id: priorOverride.print_event_id,
+        purpose: 'first_print',
+        outcome: 'manual_override',
+        overridden_at: priorOverride.printed_at,
+      };
+    }
+
+    // No slip is rendered — the cashier handled the receipt out-of-band. Write
+    // the print_events row directly (NOT via the dispatcher, which would render
+    // + set render_path; the CHECK requires render_path NULL on a
+    // manual_override row). Attribution is the CURRENT (overriding) operator.
+    const overridden_at = now();
+    const print_event_id = (deps.newPrintEventId ?? ((): string => overridden_at))();
+    printEventsRepo.insert({
+      print_event_id,
+      sale_id: row.sale_id,
+      outcome: 'manual_override',
+      purpose: 'first_print',
+      render_path: null,
+      acting_operator_id: session.operator_id,
+      acting_operator_session_id: session.operator_session_id,
+      duplicate_copy_sequence_number: null,
+      failure_reason: null,
+      previous_failed_print_event_ids: null,
+      printed_at: overridden_at,
+    });
+
+    // Emit the audit event (structural only — no slip content). emitRaw allows
+    // sale.receipt.manual_override (it is in the non-finalize raw category set).
+    auditEmitter?.emitRaw({
+      action_category: 'sale.receipt.manual_override',
+      attribution_operator_id: session.operator_id,
+      tenant_id: row.tenant_id,
+      branch_id: row.branch_id,
+      originating_terminal_id: row.terminal_id,
+      session_id: session.operator_session_id,
+      created_at: overridden_at,
+      payload: { sale_id: row.sale_id, print_event_id },
+    });
+
+    return {
+      kind: 'ok',
+      print_event_id,
+      purpose: 'first_print',
+      outcome: 'manual_override',
+      overridden_at,
+    };
+  }
 }
