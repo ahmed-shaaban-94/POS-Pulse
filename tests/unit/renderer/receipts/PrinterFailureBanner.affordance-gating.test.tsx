@@ -194,6 +194,35 @@ describe('T262 — affordance gating', () => {
     await waitFor(() => expect(retry).toBeEnabled());
   });
 
+  it('recovers (no crash, button re-enabled) when manualOverride rejects (T512 catch arm)', async () => {
+    // Symmetric with the retryPrint-rejects case above: handleManualOverride's
+    // .catch clears the local in-flight phase so the Manual button is
+    // interactive again. The banner stays up (dismissal is the parent's job).
+    const rejecting: ReceiptsBridgeAPI = {
+      preview: vi.fn(),
+      retryPrint: vi.fn(),
+      manualOverride: vi.fn(() => Promise.reject(new Error('ipc boom'))),
+    };
+    render(
+      <PrinterFailureBanner
+        printFailure={{
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: false,
+        }}
+        onReprint={() => {}}
+        _testReceiptsBridge={rejecting}
+      />,
+    );
+    const manual = screen.getByRole('button', { name: /manual/i });
+    await userEvent.click(manual);
+    expect(rejecting.manualOverride).toHaveBeenCalledWith(
+      expect.objectContaining({ sale_id: 'sale-1' }),
+    );
+    await waitFor(() => expect(manual).toBeEnabled());
+    expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+  });
+
   it('Retry is a no-op when no receipts bridge is available (null resolve, no crash)', async () => {
     // No _testReceiptsBridge and no window.api.receipts → resolveReceiptsBridge null.
     render(
