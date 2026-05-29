@@ -277,6 +277,21 @@ Four decisions recorded before the T290 `/impeccable craft` (per `docs/impeccabl
    - `tests/unit/renderer/receipts/PrinterFailureBanner.affordance-gating.test.tsx`
    - `tests/unit/renderer/receipts/PrinterFailureBanner.a11y.test.tsx`
 
+### T360 `<DrawerFailureBanner>` red-bar record (2026-05-30, S4b)
+
+**Third `[IMPECCABLE craft]` marker (T360).** Per `impeccable-embed-preflight §4.2` + `s4-preflight.md §4.2`, the three failing test files for `<DrawerFailureBanner>` were written and confirmed **RED locally** (3 files failed — `src/renderer/ui/receipts/DrawerFailureBanner.tsx` does not yet exist; import fails) on 2026-05-30 BEFORE the T360 `/impeccable craft 008-drawer-failure-banner` invocation:
+
+- `tests/unit/renderer/receipts/DrawerFailureBanner.persistence.test.tsx` (T330 — mounts on `outcome='failed'`; relative `last_successful_open_at` via `formatRelativeTime`; ≥44×44 manual-override; no close-X; visually distinct from the printer banner)
+- `tests/unit/renderer/receipts/DrawerFailureBanner.no-retry.test.tsx` (T331 — NO retry-kick / reprint affordance; manual-override is the ONLY action, per quickstart §Path D + FR-053)
+- `tests/unit/renderer/receipts/DrawerFailureBanner.a11y.test.tsx` (T332 — role=status/aria-live=polite/aria-atomic; no focus-steal on mount; 44×44; axe-clean)
+
+Result: `Test Files 3 failed (3) · Tests no tests`. Craft invoked immediately after this record.
+
+**S4b craft bindings (per `s4-preflight.md §5.2`):**
+- Subscribes to `sales.subscribe(topic='banner_state')` via a new `useDrawerBannerState` hook reading the `.drawer_failure` slice of the coexistence `BannerState` record (PR #285 contract precursor).
+- Manual-override is a **required `onManualOverride` prop** wired to a placeholder in `AppShell.tsx` (the real `receipts.manualOverride` handler is Slice 6 / T512) — the `enabled⟹wired` lesson; mirrors the printer banner's stub posture (Ahmed-approved 2026-05-29).
+- Mounts in `AppShell.tsx` as a sibling BELOW `<PrinterFailureBanner>` (NFR-008 stack order). **No `BannerHost.tsx`** — same stale-path correction as T291/T352 (that file never existed).
+
 ---
 
 ## Dependencies

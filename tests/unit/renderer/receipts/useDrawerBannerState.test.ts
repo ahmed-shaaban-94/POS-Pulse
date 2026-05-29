@@ -1,0 +1,154 @@
+/* eslint-disable @typescript-eslint/unbound-method --
+ * vi.fn-typed bridge spies trigger this rule on expect(...) assertions.
+ */
+/**
+ * useDrawerBannerState — renderer poll hook for the `.drawer_failure` slice.
+ *
+ * Maps the coexistence `BannerState` record's `drawer_failure` slice to the
+ * `<DrawerFailureBanner>` prop shape. A printer-only / none / refused / errored
+ * response yields null. Printer failures are NOT surfaced here (that's
+ * useBannerState). The interval is cleared on unmount.
+ */
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
+
+import { useDrawerBannerState } from '../../../../src/renderer/ui/receipts/useDrawerBannerState.js';
+import type { SalesBridgeAPI } from '../../../../src/shared/bridge-api.js';
+import type { BannerState } from '../../../../src/shared/sales/types.js';
+
+function salesBridge(banner: BannerState): SalesBridgeAPI {
+  return {
+    read: vi.fn(),
+    findByNumber: vi.fn(),
+    subscribe: vi.fn(() =>
+      Promise.resolve({ kind: 'ok' as const, subscription_token: 'tok-1', banner_state: banner }),
+    ),
+    unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+  };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+describe('useDrawerBannerState', () => {
+  it('maps a drawer_failure slice to DrawerFailureState on first poll', async () => {
+    const bridge = salesBridge({
+      printer_failure: null,
+      drawer_failure: { sale_id: 'sale-1', last_successful_open_at: '2026-05-29T08:00:00.000Z' },
+    });
+    const { result } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(result.current).not.toBeNull();
+    });
+    expect(result.current).toEqual({
+      sale_id: 'sale-1',
+      last_successful_open_at: '2026-05-29T08:00:00.000Z',
+    });
+  });
+
+  it('yields null for a printer-only failure (drawer banner does not surface it)', async () => {
+    const bridge = salesBridge({
+      printer_failure: {
+        sale_id: 'sale-1',
+        failure_reason: 'printer_offline',
+        has_successful_print: false,
+      },
+      drawer_failure: null,
+    });
+    const { result } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    expect(result.current).toBeNull();
+  });
+
+  it('surfaces the drawer slice even when a printer failure coexists', async () => {
+    // Coexistence: both slices non-null. This hook reads ONLY drawer.
+    const bridge = salesBridge({
+      printer_failure: {
+        sale_id: 'sale-2',
+        failure_reason: 'printer_offline',
+        has_successful_print: false,
+      },
+      drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
+    });
+    const { result } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(result.current).not.toBeNull();
+    });
+    expect(result.current?.sale_id).toBe('sale-1');
+  });
+
+  it('yields null for a both-null BannerState', async () => {
+    const bridge = salesBridge({ printer_failure: null, drawer_failure: null });
+    const { result } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    expect(result.current).toBeNull();
+  });
+
+  it('yields null when subscribe refuses', async () => {
+    const bridge: SalesBridgeAPI = {
+      read: vi.fn(),
+      findByNumber: vi.fn(),
+      subscribe: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, reason: 'no_session' as const }),
+      ),
+      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    };
+    const { result } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    expect(result.current).toBeNull();
+  });
+
+  it('yields null and does not throw when subscribe rejects', async () => {
+    const bridge: SalesBridgeAPI = {
+      read: vi.fn(),
+      findByNumber: vi.fn(),
+      subscribe: vi.fn(() => Promise.reject(new Error('ipc boom'))),
+      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    };
+    const { result } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    expect(result.current).toBeNull();
+  });
+
+  it('stops polling after unmount (no further subscribe calls)', async () => {
+    vi.useFakeTimers();
+    const bridge = salesBridge({ printer_failure: null, drawer_failure: null });
+    const { unmount } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+    const callsBefore = (bridge.subscribe as ReturnType<typeof vi.fn>).mock.calls.length;
+    unmount();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect((bridge.subscribe as ReturnType<typeof vi.fn>).mock.calls.length).toBe(callsBefore);
+  });
+
+  it('returns null when no sales bridge is available (no crash)', async () => {
+    const { result } = renderHook(() => useDrawerBannerState({ intervalMs: 1000 }));
+    await Promise.resolve();
+    expect(result.current).toBeNull();
+  });
+});
