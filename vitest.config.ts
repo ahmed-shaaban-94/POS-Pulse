@@ -42,6 +42,11 @@ export default defineConfig({
         // wire-up; correctness is proven by the SalesBridgeAPI typing
         // and the manual Electron smoke (T111).
         'src/preload/sales.ts',
+        // 008 S2: receipts-specific preload entry — same posture as
+        // src/preload/sales.ts above. Thin ipcRenderer.invoke wire-up;
+        // correctness is proven by the ReceiptsBridgeAPI typing + the
+        // ReceiptPreview window.api.receipts fallback test + the T181 smoke.
+        'src/preload/receipts.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',
@@ -135,6 +140,33 @@ export default defineConfig({
         // Spec §A5 requires ≥95%. All read sources + refusal branches are
         // exercised by tests/unit/main/sales/finalize-dispatch.test.ts.
         'src/main/sales/finalize-dispatch.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        // T164 — 008 Slice 2 receipt-payload derivation. Spec §A5 requires
+        // ≥95% on the payload generator. Exercised by
+        // tests/unit/main/receipts/receipts-payload.test.ts.
+        'src/main/receipts/receipts-payload.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        // T160 — 008 Slice 2 AD-6 template engine. Spec §A5 requires ≥95% on
+        // the template engine. compose + both serialisers exercised by
+        // tests/unit/main/receipts/template-engine.test.ts.
+        'src/main/receipts/template-engine.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        // T170 — 008 Slice 2 receipts.preview bridge handler. Spec §A5 ≥95% on
+        // the bridge. All gate/isolation/forbidden/render paths exercised by
+        // tests/unit/main/receipts/bridge.receipts-preview.test.ts.
+        'src/main/receipts/receipts-bridge.ts': {
           lines: 95,
           branches: 95,
           functions: 95,
