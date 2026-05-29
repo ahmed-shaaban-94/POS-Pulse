@@ -51,12 +51,8 @@ export function useBannerState(options: UseBannerStateOptions = {}): PrinterFail
         .subscribe({ topic: 'banner_state' })
         .then((res) => {
           if (cancelled) return;
-          if (
-            res.kind === 'ok' &&
-            'banner_state' in res &&
-            res.banner_state.kind === 'printer_failure'
-          ) {
-            const b = res.banner_state;
+          if (res.kind === 'ok' && 'banner_state' in res && res.banner_state.printer_failure) {
+            const b = res.banner_state.printer_failure;
             setPrintFailure({
               sale_id: b.sale_id,
               failure_reason: b.failure_reason,

@@ -50,19 +50,21 @@ describe('T291 — AppShell printer-failure banner integration', () => {
   it('mounts the banner when the terminal has an unresolved print failure', async () => {
     (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
       sales: salesBridge({
-        kind: 'printer_failure',
-        sale_id: 'sale-1',
-        failure_reason: 'printer_offline',
-        has_successful_print: false,
+        printer_failure: {
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: false,
+        },
+        drawer_failure: null,
       }),
     };
     renderShell();
     await waitFor(() => expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument());
   });
 
-  it('does NOT render the banner when there is no print failure (kind:none)', async () => {
+  it('does NOT render the banner when there is no print failure (both-null)', async () => {
     (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
-      sales: salesBridge({ kind: 'none' }),
+      sales: salesBridge({ printer_failure: null, drawer_failure: null }),
     };
     renderShell();
     // The dashboard renders; the banner does not.
@@ -81,10 +83,12 @@ describe('T291 — AppShell printer-failure banner integration', () => {
     // 5/6 stubs; this proves they are wired (enabled⟹wired) and inert-safe.
     (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
       sales: salesBridge({
-        kind: 'printer_failure',
-        sale_id: 'sale-1',
-        failure_reason: 'printer_offline',
-        has_successful_print: true,
+        printer_failure: {
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: true,
+        },
+        drawer_failure: null,
       }),
     };
     renderShell();

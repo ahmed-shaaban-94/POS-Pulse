@@ -40,10 +40,12 @@ afterEach(() => {
 describe('useBannerState', () => {
   it('maps a printer_failure BannerState to PrinterFailureState on first poll', async () => {
     const bridge = salesBridge({
-      kind: 'printer_failure',
-      sale_id: 'sale-1',
-      failure_reason: 'printer_offline',
-      has_successful_print: false,
+      printer_failure: {
+        sale_id: 'sale-1',
+        failure_reason: 'printer_offline',
+        has_successful_print: false,
+      },
+      drawer_failure: null,
     });
     const { result } = renderHook(() =>
       useBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
@@ -59,7 +61,7 @@ describe('useBannerState', () => {
   });
 
   it('yields null for a kind:none BannerState', async () => {
-    const bridge = salesBridge({ kind: 'none' });
+    const bridge = salesBridge({ printer_failure: null, drawer_failure: null });
     const { result } = renderHook(() =>
       useBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
     );
@@ -71,7 +73,10 @@ describe('useBannerState', () => {
   });
 
   it('yields null for a drawer_failure BannerState (printer banner only)', async () => {
-    const bridge = salesBridge({ kind: 'drawer_failure', sale_id: 'sale-1' });
+    const bridge = salesBridge({
+      printer_failure: null,
+      drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
+    });
     const { result } = renderHook(() =>
       useBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
     );
@@ -93,12 +98,14 @@ describe('useBannerState', () => {
         const banner: BannerState =
           call === 1
             ? {
-                kind: 'printer_failure',
-                sale_id: 'sale-1',
-                failure_reason: 'printer_offline',
-                has_successful_print: false,
+                printer_failure: {
+                  sale_id: 'sale-1',
+                  failure_reason: 'printer_offline',
+                  has_successful_print: false,
+                },
+                drawer_failure: null,
               }
-            : { kind: 'none' };
+            : { printer_failure: null, drawer_failure: null };
         return Promise.resolve({
           kind: 'ok' as const,
           subscription_token: 't',
@@ -159,7 +166,7 @@ describe('useBannerState', () => {
 
   it('stops polling after unmount (no further subscribe calls)', async () => {
     vi.useFakeTimers();
-    const bridge = salesBridge({ kind: 'none' });
+    const bridge = salesBridge({ printer_failure: null, drawer_failure: null });
     const { unmount } = renderHook(() =>
       useBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
     );
@@ -179,10 +186,12 @@ describe('useBannerState', () => {
   it('uses the default interval when none is supplied (no options at all)', async () => {
     (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
       sales: salesBridge({
-        kind: 'printer_failure',
-        sale_id: 'sale-1',
-        failure_reason: 'printer_offline',
-        has_successful_print: false,
+        printer_failure: {
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: false,
+        },
+        drawer_failure: null,
       }),
     };
     const { result } = renderHook(() => useBannerState());
@@ -222,10 +231,12 @@ describe('useBannerState', () => {
       kind: 'ok',
       subscription_token: 't',
       banner_state: {
-        kind: 'printer_failure',
-        sale_id: 'sale-1',
-        failure_reason: 'printer_offline',
-        has_successful_print: false,
+        printer_failure: {
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: false,
+        },
+        drawer_failure: null,
       },
     });
     await Promise.resolve();

@@ -92,35 +92,37 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     for (const sql of MIGRATIONS) db.exec(sql);
   });
 
-  it('returns kind:none when there are no print/drawer events', () => {
+  it('returns both-null when there are no print/drawer events', () => {
     seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
-    expect(projector(db).projectBannerState(SCOPE)).toEqual({ kind: 'none' });
+    expect(projector(db).projectBannerState(SCOPE)).toEqual({
+      printer_failure: null,
+      drawer_failure: null,
+    });
   });
 
   it('returns printer_failure for a sale whose latest print event is a failure', () => {
     seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
     printEvent(db, 'pe-1', 'sale-1', 'failure', '2026-05-27T10:00:05.000Z');
     const state = projector(db).projectBannerState(SCOPE);
-    expect(state.kind).toBe('printer_failure');
-    if (state.kind === 'printer_failure') {
-      expect(state.sale_id).toBe('sale-1');
-      expect(state.failure_reason).toBe('printer_offline');
-      expect(state.has_successful_print).toBe(false);
-    }
+    expect(state.printer_failure).not.toBeNull();
+    expect(state.printer_failure?.sale_id).toBe('sale-1');
+    expect(state.printer_failure?.failure_reason).toBe('printer_offline');
+    expect(state.printer_failure?.has_successful_print).toBe(false);
+    expect(state.drawer_failure).toBeNull();
   });
 
-  it('clears (kind:none) when a later SUCCESS exists on the SAME sale', () => {
+  it('clears (printer_failure:null) when a later SUCCESS exists on the SAME sale', () => {
     seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
     printEvent(db, 'pe-1', 'sale-1', 'failure', '2026-05-27T10:00:05.000Z');
     printEvent(db, 'pe-2', 'sale-1', 'success', '2026-05-27T10:00:09.000Z');
-    expect(projector(db).projectBannerState(SCOPE)).toEqual({ kind: 'none' });
+    expect(projector(db).projectBannerState(SCOPE).printer_failure).toBeNull();
   });
 
   it('clears when a later manual_override exists on the same sale', () => {
     seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
     printEvent(db, 'pe-1', 'sale-1', 'failure', '2026-05-27T10:00:05.000Z');
     printEvent(db, 'pe-2', 'sale-1', 'manual_override', '2026-05-27T10:00:09.000Z');
-    expect(projector(db).projectBannerState(SCOPE)).toEqual({ kind: 'none' });
+    expect(projector(db).projectBannerState(SCOPE).printer_failure).toBeNull();
   });
 
   it('SILENT-FAILURE GUARD: a newer sale SUCCESS does NOT clear an older sale FAILURE', () => {
@@ -131,8 +133,7 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     seedSale(db, 'sale-B', '2026-05-27T10:05:00.000Z');
     printEvent(db, 'pe-B', 'sale-B', 'success', '2026-05-27T10:05:02.000Z');
     const state = projector(db).projectBannerState(SCOPE);
-    expect(state.kind).toBe('printer_failure');
-    if (state.kind === 'printer_failure') expect(state.sale_id).toBe('sale-A');
+    expect(state.printer_failure?.sale_id).toBe('sale-A');
   });
 
   it('with two unresolved failures, surfaces the most-recently-finalized one', () => {
@@ -141,7 +142,7 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     seedSale(db, 'sale-B', '2026-05-27T10:05:00.000Z');
     printEvent(db, 'pe-B', 'sale-B', 'failure', '2026-05-27T10:05:02.000Z');
     const state = projector(db).projectBannerState(SCOPE);
-    if (state.kind === 'printer_failure') expect(state.sale_id).toBe('sale-B');
+    expect(state.printer_failure?.sale_id).toBe('sale-B');
   });
 
   it('reports has_successful_print=true when the sale had an earlier success (AD-10)', () => {
@@ -150,14 +151,17 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
     printEvent(db, 'pe-2', 'sale-1', 'failure', '2026-05-27T10:10:00.000Z');
     const state = projector(db).projectBannerState(SCOPE);
-    expect(state.kind).toBe('printer_failure');
-    if (state.kind === 'printer_failure') expect(state.has_successful_print).toBe(true);
+    expect(state.printer_failure).not.toBeNull();
+    expect(state.printer_failure?.has_successful_print).toBe(true);
   });
 
   it('tenant-isolation: a failure on another terminal/tenant is NOT surfaced', () => {
     seedSale(db, 'sale-other', '2026-05-27T10:00:00.000Z', { terminal_id: 'terminal-2' });
     printEvent(db, 'pe-o', 'sale-other', 'failure', '2026-05-27T10:00:05.000Z');
-    expect(projector(db).projectBannerState(SCOPE)).toEqual({ kind: 'none' });
+    expect(projector(db).projectBannerState(SCOPE)).toEqual({
+      printer_failure: null,
+      drawer_failure: null,
+    });
   });
 
   it('returns drawer_failure when a sale has a failed drawer event and no printer failure', () => {
@@ -173,11 +177,29 @@ describe('banner-state projector — per-sale, no silent masking', () => {
          NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
     );
     const state = projector(db).projectBannerState(SCOPE);
-    expect(state.kind).toBe('drawer_failure');
-    if (state.kind === 'drawer_failure') expect(state.sale_id).toBe('sale-1');
+    expect(state.drawer_failure).not.toBeNull();
+    expect(state.drawer_failure?.sale_id).toBe('sale-1');
+    expect(state.printer_failure).toBeNull();
   });
 
-  it('printer_failure takes precedence over a concurrent drawer_failure', () => {
+  it('drawer_failure carries last_successful_open_at from the failed row', () => {
+    seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+    printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-1', 'sale-1', 'failed', NULL, 'printer_dk_failure',
+         '2026-05-27T08:30:00.000Z', 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+    );
+    const state = projector(db).projectBannerState(SCOPE);
+    expect(state.drawer_failure?.last_successful_open_at).toBe('2026-05-27T08:30:00.000Z');
+  });
+
+  it('COEXISTENCE: a printer failure and a concurrent drawer failure are BOTH surfaced', () => {
+    // Slice-4 decision (Ahmed 2026-05-29): the two banners coexist. A
+    // single-kind union could only ever report one — the drawer failure would
+    // be silently hidden behind the printer failure. The record reports both.
     seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
     printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
     db.run(
@@ -190,7 +212,22 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     // A second sale with an unresolved print failure.
     seedSale(db, 'sale-2', '2026-05-27T10:10:00.000Z');
     printEvent(db, 'pe-2', 'sale-2', 'failure', '2026-05-27T10:10:05.000Z');
-    expect(projector(db).projectBannerState(SCOPE).kind).toBe('printer_failure');
+    const state = projector(db).projectBannerState(SCOPE);
+    expect(state.printer_failure?.sale_id).toBe('sale-2');
+    expect(state.drawer_failure?.sale_id).toBe('sale-1');
+  });
+
+  it('tenant-isolation: a drawer failure on another terminal is NOT surfaced', () => {
+    seedSale(db, 'sale-other', '2026-05-27T10:00:00.000Z', { terminal_id: 'terminal-2' });
+    printEvent(db, 'pe-o', 'sale-other', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-o', 'sale-other', 'failed', NULL, 'printer_dk_failure',
+         NULL, 'pe-o', 'terminal-2', '2026-05-27T10:00:06.000Z')`,
+    );
+    expect(projector(db).projectBannerState(SCOPE).drawer_failure).toBeNull();
   });
 });
 
