@@ -169,7 +169,13 @@ function wire(db: SqlJsDatabase, opts: { kickResult?: DrawerKickResult } = {}): 
     newDrawerEventId: () => `de-${String((dseq += 1))}`,
   });
 
-  const FINALIZED: FinalizeFinalized = { kind: 'finalized', sale_id: 'sale-1' };
+  const FINALIZED: FinalizeFinalized = {
+    kind: 'finalized',
+    sale_id: 'sale-1',
+    sale_number: 'TERM-01-2026-05-27-000001',
+    receipt_number: 'TERM-01-2026-05-27-000001',
+    finalized_at: '2026-05-27T10:00:06.000Z',
+  };
 
   return {
     run: () =>
