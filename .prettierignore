@@ -33,3 +33,9 @@ scripts/openapi-snapshot.json
 # format failure. A future `ci/` branch may format the workflow
 # properly and remove this entry.
 .github/workflows/update-loc-badge.yml
+
+# Architecture artifact doc — hand/tool-authored, not subject to project
+# prettier conventions (it has its own embedded styling/markup). Ignoring it
+# keeps the lint job green without a churny full-file reformat that could
+# re-break on the next edit.
+docs/architecture/pos-pulse-live-map.html

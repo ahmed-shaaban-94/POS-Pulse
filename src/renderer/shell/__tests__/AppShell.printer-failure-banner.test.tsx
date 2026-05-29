@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/unbound-method --
- * vi.fn-typed bridge spies trigger this rule on expect(...) assertions.
- */
 /**
  * T291 — AppShell mounts <PrinterFailureBanner> fed by useBannerState.
  *
