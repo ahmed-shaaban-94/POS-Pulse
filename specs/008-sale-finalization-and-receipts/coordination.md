@@ -40,9 +40,14 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 
 ## Current phase / status
 
-**Phase: PRE-IMPLEMENTATION — PHASE 1 SETUP.** Spec, plan, data-model, contracts, research, quickstart, tasks all authored (PR #238 merged 2026-05-26). `/speckit-analyze` remediations applied in PR #238. The `/impeccable` embed pattern is activated (PR #241 merged 2026-05-26 — see [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md)). Phase 1 (Setup & Coordination) is startable now; this file closes T001.
+**Phase: IMPLEMENTATION — SLICES 1 + 2 CODE-COMPLETE (human smoke/sign-off pending).** Setup (Phase 1) and Slice 0 (§A1 visual direction) are closed. Slices 1 and 2 are merged and code-complete; each still needs its human dev-build smoke + functional sign-off before it is fully closed:
 
-**Next-up:** Slice 1 (load-bearing) — migrations + persistence + AD-2 finalize listener + `sales.*` bridge — becomes startable once §A3 (migrations) AND §A4 (bridge-API security) sign-off evidence lands. §A1 is now ✅ cleared. **Parallel commitment:** Ahmed authors sub-items (a)/(b)/(c) printed-slip layouts in a follow-up commit before Slice 2's T173 craft fires (Slice 2 commission gate; not a Slice 1 blocker).
+- **Slice 1** (migrations + persistence + AD-2 finalize listener + `sales.*` bridge) — **code-complete** after PR #276 (T028a + T094b + T094c; the AD-2 worker is live behind the `sale_finalization` flag). T094a POS-Pulse-side pairing extension merged via PR #273. **Remaining: human smoke/sign-off — T111, T112, T113** (unchecked; checklist in §"Slice 1 closeout — T111 / T112 human smoke checklist" below, added via PR #277).
+- **Slice 2** (receipt payload + AD-6 template engine + `receipts.preview` + `<ReceiptPreview>`) — **code-complete** after PR #278. **Remaining: human smoke/sign-off — T181, T182** (unchecked).
+
+**Next-up:** complete the four open human smokes (T111/T112/T113 for Slice 1, T181/T182 for Slice 2), then Slice 3 (first-print pipeline). §A5 production-readiness remains **held** (rollout gate, not a slice-merge blocker).
+
+> Historical note: this file was authored in the pre-implementation phase; the original "PRE-IMPLEMENTATION — PHASE 1 SETUP" framing and the `/speckit-*` authoring rows below are preserved verbatim as the project record. The live status is the paragraph above.
 
 | Item | State |
 |:--|:--|
@@ -65,7 +70,9 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 | **T010 — Slice 0 visual direction brief authored** | ✅ Closed 2026-05-26 via PR #254 (renderer portion d–g drafted by `/impeccable shape`) + this PR's (a)/(b)/(c) deferred-acceptance recorded by Ahmed. File: [./visual-direction/README.md](./visual-direction/README.md). |
 | **T011 — Slice 0 review record signed** | ✅ Closed 2026-05-26 by this PR's §A1 sign-off block below. Reviewer: Ahmed. Result: `approved`. (a)/(b)/(c) deferred to follow-up commit before T173. |
 | Slice 0 visual direction | ✅ Cleared — see §A1 row |
-| Implementation slices 1–6 | ❌ All held — per-slice gate ownership below |
+| Slice 1 — finalize + persistence + AD-2 worker | ✅ Code-complete (PR #276; T094a via PR #273). Human smoke/sign-off T111/T112/T113 pending. |
+| Slice 2 — receipt payload + engine + preview | ✅ Code-complete (PR #278). Human smoke/sign-off T181/T182 pending. |
+| Implementation slices 3–6 | ❌ Held — per-slice gate ownership below |
 
 ---
 
