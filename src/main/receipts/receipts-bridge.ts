@@ -14,15 +14,19 @@
  */
 
 import { FORBIDDEN_PAYLOAD_KEYS } from '../../shared/audit/forbidden-keys.js';
-import type { SalesRepository } from '../sales/repositories/sales.repository.js';
+import type { SalesRepository, SaleRow } from '../sales/repositories/sales.repository.js';
+import type { PrintEventsRepository } from '../sales/repositories/print-events.repository.js';
 import type { OperatorSessionForSales } from '../sales/sales-bridge.js';
 import type {
   ReceiptsBridgeAPI,
   ReceiptsPreviewRequest,
   ReceiptsPreviewResponse,
+  ReceiptsRetryPrintRequest,
+  ReceiptsRetryPrintResponse,
 } from '../../shared/bridge-api.js';
 import { deriveReceiptPayload } from './receipts-payload.js';
 import { renderReceipt } from './template-engine.js';
+import type { PrintDispatcher, PrintDispatchContext } from './print-dispatcher.js';
 
 /** 80 mm Font A column width — the v1 printed-slip dimension (§(a) layout). */
 const PREVIEW_WIDTH_CHARS = 42;
@@ -78,10 +82,38 @@ export interface ReceiptsBridgeDependencies {
   /** Read-only: preview never writes. `insert` is in the Pick only to share
    *  the repository type; it is never called. */
   salesRepo: Pick<SalesRepository, 'readById' | 'insert'>;
+  /** S3 retryPrint: read prior failed print_events to build the lineage. */
+  printEventsRepo: Pick<PrintEventsRepository, 'readBySale'>;
+  /** S3 retryPrint: re-runs the print pipeline + writes the retry row. */
+  printDispatcher: Pick<PrintDispatcher, 'dispatchRetryPrint'>;
 }
 
+/**
+ * Tenant-isolation gate shared by the mutating handlers: returns the scoped
+ * Sale row, or a refusal reason. A cross-scope or missing row refuses as
+ * `sale_not_found` (no existence-distinguishing leak; §A4 #6).
+ */
+type ScopedSale =
+  | { ok: true; row: SaleRow; session: OperatorSessionForSales }
+  | { ok: false; reason: 'no_session' | 'sale_not_found' };
+
 export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): ReceiptsBridge {
-  const { getCurrentSession, salesRepo } = deps;
+  const { getCurrentSession, salesRepo, printEventsRepo, printDispatcher } = deps;
+
+  function scopedSale(sale_id: string): ScopedSale {
+    const session = getCurrentSession();
+    if (session === null) return { ok: false, reason: 'no_session' };
+    const row = salesRepo.readById(sale_id);
+    if (
+      row === null ||
+      row.tenant_id !== session.tenant_id ||
+      row.branch_id !== session.branch_id ||
+      row.terminal_id !== session.terminal_id
+    ) {
+      return { ok: false, reason: 'sale_not_found' };
+    }
+    return { ok: true, row, session };
+  }
 
   return {
     async preview(req: ReceiptsPreviewRequest): Promise<ReceiptsPreviewResponse> {
@@ -134,6 +166,106 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
           bilingual_locale: 'ar-EG-RTL-with-latin-en',
         },
       });
+    },
+
+    async retryPrint(req: ReceiptsRetryPrintRequest): Promise<ReceiptsRetryPrintResponse> {
+      // §A4 #2 — forbidden-field guard first.
+      const forbidden = findForbiddenKey(req);
+      if (forbidden !== null) {
+        return { kind: 'refused', reason: 'forbidden_field_in_request' };
+      }
+
+      const scoped = scopedSale(req.sale_id);
+      if (!scoped.ok) {
+        return { kind: 'refused', reason: scoped.reason };
+      }
+      const { row, session } = scoped;
+
+      // FR-052: a retry that succeeds is the canonical FIRST print — render the
+      // `first_print` variant (no duplicate-copy marker). The reprint variant
+      // is Slice 5's `receipts.reprint`, a different handler.
+      let payload;
+      try {
+        payload = deriveReceiptPayload(row, { variant: 'first_print' });
+      } catch {
+        // A corrupt persisted JSON column (engine-written, unreachable in
+        // practice) maps to sale_not_found rather than rejecting the IPC call.
+        return { kind: 'refused', reason: 'sale_not_found' };
+      }
+
+      // Idempotency / FR-052 double-print guard (Path A — key-on-state, Ahmed
+      // 2026-05-29). A sale that ALREADY has a successful or manual_override
+      // print must NOT print again — a re-fired retry is a no-op that returns
+      // the original success outcome. This keys idempotency on durable print
+      // state rather than a client token (print_events has no idempotency_key
+      // column; migrations 0020-0027 are sign-off-frozen). The contract's
+      // payload-mismatch arm is unreachable for a sale-scoped key.
+      const priorEvents = printEventsRepo.readBySale(req.sale_id);
+      const alreadyPrinted = priorEvents.find(
+        (e) => e.outcome === 'success' || e.outcome === 'manual_override',
+      );
+      if (alreadyPrinted !== undefined) {
+        return {
+          kind: 'ok',
+          outcome: 'success',
+          print_event_id: alreadyPrinted.print_event_id,
+          purpose: 'retry_after_failure',
+          render_path: alreadyPrinted.render_path ?? 'escpos_direct',
+          printed_at: alreadyPrinted.printed_at,
+        };
+      }
+
+      // Lineage: the ids of the prior FAILED print events for this sale, so the
+      // retry row records what it superseded (FR-052 audit trail).
+      const previousFailedPrintEventIds = priorEvents
+        .filter((e) => e.outcome === 'failure')
+        .map((e) => e.print_event_id);
+
+      const ctx: PrintDispatchContext = {
+        sale_id: row.sale_id,
+        tenant_id: row.tenant_id,
+        branch_id: row.branch_id,
+        terminal_id: row.terminal_id,
+        // Attribution is the CURRENT signed-in operator (the retrying operator),
+        // not the selling operator on the Sale row (FR-024).
+        session_id: session.operator_session_id,
+        attribution_operator_id: session.operator_id,
+      };
+
+      // An INFRA throw inside the dispatcher (render/INSERT/emit bug — not a
+      // printer fault) must NOT reject the IPC call with an unstructured error.
+      // Degrade to sale_not_found (the generic refusal); the Sale is durable
+      // and the renderer's banner stays raised for another retry.
+      let dispatched;
+      try {
+        dispatched = await printDispatcher.dispatchRetryPrint(
+          payload,
+          ctx,
+          previousFailedPrintEventIds,
+        );
+      } catch {
+        return { kind: 'refused', reason: 'sale_not_found' };
+      }
+      const { result, print_event_id, printed_at } = dispatched;
+
+      if (result.ok) {
+        return {
+          kind: 'ok',
+          outcome: 'success',
+          print_event_id,
+          purpose: 'retry_after_failure',
+          render_path: result.render_path,
+          printed_at,
+        };
+      }
+      // Still-failed: attempt accepted, print failed → ok+failure (NOT refused).
+      return {
+        kind: 'ok',
+        outcome: 'failure',
+        print_event_id,
+        purpose: 'retry_after_failure',
+        failure_reason: result.failure_reason,
+      };
     },
   };
 }

@@ -49,6 +49,11 @@ import { createFinalizeListener } from './sales/finalize-listener.js';
 import { createSalesBridge } from './sales/sales-bridge.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
+import { createPrintPipeline } from './receipts/print-pipeline.js';
+import { createEscposAdapter } from './receipts/escpos-adapter.js';
+import { createOsPrintAdapter } from './receipts/os-print-adapter.js';
+import { createPrintDispatcher } from './receipts/print-dispatcher.js';
+import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
 import { randomUUID } from 'node:crypto';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
@@ -811,10 +816,75 @@ app
       });
       registerSalesHandlers(ipcMain, { salesBridge });
 
-      // 008 Slice 2 — receipts.preview (read-only HTML render; no side effects).
+      // 008 Slice 3 — print dispatcher (used by both the auto-fire finalize
+      // seam AND the renderer-callable receipts.retryPrint handler). Built
+      // here (not inside the paired branch) so the receipts bridge can be
+      // registered UNCONDITIONALLY — the T094c lesson: IPC handlers must be
+      // present regardless of pairing, since pairing is in-renderer with no
+      // relaunch. The dispatcher needs only the DB + repos + audit sink, none
+      // of which are pairing-specific; the paired branch reuses it for the
+      // finalize-listener wiring.
+      const saleAuditEmitter = createSaleAuditEmitter({
+        sink: {
+          write: (evt: SaleAuditEvent): void => {
+            auditEventsStore.insertIgnore({
+              event_id: randomUUID(),
+              tenant_id: evt.tenant_id,
+              branch_id: evt.branch_id,
+              originating_terminal_id: evt.originating_terminal_id,
+              acting_operator_id: evt.attribution_operator_id,
+              session_id: evt.session_id,
+              shift_id: null,
+              action_category: evt.action_category,
+              created_at: evt.created_at,
+              approving_supervisor_id: null,
+              payload: evt.payload,
+            });
+          },
+        },
+      });
+      // The real ESC/POS transport (node-thermal-printer ↔ Epson TM-T20III) +
+      // the offscreen `webContents.print` window are the §A3 HARDWARE bring-up
+      // (T200), deferred. Until then an honest STUB transport reports `offline`,
+      // so a print records a clean `printer_offline` failure row + raises the
+      // banner while the Sale stays durable — no fake "success" is recorded.
+      // T200 swaps these two adapters for the real transports; nothing else
+      // changes.
+      const printPipeline = createPrintPipeline({
+        escposAdapter: createEscposAdapter({
+          transport: {
+            write: () => Promise.resolve(),
+            pollStatus: () => Promise.resolve('offline' as const),
+          },
+          statusTimeoutMs: 3000,
+        }),
+        osPrintAdapter: createOsPrintAdapter({
+          print: (_html, cb) => {
+            cb(false, 'os_print_transport_not_wired_until_T200');
+          },
+        }),
+        // Pre-T200: route to the ESC/POS path so the `offline` stub produces a
+        // clean `printer_offline` failure (matching the wiring comment), NOT
+        // the OS-print `os_print_error`. T200 replaces the probe with a real
+        // status-byte check.
+        probeEscposSupport: () => Promise.resolve(true),
+      });
+      const printDispatcher = createPrintDispatcher({
+        pipeline: printPipeline,
+        printEventsRepo,
+        auditEmitter: saleAuditEmitter,
+        now: () => new Date().toISOString(),
+        newPrintEventId: () => randomUUID(),
+        logger: mainLogger,
+      });
+
+      // 008 Slice 2 + 3 — receipts.preview (read-only render) + retryPrint
+      // (mutating; gated server-side). Registered unconditionally (T094c).
       const receiptsBridge = createReceiptsBridge({
         getCurrentSession: getCurrentSalesSession,
         salesRepo,
+        printEventsRepo,
+        printDispatcher,
       });
       registerReceiptsHandlers(ipcMain, { receiptsBridge });
 
@@ -827,25 +897,9 @@ app
       if (pairingStatus.kind === 'paired') {
         const outboxRepo = bindSaleSyncOutboxRepository(dbHandle);
         const allocator = bindSaleNumberAllocator(dbHandle);
-        const saleAuditEmitter = createSaleAuditEmitter({
-          sink: {
-            write: (evt: SaleAuditEvent): void => {
-              auditEventsStore.insertIgnore({
-                event_id: randomUUID(),
-                tenant_id: evt.tenant_id,
-                branch_id: evt.branch_id,
-                originating_terminal_id: evt.originating_terminal_id,
-                acting_operator_id: evt.attribution_operator_id,
-                session_id: evt.session_id,
-                shift_id: null,
-                action_category: evt.action_category,
-                created_at: evt.created_at,
-                approving_supervisor_id: null,
-                payload: evt.payload,
-              });
-            },
-          },
-        });
+        // saleAuditEmitter + printPipeline + printDispatcher are hoisted above
+        // the receipts-bridge registration (T094c — unconditional handlers);
+        // the paired branch reuses them for the finalize-listener wiring.
         const finalizeTransaction = bindFinalizeTransaction({
           db: dbHandle,
           salesRepo,
@@ -861,6 +915,10 @@ app
         // FinalizeInput (T094b), then run the atomic finalize (T091). A
         // projection refusal is logged and skipped — the worker re-scans
         // the same row on the next tick (idempotent NOT EXISTS clause).
+        // After a FRESH finalize commits, fire the first print asynchronously
+        // (T273) — NOT part of the atomic transaction; the Sale is already
+        // durable. Idempotent replays do NOT re-print (extracted + unit-tested
+        // in dispatch-first-print-on-finalize.ts).
         const finalizeDb = dbHandle;
         const dispatch = (handoff_action_id: string): void => {
           const projected = buildFinalizeInput({ db: finalizeDb, handoff_action_id });
@@ -873,6 +931,15 @@ app
           }
           const result = finalizeTransaction.finalize(projected.input);
           mainLogger.info({ handoff_action_id, kind: result.kind }, 'finalize_dispatch:finalized');
+          void dispatchFirstPrintOnFinalize(result, {
+            salesRepo,
+            printDispatcher,
+            logError: (err: unknown) => {
+              mainLogger.error({ handoff_action_id, err }, 'finalize_dispatch:print_seam_infra');
+            },
+          }).catch((err: unknown) => {
+            mainLogger.error({ handoff_action_id, err }, 'finalize_dispatch:print_seam_unexpected');
+          });
         };
 
         // F-007 alignment — the AD-2 scan filters `audit_events` by
@@ -894,10 +961,18 @@ app
           branch_id: pairingStatus.branch_id,
           terminal_id: payments006TerminalId,
           dispatch,
-          // Print + drawer recovery dispatchers land in Slice 3 / Slice 4;
-          // log placeholders keep the recovery scan inert until then.
+          // Print recovery (T273): a sale that crashed before a successful
+          // first print is re-attempted via the SAME print dispatcher. Reuses
+          // the finalize→print seam by synthesising a `finalized` result for
+          // the recovered sale_id (the seam reads the row + derives the
+          // payload). Drawer recovery lands in Slice 4.
           dispatchPrintRecovery: (sale_id: string): void => {
-            mainLogger.warn({ sale_id }, 'finalize_recovery:print_recovery_stub');
+            void dispatchFirstPrintOnFinalize(
+              { kind: 'finalized', sale_id, sale_number: '', receipt_number: '', finalized_at: '' },
+              { salesRepo, printDispatcher },
+            ).catch((err: unknown) => {
+              mainLogger.error({ sale_id, err }, 'finalize_recovery:print_recovery_unexpected');
+            });
           },
           dispatchDrawerRecovery: (sale_id: string): void => {
             mainLogger.warn({ sale_id }, 'finalize_recovery:drawer_recovery_stub');

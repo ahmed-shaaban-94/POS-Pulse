@@ -13,7 +13,12 @@ import type { IpcMain, IpcMainInvokeEvent } from 'electron';
 
 import { RECEIPTS_IPC_CHANNELS } from '../../shared/receipts/channels.js';
 import type { ReceiptsBridge } from '../receipts/receipts-bridge.js';
-import type { ReceiptsPreviewRequest, ReceiptsPreviewResponse } from '../../shared/bridge-api.js';
+import type {
+  ReceiptsPreviewRequest,
+  ReceiptsPreviewResponse,
+  ReceiptsRetryPrintRequest,
+  ReceiptsRetryPrintResponse,
+} from '../../shared/bridge-api.js';
 
 export interface ReceiptsIpcDeps {
   receiptsBridge: ReceiptsBridge;
@@ -31,6 +36,14 @@ export function registerReceiptsHandlers(ipcMain: IpcMain, deps: ReceiptsIpcDeps
     async (_event: IpcMainInvokeEvent, request: unknown): Promise<ReceiptsPreviewResponse> => {
       if (!isObject(request)) return { kind: 'refused', reason: 'sale_not_found' };
       return receiptsBridge.preview(request as unknown as ReceiptsPreviewRequest);
+    },
+  );
+
+  ipcMain.handle(
+    RECEIPTS_IPC_CHANNELS.RETRY_PRINT,
+    async (_event: IpcMainInvokeEvent, request: unknown): Promise<ReceiptsRetryPrintResponse> => {
+      if (!isObject(request)) return { kind: 'refused', reason: 'sale_not_found' };
+      return receiptsBridge.retryPrint(request as unknown as ReceiptsRetryPrintRequest);
     },
   );
 }

@@ -233,6 +233,27 @@ Vendor + model + driver-version capture has been recorded in [../../docs/hardwar
 - Cash drawer: ESC/POS DK1/DK2 pulse-compatible; separate kick (not embedded-in-receipt — AD-8 PROHIBITED in 008 v1).
 - Driver-version capture in hardware-matrix.md is mandatory per Constitution Hardware section.
 
+### T201 — ESC/POS library pick + dependency audit (Slice 3, 2026-05-29)
+
+**Choice:** `node-thermal-printer@4.6.0` (the pre-pinned candidate from the T006 thread). Confirmed as the Slice 3 ESC/POS adapter library.
+
+**Transitive-dependency audit:**
+
+| Package | Version | License | Native bindings |
+|:--|:--|:--|:--|
+| `node-thermal-printer` | 4.6.0 | ISC | none |
+| `iconv-lite` | 0.6.3 | MIT | none (pure JS) |
+| `pngjs` | 7.0.0 | MIT | none (pure JS) |
+| `unorm` | 1.6.0 | MIT or GPL-2.0 (take MIT) | none (pure JS) |
+| `write-file-queue` | 0.0.1 | MIT | none (pure JS) |
+
+- **License review:** ISC + MIT throughout. `unorm` is dual-licensed; the MIT arm applies, so there is no copyleft obligation. All compatible with the project's distribution posture.
+- **Maintenance:** last published 2026-01-27 (≈4 months before this pick) — actively maintained.
+- **No native/`serialport` bindings** — the library speaks ESC/POS over a network or named-printer transport, so there is no `node-gyp` rebuild step in the Electron packaging path. This is the load-bearing reason the choice holds for an Electron app.
+- **`npm audit` after install:** 3 vulnerabilities reported (`brace-expansion` moderate, `tmp` high, `ws` moderate). **None are in the `node-thermal-printer` subtree** — verified against the `package-lock.json` git diff, which shows the install added ONLY `node-thermal-printer` + the four clean deps above. They are all **pre-existing and not introduced by this dependency**. Provenance (corrected per CodeRabbit #280 re-check — the earlier "dev-tooling only" phrasing was imprecise): `tmp` + `ws` are in the dev/build-test chain; `brace-expansion` IS in the **production** tree, but via `@sentry/electron → @sentry/node → @fastify/otel → minimatch → brace-expansion`, NOT via `node-thermal-printer`. So `node-thermal-printer` itself introduces zero new vulnerabilities; the pre-existing Sentry-chain `brace-expansion` advisory is tracked separately (out of scope for this slice).
+
+**T202:** `node-thermal-printer@^4.6.0` added to `package.json` `dependencies`; lockfile committed.
+
 ---
 
 ## Dependencies

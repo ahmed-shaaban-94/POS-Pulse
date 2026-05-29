@@ -951,14 +951,60 @@ export type ReceiptsPreviewResponse =
   | { kind: 'ok'; preview: ReceiptPreviewPayload }
   | { kind: 'refused'; reason: SalesRefusalReason };
 
+// ── receipts.retryPrint (008 Slice 3) ────────────────────────────────────────
+//
+// Schema source of truth:
+//   specs/008-sale-finalization-and-receipts/contracts/bridge-api.md
+//   §"receipts.retryPrint"
+//
+// THREE-way response. A successful retry is the canonical first print
+// (FR-052): no duplicate-copy marker. A still-failed retry returns kind:'ok'
+// with outcome:'failure' (NOT kind:'refused') because the retry attempt itself
+// was accepted — it ran and got a failure ack back; the banner stays loud.
+
+export interface ReceiptsRetryPrintRequest {
+  sale_id: SaleId;
+  idempotency_key: string;
+}
+
+export type ReceiptsRetryPrintResponse =
+  // success
+  | {
+      kind: 'ok';
+      outcome: 'success';
+      print_event_id: string;
+      purpose: 'retry_after_failure';
+      render_path: 'escpos_direct' | 'os_print';
+      printed_at: string;
+    }
+  // still-failed (attempt accepted, print failed)
+  | {
+      kind: 'ok';
+      outcome: 'failure';
+      print_event_id: string;
+      purpose: 'retry_after_failure';
+      failure_reason:
+        | 'printer_offline'
+        | 'printer_out_of_paper'
+        | 'printer_jam'
+        | 'os_print_error'
+        | 'escpos_write_failure'
+        | 'escpos_status_unknown';
+    }
+  // refused (attempt NOT accepted — gate/isolation/not-found)
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
 // ── ReceiptsBridgeAPI surface ───────────────────────────────────────────────
 
 /**
- * 008 Slice 2 mutating-namespace bridge surface (preview member only in S2).
- * Gated server-side by `requireOperatorSession`; tenant/branch/terminal
- * scoping is derived from the operator session per the §A4 checklist.
+ * 008 mutating-namespace bridge surface. S2 landed `preview`; S3 adds
+ * `retryPrint`. Gated server-side by `requireOperatorSession`;
+ * tenant/branch/terminal scoping is derived from the operator session per the
+ * §A4 checklist.
  */
 export interface ReceiptsBridgeAPI {
   /** Render the read-only HTML preview of a sale's receipt. No side effects. */
   preview(req: ReceiptsPreviewRequest): Promise<ReceiptsPreviewResponse>;
+  /** Retry a failed print. Three-way response (success / still-failed / refused). */
+  retryPrint(req: ReceiptsRetryPrintRequest): Promise<ReceiptsRetryPrintResponse>;
 }

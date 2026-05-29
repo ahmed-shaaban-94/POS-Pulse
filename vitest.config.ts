@@ -172,6 +172,44 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // T210-T212 / T270-T272 — 008 Slice 3 print pipeline + adapters +
+        // dispatcher. Spec §A5 / T300 require ≥95% on the print pipeline +
+        // adapter + retry handler. All paths exercised hardware-free via
+        // injected transports/probes (tests/unit/main/receipts/* +
+        // tests/integration/sales/print-pipeline.*).
+        'src/main/receipts/print-pipeline.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/receipts/escpos-adapter.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/receipts/os-print-adapter.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        'src/main/receipts/print-dispatcher.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
+        // T273 — finalize→first-print seam. The load-bearing
+        // finalized-vs-idempotent discriminator + JSON-degrade paths are
+        // exercised by tests/unit/main/receipts/dispatch-first-print-on-finalize.
+        'src/main/receipts/dispatch-first-print-on-finalize.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         'src/main/sales/audit-emitter.ts': {
           lines: 95,
           branches: 95,

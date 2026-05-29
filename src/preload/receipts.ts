@@ -4,6 +4,8 @@ import type {
   ReceiptsBridgeAPI,
   ReceiptsPreviewRequest,
   ReceiptsPreviewResponse,
+  ReceiptsRetryPrintRequest,
+  ReceiptsRetryPrintResponse,
 } from '../shared/bridge-api.js';
 import { RECEIPTS_IPC_CHANNELS } from '../shared/receipts/channels.js';
 
@@ -21,4 +23,9 @@ import { RECEIPTS_IPC_CHANNELS } from '../shared/receipts/channels.js';
 export const receipts: ReceiptsBridgeAPI = {
   preview: (req: ReceiptsPreviewRequest) =>
     ipcRenderer.invoke(RECEIPTS_IPC_CHANNELS.PREVIEW, req) as Promise<ReceiptsPreviewResponse>,
+  retryPrint: (req: ReceiptsRetryPrintRequest) =>
+    ipcRenderer.invoke(
+      RECEIPTS_IPC_CHANNELS.RETRY_PRINT,
+      req,
+    ) as Promise<ReceiptsRetryPrintResponse>,
 };
