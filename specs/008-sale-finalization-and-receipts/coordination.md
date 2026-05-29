@@ -1033,3 +1033,85 @@ indirection). T173 "Print" button is a disabled placeholder — its
 
 **Validation:** typecheck ✓ · lint ✓ · full suite 3904 passed / 3 skipped ·
 per-file ≥95% on engine/payload/bridge, ≥90% on the preview UI.
+
+---
+
+## Slice 4 close-out — drawer-kick + drawer-failure banner (2026-05-30)
+
+Code-complete across a **stacked set of 5 PRs** (drawer-kick main-side + the
+drawer-failure banner + the coexistence-contract precursor + the clear-path +
+the pre-existing-lint fix). **Human dev-build smoke (the §A3 hardware tests
+T371/T372/T373) + functional sign-off (T374) remain** — like T111/T112/T181,
+they need a real Epson TM-T20III + APG VBS320 pair, deferred to the T200 bring-up.
+
+### PR stack + merge order
+
+Merge **#287 → #285 → then #286 ∥ #288 ∥ #289** (rebase each onto `main` as its
+predecessors land). All five currently fail CI **only** on the inherited
+`sales-bridge.ts:351` lint error that #287 fixes; once #287 merges + the others
+rebase, CI clears.
+
+| PR | Scope | Base | Tasks |
+|:--|:--|:--|:--|
+| **#287** | Pre-existing `main` lint break (`no-unnecessary-condition` on the `subscribe` topic branch) — `satisfies` exhaustiveness anchor. **Merge first.** | `main` | — |
+| **#285** | `BannerState` union → **coexistence record** `{ printer_failure\|null; drawer_failure\|null }` + `last_successful_open_at`. | `main` | (contract precursor) |
+| **#286** | **S4a** drawer-kick pipeline. | `main` | T310–T352 |
+| **#288** | **S4b** `<DrawerFailureBanner>` + `useDrawerBannerState` + AppShell mount + `formatRelativeTime`. | #285 | T330/T331/T332/T360/T361 |
+| **#289** | **S4c** drawer banner clear-path (hardware-recovery). | #285 | (clear-path) |
+
+### Decisions recorded this slice (Ahmed)
+
+1. **Coexistence record (2026-05-29).** Both banners may be on screen at once
+   (T330/T361/NFR-008). The merged-T291 single-kind union silently hid a
+   concurrent drawer failure behind a printer failure — a silent-failure
+   regression (PRODUCT.md Principle 3). Each banner reads its own slice.
+2. **Manual-override = required-prop stub (2026-05-29).** The drawer banner's
+   only affordance is Manual receipt, wired to a required `onManualOverride`
+   prop the host passes as a placeholder (real `receipts.manualOverride` is
+   Slice 6 / T512). Mirrors the printer banner's `enabled⟹wired` posture.
+3. **Clear-path = hardware-recovery (2026-05-30).** A failed drawer row can
+   never be superseded on its own sale (UNIQUE(sale_id) + no retry-kick,
+   FR-053), so the banner clears when a later `opened` drawer event on the same
+   terminal proves the drawer recovered. Per-sale-via-manual-override was
+   re-surfaced + rejected: it would be INERT in v1 (nothing writes a
+   `manual_override` print event until Slice 6). A Slice-6 per-sale clear can
+   compose on top later.
+4. **Retry-success drawer attribution = retrying operator (2026-05-30).**
+   Confirmed the deliberate asymmetry: an auto-fired first-print drawer event
+   attributes to the SELLING operator; a retry-success drawer event to the
+   retrying operator. Both = "the operator who caused this kick" (FR-052 +
+   FR-022/FR-023).
+
+### Honest-stub posture (carried from Slice 3)
+
+The composition root wires the drawer-kick with a **STUB transport** reporting
+`no_drawer_configured` (NOT a faked `opened`) until the T200 §A3 bring-up swaps
+the real `node-thermal-printer` `openCashDrawer()` transport. Until then every
+dev cash sale records a clean `failed` drawer row + raises the drawer-failure
+banner while the Sale stays durable — same posture as Slice 3's `printer_offline`
+stub.
+
+### Adversarial review (Opus, PRs #285/#286/#287)
+
+Verdict **Warning — no CRITICAL, no security/redaction breach**. Redaction,
+tenant-scoping, the union→record migration, the silent-failure guard, and FR-024
+retry attribution all verified clean. Fixes applied: [HIGH] extracted
+`record{Suppressed,Opened,Failed}` helpers (50-line ceiling); [MEDIUM] flagged
+the readBySale→kick→insert TOCTOU physical-double-kick for the T200 transport
+(serialize per sale_id then); [LOW] FR-024→FR-052 citation; [LOW] plan.md §AD-8
+"OR reprint" stale text dropped; [LOW] #287 `satisfies` idiom. Deferred (flagged):
+`findLastSuccessfulOpenForTerminal` terminal-only scoping (Slice 1 territory;
+consistency nit, not a leak).
+
+### Remaining before Slice 4 fully closes
+
+- [ ] **T370** — coverage assertion ≥95% drawer-kick logic / ≥90% banner (per-file
+      confirmed green locally on each branch; re-assert on the merged stack).
+- [ ] **T371 / T372 / T373** — §A3 hardware integration (cash-success / drawer-
+      disconnect-failure / cashless) on the real pair. Deferred to T200 bring-up.
+- [ ] **T374** — functional sign-off (this section + tasks.md checkbox flips).
+      **Sign-off:** _[reviewer]_ · _[date]_ · _[outcome]_ · drawer-pop observed: _____
+- [ ] **§A4 no-new-surface confirmation** — verified: no `src/preload/drawer.ts`,
+      no `BridgeApi['drawer']`; the drawer pipeline is main-only (AD-5). The only
+      renderer affordance is the banner's manual-override → `receipts.manualOverride`
+      (a `receipts.*` handler, Slice 6).

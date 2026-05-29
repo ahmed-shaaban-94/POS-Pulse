@@ -11,14 +11,20 @@
  * must NOT clear an older sale's unresolved failure. The terminal surfaces the
  * most-recently-finalized sale whose own latest print event is a failure.
  *
- * `print_events` / `drawer_events` are sale-scoped (no `terminal_id`), so the
- * query JOINs to `sales` on the session (tenant, branch, terminal) triple.
+ * `print_events` is sale-scoped (no `terminal_id`), so the printer query JOINs
+ * to `sales` on the session (tenant, branch, terminal) triple. `drawer_events`
+ * carries its own `terminal_id`, which the drawer clear-path uses directly.
  * Drawer-failure projection is computed INDEPENDENTLY of printer-failure so the
  * Slice-4 `<DrawerFailureBanner>` can coexist on screen with
  * `<PrinterFailureBanner>` (Slice 4 decision, Ahmed 2026-05-29; T330 / T361 /
  * NFR-008). The result is a record `{ printer_failure; drawer_failure }`, NOT a
  * single-kind union — a union could only report one banner, silently hiding a
  * concurrent failure of the other class.
+ *
+ * Drawer CLEAR-PATH (Ahmed 2026-05-30, hardware-recovery): a failed drawer row
+ * cannot be superseded on its own sale (UNIQUE(sale_id) + no retry-kick,
+ * FR-053), so the drawer banner clears when a LATER `opened` drawer event on the
+ * same terminal proves the hardware recovered. See the drawer SELECT below.
  *
  * Correlated `NOT EXISTS` "latest event per sale" form (no window functions —
  * portable to the sql.js test adapter, mirroring the finalize-listener scan).
@@ -84,9 +90,18 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
       LIMIT 1`,
   ) as PrepareGet<PrinterFailureRow>;
 
-  // Same shape for drawer: a sale whose drawer event outcome is 'failed'.
-  // drawer_events has UNIQUE(sale_id), so there is at most one row per sale —
-  // no "latest event" sub-scan needed.
+  // A sale whose drawer event outcome is 'failed', UNLESS the drawer has since
+  // RECOVERED. drawer_events has UNIQUE(sale_id) + is append-only with NO
+  // retry-kick (FR-053), so a failed row can never be superseded on its OWN
+  // sale — unlike the printer banner, which clears via a later same-sale
+  // success. The drawer banner is a HARDWARE-state signal (it surfaces the
+  // terminal's "last opened" time): it therefore clears when a LATER successful
+  // `opened` drawer event on the SAME TERMINAL proves the drawer recovered
+  // (Slice 4 clear-path decision, Ahmed 2026-05-30 — "hardware-recovery").
+  // "Later" = strictly greater `attempted_at` (with a drawer_event_id tie-break
+  // for same-instant determinism). The cashier's manual-override affordance
+  // remains the immediate action; a Slice-6 per-sale manual_override clear can
+  // compose on top of this clause later.
   const drawerFailureStmt = db.prepare(
     `SELECT de.sale_id AS sale_id,
             de.last_successful_open_at_for_terminal AS last_successful_open_at
@@ -94,6 +109,15 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
        JOIN sales s ON s.sale_id = de.sale_id
       WHERE de.outcome = 'failed'
         AND s.tenant_id = ? AND s.branch_id = ? AND s.terminal_id = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM drawer_events rec
+           WHERE rec.terminal_id = de.terminal_id
+             AND rec.outcome = 'opened'
+             AND (
+               rec.attempted_at > de.attempted_at
+               OR (rec.attempted_at = de.attempted_at AND rec.drawer_event_id > de.drawer_event_id)
+             )
+        )
       ORDER BY s.finalized_at DESC
       LIMIT 1`,
   ) as PrepareGet<DrawerFailureRow>;

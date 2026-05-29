@@ -217,6 +217,81 @@ describe('banner-state projector — per-sale, no silent masking', () => {
     expect(state.drawer_failure?.sale_id).toBe('sale-1');
   });
 
+  it('CLEAR-PATH: a later "opened" drawer event on the SAME terminal clears the failed banner', () => {
+    // Hardware-recovery (Slice-4 clear-path, Ahmed 2026-05-30): the drawer
+    // banner is a terminal hardware-state signal. Sale-1's drawer fails at
+    // 10:00; sale-2's drawer OPENS at 10:10 on the same terminal → the drawer
+    // recovered → the banner clears (no per-sale success is possible — FR-053).
+    seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+    printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-1', 'sale-1', 'failed', NULL, 'printer_dk_failure',
+         NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+    );
+    seedSale(db, 'sale-2', '2026-05-27T10:10:00.000Z');
+    printEvent(db, 'pe-2', 'sale-2', 'success', '2026-05-27T10:10:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-2', 'sale-2', 'opened', NULL, NULL,
+         NULL, 'pe-2', 'terminal-1', '2026-05-27T10:10:06.000Z')`,
+    );
+    expect(projector(db).projectBannerState(SCOPE).drawer_failure).toBeNull();
+  });
+
+  it('CLEAR-PATH: an EARLIER "opened" event does NOT clear a later failure (still faulting)', () => {
+    // The drawer opened at 09:00, then FAILED at 10:00 with no recovery since →
+    // the banner must still show (an earlier success is not recovery).
+    seedSale(db, 'sale-0', '2026-05-27T09:00:00.000Z');
+    printEvent(db, 'pe-0', 'sale-0', 'success', '2026-05-27T09:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-0', 'sale-0', 'opened', NULL, NULL,
+         NULL, 'pe-0', 'terminal-1', '2026-05-27T09:00:06.000Z')`,
+    );
+    seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+    printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-1', 'sale-1', 'failed', NULL, 'printer_dk_failure',
+         NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+    );
+    expect(projector(db).projectBannerState(SCOPE).drawer_failure?.sale_id).toBe('sale-1');
+  });
+
+  it('CLEAR-PATH: a later "opened" on a DIFFERENT terminal does NOT clear this terminal’s failure', () => {
+    // Recovery is per-terminal: another terminal's drawer opening proves nothing
+    // about THIS terminal's hardware.
+    seedSale(db, 'sale-1', '2026-05-27T10:00:00.000Z');
+    printEvent(db, 'pe-1', 'sale-1', 'success', '2026-05-27T10:00:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-1', 'sale-1', 'failed', NULL, 'printer_dk_failure',
+         NULL, 'pe-1', 'terminal-1', '2026-05-27T10:00:06.000Z')`,
+    );
+    // A later 'opened' on terminal-2 (FK needs a sale + print event there).
+    seedSale(db, 'sale-x', '2026-05-27T10:10:00.000Z', { terminal_id: 'terminal-2' });
+    printEvent(db, 'pe-x', 'sale-x', 'success', '2026-05-27T10:10:05.000Z');
+    db.run(
+      `INSERT INTO drawer_events (
+         drawer_event_id, sale_id, outcome, suppression_reason, failure_reason,
+         last_successful_open_at_for_terminal, triggering_print_event_id, terminal_id, attempted_at
+       ) VALUES ('de-x', 'sale-x', 'opened', NULL, NULL,
+         NULL, 'pe-x', 'terminal-2', '2026-05-27T10:10:06.000Z')`,
+    );
+    expect(projector(db).projectBannerState(SCOPE).drawer_failure?.sale_id).toBe('sale-1');
+  });
+
   it('tenant-isolation: a drawer failure on another terminal is NOT surfaced', () => {
     seedSale(db, 'sale-other', '2026-05-27T10:00:00.000Z', { terminal_id: 'terminal-2' });
     printEvent(db, 'pe-o', 'sale-other', 'success', '2026-05-27T10:00:05.000Z');
