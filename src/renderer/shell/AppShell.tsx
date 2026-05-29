@@ -12,6 +12,8 @@ import { useOperatorSessionStore } from '../stores/operator-session-store';
 import { ShiftClosedBanner } from '../ui/operator/ShiftClosedBanner';
 import { PrinterFailureBanner } from '../ui/receipts/PrinterFailureBanner';
 import { useBannerState } from '../ui/receipts/useBannerState';
+import { DrawerFailureBanner } from '../ui/receipts/DrawerFailureBanner';
+import { useDrawerBannerState } from '../ui/receipts/useDrawerBannerState';
 
 interface AppShellProps {
   pairedStatus?: Extract<PairingStatus, { kind: 'paired' }>;
@@ -34,6 +36,9 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   const sessionState = useOperatorSessionStore((s) => s.state);
   // T291 — printer-failure banner state, polled from sales.subscribe(banner_state).
   const printFailure = useBannerState();
+  // T361 — drawer-failure banner state, polled from the same snapshot's
+  // `.drawer_failure` slice (coexistence record). Both banners can show at once.
+  const drawerFailure = useDrawerBannerState();
 
   // Dev-only: wire ?conn= URL param → useConnectionState.
   // The cast keeps TS happy while Vite tree-shakes the dev branch from production.
@@ -96,6 +101,16 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
             onReprint={() => {
               // Slice 5 (receipts.reprint) — entry-point only for now.
             }}
+            onManualOverride={() => {
+              // Slice 6 (receipts.manualOverride) — entry-point only for now.
+            }}
+          />
+          {/* T361 — persistent drawer-failure banner, stacked BELOW the printer
+              banner (NFR-008 order). Coexists with it. Manual receipt is an
+              entry-point (receipts.manualOverride lands Slice 6). */}
+          <DrawerFailureBanner
+            drawerFailure={drawerFailure}
+            now={new Date().toISOString()}
             onManualOverride={() => {
               // Slice 6 (receipts.manualOverride) — entry-point only for now.
             }}
