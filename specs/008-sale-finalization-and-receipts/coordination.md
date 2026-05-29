@@ -254,6 +254,26 @@ Vendor + model + driver-version capture has been recorded in [../../docs/hardwar
 
 **T202:** `node-thermal-printer@^4.6.0` added to `package.json` `dependencies`; lockfile committed.
 
+### S3c — `<PrinterFailureBanner>` preflight decisions (2026-05-29)
+
+Four decisions recorded before the T290 `/impeccable craft` (per `docs/impeccable-embed-preflight.md §4.2`):
+
+1. **T291 host path corrected.** tasks.md T291 + the §A1 brief (f) name `src/renderer/ui/banners/BannerHost.tsx` as the mount target — **that file does not exist**. Banners in this codebase mount as siblings directly in `src/renderer/shell/AppShell.tsx` (the connection `StatusBanner` via `TopBar`; `ShiftClosedBanner` mounted in AppShell at ~line 80). S3c mounts `<PrinterFailureBanner>` as a sibling in `AppShell.tsx` below the connection banner (matching the brief's stack order). No `BannerHost.tsx` is created.
+
+2. **Component ships; AppShell mount (T291) deferred on the missing recent-sale feed (v1-subset gap — owner review at PR).** Two feeds matter here, and the gap is sharper than first framed:
+   - The **failure projection** is real today: `sales.read` is implemented (NOT stubbed) and projects `latest_print_event: PrintEventSummary` carrying `outcome`, so `outcome==='failure'` is queryable now.
+   - What is **missing** is the renderer's "*which* sale just finalized, and *when*" signal — that comes from `sales.subscribe({topic:'recent'|'banner_state'})`, **both still the `not_implemented` STUB** (`sales-bridge.ts:310`; push primitive `webContents.send` + token registry unbuilt). There is no other renderer source for a recent finalized sale_id (verified: nothing in `src/renderer` reads one).
+   - Therefore AppShell cannot know what to feed `<PrinterFailureBanner printFailure>` until the push primitive lands. Per advisor: do NOT mount with a hardcoded `printFailure={null}` (looks-wired-but-can-never-display) and do NOT scaffold a writer-less store (speculative dead code). **The tested component ships now; T291 (AppShell mount + live feed) stays UNCHECKED**, to land with the push primitive in a later slice — OR the owner pulls the push primitive into S3c scope at review. One decision, flagged in the PR body. Standard render-what's-true / defer.
+
+3. **Reprint-gate reconciliation (brief prose vs T262 vs AD-10).** Brief (f) prose loosely describes the failure-banner Reprint as "a fresh first-print attempt" (implying enabled). T262 says Reprint is **disabled until a successful print exists** (AD-10 precondition). The data-model is decisive: AD-10 / contract line 310 — reprint requires ≥1 prior `outcome='success'` PrintEvent; in the *failure* state none exists → **Reprint disabled is correct**. Encoded T262's AD-10-consistent behavior; **Retry** is the live action in the failure state. The brief-prose discrepancy is surfaced here for the §A1 reviewer (the prose is the loose artifact, not the test).
+   - **Manual receipt** affordance is present + labeled but **not wired** (entry-point only; manual-override is Slice 6 / T512) — same posture as ReceiptPreview's disabled Print placeholder.
+
+4. **Red-bar confirmed (T290 craft gate, `impeccable-embed-preflight §4.2`).** The four failing test files for `<PrinterFailureBanner>` (T260 persistence + affordances, T261 subscription, T262 affordance-gating, T263 a11y) were written and confirmed **RED locally** (4 files failed — component module missing) on 2026-05-29 BEFORE the T290 `/impeccable craft` invocation:
+   - `tests/unit/renderer/receipts/PrinterFailureBanner.persistence.test.tsx`
+   - `tests/unit/renderer/receipts/PrinterFailureBanner.subscription.test.tsx`
+   - `tests/unit/renderer/receipts/PrinterFailureBanner.affordance-gating.test.tsx`
+   - `tests/unit/renderer/receipts/PrinterFailureBanner.a11y.test.tsx`
+
 ---
 
 ## Dependencies
