@@ -348,10 +348,16 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
           banner_state: projector.projectBannerState(scope),
         });
       }
+      if (req.topic === 'recent') {
+        return await Promise.resolve({
+          kind: 'ok',
+          subscription_token,
+          recent: projector.projectRecentSale(scope),
+        });
+      }
       return await Promise.resolve({
-        kind: 'ok',
-        subscription_token,
-        recent: projector.projectRecentSale(scope),
+        kind: 'refused',
+        reason: 'not_implemented',
       });
     },
 
