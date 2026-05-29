@@ -122,7 +122,7 @@ describe('T240 — print dispatcher fires on finalize (success path)', () => {
     const events: SaleAuditEvent[] = [];
     const dispatcher = makeDispatcher(db, events);
 
-    const result = await dispatcher.dispatchFirstPrint(payload(), CTX);
+    const { result } = await dispatcher.dispatchFirstPrint(payload(), CTX);
 
     expect(result.ok).toBe(true);
 
@@ -155,7 +155,7 @@ describe('T240 — print dispatcher fires on finalize (success path)', () => {
     // `session_id ?? ''` null branch on the print_events row.
     const events: SaleAuditEvent[] = [];
     const dispatcher = makeDispatcher(db, events);
-    const result = await dispatcher.dispatchFirstPrint(payload(), { ...CTX, session_id: null });
+    const { result } = await dispatcher.dispatchFirstPrint(payload(), { ...CTX, session_id: null });
     expect(result.ok).toBe(true);
     const rows = bindPrintEventsRepository(makeSqlJsHandle(db)).readBySale('sale-1');
     expect(rows[0].acting_operator_session_id).toBe('');

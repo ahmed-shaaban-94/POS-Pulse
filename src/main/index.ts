@@ -55,6 +55,7 @@ import { createEscposAdapter } from './receipts/escpos-adapter.js';
 import { createOsPrintAdapter } from './receipts/os-print-adapter.js';
 import { createPrintDispatcher } from './receipts/print-dispatcher.js';
 import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
+import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
 import { randomUUID } from 'node:crypto';
 import { openDatabase, type DatabaseHandle } from './db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from './db/migrate.js';
@@ -883,6 +884,27 @@ app
         logger: mainLogger,
       });
 
+      // 008 Slice 4 — drawer-kick dispatcher (AD-8 separate command). Chains
+      // after a successful first print for cash-inclusive sales. The real
+      // DK1/DK2 transport (node-thermal-printer `openCashDrawer` ↔ the Epson's
+      // DRAWER port driving the APG VBS320) is the §A3 HARDWARE bring-up (T200),
+      // deferred — same posture as the print transport above. Until then an
+      // honest STUB reports `no_drawer_configured`, so a cash sale records a
+      // clean `failed` drawer row + raises the drawer-failure banner while the
+      // Sale stays durable — no fake "opened" is recorded (PRODUCT.md
+      // Principle 3). T200 swaps this transport for the real one; nothing else
+      // changes.
+      const drawerKickDispatcher = createDrawerKickDispatcher({
+        drawerEventsRepo,
+        transport: {
+          kick: () => Promise.resolve({ ok: false, failure_reason: 'no_drawer_configured' }),
+        },
+        auditEmitter: saleAuditEmitter,
+        now: () => new Date().toISOString(),
+        newDrawerEventId: () => randomUUID(),
+        logger: mainLogger,
+      });
+
       // 008 Slice 2 + 3 — receipts.preview (read-only render) + retryPrint
       // (mutating; gated server-side). Registered unconditionally (T094c).
       const receiptsBridge = createReceiptsBridge({
@@ -890,6 +912,10 @@ app
         salesRepo,
         printEventsRepo,
         printDispatcher,
+        // S4: a retry-success runs drawer gating (FR-052 — retry-success is the
+        // canonical first print). Same STUB transport as the auto-fired path
+        // until the T200 hardware bring-up.
+        drawerKickDispatcher,
       });
       registerReceiptsHandlers(ipcMain, { receiptsBridge });
 
@@ -939,6 +965,7 @@ app
           void dispatchFirstPrintOnFinalize(result, {
             salesRepo,
             printDispatcher,
+            drawerKickDispatcher,
             logError: (err: unknown) => {
               mainLogger.error({ handoff_action_id, err }, 'finalize_dispatch:print_seam_infra');
             },
@@ -970,15 +997,26 @@ app
           // first print is re-attempted via the SAME print dispatcher. Reuses
           // the finalize→print seam by synthesising a `finalized` result for
           // the recovered sale_id (the seam reads the row + derives the
-          // payload). Drawer recovery lands in Slice 4.
+          // payload). The drawer-kick dispatcher is wired here too, so a
+          // recovered print success chains its drawer decision exactly like a
+          // live finalize (the dispatcher's readBySale guard makes it
+          // idempotent — a sale that already has a drawer row is a no-op).
           dispatchPrintRecovery: (sale_id: string): void => {
             void dispatchFirstPrintOnFinalize(
               { kind: 'finalized', sale_id, sale_number: '', receipt_number: '', finalized_at: '' },
-              { salesRepo, printDispatcher },
+              { salesRepo, printDispatcher, drawerKickDispatcher },
             ).catch((err: unknown) => {
               mainLogger.error({ sale_id, err }, 'finalize_recovery:print_recovery_unexpected');
             });
           },
+          // Drawer recovery sub-scan #2 (T092): a cash-inclusive sale whose
+          // print already succeeded but whose drawer never got a row (crashed
+          // between print success and kick). The forward drawer-kick dispatcher
+          // now exists, but driving it from recovery needs the sale-row read +
+          // successful-print lookup that lives in finalize-listener territory
+          // (`src/main/sales/**`, out of this S4a wave's allow-list). Tracked as
+          // a follow-up; until then this logs (the sale + receipt are durable,
+          // only the drawer pop is missed on the crash-recovery path).
           dispatchDrawerRecovery: (sale_id: string): void => {
             mainLogger.warn({ sale_id }, 'finalize_recovery:drawer_recovery_stub');
           },

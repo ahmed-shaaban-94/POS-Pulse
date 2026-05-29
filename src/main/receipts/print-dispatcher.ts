@@ -78,15 +78,20 @@ export interface PrintDispatcherDependencies {
 export interface PrintDispatcher {
   /**
    * Dispatch a first-print attempt for a freshly-finalized sale. Resolves with
-   * the print outcome: success → success row + `sale.receipt.printed`; a
-   * genuine print failure → failure row + `sale.receipt.print_failed`. Infra
-   * errors (render/INSERT/emit throwing) PROPAGATE — see the module doc; the
-   * caller (`dispatchFirstPrintOnFinalize`) catches them.
+   * the print outcome + the new `print_events` row id: success → success row +
+   * `sale.receipt.printed`; a genuine print failure → failure row +
+   * `sale.receipt.print_failed`. Infra errors (render/INSERT/emit throwing)
+   * PROPAGATE — see the module doc; the caller (`dispatchFirstPrintOnFinalize`)
+   * catches them.
+   *
+   * Returns the `print_event_id` (symmetric with `dispatchRetryPrint`) so the
+   * Slice-4 drawer-kick seam can FK its `drawer_events` row to the triggering
+   * first print without a re-query race.
    */
   dispatchFirstPrint(
     payload: ReceiptPayload,
     ctx: PrintDispatchContext,
-  ): Promise<PrintPipelineResult>;
+  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
 
   /**
    * Dispatch a retry-after-failure attempt (T250-T252). Writes a
@@ -219,13 +224,12 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
     async dispatchFirstPrint(
       payload: ReceiptPayload,
       ctx: PrintDispatchContext,
-    ): Promise<PrintPipelineResult> {
-      const { result } = await record(payload, ctx, {
+    ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+      return record(payload, ctx, {
         purpose: 'first_print',
         successCategory: 'sale.receipt.printed',
         previousFailedPrintEventIds: null,
       });
-      return result;
     },
 
     dispatchRetryPrint(

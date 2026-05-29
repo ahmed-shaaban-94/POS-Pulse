@@ -24,10 +24,20 @@ import { deriveReceiptPayload } from './receipts-payload.js';
 import type { PrintDispatcher, PrintDispatchContext } from './print-dispatcher.js';
 import type { SaleRow, SalesRepository } from '../sales/repositories/sales.repository.js';
 import type { FinalizeResult } from '../sales/finalize-transaction.js';
+import type { DrawerKickDispatcher } from '../drawer/drawer-kick.js';
 
 export interface DispatchFirstPrintOnFinalizeDependencies {
   salesRepo: Pick<SalesRepository, 'readById'>;
   printDispatcher: PrintDispatcher;
+  /**
+   * Optional Slice-4 drawer-kick dispatcher. When wired, a SUCCESSFUL
+   * first-print chains a drawer-kick dispatch (AD-8 separate command, gated on
+   * cash-inclusive tender — FR-040). When absent (Slice-3-era construction /
+   * tests), the seam behaves exactly as before. The drawer dispatch is a
+   * SIBLING of the print, not coupled to it: it runs only after print success
+   * and never blocks or alters the print's own audit/row.
+   */
+  drawerKickDispatcher?: DrawerKickDispatcher;
   /**
    * Optional structural logger for the no-unhandled-rejection safety net: if
    * the dispatcher throws an INFRA error (render/INSERT/emit bug — not a
@@ -76,7 +86,28 @@ export async function dispatchFirstPrintOnFinalize(
   // failure result (handled inside the dispatcher); an INFRA throw is caught,
   // logged, and swallowed here so this fire-and-forget seam resolves void.
   try {
-    await deps.printDispatcher.dispatchFirstPrint(payload, toContext(row));
+    const { result, print_event_id } = await deps.printDispatcher.dispatchFirstPrint(
+      payload,
+      toContext(row),
+    );
+
+    // Slice 4 (AD-8 / FR-040): chain the drawer-kick ONLY after a successful
+    // first print. A print FAILURE writes no drawer row — the drawer decision
+    // is re-evaluated when (and if) a retry succeeds (Slice 3 retry seam). The
+    // drawer dispatch is a sibling step: it never alters the print outcome and
+    // resolves void on its own internal faults (Sale stays durable — US1 sc.9).
+    if (result.ok && deps.drawerKickDispatcher !== undefined) {
+      await deps.drawerKickDispatcher.dispatchOnFirstPrintSuccess({
+        sale_id: row.sale_id,
+        tenant_id: row.tenant_id,
+        branch_id: row.branch_id,
+        terminal_id: row.terminal_id,
+        session_id: row.selling_operator_session_id,
+        attribution_operator_id: row.selling_operator_id,
+        tender_lines_summary_json: row.tender_lines_summary_json,
+        triggering_print_event_id: print_event_id,
+      });
+    }
   } catch (err) {
     deps.logError?.(err);
   }
