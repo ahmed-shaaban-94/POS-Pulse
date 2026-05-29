@@ -924,3 +924,61 @@ cross-referenced above.
 
 **Sign-off:** _[reviewer]_ · _[date]_ · _[outcome]_ · sale_number observed: _____ · T112 recovered: _____
 
+
+---
+
+## T173 `/impeccable craft` red-bar record (2026-05-28)
+
+Per `docs/impeccable-embed-preflight.md §4.2`, the `<ReceiptPreview>` failing
+tests are written and confirmed RED before invoking the craft skill:
+
+- File: `tests/unit/renderer/receipts/ReceiptPreview.test.tsx`
+- Status: **RED** — `Test Files 1 failed (1) · Tests no tests` (component
+  `src/renderer/ui/receipts/ReceiptPreview.tsx` does not yet exist; import fails).
+- Covers T150 (renders preview HTML, role=img canvas, bilingual title + close,
+  error state), T151 (non-modal dialog, onClose without confirm), T152 (Escape
+  closes, axe-clean default state), + production `window.api.receipts` fallback.
+- Shape brief: visual-direction/README.md §(d) `<ReceiptPreview>` UI panel.
+- Scope note: the §(d) "Print" button calls `receipts.print` (AD-2 listener
+  side-effect, Slice 3) — in S2 the Print affordance renders but its action
+  wires in Slice 3; the S2 craft delivers the preview render + close + a11y +
+  loading/error states.
+
+Craft invoked immediately after this record.
+
+---
+
+## Slice 2 closeout — receipt payload + engine + preview (2026-05-28)
+
+Code complete on `feat/008-slice2-receipts` (PR pending). T120–T173 + T180 done;
+**T181 (human dev-fixture smoke) + T182 (sign-off) remain** — like T111/T112,
+they need a packaged dev build run by a human.
+
+**Built (TDD throughout):**
+- T164 `receipts-payload.ts` — pure derivation from the Sale row (parses
+  `lines_json` + tender summary; FR-015 — no cart re-read / catalogue / voucher).
+- T160 `template-engine.ts` — AD-6 single-source dual-output via compose→Band[]
+  →{toEscPos,toHtml}. Byte-stable + preview≡first_print structural (FR-016).
+- T130–134 minimisation — engine reads only typed fields; no card/voucher data
+  reaches the slip across the tender mix.
+- T140–142/T170–172 `receipts.preview` bridge + IPC + preload (read-only, no
+  side effects, tenant-scoped, forbidden-field guard). Registered
+  unconditionally in index.ts (T094c registration-timing lesson).
+- T173 `<ReceiptPreview>` via `/impeccable craft` against §A1 §(d) (red-bar
+  recorded above). Non-modal dialog, role=img canvas, bilingual title + 44×44
+  close, Zoom 2×, loading/error states, Escape-closes, axe-clean. RTL
+  logical-properties. 18 tests incl. race-guard + a11y.
+
+**v1 subset decisions (Ahmed 2026-05-28, slice2-mapping-pass.md):**
+- item names: single `display_name` (bilingual ar/en → v2, catalogue dep);
+- shift line: omitted (→ v2, sales↔shift link);
+- VAT: driven by `total_tax_minor`; "14%" rate label suppressed at tax=0;
+- `local_calendar_day`/timestamps: UTC (terminal-TZ → v2).
+
+**Deviations:** T161/T162/T163 satisfied in-code (compose variant branches),
+not as separate `.template` asset files (R-6 rejects the parsed-asset
+indirection). T173 "Print" button is a disabled placeholder — its
+`receipts.print` action lands in Slice 3.
+
+**Validation:** typecheck ✓ · lint ✓ · full suite 3904 passed / 3 skipped ·
+per-file ≥95% on engine/payload/bridge, ≥90% on the preview UI.

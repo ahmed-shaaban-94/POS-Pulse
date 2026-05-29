@@ -42,6 +42,11 @@ export default defineConfig({
         // wire-up; correctness is proven by the SalesBridgeAPI typing
         // and the manual Electron smoke (T111).
         'src/preload/sales.ts',
+        // 008 S2: receipts-specific preload entry — same posture as
+        // src/preload/sales.ts above. Thin ipcRenderer.invoke wire-up;
+        // correctness is proven by the ReceiptsBridgeAPI typing + the
+        // ReceiptPreview window.api.receipts fallback test + the T181 smoke.
+        'src/preload/receipts.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',
