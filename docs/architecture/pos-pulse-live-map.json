@@ -1,0 +1,110 @@
+{
+  "title": "POS Pulse Live Terminal Map",
+  "version": "2026-05-29",
+  "summary": "Repo-backed topology for the secure Windows POS terminal.",
+  "nodes": [
+    {
+      "id": "operator",
+      "label": "Cashier/operator",
+      "kind": "actor",
+      "status": "human",
+      "path": "docs/product.md",
+      "description": "Named operator using the terminal to scan, tender, finalize, print, and recover sale work."
+    },
+    {
+      "id": "renderer",
+      "label": "React renderer",
+      "kind": "ui",
+      "status": "shipped",
+      "path": "src/renderer",
+      "description": "Touch-first POS UI, routes, visual system, and operator-facing workflow surfaces."
+    },
+    {
+      "id": "preload",
+      "label": "Typed preload bridge",
+      "kind": "bridge",
+      "status": "binding",
+      "path": "src/preload",
+      "description": "Typed contextBridge boundary. Renderer never reaches Node or Electron APIs directly."
+    },
+    {
+      "id": "main",
+      "label": "Electron main",
+      "kind": "runtime",
+      "status": "shipped",
+      "path": "src/main",
+      "description": "High-trust process for SQLite, safeStorage, audit, pairing, session, printing, and IPC handlers."
+    },
+    {
+      "id": "sqlite",
+      "label": "SQLite state",
+      "kind": "data",
+      "status": "local durability",
+      "path": "migrations",
+      "description": "Versioned local terminal state and migration runner for offline-aware POS operation."
+    },
+    {
+      "id": "secrets",
+      "label": "safeStorage",
+      "kind": "security",
+      "status": "device secret boundary",
+      "path": ".specify/memory/constitution.md",
+      "description": "Electron safeStorage protects terminal secrets through the Windows DPAPI-backed boundary."
+    },
+    {
+      "id": "api",
+      "label": "SmartDataPulse API",
+      "kind": "integration",
+      "status": "external authority",
+      "path": "scripts/openapi-snapshot.json",
+      "description": "External SaaS backend contract consumed through generated types and pinned snapshots."
+    },
+    {
+      "id": "hardware",
+      "label": "POS hardware",
+      "kind": "hardware",
+      "status": "MVP matrix",
+      "path": "docs/hardware-matrix.md",
+      "description": "Windows x64 terminal hardware: scanner, receipt printer, and optional cash drawer."
+    },
+    {
+      "id": "tests",
+      "label": "Vitest gates",
+      "kind": "governance",
+      "status": "required",
+      "path": "tests",
+      "description": "Vitest, Testing Library, axe-core, and process-boundary tests protect terminal behavior."
+    },
+    {
+      "id": "spec008",
+      "label": "008 receipts",
+      "kind": "feature",
+      "status": "blocked for approval",
+      "path": "specs/008-sale-finalization-and-receipts",
+      "description": "Active sale finalization and receipts feature. Implementation is blocked pending review and gates."
+    },
+    {
+      "id": "constitution",
+      "label": "Constitution",
+      "kind": "governance",
+      "status": "binding",
+      "path": ".specify/memory/constitution.md",
+      "description": "Binding rules for money, Electron isolation, IPC, hardware, identity, logging, and quality gates."
+    }
+  ],
+  "edges": [
+    { "from": "operator", "to": "renderer", "label": "uses" },
+    { "from": "renderer", "to": "preload", "label": "typed bridge only" },
+    { "from": "preload", "to": "main", "label": "IPC contract" },
+    { "from": "main", "to": "sqlite", "label": "durable local commit" },
+    { "from": "main", "to": "secrets", "label": "device secrets" },
+    { "from": "main", "to": "api", "label": "contract sync" },
+    { "from": "renderer", "to": "hardware", "label": "scan and print UX" },
+    { "from": "main", "to": "hardware", "label": "trusted device actions" },
+    { "from": "tests", "to": "renderer", "label": "UI coverage" },
+    { "from": "tests", "to": "main", "label": "process coverage" },
+    { "from": "spec008", "to": "main", "label": "future finalization paths" },
+    { "from": "constitution", "to": "preload", "label": "no upward bridge" },
+    { "from": "constitution", "to": "sqlite", "label": "money and durability rules" }
+  ]
+}

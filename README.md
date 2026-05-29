@@ -4,18 +4,71 @@
 
 **The Windows desktop POS terminal for the SmartDataPulse pharmacy platform.**
 
-[![License: UNLICENSED](https://img.shields.io/badge/license-UNLICENSED-334155.svg?style=flat-square)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%E2%89%A520-2563eb.svg?style=flat-square)](.nvmrc)
-[![TypeScript](https://img.shields.io/badge/typescript-strict-3178c6.svg?style=flat-square)](tsconfig.json)
-[![Electron](https://img.shields.io/badge/Electron-40-47848f.svg?style=flat-square)](package.json)
-[![React](https://img.shields.io/badge/React-19-61dafb.svg?style=flat-square)](src/renderer)
-[![Vite](https://img.shields.io/badge/Vite-8-646cff.svg?style=flat-square)](vite.config.ts)
-[![Tailwind](https://img.shields.io/badge/Tailwind-4-06b6d4.svg?style=flat-square)](tailwind.config.ts)
-[![LOC](docs/assets/badges/loc.svg)](docs/assets/badges/loc.svg)
+<p align="center">
+  <a href="docs/product.md"><img alt="Product: POS Pulse" src="https://img.shields.io/badge/product-POS%20Pulse-0f766e?style=flat-square"></a>
+  <a href="README.md"><img alt="Repo: POS-Pulse" src="https://img.shields.io/badge/repo-POS--Pulse-181717?style=flat-square&logo=github&logoColor=white"></a>
+  <a href="docs/hardware-matrix.md"><img alt="Platform: Windows terminal" src="https://img.shields.io/badge/platform-Windows%20terminal-2563eb?style=flat-square"></a>
+  <a href="LICENSE"><img alt="License: UNLICENSED" src="https://img.shields.io/badge/license-UNLICENSED-334155?style=flat-square"></a>
+</p>
+
+<p align="center">
+  <a href=".nvmrc"><img alt="Node.js >=20" src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=nodedotjs&logoColor=white"></a>
+  <a href="package-lock.json"><img alt="npm lockfile" src="https://img.shields.io/badge/npm-lockfile-cb3837?style=flat-square&logo=npm&logoColor=white"></a>
+  <a href="tsconfig.json"><img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white"></a>
+  <a href="package.json"><img alt="Electron 40" src="https://img.shields.io/badge/Electron-40-47848f?style=flat-square&logo=electron&logoColor=white"></a>
+  <a href="src/renderer"><img alt="React 19" src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=111827"></a>
+  <a href="vite.config.ts"><img alt="Vite 8" src="https://img.shields.io/badge/Vite-8-646cff?style=flat-square&logo=vite&logoColor=white"></a>
+  <a href="tailwind.config.ts"><img alt="Tailwind 4" src="https://img.shields.io/badge/Tailwind-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white"></a>
+  <a href="docs/assets/badges/loc.svg"><img alt="LOC" src="docs/assets/badges/loc.svg"></a>
+</p>
+
+<p align="center">
+  <a href=".specify/memory/constitution.md"><img alt="Electron: sandboxed" src="https://img.shields.io/badge/Electron-sandboxed-0f766e?style=flat-square"></a>
+  <a href="src/shared/bridge-api.ts"><img alt="Bridge: typed only" src="https://img.shields.io/badge/bridge-typed%20only-7c3aed?style=flat-square"></a>
+  <a href="migrations"><img alt="Local state: durable" src="https://img.shields.io/badge/local%20state-durable-16a34a?style=flat-square"></a>
+  <a href="docs/hardware-matrix.md"><img alt="Hardware: MVP matrix" src="https://img.shields.io/badge/hardware-MVP%20matrix-f97316?style=flat-square"></a>
+  <a href=".specify/memory/constitution.md"><img alt="Cards: no capture" src="https://img.shields.io/badge/cards-no%20capture-dc2626?style=flat-square"></a>
+</p>
 
 ![POS Pulse terminal hero](docs/assets/hero-pos-pulse.svg)
 
 </div>
+
+---
+
+## Live terminal control map
+
+[![POS Pulse live terminal map preview](docs/assets/pos-pulse-live-map-preview.svg)](docs/architecture/pos-pulse-live-map.html)
+
+Open the [interactive Three.js terminal map](docs/architecture/pos-pulse-live-map.html) through a local static server or docs host. The map is backed by [topology JSON](docs/architecture/pos-pulse-live-map.json), while the README stays GitHub-safe with a static SVG preview.
+
+---
+
+## Current implementation status
+
+The current active feature is `specs/008-sale-finalization-and-receipts`; implementation is blocked pending artifact review, owner approval, and approval gates. Earlier terminal foundation, pairing, shell, operator, sales-cart, payments, and visual-system work are complete.
+
+| Area | Status | Evidence |
+| --- | --- | --- |
+| Secure Electron foundation | Complete | [`specs/001-foundation`](specs/001-foundation) |
+| Terminal pairing | Complete | [`specs/002-terminal-pairing`](specs/002-terminal-pairing) |
+| POS shell and operator sessions | Complete | [`specs/003-pos-ui-shell`](specs/003-pos-ui-shell) · [`specs/004-operator-session`](specs/004-operator-session) |
+| Sales cart and payments tender | Complete | [`specs/005-sales-cart`](specs/005-sales-cart) · [`specs/006-payments-tender`](specs/006-payments-tender) |
+| POS visual system | Complete | [`specs/007-pos-visual-system`](specs/007-pos-visual-system) |
+| Sale finalization and receipts | Planned; blocked pending gates | [`specs/008-sale-finalization-and-receipts`](specs/008-sale-finalization-and-receipts) |
+
+---
+
+## What you can verify today
+
+| Claim | Repo-backed evidence |
+| --- | --- |
+| Renderer cannot reach Node/Electron directly | [preload bridge](src/preload) · [bridge API](src/shared/bridge-api.ts) |
+| High-trust work stays in Electron main | [main process](src/main) · [constitution](.specify/memory/constitution.md) |
+| Money avoids floating point | [shared money code](src/shared) · [constitution](.specify/memory/constitution.md) |
+| Local terminal state is migration-backed | [SQLite migrations](migrations) |
+| Hardware scope is intentionally narrow | [hardware matrix](docs/hardware-matrix.md) |
+| Backend/API source of truth is external | [API snapshot](scripts/openapi-snapshot.json) · [constitution](.specify/memory/constitution.md) |
 
 ---
 
@@ -175,7 +228,7 @@ npm run codegen:verify  # CI helper: regen → diff
 
 ## Active work
 
-The active feature is `specs/007-pos-visual-system`, which covers the visual system that lights up across pairing, terminal-state, and operator surfaces. Earlier features established the Electron foundation, terminal pairing, POS shell, operator sessions, sales cart, and payments tender.
+The active feature is `specs/008-sale-finalization-and-receipts`, covering sale finalization and receipts. Implementation is blocked until artifact review, owner approval, and approval gates clear. `specs/007-pos-visual-system` is complete.
 
 ---
 
@@ -184,7 +237,7 @@ The active feature is `specs/007-pos-visual-system`, which covers the visual sys
 | Audience | First reads |
 | --- | --- |
 | **Product & operations** | [Product brief](docs/product.md) · [Hardware matrix](docs/hardware-matrix.md) · [POS shell spec](specs/003-pos-ui-shell/spec.md) |
-| **Engineering** | [Foundation quickstart](specs/001-foundation/quickstart.md) · [Pairing quickstart](specs/002-terminal-pairing/quickstart.md) · [Operator session plan](specs/004-operator-session/plan.md) |
+| **Engineering** | [Foundation quickstart](specs/001-foundation/quickstart.md) · [Pairing quickstart](specs/002-terminal-pairing/quickstart.md) · [Operator session plan](specs/004-operator-session/plan.md) · [Live terminal map](docs/architecture/pos-pulse-live-map.html) |
 | **Design** | [Design system](docs/DESIGN.md) · [Visual system spec](specs/007-pos-visual-system/spec.md) |
 | **Security** | [Constitution](.specify/memory/constitution.md) · [Operator security review](specs/004-operator-session/security-review/s1-review.md) |
 | **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [API snapshot](scripts/openapi-snapshot.json) |
