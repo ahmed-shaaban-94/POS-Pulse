@@ -13,9 +13,12 @@
  *
  * `print_events` / `drawer_events` are sale-scoped (no `terminal_id`), so the
  * query JOINs to `sales` on the session (tenant, branch, terminal) triple.
- * Drawer-failure projection is included so the Slice-4 `<DrawerFailureBanner>`
- * can consume the same snapshot; printer-failure takes precedence when both
- * are present on the freshest sale (printer is the more general fault).
+ * Drawer-failure projection is computed INDEPENDENTLY of printer-failure so the
+ * Slice-4 `<DrawerFailureBanner>` can coexist on screen with
+ * `<PrinterFailureBanner>` (Slice 4 decision, Ahmed 2026-05-29; T330 / T361 /
+ * NFR-008). The result is a record `{ printer_failure; drawer_failure }`, NOT a
+ * single-kind union — a union could only report one banner, silently hiding a
+ * concurrent failure of the other class.
  *
  * Correlated `NOT EXISTS` "latest event per sale" form (no window functions —
  * portable to the sql.js test adapter, mirroring the finalize-listener scan).
@@ -48,6 +51,7 @@ interface PrinterFailureRow {
 
 interface DrawerFailureRow {
   sale_id: string;
+  last_successful_open_at: string | null;
 }
 
 interface RecentSaleRow {
@@ -84,7 +88,8 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
   // drawer_events has UNIQUE(sale_id), so there is at most one row per sale —
   // no "latest event" sub-scan needed.
   const drawerFailureStmt = db.prepare(
-    `SELECT de.sale_id AS sale_id
+    `SELECT de.sale_id AS sale_id,
+            de.last_successful_open_at_for_terminal AS last_successful_open_at
        FROM drawer_events de
        JOIN sales s ON s.sale_id = de.sale_id
       WHERE de.outcome = 'failed'
@@ -114,26 +119,33 @@ export function bindBannerStateProjector(db: DatabaseHandle): BannerStateProject
     },
 
     projectBannerState(scope: BannerStateScope): BannerState {
+      // Each failure class is projected independently — no early return — so a
+      // printer failure cannot silently hide a concurrent drawer failure
+      // (coexistence; Slice 4 decision).
       const printerRow = printerFailureStmt.get(
         scope.tenant_id,
         scope.branch_id,
         scope.terminal_id,
       );
-      if (printerRow !== undefined) {
-        return {
-          kind: 'printer_failure',
-          sale_id: printerRow.sale_id,
-          failure_reason: printerRow.failure_reason,
-          has_successful_print: printerRow.has_successful_print === 1,
-        };
-      }
-
       const drawerRow = drawerFailureStmt.get(scope.tenant_id, scope.branch_id, scope.terminal_id);
-      if (drawerRow !== undefined) {
-        return { kind: 'drawer_failure', sale_id: drawerRow.sale_id };
-      }
 
-      return { kind: 'none' };
+      return {
+        printer_failure:
+          printerRow === undefined
+            ? null
+            : {
+                sale_id: printerRow.sale_id,
+                failure_reason: printerRow.failure_reason,
+                has_successful_print: printerRow.has_successful_print === 1,
+              },
+        drawer_failure:
+          drawerRow === undefined
+            ? null
+            : {
+                sale_id: drawerRow.sale_id,
+                last_successful_open_at: drawerRow.last_successful_open_at,
+              },
+      };
     },
   };
 }

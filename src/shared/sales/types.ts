@@ -110,30 +110,54 @@ export interface DrawerEventSummary {
 // ── Banner state (sales.subscribe topic='banner_state' projection) ───────────
 
 /**
+ * Printer-failure slice of `BannerState` — the sale whose own latest print
+ * event is an unresolved `outcome='failure'`. Carries the fields
+ * `<PrinterFailureBanner>` needs (Slice 3 / T290).
+ */
+export interface PrinterBannerFailure {
+  sale_id: string;
+  failure_reason: string;
+  /** AD-10: whether the sale already has a prior successful print. */
+  has_successful_print: boolean;
+}
+
+/**
+ * Drawer-failure slice of `BannerState` — the sale whose own drawer event is
+ * `outcome='failed'`. Carries `last_successful_open_at` for the banner's
+ * relative-timestamp display (Slice 4 / T360); null when the terminal has no
+ * prior successful drawer open on record. UTC ISO-8601.
+ */
+export interface DrawerBannerFailure {
+  sale_id: string;
+  last_successful_open_at: string | null;
+}
+
+/**
  * The renderer's persistent-banner projection for the current terminal.
  * Computed PER-SALE (never terminal-global-latest — that would silently mask
  * an older unresolved failure behind a newer sale's success; see coordination
- * §S3c projection rule): the terminal surfaces the most-recently-finalized
- * sale whose OWN latest print/drawer event is still an unresolved failure.
+ * §S3c projection rule): the terminal surfaces, per failure class, the
+ * most-recently-finalized sale whose OWN latest print/drawer event is still an
+ * unresolved failure.
  *
- *   • `kind:'none'`            — no unresolved print/drawer failure → no banner.
- *   • `kind:'printer_failure'` — a sale whose latest print event is
- *                                `outcome='failure'` (no later success /
- *                                manual_override on that sale). Carries the
- *                                fields `<PrinterFailureBanner>` needs.
- *   • `kind:'drawer_failure'`  — a sale whose latest drawer event is
- *                                `outcome='failed'` (Slice-4 banner).
+ * **Coexistence record, NOT a single-kind union** (Slice 4 decision, Ahmed
+ * 2026-05-29): the printer-failure and drawer-failure banners can be on screen
+ * AT THE SAME TIME (T330 / T361 / NFR-008). A single discriminated union could
+ * only ever report ONE banner, so a printer failure would silently hide a
+ * concurrent drawer failure. Each slice is projected and consumed
+ * independently:
+ *
+ *   • `printer_failure: null`   — no unresolved print failure → no printer banner.
+ *   • `printer_failure: {...}`   — `<PrinterFailureBanner>` mounts (`useBannerState`).
+ *   • `drawer_failure: null`     — no unresolved drawer failure → no drawer banner.
+ *   • `drawer_failure: {...}`     — `<DrawerFailureBanner>` mounts (`useDrawerBannerState`).
+ *
+ * `{ printer_failure: null, drawer_failure: null }` is the no-banner state.
  */
-export type BannerState =
-  | { kind: 'none' }
-  | {
-      kind: 'printer_failure';
-      sale_id: string;
-      failure_reason: string;
-      /** AD-10: whether the sale already has a prior successful print. */
-      has_successful_print: boolean;
-    }
-  | { kind: 'drawer_failure'; sale_id: string };
+export interface BannerState {
+  printer_failure: PrinterBannerFailure | null;
+  drawer_failure: DrawerBannerFailure | null;
+}
 
 // ── Recent-sale summary (sales.subscribe topic='recent' projection) ──────────
 

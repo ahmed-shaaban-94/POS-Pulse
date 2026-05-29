@@ -44,7 +44,7 @@ const STUB_DRAWER_REPO = {
 
 function projectorStub(over: Partial<BannerStateProjector> = {}): BannerStateProjector {
   return {
-    projectBannerState: vi.fn((): BannerState => ({ kind: 'none' })),
+    projectBannerState: vi.fn((): BannerState => ({ printer_failure: null, drawer_failure: null })),
     projectRecentSale: vi.fn((): RecentSaleSummary | null => null),
     ...over,
   };
@@ -64,10 +64,12 @@ function bridgeWith(opts: { session?: typeof SESSION | null; projector?: BannerS
 describe('sales.subscribe — snapshot projection (projector wired)', () => {
   it('subscribe(topic="banner_state") returns the projected BannerState', async () => {
     const bannerState: BannerState = {
-      kind: 'printer_failure',
-      sale_id: 'sale-1',
-      failure_reason: 'printer_offline',
-      has_successful_print: false,
+      printer_failure: {
+        sale_id: 'sale-1',
+        failure_reason: 'printer_offline',
+        has_successful_print: false,
+      },
+      drawer_failure: null,
     };
     const projector = projectorStub({ projectBannerState: vi.fn(() => bannerState) });
     const result = await bridgeWith({ session: SESSION, projector }).subscribe({
