@@ -110,6 +110,17 @@ export function hasCashTender(tender_lines_summary_json: string): boolean {
   });
 }
 
+/** The outcome-independent columns of a `drawer_events` row, shared by the
+ *  three record helpers. The outcome-specific fields (outcome / reasons /
+ *  last_successful_open_at) are filled per branch. */
+interface BaseDrawerRow {
+  drawer_event_id: string;
+  sale_id: string;
+  triggering_print_event_id: string;
+  terminal_id: string;
+  attempted_at: string;
+}
+
 export function createDrawerKickDispatcher(deps: DrawerKickDependencies): DrawerKickDispatcher {
   const { drawerEventsRepo, transport, auditEmitter } = deps;
   const logger = deps.logger ?? NOOP_LOGGER;
@@ -133,6 +144,80 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
     });
   }
 
+  // ── Per-outcome record helpers (one drawer_events row + matching audit each).
+  // Extracted so the public method stays under the function-length ceiling and
+  // the three terminal triples (insert + emit + log) don't repeat inline.
+
+  function recordSuppressed(ctx: DrawerKickContext, base: BaseDrawerRow, created_at: string): void {
+    drawerEventsRepo.insert({
+      ...base,
+      outcome: 'suppressed',
+      suppression_reason: 'cashless_tender_mix',
+      failure_reason: null,
+      last_successful_open_at_for_terminal: null,
+    });
+    emitDrawer(
+      'sale.drawer.suppressed',
+      ctx,
+      {
+        sale_id: ctx.sale_id,
+        drawer_event_id: base.drawer_event_id,
+        suppression_reason: 'cashless_tender_mix',
+      },
+      created_at,
+    );
+    logger.info({ msg: 'sale.drawer.suppressed', sale_id: ctx.sale_id });
+  }
+
+  function recordOpened(ctx: DrawerKickContext, base: BaseDrawerRow, created_at: string): void {
+    drawerEventsRepo.insert({
+      ...base,
+      outcome: 'opened',
+      suppression_reason: null,
+      failure_reason: null,
+      last_successful_open_at_for_terminal: null,
+    });
+    emitDrawer(
+      'sale.drawer.opened',
+      ctx,
+      { sale_id: ctx.sale_id, drawer_event_id: base.drawer_event_id },
+      created_at,
+    );
+    logger.info({ msg: 'sale.drawer.opened', sale_id: ctx.sale_id });
+  }
+
+  function recordFailed(
+    ctx: DrawerKickContext,
+    base: BaseDrawerRow,
+    created_at: string,
+    failure_reason: DrawerEventFailureReason,
+  ): void {
+    // Capture last-known-good open time for incident reconstruction
+    // (Constitution §IV) on the failed row + audit payload.
+    const last_successful_open_at = drawerEventsRepo.findLastSuccessfulOpenForTerminal(
+      ctx.terminal_id,
+    );
+    drawerEventsRepo.insert({
+      ...base,
+      outcome: 'failed',
+      suppression_reason: null,
+      failure_reason,
+      last_successful_open_at_for_terminal: last_successful_open_at,
+    });
+    emitDrawer(
+      'sale.drawer.failed',
+      ctx,
+      {
+        sale_id: ctx.sale_id,
+        drawer_event_id: base.drawer_event_id,
+        failure_reason,
+        last_successful_open_at_for_terminal: last_successful_open_at,
+      },
+      created_at,
+    );
+    logger.warn({ msg: 'sale.drawer.failed', sale_id: ctx.sale_id, failure_reason });
+  }
+
   return {
     async dispatchOnFirstPrintSuccess(ctx: DrawerKickContext): Promise<void> {
       // FR-053 double-kick suppression (application layer; UNIQUE(sale_id) is
@@ -140,13 +225,25 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
       // Any prior row (opened | suppressed | failed) means the drawer decision
       // was already made for this sale — a reprint / retry-after-partial-open
       // must NOT write a second row or re-kick.
+      //
+      // NOTE (T200 hardware follow-up): this readBySale → await kick() → insert
+      // is a check-then-act with an await in the middle. UNIQUE(sale_id) + the
+      // caller's try/catch prevent a second ROW and a seam crash, but they do
+      // NOT prevent a second PHYSICAL kick if two dispatches for the same sale
+      // interleave before either INSERTs (the loser kicks, then throws on
+      // INSERT, caught + swallowed). Dormant today: the STUB transport never
+      // kicks, and the steady-state worker is fenced (it re-scans on
+      // `NOT EXISTS sales` and the Sale commits before this fire-and-forget).
+      // When the real DK transport lands (T200), serialize kick dispatch per
+      // sale_id (an in-flight set) so the loser short-circuits BEFORE kick(),
+      // not just before INSERT.
       if (drawerEventsRepo.readBySale(ctx.sale_id) !== null) {
         logger.info({ msg: 'drawer.kick.suppressed_existing_row', sale_id: ctx.sale_id });
         return;
       }
 
       const created_at = now();
-      const base = {
+      const base: BaseDrawerRow = {
         drawer_event_id: deps.newDrawerEventId(),
         sale_id: ctx.sale_id,
         triggering_print_event_id: ctx.triggering_print_event_id,
@@ -156,24 +253,7 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
 
       // Cashless first print → suppressed; no kick (FR-042).
       if (!hasCashTender(ctx.tender_lines_summary_json)) {
-        drawerEventsRepo.insert({
-          ...base,
-          outcome: 'suppressed',
-          suppression_reason: 'cashless_tender_mix',
-          failure_reason: null,
-          last_successful_open_at_for_terminal: null,
-        });
-        emitDrawer(
-          'sale.drawer.suppressed',
-          ctx,
-          {
-            sale_id: ctx.sale_id,
-            drawer_event_id: base.drawer_event_id,
-            suppression_reason: 'cashless_tender_mix',
-          },
-          created_at,
-        );
-        logger.info({ msg: 'sale.drawer.suppressed', sale_id: ctx.sale_id });
+        recordSuppressed(ctx, base, created_at);
         return;
       }
 
@@ -190,51 +270,10 @@ export function createDrawerKickDispatcher(deps: DrawerKickDependencies): Drawer
       }
 
       if (result.ok) {
-        drawerEventsRepo.insert({
-          ...base,
-          outcome: 'opened',
-          suppression_reason: null,
-          failure_reason: null,
-          last_successful_open_at_for_terminal: null,
-        });
-        emitDrawer(
-          'sale.drawer.opened',
-          ctx,
-          { sale_id: ctx.sale_id, drawer_event_id: base.drawer_event_id },
-          created_at,
-        );
-        logger.info({ msg: 'sale.drawer.opened', sale_id: ctx.sale_id });
+        recordOpened(ctx, base, created_at);
         return;
       }
-
-      // Failure: capture last-known-good open time for incident reconstruction
-      // (Constitution §IV) on the failed row + audit payload.
-      const last_successful_open_at = drawerEventsRepo.findLastSuccessfulOpenForTerminal(
-        ctx.terminal_id,
-      );
-      drawerEventsRepo.insert({
-        ...base,
-        outcome: 'failed',
-        suppression_reason: null,
-        failure_reason: result.failure_reason,
-        last_successful_open_at_for_terminal: last_successful_open_at,
-      });
-      emitDrawer(
-        'sale.drawer.failed',
-        ctx,
-        {
-          sale_id: ctx.sale_id,
-          drawer_event_id: base.drawer_event_id,
-          failure_reason: result.failure_reason,
-          last_successful_open_at_for_terminal: last_successful_open_at,
-        },
-        created_at,
-      );
-      logger.warn({
-        msg: 'sale.drawer.failed',
-        sale_id: ctx.sale_id,
-        failure_reason: result.failure_reason,
-      });
+      recordFailed(ctx, base, created_at, result.failure_reason);
     },
   };
 }

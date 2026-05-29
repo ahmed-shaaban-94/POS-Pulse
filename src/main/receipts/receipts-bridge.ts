@@ -265,8 +265,16 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         // (cash-inclusive → kick). The drawer dispatch is a sibling step — its
         // own faults never reject this handler (the dispatcher resolves void on
         // internal faults; the Sale + print are already durable). The
-        // `readBySale` guard makes a re-fired retry idempotent. Attribution is
-        // the retrying operator (FR-024), mirroring the print ctx above.
+        // `readBySale` guard makes a re-fired retry idempotent.
+        //
+        // Attribution is the RETRYING operator (FR-052 retry semantics +
+        // FR-022/FR-023 operator attribution), mirroring this handler's print
+        // ctx above — NOT FR-024 (which governs reprint attribution). Deliberate
+        // asymmetry: an auto-fired first-print drawer event attributes to the
+        // SELLING operator (dispatch-first-print-on-finalize → row.selling_operator_id),
+        // while a retry-success drawer event for the same logical first print
+        // attributes to the operator who clicked Retry. Both are "the operator
+        // who caused this drawer kick" — the intended attribution.
         if (drawerKickDispatcher !== undefined) {
           try {
             await drawerKickDispatcher.dispatchOnFirstPrintSuccess({

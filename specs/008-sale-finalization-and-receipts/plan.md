@@ -424,8 +424,13 @@ Ordering inside the finalize pipeline:
    write to the printer adapter. Await drawer-kick ack (printer
    returns a status byte). Emit `sale.drawer.opened` /
    `sale.drawer.failed` audit event accordingly.
-6. **Otherwise (cashless OR reprint):** emit `sale.drawer.suppressed`
-   audit event with the suppression reason.
+6. **Otherwise (cashless first print):** INSERT a `suppressed`
+   `drawer_events` row + emit `sale.drawer.suppressed` (reason
+   `cashless_tender_mix`). **Reprints emit NO DrawerEvent at all** — the
+   `reprint` suppression value was removed post-external-review R2 (see the
+   `sale.drawer.suppressed` row in the audit-catalogue table below + FR-055);
+   a reprint is a no-op against the existing `drawer_events` row (the
+   implementation's `readBySale` guard returns early).
 
 The drawer-kick command is **not idempotent at the printer layer**
 (the printer kicks every time you send it). Idempotency at the sale
