@@ -249,7 +249,10 @@ describe('receipts.retryPrint — gate refusals', () => {
     const res = await bridgeWith(SESSION).retryPrint({
       sale_id: 'sale-1' as SaleId,
       idempotency_key: 'k',
-      pan: '4111111111111111',
+      // The forbidden KEY ('pan') is what trips the guard — the value is
+      // irrelevant. A non-card placeholder avoids PAN-like literals in source
+      // (CodeRabbit #280: compliance/secret-scanner hygiene).
+      pan: 'forbidden-test-value',
     } as unknown as Parameters<ReturnType<typeof bridgeWith>['retryPrint']>[0]);
     expect(res).toEqual({ kind: 'refused', reason: 'forbidden_field_in_request' });
   });
