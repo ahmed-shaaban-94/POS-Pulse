@@ -52,6 +52,7 @@ describe('T262 — affordance gating', () => {
           has_successful_print: false,
         }}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={retryBridge()}
       />,
     );
@@ -67,10 +68,32 @@ describe('T262 — affordance gating', () => {
           has_successful_print: true,
         }}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={retryBridge()}
       />,
     );
     expect(screen.getByRole('button', { name: /reprint/i })).toBeEnabled();
+  });
+
+  it('calls onReprint with the sale id when the enabled Reprint button is clicked', async () => {
+    // enabled⟹wired (CodeRabbit #281): an enabled Reprint must do something
+    // real. onReprint is the Slice-5 entry-point (receipts.reprint TBD),
+    // symmetric with onManualOverride.
+    const onReprint = vi.fn();
+    render(
+      <PrinterFailureBanner
+        printFailure={{
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: true,
+        }}
+        onManualOverride={() => {}}
+        onReprint={onReprint}
+        _testReceiptsBridge={retryBridge()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /reprint/i }));
+    expect(onReprint).toHaveBeenCalledWith('sale-1');
   });
 
   it('Retry is enabled in the failure state and calls receipts.retryPrint on click', async () => {
@@ -83,6 +106,7 @@ describe('T262 — affordance gating', () => {
           has_successful_print: false,
         }}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={bridge}
       />,
     );
@@ -102,6 +126,7 @@ describe('T262 — affordance gating', () => {
           has_successful_print: false,
         }}
         onManualOverride={onManualOverride}
+        onReprint={() => {}}
         _testReceiptsBridge={retryBridge()}
       />,
     );
@@ -121,6 +146,7 @@ describe('T262 — affordance gating', () => {
           has_successful_print: false,
         }}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={bridge}
         _idempotencyKeyFactory={() => 'fixed-key-1'}
       />,
@@ -145,6 +171,7 @@ describe('T262 — affordance gating', () => {
           has_successful_print: false,
         }}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={rejecting}
       />,
     );
@@ -164,6 +191,7 @@ describe('T262 — affordance gating', () => {
           has_successful_print: false,
         }}
         onManualOverride={() => {}}
+        onReprint={() => {}}
       />,
     );
     const retry = screen.getByRole('button', { name: /retry/i });

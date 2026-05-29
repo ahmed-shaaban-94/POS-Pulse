@@ -42,6 +42,9 @@ function salesBridgeStub(token: { kind: 'ok' | 'refused' }): Partial<SalesBridge
 
 afterEach(() => {
   cleanup();
+  // Guard against window.api leaking into later tests if a test throws before
+  // its own cleanup (CodeRabbit #281).
+  delete (window as unknown as { api?: unknown }).api;
 });
 
 describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
@@ -51,6 +54,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
       />,
@@ -68,6 +72,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
       />,
@@ -86,6 +91,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={null}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
       />,
@@ -99,6 +105,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
       />,
@@ -123,13 +130,14 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
     await waitFor(() => {
       expect(sales.subscribe).toHaveBeenCalled();
     });
-    delete (window as unknown as { api?: unknown }).api;
+    // window.api cleanup is handled by afterEach (CodeRabbit #281).
   });
 
   it('does not crash when no sales bridge is available at all (null resolve)', () => {
@@ -138,6 +146,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
@@ -153,6 +162,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
       />,
@@ -174,6 +184,7 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
       />,
@@ -188,5 +199,42 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     });
     // The unsubscribe .catch arm held — no unhandled rejection / crash.
     expect(true).toBe(true);
+  });
+
+  it('unsubscribes a token that resolves AFTER unmount (orphan cleanup, CodeRabbit #281)', async () => {
+    // subscribe resolves only after we trigger it — so cleanup runs first and
+    // the late token would otherwise leak with no unsubscribe ever issued.
+    let resolveSubscribe: (r: { kind: 'ok'; subscription_token: string }) => void = () => {};
+    const sales: Partial<SalesBridgeAPI> = {
+      subscribe: vi.fn(
+        () =>
+          new Promise<{ kind: 'ok'; subscription_token: string }>((resolve) => {
+            resolveSubscribe = resolve;
+          }),
+      ),
+      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    };
+    const { unmount } = render(
+      <PrinterFailureBanner
+        printFailure={FAILURE}
+        onManualOverride={() => {}}
+        onReprint={() => {}}
+        _testReceiptsBridge={noopReceiptsBridge()}
+        _testSalesBridge={sales as SalesBridgeAPI}
+      />,
+    );
+    await waitFor(() => {
+      expect(sales.subscribe).toHaveBeenCalled();
+    });
+    // Unmount BEFORE subscribe resolves → cancelled === true.
+    unmount();
+    // Now the subscription resolves late with a token — the orphan-cleanup arm
+    // must immediately unsubscribe it.
+    resolveSubscribe({ kind: 'ok', subscription_token: 'late-token' });
+    await waitFor(() => {
+      expect(sales.unsubscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ subscription_token: 'late-token' }),
+      );
+    });
   });
 });

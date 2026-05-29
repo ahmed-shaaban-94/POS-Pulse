@@ -1501,7 +1501,7 @@ body {
   .printer-failure-banner__message {
     margin: 0;
     flex: 1 1 auto;
-    font-size: var(--font-size-base);
+    font-size: var(--font-size-md);
     font-weight: var(--font-weight-regular);
     line-height: 1.4;
   }

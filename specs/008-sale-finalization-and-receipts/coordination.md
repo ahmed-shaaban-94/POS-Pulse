@@ -256,7 +256,7 @@ Vendor + model + driver-version capture has been recorded in [../../docs/hardwar
 
 ### S3c — `<PrinterFailureBanner>` preflight decisions (2026-05-29)
 
-Three decisions recorded before the T290 `/impeccable craft` (per `docs/impeccable-embed-preflight.md §4.2`):
+Four decisions recorded before the T290 `/impeccable craft` (per `docs/impeccable-embed-preflight.md §4.2`):
 
 1. **T291 host path corrected.** tasks.md T291 + the §A1 brief (f) name `src/renderer/ui/banners/BannerHost.tsx` as the mount target — **that file does not exist**. Banners in this codebase mount as siblings directly in `src/renderer/shell/AppShell.tsx` (the connection `StatusBanner` via `TopBar`; `ShiftClosedBanner` mounted in AppShell at ~line 80). S3c mounts `<PrinterFailureBanner>` as a sibling in `AppShell.tsx` below the connection banner (matching the brief's stack order). No `BannerHost.tsx` is created.
 

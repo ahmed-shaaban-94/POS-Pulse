@@ -41,6 +41,15 @@ export interface PrinterFailureBannerProps {
   printFailure: PrinterFailureState | null;
   /** Entry-point for the Slice-6 manual-override surface (T512); receives the sale id. */
   onManualOverride: (saleId: string) => void;
+  /**
+   * Entry-point for the Slice-5 reprint surface (T4xx — `receipts.reprint`
+   * does not exist yet); receives the sale id. REQUIRED (not optional) to
+   * preserve the enabled⟹wired invariant: the Reprint button is only ever
+   * enabled when `has_successful_print`, and an enabled button must always
+   * have a real handler (PRODUCT.md Principle 1 — no affordance without a
+   * result). Symmetric with `onManualOverride`.
+   */
+  onReprint: (saleId: string) => void;
   /** Injected for tests; production falls back to `window.api.receipts`. */
   _testReceiptsBridge?: ReceiptsBridgeAPI;
   /** Injected for tests; production falls back to `window.api.sales`. */
@@ -71,6 +80,7 @@ type RetryPhase = 'idle' | 'retrying';
 export function PrinterFailureBanner({
   printFailure,
   onManualOverride,
+  onReprint,
   _testReceiptsBridge,
   _testSalesBridge,
   _idempotencyKeyFactory,
@@ -94,7 +104,14 @@ export function PrinterFailureBanner({
     void sales
       .subscribe({ topic: 'banner_state' })
       .then((res) => {
-        if (!cancelled && res.kind === 'ok') token = res.subscription_token;
+        if (res.kind !== 'ok') return;
+        if (cancelled) {
+          // Cleanup already ran before subscribe resolved — the token would
+          // otherwise leak (no unsubscribe ever issued). Release it now.
+          void sales.unsubscribe({ subscription_token: res.subscription_token }).catch(() => {});
+          return;
+        }
+        token = res.subscription_token;
       })
       .catch(() => {
         /* inert subscription — the injected printFailure still drives render */
@@ -166,6 +183,9 @@ export function PrinterFailureBanner({
           type="button"
           className="btn btn--md btn--secondary"
           disabled={!reprintEnabled}
+          onClick={() => {
+            onReprint(printFailure.sale_id);
+          }}
           aria-label="Reprint — نسخة"
           title={
             reprintEnabled

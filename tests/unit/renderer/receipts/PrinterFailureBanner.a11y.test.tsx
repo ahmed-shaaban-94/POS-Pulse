@@ -38,6 +38,7 @@ describe('T263 — PrinterFailureBanner accessibility', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
@@ -51,6 +52,7 @@ describe('T263 — PrinterFailureBanner accessibility', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
@@ -64,6 +66,7 @@ describe('T263 — PrinterFailureBanner accessibility', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
@@ -76,6 +79,7 @@ describe('T263 — PrinterFailureBanner accessibility', () => {
       <PrinterFailureBanner
         printFailure={FAILURE}
         onManualOverride={() => {}}
+        onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
     );
