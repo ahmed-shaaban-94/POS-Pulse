@@ -1036,7 +1036,7 @@ per-file ≥95% on engine/payload/bridge, ≥90% on the preview UI.
 
 ---
 
-## Slice 4 close-out — drawer-kick + drawer-failure banner (2026-05-30)
+## Slice 4 close-out — drawer-kick + drawer-failure banner (2026-05-29)
 
 Code-complete across a **stacked set of 5 PRs** (drawer-kick main-side + the
 drawer-failure banner + the coexistence-contract precursor + the clear-path +
@@ -1059,6 +1059,19 @@ rebase, CI clears.
 | **#288** | **S4b** `<DrawerFailureBanner>` + `useDrawerBannerState` + AppShell mount + `formatRelativeTime`. | #285 | T330/T331/T332/T360/T361 |
 | **#289** | **S4c** drawer banner clear-path (hardware-recovery). | #285 | (clear-path) |
 
+> **Post-merge correction (2026-05-29):** the stacked-base approach above hit a
+> GitHub footgun. #285 + #286 merged to `main` cleanly. But #288 + #289 had been
+> merged **into the #285 branch** (their base), not `main`; when #285
+> squash-merged, their commits were stranded on the orphaned #285 branch and
+> never reached `main` — GitHub still marked #288/#289 "MERGED" because their
+> base branch merged. The S4b + S4c content was **re-landed via fresh PRs based
+> on `main`**: **#288 → re-landed as #290**, **#289 → re-landed as #291** (the
+> identical deltas `e0acedc` / `5b8eb05` re-applied onto current `main`).
+> **Lesson:** never merge a PR whose base is another open PR's branch and expect
+> a later squash of that base to carry it — squash flattens only the commits
+> present when the base PR merged. Land dependent PRs against `main` after the
+> base merges.
+
 ### Decisions recorded this slice (Ahmed)
 
 1. **Coexistence record (2026-05-29).** Both banners may be on screen at once
@@ -1069,14 +1082,14 @@ rebase, CI clears.
    only affordance is Manual receipt, wired to a required `onManualOverride`
    prop the host passes as a placeholder (real `receipts.manualOverride` is
    Slice 6 / T512). Mirrors the printer banner's `enabled⟹wired` posture.
-3. **Clear-path = hardware-recovery (2026-05-30).** A failed drawer row can
+3. **Clear-path = hardware-recovery (2026-05-29).** A failed drawer row can
    never be superseded on its own sale (UNIQUE(sale_id) + no retry-kick,
    FR-053), so the banner clears when a later `opened` drawer event on the same
    terminal proves the drawer recovered. Per-sale-via-manual-override was
    re-surfaced + rejected: it would be INERT in v1 (nothing writes a
    `manual_override` print event until Slice 6). A Slice-6 per-sale clear can
    compose on top later.
-4. **Retry-success drawer attribution = retrying operator (2026-05-30).**
+4. **Retry-success drawer attribution = retrying operator (2026-05-29).**
    Confirmed the deliberate asymmetry: an auto-fired first-print drawer event
    attributes to the SELLING operator; a retry-success drawer event to the
    retrying operator. Both = "the operator who caused this kick" (FR-052 +
