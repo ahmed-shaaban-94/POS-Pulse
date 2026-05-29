@@ -107,6 +107,43 @@ export interface DrawerEventSummary {
   attempted_at: string;
 }
 
+// ── Banner state (sales.subscribe topic='banner_state' projection) ───────────
+
+/**
+ * The renderer's persistent-banner projection for the current terminal.
+ * Computed PER-SALE (never terminal-global-latest — that would silently mask
+ * an older unresolved failure behind a newer sale's success; see coordination
+ * §S3c projection rule): the terminal surfaces the most-recently-finalized
+ * sale whose OWN latest print/drawer event is still an unresolved failure.
+ *
+ *   • `kind:'none'`            — no unresolved print/drawer failure → no banner.
+ *   • `kind:'printer_failure'` — a sale whose latest print event is
+ *                                `outcome='failure'` (no later success /
+ *                                manual_override on that sale). Carries the
+ *                                fields `<PrinterFailureBanner>` needs.
+ *   • `kind:'drawer_failure'`  — a sale whose latest drawer event is
+ *                                `outcome='failed'` (Slice-4 banner).
+ */
+export type BannerState =
+  | { kind: 'none' }
+  | {
+      kind: 'printer_failure';
+      sale_id: string;
+      failure_reason: string;
+      /** AD-10: whether the sale already has a prior successful print. */
+      has_successful_print: boolean;
+    }
+  | { kind: 'drawer_failure'; sale_id: string };
+
+// ── Recent-sale summary (sales.subscribe topic='recent' projection) ──────────
+
+/** Compact most-recent-finalized-sale summary (FR-046 "recent sale" UI). */
+export interface RecentSaleSummary {
+  sale_id: string;
+  sale_number: string;
+  finalized_at: string;
+}
+
 // ── Refusal reason (closed enum — contract §"Refusal envelope") ──────────────
 
 /**

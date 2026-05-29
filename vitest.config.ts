@@ -222,6 +222,14 @@ export default defineConfig({
           functions: 95,
           statements: 95,
         },
+        // 008 follow-up — banner-state projector (sales.subscribe banner_state).
+        // The per-sale silent-failure-guard logic is load-bearing; ≥95%.
+        'src/main/sales/banner-state-projector.ts': {
+          lines: 95,
+          branches: 95,
+          functions: 95,
+          statements: 95,
+        },
         'src/main/sales/repositories/print-events.repository.ts': {
           lines: 95,
           branches: 95,

@@ -47,6 +47,7 @@ import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
 import { buildFinalizeInput } from './sales/finalize-dispatch.js';
 import { createFinalizeListener } from './sales/finalize-listener.js';
 import { createSalesBridge } from './sales/sales-bridge.js';
+import { bindBannerStateProjector } from './sales/banner-state-projector.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
 import { createPrintPipeline } from './receipts/print-pipeline.js';
@@ -813,6 +814,10 @@ app
         salesRepo,
         printEventsRepo,
         drawerEventsRepo,
+        // Snapshot-subscribe projector (008 follow-up): sales.subscribe returns
+        // the current banner_state / recent projection; the renderer polls it.
+        bannerStateProjector: bindBannerStateProjector(dbHandle),
+        newSubscriptionToken: () => randomUUID(),
       });
       registerSalesHandlers(ipcMain, { salesBridge });
 
