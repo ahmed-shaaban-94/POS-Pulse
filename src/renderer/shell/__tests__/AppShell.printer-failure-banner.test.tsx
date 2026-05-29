@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -97,5 +97,27 @@ describe('T291 — AppShell printer-failure banner integration', () => {
     await userEvent.click(screen.getByRole('button', { name: /manual/i }));
     // No throw; banner still present (entry-points are inert stubs).
     expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
+  });
+
+  it('mounts the drawer-failure banner and its Manual entry-point is wired', async () => {
+    // Drawer twin of the printer-banner wiring check: a `.drawer_failure` slice
+    // feeds useDrawerBannerState → <DrawerFailureBanner>, whose only affordance
+    // is the Slice-6 manual-override entry-point. Clicking it exercises the
+    // AppShell `onManualOverride` stub the printer-only fixtures never reach.
+    (window as unknown as { api: { sales: SalesBridgeAPI } }).api = {
+      sales: salesBridge({
+        printer_failure: null,
+        drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
+      }),
+    };
+    renderShell();
+    const drawerBanner = await screen.findByTestId('drawer-failure-banner');
+    expect(drawerBanner).toBeInTheDocument();
+    // Scope the click to the drawer banner — its Manual receipt button is the
+    // only one on screen (printer_failure is null), but scoping keeps the intent
+    // explicit and survives a future printer+drawer coexistence fixture.
+    await userEvent.click(within(drawerBanner).getByRole('button', { name: /manual receipt/i }));
+    // No throw; the banner persists (the entry-point is an inert Slice-6 stub).
+    expect(screen.getByTestId('drawer-failure-banner')).toBeInTheDocument();
   });
 });

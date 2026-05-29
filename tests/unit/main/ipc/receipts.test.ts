@@ -62,6 +62,16 @@ function makeBridgeSpy(): ReceiptsBridge {
           printed_at: '2026-05-27T10:00:09.000Z',
         }) as never,
     ),
+    reprint: vi.fn(
+      () =>
+        Promise.resolve({
+          kind: 'ok',
+          print_event_id: 'pe-r-1',
+          duplicate_copy_sequence_number: 1,
+          reprinted_at: '2026-05-27T10:00:09.000Z',
+          render_path: 'escpos_direct',
+        }) as never,
+    ),
   };
 }
 
@@ -121,5 +131,34 @@ describe('T172 — registerReceiptsHandlers', () => {
     expect(res.kind).toBe('refused');
     expect(res.reason).toBe('sale_not_found');
     expect(bridge.retryPrint).not.toHaveBeenCalled();
+  });
+
+  // S5 — receipts.reprint channel.
+  it('registers the receipts.reprint channel', () => {
+    const fake = makeFakeIpcMain();
+    registerReceiptsHandlers(fake.ipcMain, { receiptsBridge: makeBridgeSpy() });
+    expect(fake.channels()).toContain(RECEIPTS_IPC_CHANNELS.REPRINT);
+  });
+
+  it('delegates receipts.reprint to the bridge with the request payload', async () => {
+    const fake = makeFakeIpcMain();
+    const bridge = makeBridgeSpy();
+    registerReceiptsHandlers(fake.ipcMain, { receiptsBridge: bridge });
+    const req = { sale_id: 'sale-1', idempotency_key: 'idem-1' };
+    await fake.invoke(RECEIPTS_IPC_CHANNELS.REPRINT, req);
+    expect(bridge.reprint).toHaveBeenCalledWith(req);
+  });
+
+  it('refuses a non-object reprint request without calling the bridge', async () => {
+    const fake = makeFakeIpcMain();
+    const bridge = makeBridgeSpy();
+    registerReceiptsHandlers(fake.ipcMain, { receiptsBridge: bridge });
+    const res = (await fake.invoke(RECEIPTS_IPC_CHANNELS.REPRINT, undefined)) as {
+      kind: string;
+      reason: string;
+    };
+    expect(res.kind).toBe('refused');
+    expect(res.reason).toBe('sale_not_found');
+    expect(bridge.reprint).not.toHaveBeenCalled();
   });
 });

@@ -77,6 +77,7 @@ function receiptsBridge(): ReceiptsBridgeAPI {
 
 afterEach(() => {
   cleanup();
+  delete (window as unknown as { api?: unknown }).api;
 });
 
 describe('T451 — FindSaleReceipt surface', () => {
@@ -138,5 +139,43 @@ describe('T451 — FindSaleReceipt surface', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /find/i }));
     expect(sales.findByNumber).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op (no crash) when no sales bridge is available', async () => {
+    // No _testSalesBridge and no window.api.sales → resolveSalesBridge null.
+    render(<FindSaleReceipt />);
+    await userEvent.type(screen.getByRole('textbox', { name: /sale number/i }), 'TERM-X');
+    await userEvent.click(screen.getByRole('button', { name: /find/i }));
+    // No sale rendered, no not-found message — the lookup short-circuited.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('falls back to window.api.sales when no bridge is injected (production path)', async () => {
+    // No _testSalesBridge → resolveSalesBridge reads window.api.sales (the
+    // production fallback arm). The injected bridge here IS the window one.
+    const sales = salesBridge(() => Promise.resolve({ kind: 'ok', sale: saleSummary() }));
+    (window as unknown as { api: { sales: SalesBridgeAPI } }).api = { sales };
+
+    render(<FindSaleReceipt />);
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /sale number/i }),
+      'TERM-01-2026-05-27-000001',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /find/i }));
+
+    expect(sales.findByNumber).toHaveBeenCalledWith({
+      sale_number: 'TERM-01-2026-05-27-000001',
+    });
+    await waitFor(() => expect(screen.getByText('TERM-01-2026-05-27-000001')).toBeInTheDocument());
+  });
+
+  it('shows not-found when findByNumber rejects (catch arm)', async () => {
+    const sales = salesBridge(() => Promise.reject(new Error('ipc boom')));
+    render(<FindSaleReceipt _testSalesBridge={sales} _testReceiptsBridge={receiptsBridge()} />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /sale number/i }), 'TERM-X');
+    await userEvent.click(screen.getByRole('button', { name: /find/i }));
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/not found/i));
   });
 });
