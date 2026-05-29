@@ -107,6 +107,21 @@ export interface PrintDispatcher {
     ctx: PrintDispatchContext,
     previousFailedPrintEventIds: string[],
   ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
+
+  /**
+   * Dispatch a reprint (T400 / Slice 5). Writes a `purpose='reprint'` row with
+   * the supplied `duplicate_copy_sequence_number` (the n-th reprint → n) and,
+   * on success, emits `sale.receipt.reprinted` carrying BOTH the reprinting
+   * operator (`ctx.attribution_operator_id`) and the selling operator
+   * (`sellingOperatorId`) per FR-024 / AD-10. A reprint NEVER kicks the drawer
+   * (no drawer dispatch here) and is repeatable (no idempotency no-op). Infra
+   * errors PROPAGATE (the caller maps them to a refusal).
+   */
+  dispatchReprint(
+    payload: ReceiptPayload,
+    ctx: PrintDispatchContext,
+    opts: { duplicateCopySequenceNumber: number; sellingOperatorId: string },
+  ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }>;
 }
 
 const NOOP_LOGGER: PrintDispatchLogger = {
@@ -133,6 +148,9 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
       purpose,
       acting_operator_id: ctx.attribution_operator_id,
       acting_operator_session_id: ctx.session_id ?? '',
+      // Always NULL here; the success branch in `record` stamps the reprint
+      // sequence number on the row it writes (CHECK: non-null only on a
+      // successful reprint).
       duplicate_copy_sequence_number: null,
       previous_failed_print_event_ids:
         previousFailedPrintEventIds === null || previousFailedPrintEventIds.length === 0
@@ -154,13 +172,24 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
     ctx: PrintDispatchContext,
     opts: {
       purpose: PrintEventRow['purpose'];
-      successCategory: 'sale.receipt.printed' | 'sale.receipt.print_retried_success';
+      successCategory:
+        | 'sale.receipt.printed'
+        | 'sale.receipt.print_retried_success'
+        | 'sale.receipt.reprinted';
       previousFailedPrintEventIds: string[] | null;
+      duplicateCopySequenceNumber?: number | null;
+      /** Extra structural fields merged into the SUCCESS audit payload (e.g. the
+       *  reprint's dual-operator attribution). Never slip content (T242). */
+      successAuditExtra?: Readonly<Record<string, unknown>>;
     },
   ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
     const result = await pipeline.render(payload);
     const print_event_id = deps.newPrintEventId();
     const created_at = now();
+    // The base row carries NULL for duplicate_copy_sequence_number — the
+    // print_events CHECK requires it non-null ONLY on a SUCCESSFUL reprint, and
+    // null everywhere else (incl. a FAILED reprint). The success branch below
+    // stamps it on the row it actually writes.
     const base = baseRow(ctx, print_event_id, opts.purpose, opts.previousFailedPrintEventIds);
     const printed_at = base.printed_at;
 
@@ -170,6 +199,7 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
         outcome: 'success',
         render_path: result.render_path,
         failure_reason: null,
+        duplicate_copy_sequence_number: opts.duplicateCopySequenceNumber ?? null,
       });
       auditEmitter.emitRaw({
         action_category: opts.successCategory,
@@ -180,7 +210,12 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
         session_id: ctx.session_id,
         created_at,
         // Structural ONLY — no slip content (T242).
-        payload: { sale_id: ctx.sale_id, print_event_id, render_path: result.render_path },
+        payload: {
+          sale_id: ctx.sale_id,
+          print_event_id,
+          render_path: result.render_path,
+          ...opts.successAuditExtra,
+        },
       });
       logger.info({ msg: opts.successCategory, sale_id: ctx.sale_id, print_event_id });
       return { result, print_event_id, printed_at };
@@ -241,6 +276,27 @@ export function createPrintDispatcher(deps: PrintDispatcherDependencies): PrintD
         purpose: 'retry_after_failure',
         successCategory: 'sale.receipt.print_retried_success',
         previousFailedPrintEventIds,
+      });
+    },
+
+    dispatchReprint(
+      payload: ReceiptPayload,
+      ctx: PrintDispatchContext,
+      opts: { duplicateCopySequenceNumber: number; sellingOperatorId: string },
+    ): Promise<{ result: PrintPipelineResult; print_event_id: string; printed_at: string }> {
+      return record(payload, ctx, {
+        purpose: 'reprint',
+        successCategory: 'sale.receipt.reprinted',
+        previousFailedPrintEventIds: null,
+        duplicateCopySequenceNumber: opts.duplicateCopySequenceNumber,
+        // FR-024 / AD-10: the reprinted audit carries BOTH operator ids — the
+        // reprinting operator (ctx.attribution_operator_id, already on every
+        // audit payload) and the original selling operator.
+        successAuditExtra: {
+          reprinting_operator_id: ctx.attribution_operator_id,
+          selling_operator_id: opts.sellingOperatorId,
+          duplicate_copy_sequence_number: opts.duplicateCopySequenceNumber,
+        },
       });
     },
   };

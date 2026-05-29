@@ -151,4 +151,67 @@ describe('useDrawerBannerState', () => {
     await Promise.resolve();
     expect(result.current).toBeNull();
   });
+
+  it('ignores a resolution that arrives after unmount (cancelled then arm)', async () => {
+    let resolveFn: (r: {
+      kind: 'ok';
+      subscription_token: string;
+      banner_state: BannerState;
+    }) => void = () => {};
+    const bridge: SalesBridgeAPI = {
+      read: vi.fn(),
+      findByNumber: vi.fn(),
+      subscribe: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFn = resolve;
+          }),
+      ),
+      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    };
+    const { result, unmount } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    unmount();
+    // Resolve a drawer failure AFTER unmount — the cancelled guard must swallow
+    // the setState (no crash / act-warning); state stays null.
+    resolveFn({
+      kind: 'ok',
+      subscription_token: 't',
+      banner_state: {
+        printer_failure: null,
+        drawer_failure: { sale_id: 'sale-1', last_successful_open_at: null },
+      },
+    });
+    await Promise.resolve();
+    expect(result.current).toBeNull();
+  });
+
+  it('swallows a rejection that resolves after unmount (cancelled catch arm)', async () => {
+    let rejectFn: (e: unknown) => void = () => {};
+    const bridge: SalesBridgeAPI = {
+      read: vi.fn(),
+      findByNumber: vi.fn(),
+      subscribe: vi.fn(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFn = reject;
+          }),
+      ),
+      unsubscribe: vi.fn(() => Promise.resolve({ kind: 'ok' as const })),
+    };
+    const { unmount } = renderHook(() =>
+      useDrawerBannerState({ intervalMs: 1000, _testSalesBridge: bridge }),
+    );
+    await waitFor(() => {
+      expect(bridge.subscribe).toHaveBeenCalled();
+    });
+    unmount();
+    rejectFn(new Error('late')); // catch arm runs with cancelled === true
+    await Promise.resolve();
+    expect(bridge.subscribe).toHaveBeenCalled();
+  });
 });

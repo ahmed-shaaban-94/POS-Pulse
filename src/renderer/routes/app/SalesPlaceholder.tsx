@@ -8,6 +8,7 @@
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
+import { FindSaleReceipt } from '../../ui/receipts/FindSaleReceipt';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -40,7 +41,9 @@ export function SalesPlaceholder(): JSX.Element {
   return (
     <Workspace title="Sales">
       <section className="placeholder-pane">
-        <p>Sales functionality coming soon.</p>
+        {/* T451 — receipt-affordance slot: find a finalized sale + reprint its
+            receipt. The fuller sale-search / recent-sale UI is 005's territory. */}
+        <FindSaleReceipt />
       </section>
     </Workspace>
   );

@@ -875,11 +875,15 @@ app
         // status-byte check.
         probeEscposSupport: () => Promise.resolve(true),
       });
+      // Shared clock for the print dispatcher + receipts bridge so a reprint's
+      // rendered slip time (bridge) matches the print_events.printed_at the
+      // dispatcher writes for the same logical event (one clock read per event).
+      const receiptsClock = (): string => new Date().toISOString();
       const printDispatcher = createPrintDispatcher({
         pipeline: printPipeline,
         printEventsRepo,
         auditEmitter: saleAuditEmitter,
-        now: () => new Date().toISOString(),
+        now: receiptsClock,
         newPrintEventId: () => randomUUID(),
         logger: mainLogger,
       });
@@ -916,6 +920,9 @@ app
         // canonical first print). Same STUB transport as the auto-fired path
         // until the T200 hardware bring-up.
         drawerKickDispatcher,
+        // S5: same clock as printDispatcher so the reprint slip time matches the
+        // print_events.printed_at row.
+        now: receiptsClock,
       });
       registerReceiptsHandlers(ipcMain, { receiptsBridge });
 

@@ -9,6 +9,8 @@ export const RECEIPTS_IPC_CHANNELS = {
   PREVIEW: 'receipts:preview',
   // S3 — retry a failed print (mutating; gated server-side).
   RETRY_PRINT: 'receipts:retryPrint',
+  // S5 — reprint a previously-printed sale (mutating; gated server-side).
+  REPRINT: 'receipts:reprint',
 } as const;
 
 export type ReceiptsIpcChannel = (typeof RECEIPTS_IPC_CHANNELS)[keyof typeof RECEIPTS_IPC_CHANNELS];
