@@ -10,6 +10,8 @@ import { useConnectionState } from './connection/useConnectionState';
 import type { PairingStatus } from '../../shared/pairing-types';
 import { useOperatorSessionStore } from '../stores/operator-session-store';
 import { ShiftClosedBanner } from '../ui/operator/ShiftClosedBanner';
+import { PrinterFailureBanner } from '../ui/receipts/PrinterFailureBanner';
+import { useBannerState } from '../ui/receipts/useBannerState';
 
 interface AppShellProps {
   pairedStatus?: Extract<PairingStatus, { kind: 'paired' }>;
@@ -30,6 +32,8 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   const tier = useViewportTier();
   const { state: connectionState, setState: setConnectionState } = useConnectionState();
   const sessionState = useOperatorSessionStore((s) => s.state);
+  // T291 — printer-failure banner state, polled from sales.subscribe(banner_state).
+  const printFailure = useBannerState();
 
   // Dev-only: wire ?conn= URL param → useConnectionState.
   // The cast keeps TS happy while Vite tree-shakes the dev branch from production.
@@ -84,6 +88,18 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
               }}
             />
           ) : undefined}
+          {/* T291 — persistent printer-failure banner, fed by the snapshot
+              poll hook. Unmounts when there is no unresolved failure. Reprint /
+              Manual are entry-points (handlers land Slice 5 / Slice 6). */}
+          <PrinterFailureBanner
+            printFailure={printFailure}
+            onReprint={() => {
+              // Slice 5 (receipts.reprint) — entry-point only for now.
+            }}
+            onManualOverride={() => {
+              // Slice 6 (receipts.manualOverride) — entry-point only for now.
+            }}
+          />
           <Outlet />
         </main>
       </div>

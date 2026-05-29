@@ -7,10 +7,13 @@
  *   • `sales.findByNumber({ sale_number })` — read by cashier-quotable
  *     number; tenant-scoped to (session.tenant_id, branch_id, terminal_id).
  *   • `sales.subscribe({ topic })` + `sales.unsubscribe({ subscription_token })`
- *     — STUB returning `not_implemented` matching 005's cart.subscribe
- *     posture. The push-subscription primitive (webContents.send + token
- *     registry) lands in a future task; 008 v1 doesn't require it for the
- *     S1 acceptance scenarios.
+ *     — SNAPSHOT-subscribe (008 follow-up slice): subscribe returns the current
+ *     projection for the topic (`banner_state` → BannerState; `recent` →
+ *     RecentSaleSummary | null) via the injected `bannerStateProjector`; the
+ *     renderer POLLS it (no `webContents.send` push — consistent with the
+ *     poll-based AD-2 finalize design). When the projector isn't wired (legacy
+ *     S1 construction), subscribe falls back to the `not_implemented` refusal.
+ *     `unsubscribe` is a no-op (no registry; snapshot mode).
  *
  * Per contracts/bridge-api.md (§A4 CLEARED 2026-05-26):
  *   • Every handler is gated by an active session (`no_session` refusal).
@@ -50,6 +53,7 @@ import type {
   SaleSummary,
 } from '../../shared/bridge-api.js';
 import type { SaleId, SaleNumber, TenderLineSummary } from '../../shared/sales/types.js';
+import type { BannerStateProjector } from './banner-state-projector.js';
 
 // ─── Session shape (mirrors 006's OperatorSessionForPayments) ──────────────
 //
@@ -89,6 +93,16 @@ export interface SalesBridgeDependencies {
     DrawerEventsRepository,
     'readBySale' | 'findLastSuccessfulOpenForTerminal' | 'insert'
   >;
+  /**
+   * Snapshot-subscribe projector (008 follow-up slice). `sales.subscribe`
+   * returns the current projection for the topic (the renderer polls it);
+   * see coordination §S3c mechanism-corrected note. Optional so the existing
+   * S1 construction sites that don't wire it keep compiling — when absent,
+   * subscribe falls back to the `not_implemented` refusal.
+   */
+  bannerStateProjector?: BannerStateProjector;
+  /** Injected token generator for subscribe (symmetry with unsubscribe). */
+  newSubscriptionToken?: () => string;
 }
 
 // ─── Forbidden-field-in-request scan ────────────────────────────────────────
@@ -224,6 +238,14 @@ function projectSaleForRenderer(
 
 export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
   const { getCurrentSession, salesRepo, printEventsRepo, drawerEventsRepo } = deps;
+  // Per-bridge monotonic fallback token source (snapshot mode — the token is
+  // vestigial for unsubscribe symmetry; uniqueness avoids two subscriptions
+  // sharing a token). Overridable via deps.newSubscriptionToken.
+  let subscriptionSeq = 0;
+  const nextToken = (): string =>
+    deps.newSubscriptionToken !== undefined
+      ? deps.newSubscriptionToken()
+      : `sub-${String((subscriptionSeq += 1))}`;
 
   return {
     async read(req: SalesReadRequest): Promise<SalesReadResponse> {
@@ -304,10 +326,39 @@ export function createSalesBridge(deps: SalesBridgeDependencies): SalesBridge {
       if (session === null) {
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
       }
-      // STUB matching 005 cart.subscribe posture. The push-subscription
-      // primitive (webContents.send + token registry) lands in a future
-      // task — see brainstorm decision in PR description.
-      return await Promise.resolve({ kind: 'refused', reason: 'not_implemented' });
+      // Snapshot-subscribe (008 follow-up slice): return the current projection
+      // for the topic; the renderer POLLS this (no push channel) — consistent
+      // with the poll-based AD-2 finalize design. See coordination §S3c
+      // mechanism-corrected note. If the projector wasn't wired (legacy S1
+      // construction sites), fall back to the prior not_implemented refusal.
+      const projector = deps.bannerStateProjector;
+      if (projector === undefined) {
+        return await Promise.resolve({ kind: 'refused', reason: 'not_implemented' });
+      }
+      const scope = {
+        tenant_id: session.tenant_id,
+        branch_id: session.branch_id,
+        terminal_id: session.terminal_id,
+      };
+      const subscription_token = nextToken();
+      if (req.topic === 'banner_state') {
+        return await Promise.resolve({
+          kind: 'ok',
+          subscription_token,
+          banner_state: projector.projectBannerState(scope),
+        });
+      }
+      if (req.topic === 'recent') {
+        return await Promise.resolve({
+          kind: 'ok',
+          subscription_token,
+          recent: projector.projectRecentSale(scope),
+        });
+      }
+      return await Promise.resolve({
+        kind: 'refused',
+        reason: 'not_implemented',
+      });
     },
 
     async unsubscribe(req: SalesUnsubscribeRequest): Promise<SalesUnsubscribeResponse> {

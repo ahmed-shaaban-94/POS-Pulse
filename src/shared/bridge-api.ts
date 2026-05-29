@@ -13,6 +13,8 @@ import type {
   PrintEventSummary,
   DrawerEventSummary,
   SalesRefusalReason,
+  BannerState,
+  RecentSaleSummary,
 } from './sales/types.js';
 import type {
   CartCreateRequest,
@@ -880,8 +882,20 @@ export interface SalesSubscribeRequest {
   topic: SalesSubscribeTopic;
 }
 
+/**
+ * Snapshot-subscribe (008 follow-up slice): `subscribe` returns the current
+ * projection for the topic, exactly as 006's `subscribe ≡ read`. The renderer
+ * POLLS this on an interval (no `webContents.send` push — consistent with the
+ * deliberately poll-based AD-2 finalize design; see coordination §S3c
+ * mechanism-corrected note). `subscription_token` is retained for `unsubscribe`
+ * symmetry (additive per PRODUCT.md Principle 4 — extend, don't rename); the
+ * snapshot field carried depends on the requested `topic`:
+ *   • `topic='banner_state'` → `banner_state: BannerState`
+ *   • `topic='recent'`       → `recent: RecentSaleSummary | null`
+ */
 export type SalesSubscribeResponse =
-  | { kind: 'ok'; subscription_token: string }
+  | { kind: 'ok'; subscription_token: string; banner_state: BannerState }
+  | { kind: 'ok'; subscription_token: string; recent: RecentSaleSummary | null }
   | { kind: 'refused'; reason: SalesRefusalReason };
 
 export interface SalesUnsubscribeRequest {

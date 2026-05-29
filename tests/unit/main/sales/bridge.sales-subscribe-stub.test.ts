@@ -1,26 +1,19 @@
 /**
- * T072 — `sales.subscribe` + `sales.unsubscribe` bridge handler test (RED).
+ * `sales.subscribe` + `sales.unsubscribe` bridge handler test.
  *
- * Per tasks.md T072 + contracts/bridge-api.md §"sales.subscribe":
- *
- * The push-subscription primitive (webContents.send + token registry) is
- * not yet implemented in the codebase — 005's `cart.subscribe` is a stub
- * returning `refuse('not_implemented')`. 008's `sales.subscribe` mirrors
- * that posture for S1c.2 (per user decision in brainstorm). A future
- * task implements the primitive properly. Until then:
- *   - `sales.subscribe` returns `{ kind: 'refused', reason: 'not_implemented' }`.
- *   - `sales.unsubscribe` is intentionally a no-op returning `{ kind: 'ok' }`
- *     (the shared `SalesUnsubscribeResponse` type has no refusal branch;
- *     since no registry exists, unsubscribing any token is trivially safe).
- *
- * The contract-side topics (`'recent'` and `'banner_state'`) are
- * accepted at the type level but the runtime behaviour is the same
- * `not_implemented` refusal for both.
+ * Snapshot-subscribe (008 follow-up slice — coordination §S3c mechanism note):
+ * subscribe returns the current projection for the topic via the injected
+ * `bannerStateProjector`; the renderer polls it (no push channel). When the
+ * projector is NOT wired (legacy S1 construction), subscribe falls back to the
+ * `not_implemented` refusal. Session gating + forbidden-field guard precede
+ * either path; unsubscribe is a no-op.
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createSalesBridge } from '../../../../src/main/sales/sales-bridge.js';
+import type { BannerStateProjector } from '../../../../src/main/sales/banner-state-projector.js';
+import type { BannerState, RecentSaleSummary } from '../../../../src/shared/sales/types.js';
 
 const SESSION = {
   role: 'cashier' as const,
@@ -31,7 +24,6 @@ const SESSION = {
   terminal_id: 'terminal-1',
 };
 
-// Stub repos for the subscribe-stub tests — subscribe doesn't touch the DB.
 const STUB_SALES_REPO = {
   insert: () => {},
   readById: () => null,
@@ -50,21 +42,73 @@ const STUB_DRAWER_REPO = {
   findLastSuccessfulOpenForTerminal: () => null,
 };
 
-describe('T072 — sales.subscribe: stub matching 005 cart.subscribe', () => {
-  it('subscribe(topic="recent") returns not_implemented (stub)', async () => {
-    const bridge = createSalesBridge({
-      getCurrentSession: () => SESSION,
-      salesRepo: STUB_SALES_REPO,
-      printEventsRepo: STUB_PRINT_REPO,
-      drawerEventsRepo: STUB_DRAWER_REPO,
+function projectorStub(over: Partial<BannerStateProjector> = {}): BannerStateProjector {
+  return {
+    projectBannerState: vi.fn((): BannerState => ({ kind: 'none' })),
+    projectRecentSale: vi.fn((): RecentSaleSummary | null => null),
+    ...over,
+  };
+}
+
+function bridgeWith(opts: { session?: typeof SESSION | null; projector?: BannerStateProjector }) {
+  return createSalesBridge({
+    getCurrentSession: () => opts.session ?? null,
+    salesRepo: STUB_SALES_REPO,
+    printEventsRepo: STUB_PRINT_REPO,
+    drawerEventsRepo: STUB_DRAWER_REPO,
+    bannerStateProjector: opts.projector,
+    newSubscriptionToken: () => 'tok-1',
+  });
+}
+
+describe('sales.subscribe — snapshot projection (projector wired)', () => {
+  it('subscribe(topic="banner_state") returns the projected BannerState', async () => {
+    const bannerState: BannerState = {
+      kind: 'printer_failure',
+      sale_id: 'sale-1',
+      failure_reason: 'printer_offline',
+      has_successful_print: false,
+    };
+    const projector = projectorStub({ projectBannerState: vi.fn(() => bannerState) });
+    const result = await bridgeWith({ session: SESSION, projector }).subscribe({
+      topic: 'banner_state',
     });
-    const result = await bridge.subscribe({ topic: 'recent' });
-    expect(result.kind).toBe('refused');
-    if (result.kind !== 'refused') return;
-    expect(result.reason).toBe('not_implemented');
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok' && 'banner_state' in result) {
+      expect(result.banner_state).toEqual(bannerState);
+      expect(result.subscription_token).toBe('tok-1');
+    } else {
+      throw new Error('expected ok banner_state response');
+    }
   });
 
-  it('subscribe(topic="banner_state") returns not_implemented (stub)', async () => {
+  it('subscribe(topic="recent") returns the projected recent-sale summary', async () => {
+    const recent: RecentSaleSummary = {
+      sale_id: 'sale-9',
+      sale_number: 'TERM-01-2026-05-27-000009',
+      finalized_at: '2026-05-27T10:05:00.000Z',
+    };
+    const projector = projectorStub({ projectRecentSale: vi.fn(() => recent) });
+    const result = await bridgeWith({ session: SESSION, projector }).subscribe({ topic: 'recent' });
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok' && 'recent' in result) {
+      expect(result.recent).toEqual(recent);
+    } else {
+      throw new Error('expected ok recent response');
+    }
+  });
+});
+
+describe('sales.subscribe — gating + fallback', () => {
+  it('gates on session (no_session precedes any projection)', async () => {
+    const result = await bridgeWith({ session: null, projector: projectorStub() }).subscribe({
+      topic: 'recent',
+    });
+    expect(result.kind).toBe('refused');
+    if (result.kind === 'refused') expect(result.reason).toBe('no_session');
+  });
+
+  it('falls back to not_implemented when no projector is wired (legacy S1 construction)', async () => {
     const bridge = createSalesBridge({
       getCurrentSession: () => SESSION,
       salesRepo: STUB_SALES_REPO,
@@ -73,64 +117,44 @@ describe('T072 — sales.subscribe: stub matching 005 cart.subscribe', () => {
     });
     const result = await bridge.subscribe({ topic: 'banner_state' });
     expect(result.kind).toBe('refused');
-    if (result.kind !== 'refused') return;
-    expect(result.reason).toBe('not_implemented');
+    if (result.kind === 'refused') expect(result.reason).toBe('not_implemented');
   });
 
-  it('subscribe still gates on session (no_session refusal precedes not_implemented)', async () => {
-    const bridge = createSalesBridge({
-      getCurrentSession: () => null,
-      salesRepo: STUB_SALES_REPO,
-      printEventsRepo: STUB_PRINT_REPO,
-      drawerEventsRepo: STUB_DRAWER_REPO,
-    });
-    const result = await bridge.subscribe({ topic: 'recent' });
-    expect(result.kind).toBe('refused');
-    if (result.kind !== 'refused') return;
-    expect(result.reason).toBe('no_session');
-  });
-
-  it('unsubscribe returns ok as a no-op (no subscription registry yet)', async () => {
-    // Per shared SalesUnsubscribeResponse type — only { kind: 'ok' }, no
-    // refusal branch. With subscribe returning not_implemented, the
-    // registry never holds tokens, so unsubscribe is a trivial no-op.
-    const bridge = createSalesBridge({
-      getCurrentSession: () => SESSION,
-      salesRepo: STUB_SALES_REPO,
-      printEventsRepo: STUB_PRINT_REPO,
-      drawerEventsRepo: STUB_DRAWER_REPO,
-    });
-    const result = await bridge.unsubscribe({ subscription_token: 'tok-1' });
-    expect(result.kind).toBe('ok');
-  });
-});
-
-describe('T072 — sales.subscribe + unsubscribe: forbidden-field guard (CR3 on PR #266)', () => {
-  it('subscribe refuses with forbidden_field_in_request when payload contains a forbidden key', async () => {
-    const bridge = createSalesBridge({
-      getCurrentSession: () => SESSION,
-      salesRepo: STUB_SALES_REPO,
-      printEventsRepo: STUB_PRINT_REPO,
-      drawerEventsRepo: STUB_DRAWER_REPO,
-    });
-    const result = await bridge.subscribe({
+  it('refuses forbidden_field_in_request before projecting', async () => {
+    const result = await bridgeWith({ session: SESSION, projector: projectorStub() }).subscribe({
       topic: 'recent',
       pan: 'TEST_PAN_TOKEN_NOT_A_REAL_CARD',
     } as unknown as { topic: 'recent' });
     expect(result.kind).toBe('refused');
-    if (result.kind !== 'refused') return;
-    expect(result.reason).toBe('forbidden_field_in_request');
+    if (result.kind === 'refused') expect(result.reason).toBe('forbidden_field_in_request');
   });
 
-  it('unsubscribe throws when payload contains a forbidden key (SalesUnsubscribeResponse has no refusal branch)', async () => {
+  it('mints a non-empty subscription_token via the default generator when none injected', async () => {
     const bridge = createSalesBridge({
       getCurrentSession: () => SESSION,
       salesRepo: STUB_SALES_REPO,
       printEventsRepo: STUB_PRINT_REPO,
       drawerEventsRepo: STUB_DRAWER_REPO,
+      bannerStateProjector: projectorStub(),
+      // newSubscriptionToken omitted → exercises the per-bridge fallback.
     });
+    const result = await bridge.subscribe({ topic: 'recent' });
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') {
+      expect(result.subscription_token).toMatch(/^sub-\d+$/);
+    }
+  });
+
+  it('unsubscribe returns ok as a no-op (no registry in snapshot mode)', async () => {
+    const result = await bridgeWith({ session: SESSION, projector: projectorStub() }).unsubscribe({
+      subscription_token: 'tok-1',
+    });
+    expect(result.kind).toBe('ok');
+  });
+
+  it('unsubscribe throws on a forbidden key (SalesUnsubscribeResponse has no refusal branch)', async () => {
     await expect(
-      bridge.unsubscribe({
+      bridgeWith({ session: SESSION, projector: projectorStub() }).unsubscribe({
         subscription_token: 'tok-1',
         voucher_redemption_intent_token: 'TOKEN',
       } as unknown as { subscription_token: string }),
