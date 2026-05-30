@@ -53,7 +53,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -71,7 +70,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -90,7 +88,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={null}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -104,7 +101,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     const { unmount } = render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -129,7 +125,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
@@ -145,7 +140,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
       />,
@@ -161,7 +155,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -183,7 +176,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     const { unmount } = render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -217,7 +209,6 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
     const { unmount } = render(
       <PrinterFailureBanner
         printFailure={FAILURE}
-        onManualOverride={() => {}}
         onReprint={() => {}}
         _testReceiptsBridge={noopReceiptsBridge()}
         _testSalesBridge={sales as SalesBridgeAPI}
@@ -236,5 +227,41 @@ describe('T261 — PrinterFailureBanner subscribes to banner_state', () => {
         expect.objectContaining({ subscription_token: 'late-token' }),
       );
     });
+  });
+
+  it('swallows a REJECTING orphan-cleanup unsubscribe (late token, unsubscribe throws)', async () => {
+    // Same orphan path as above, but the late unsubscribe REJECTS. The inner
+    // .catch on the cancelled-guard unsubscribe must hold so the late rejection
+    // never surfaces as an unhandled promise rejection.
+    let resolveSubscribe: (r: { kind: 'ok'; subscription_token: string }) => void = () => {};
+    const sales: Partial<SalesBridgeAPI> = {
+      subscribe: vi.fn(
+        () =>
+          new Promise<{ kind: 'ok'; subscription_token: string }>((resolve) => {
+            resolveSubscribe = resolve;
+          }),
+      ),
+      unsubscribe: vi.fn(() => Promise.reject(new Error('orphan unsub boom'))),
+    };
+    const { unmount } = render(
+      <PrinterFailureBanner
+        printFailure={FAILURE}
+        onReprint={() => {}}
+        _testReceiptsBridge={noopReceiptsBridge()}
+        _testSalesBridge={sales as SalesBridgeAPI}
+      />,
+    );
+    await waitFor(() => {
+      expect(sales.subscribe).toHaveBeenCalled();
+    });
+    unmount(); // cancelled === true before subscribe resolves
+    resolveSubscribe({ kind: 'ok', subscription_token: 'late-token' });
+    await waitFor(() => {
+      expect(sales.unsubscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ subscription_token: 'late-token' }),
+      );
+    });
+    // The inner .catch swallowed the rejection — no unhandled rejection / crash.
+    expect(true).toBe(true);
   });
 });

@@ -1039,13 +1039,44 @@ export type ReceiptsReprintResponse =
   // refused (gate / isolation / precondition / printer-down)
   | { kind: 'refused'; reason: SalesRefusalReason };
 
+// ── receipts.manualOverride (008 Slice 6) ─────────────────────────────────────
+//
+// Schema source of truth:
+//   specs/008-sale-finalization-and-receipts/contracts/bridge-api.md
+//   §"receipts.manualOverride"
+//
+// Cashier invokes manual-receipt override after a print failure (from the
+// printer-failure banner). The handler records that a receipt was handled
+// out-of-band: it INSERTs a print_events row with purpose='first_print',
+// outcome='manual_override', render_path=NULL — NO slip is rendered or printed.
+// Two-way response (success | refused). Idempotent per-sale (Path A, key-on-
+// state): a sale that already has a manual_override is a no-op returning the
+// original row. The drawer is NEVER kicked (no print succeeded).
+
+export interface ReceiptsManualOverrideRequest {
+  sale_id: SaleId;
+  idempotency_key: string;
+}
+
+export type ReceiptsManualOverrideResponse =
+  // success
+  | {
+      kind: 'ok';
+      print_event_id: string;
+      purpose: 'first_print';
+      outcome: 'manual_override';
+      overridden_at: string;
+    }
+  // refused (gate / isolation / not-found)
+  | { kind: 'refused'; reason: SalesRefusalReason };
+
 // ── ReceiptsBridgeAPI surface ───────────────────────────────────────────────
 
 /**
  * 008 mutating-namespace bridge surface. S2 landed `preview`; S3 adds
- * `retryPrint`; S5 adds `reprint`. Gated server-side by
- * `requireOperatorSession`; tenant/branch/terminal scoping is derived from the
- * operator session per the §A4 checklist.
+ * `retryPrint`; S5 adds `reprint`; S6 adds `manualOverride`. Gated server-side
+ * by `requireOperatorSession`; tenant/branch/terminal scoping is derived from
+ * the operator session per the §A4 checklist.
  */
 export interface ReceiptsBridgeAPI {
   /** Render the read-only HTML preview of a sale's receipt. No side effects. */
@@ -1054,4 +1085,6 @@ export interface ReceiptsBridgeAPI {
   retryPrint(req: ReceiptsRetryPrintRequest): Promise<ReceiptsRetryPrintResponse>;
   /** Reprint a previously-printed sale (duplicate copy). Two-way response. */
   reprint(req: ReceiptsReprintRequest): Promise<ReceiptsReprintResponse>;
+  /** Record a manual-receipt override after a print failure. Two-way response. */
+  manualOverride(req: ReceiptsManualOverrideRequest): Promise<ReceiptsManualOverrideResponse>;
 }

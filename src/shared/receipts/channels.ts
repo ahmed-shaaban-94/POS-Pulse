@@ -11,6 +11,8 @@ export const RECEIPTS_IPC_CHANNELS = {
   RETRY_PRINT: 'receipts:retryPrint',
   // S5 — reprint a previously-printed sale (mutating; gated server-side).
   REPRINT: 'receipts:reprint',
+  // S6 — manual-receipt override after a print failure (mutating; gated).
+  MANUAL_OVERRIDE: 'receipts:manualOverride',
 } as const;
 
 export type ReceiptsIpcChannel = (typeof RECEIPTS_IPC_CHANNELS)[keyof typeof RECEIPTS_IPC_CHANNELS];

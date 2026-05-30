@@ -25,7 +25,11 @@ import type { SaleId } from '../../../shared/sales/types.js';
  * `receipts.retryPrint` with a fresh idempotency key per FR-053). Reprint is
  * DISABLED until a prior successful print exists (AD-10 precondition —
  * contract line 310); in the failure state none exists, so it is disabled.
- * Manual receipt is an entry-point only (manual-override is Slice 6 / T512).
+ * Manual receipt (T512) calls `receipts.manualOverride` directly with a fresh
+ * idempotency key, mirroring Retry: a local in-flight phase guards the button,
+ * and the banner dismisses via the parent projection (the manual_override row
+ * is a later print_events row, so banner-state-projector stops surfacing the
+ * failure) — no local force-dismiss.
  */
 
 /** The projected banner state: which sale's print failed + whether reprint is eligible. */
@@ -39,8 +43,6 @@ export interface PrinterFailureState {
 export interface PrinterFailureBannerProps {
   /** Null → the banner is unmounted (not hidden). Non-null → a print failed. */
   printFailure: PrinterFailureState | null;
-  /** Entry-point for the Slice-6 manual-override surface (T512); receives the sale id. */
-  onManualOverride: (saleId: string) => void;
   /**
    * Entry-point for the Slice-5 reprint surface (T4xx — `receipts.reprint`
    * does not exist yet); receives the sale id. REQUIRED (not optional) to
@@ -75,18 +77,23 @@ function defaultKeyFactory(): string {
   return globalThis.crypto.randomUUID();
 }
 
-type RetryPhase = 'idle' | 'retrying';
+// A single in-flight phase shared across BOTH mutating actions (Retry +
+// Manual receipt). One shared phase means starting either mutation disables ALL
+// three action buttons until it settles, so a cashier cannot fire two
+// conflicting mutations against the same failed print (CodeRabbit #294). The
+// value records which mutation is active (for future per-action affordances);
+// the lock itself only cares that it is not `idle`.
+type MutationPhase = 'idle' | 'retrying' | 'manual_override';
 
 export function PrinterFailureBanner({
   printFailure,
-  onManualOverride,
   onReprint,
   _testReceiptsBridge,
   _testSalesBridge,
   _idempotencyKeyFactory,
 }: PrinterFailureBannerProps): JSX.Element | null {
   const messageId = useId();
-  const [retryPhase, setRetryPhase] = useState<RetryPhase>('idle');
+  const [mutationPhase, setMutationPhase] = useState<MutationPhase>('idle');
   const keyFactory = _idempotencyKeyFactory ?? defaultKeyFactory;
 
   const saleId = printFailure?.sale_id ?? null;
@@ -129,17 +136,36 @@ export function PrinterFailureBanner({
   const handleRetry = (): void => {
     const bridge = resolveReceiptsBridge(_testReceiptsBridge);
     if (bridge === null) return;
-    setRetryPhase('retrying');
+    setMutationPhase('retrying');
     void bridge
       .retryPrint({ sale_id: printFailure.sale_id as SaleId, idempotency_key: keyFactory() })
       .then(() => {
         // The banner's mount/unmount is driven by the parent's projected
         // printFailure (refreshed from banner_state). We only clear the local
         // in-flight phase; a still-failed retry leaves the banner up.
-        setRetryPhase('idle');
+        setMutationPhase('idle');
       })
       .catch(() => {
-        setRetryPhase('idle');
+        setMutationPhase('idle');
+      });
+  };
+
+  // T512 — Manual receipt override. Mirrors handleRetry: calls
+  // `receipts.manualOverride` directly with a fresh key, manages the shared
+  // in-flight phase, and lets the parent projection dismiss the banner (the
+  // manual_override row supersedes the failure in banner-state-projector — no
+  // local force-dismiss).
+  const handleManualOverride = (): void => {
+    const bridge = resolveReceiptsBridge(_testReceiptsBridge);
+    if (bridge === null) return;
+    setMutationPhase('manual_override');
+    void bridge
+      .manualOverride({ sale_id: printFailure.sale_id as SaleId, idempotency_key: keyFactory() })
+      .then(() => {
+        setMutationPhase('idle');
+      })
+      .catch(() => {
+        setMutationPhase('idle');
       });
   };
 
@@ -172,7 +198,7 @@ export function PrinterFailureBanner({
           type="button"
           className="btn btn--md btn--primary"
           onClick={handleRetry}
-          disabled={retryPhase === 'retrying'}
+          disabled={mutationPhase !== 'idle'}
           aria-label="Retry print — إعادة المحاولة"
         >
           <span lang="ar">إعادة المحاولة</span>
@@ -182,7 +208,7 @@ export function PrinterFailureBanner({
         <button
           type="button"
           className="btn btn--md btn--secondary"
-          disabled={!reprintEnabled}
+          disabled={!reprintEnabled || mutationPhase !== 'idle'}
           onClick={() => {
             onReprint(printFailure.sale_id);
           }}
@@ -200,9 +226,8 @@ export function PrinterFailureBanner({
         <button
           type="button"
           className="btn btn--md btn--ghost"
-          onClick={() => {
-            onManualOverride(printFailure.sale_id);
-          }}
+          onClick={handleManualOverride}
+          disabled={mutationPhase !== 'idle'}
           aria-label="Manual receipt — إيصال يدوي"
         >
           <span lang="ar">إيصال يدوي</span>

@@ -923,6 +923,10 @@ app
         // S5: same clock as printDispatcher so the reprint slip time matches the
         // print_events.printed_at row.
         now: receiptsClock,
+        // S6 manualOverride: writes the override print_events row directly +
+        // emits sale.receipt.manual_override (no slip rendered → no dispatcher).
+        auditEmitter: saleAuditEmitter,
+        newPrintEventId: () => randomUUID(),
       });
       registerReceiptsHandlers(ipcMain, { receiptsBridge });
 

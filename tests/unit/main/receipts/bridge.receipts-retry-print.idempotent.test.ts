@@ -122,10 +122,12 @@ describe('T253 — retryPrint idempotency (already-printed no-op)', () => {
     expect(dispatcher.dispatchRetryPrint).not.toHaveBeenCalled();
   });
 
-  it('treats a prior manual_override as already-printed (render_path null → escpos_direct)', async () => {
-    // A manual_override row carries render_path NULL; the no-op replay falls
-    // back to escpos_direct for the (audit-only) render_path field. Insert the
-    // sale FIRST (print_events.sale_id FK → sales.sale_id).
+  it('treats a prior manual_override as NON-terminal — a later retry runs (Slice 6, Ahmed 2026-05-30)', async () => {
+    // NARROWED in Slice 6: the retry idempotency guard keys on outcome='success'
+    // ONLY, not 'manual_override'. A sale that took a manual override can still
+    // be retried once the printer is back online (contract
+    // §receipts.manualOverride). So the retry DISPATCHES rather than no-opping.
+    // Insert the sale FIRST (print_events.sale_id FK → sales.sale_id).
     db.run(
       `INSERT INTO sales (
          sale_id, sale_number, receipt_number, envelope_handoff_action_id, payment_attempt_id,
@@ -140,7 +142,7 @@ describe('T253 — retryPrint idempotency (already-printed no-op)', () => {
          'op-abc','Mohamed Ahmed','sess-1',
          5500,0,0,'[{"tender_type":"cash","amount_applied_minor":5500,"change_due_minor":0}]',
          '2026-05-27T10:00:05.000Z','2026-05-27T10:00:06.000Z','TRN-100','Maadi Branch','12 Road 9',
-         '2026-05-27','[]'
+         '2026-05-27','[{"line_id":"l1","item_ref":"SKU-001","display_name":"X","quantity":1,"unit_price_minor":5500,"line_subtotal_minor":5500,"note":null,"version":1,"last_action_id":"a1"}]'
        )`,
     );
     db.run(
@@ -152,18 +154,22 @@ describe('T253 — retryPrint idempotency (already-printed no-op)', () => {
          'op-abc', 'sess-1', NULL, NULL, NULL, '2026-05-27T10:00:09.000Z')`,
     );
     const handle = makeSqlJsHandle(db);
+    const dispatcher = neverDispatcher();
     const bridge = createReceiptsBridge({
       getCurrentSession: () => SESSION,
       salesRepo: bindSalesRepository(handle),
       printEventsRepo: bindPrintEventsRepository(handle),
-      printDispatcher: neverDispatcher(),
+      printDispatcher: dispatcher,
     });
 
     const res = await bridge.retryPrint({ sale_id: 'sale-2' as SaleId, idempotency_key: 'k' });
+
+    // The retry DISPATCHED (manual_override did not block it) — it did not no-op
+    // on the pe-mo-1 row.
+    expect(dispatcher.dispatchRetryPrint).toHaveBeenCalled();
     expect(res.kind).toBe('ok');
     if (res.kind === 'ok' && res.outcome === 'success') {
-      expect(res.print_event_id).toBe('pe-mo-1');
-      expect(res.render_path).toBe('escpos_direct');
+      expect(res.print_event_id).not.toBe('pe-mo-1');
     }
   });
 
