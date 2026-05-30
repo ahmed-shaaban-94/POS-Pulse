@@ -138,8 +138,14 @@ jobs:
         if: steps.docs-check.outputs.docs_only != 'true'
         run: npm run package:dir
 
+      # The unpacked build is a manual-smoke convenience artifact, not a gate.
+      # A transient artifact-storage quota wall (recalculated every 6-12h) must
+      # NOT fail the required `ci` job — the code gates above already passed.
+      # continue-on-error keeps the upload best-effort: a quota/transient
+      # failure is surfaced on the step but does not block merge.
       - name: Upload unpacked Windows build
         if: github.event_name != 'pull_request'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: pos-pulse-win-unpacked-${{ github.sha }}
