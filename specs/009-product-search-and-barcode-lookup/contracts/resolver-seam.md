@@ -4,7 +4,7 @@
 **Plan:** [../plan.md](../plan.md) (AD-3, AD-4, AD-6 / R7, R9)
 **Upstream contract owner:** 005-sales-cart (`specs/005-sales-cart/contracts/bridge-api.md:416-427`)
 **Created:** 2026-05-30
-**Constitution version pinned:** v1.5.0
+**Constitution version pinned:** v1.5.1
 
 > This is the **keystone integration** of feature 009. 005 deliberately stubbed the
 > `cart.resolveItemRef` seam with a fixture and left it **unwired in production**. 009 wires a real

@@ -4,7 +4,7 @@
 **Plan:** [./plan.md](./plan.md) v1.0
 **Spec:** [./spec.md](./spec.md)
 **Created:** 2026-05-30
-**Constitution version pinned:** v1.5.0
+**Constitution version pinned:** v1.5.1
 
 > Format per research item: **Decision** · **Rationale** · **Alternatives considered (rejected).**
 > No SQL, source, codegen, or packages are produced by this document.

@@ -378,7 +378,7 @@ Explicitly NOT delivered by this feature.
 - **A pre-existing local product read model** — populated by a future catalogue-sourcing capability;
   009 reads it offline-first and defines the empty / missing / unreadable behavior (FR-24). Staleness
   is unobservable to 009 and deferred (FR-24a).
-- **Constitution v1.5.0** — Domain (Products / Barcode), Platform §Hardware (keyboard-wedge, focus
+- **Constitution v1.5.1** — Domain (Products / Barcode), Platform §Hardware (keyboard-wedge, focus
   management, 44×44 touch target), Localization (Arabic-first RTL), and Principle XVI (Feature Scope
   Discipline).
 

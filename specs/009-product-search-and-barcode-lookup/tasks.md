@@ -11,7 +11,7 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 **Data model:** [./data-model.md](./data-model.md)
 **Contracts:** [./contracts/bridge-api.md](./contracts/bridge-api.md) · [./contracts/resolver-seam.md](./contracts/resolver-seam.md)
 **Quickstart:** [./quickstart.md](./quickstart.md)
-**Constitution version pinned:** v1.5.0
+**Constitution version pinned:** v1.5.1
 **Created:** 2026-05-30
 **Last updated:** 2026-05-30 (C1 controlled/Rx surfacing + C2 alias-hit test added per `/speckit-analyze`)
 **Status:** Draft — held behind gates §A0–§A5 (see Approval Gates). `/speckit-plan` authored no code.

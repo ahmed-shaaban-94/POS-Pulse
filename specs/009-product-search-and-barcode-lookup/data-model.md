@@ -5,7 +5,7 @@
 **Spec:** [./spec.md](./spec.md)
 **Research:** [./research.md](./research.md)
 **Created:** 2026-05-30
-**Constitution version pinned:** v1.5.0
+**Constitution version pinned:** v1.5.1
 
 > 🚧 **CONCEPTUAL ONLY.** No SQL is authored by `/speckit-plan`. The migration for the two new tables
 > (`products`, `product_barcodes`) + the search-fold column/index is authored during Slice S2 under

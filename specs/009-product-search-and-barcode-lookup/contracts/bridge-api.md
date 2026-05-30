@@ -5,7 +5,7 @@
 **Spec:** [../spec.md](../spec.md)
 **Data model:** [../data-model.md](../data-model.md)
 **Created:** 2026-05-30
-**Constitution version pinned:** v1.5.0
+**Constitution version pinned:** v1.5.1
 
 > The `catalogue.*` preload-bridge namespace is the **trust boundary** between the renderer and the
 > main process for product lookup (Constitution Principle III; AD-1). Every handler is gated at the

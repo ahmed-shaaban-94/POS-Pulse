@@ -5,14 +5,19 @@
 **Plan Version:** 1.0
 **Created:** 2026-05-30
 **Last Updated:** 2026-05-30
-**Constitution version pinned:** v1.5.0
+**Constitution version pinned:** v1.5.1
 **Branch:** `009-product-search-and-barcode-lookup` (spec dir; git branch independent)
 
-> **Constitution-version note (2026-05-30):** v1.5.0 is pinned per the constitution's own footer
-> (`constitution.md:1329` "Version: 1.5.0") and its feature-version enumeration (line 83). Sibling
-> artifacts 005 and 008 pin **v1.5.1** (e.g. `005/plan.md:8`, `008/data-model.md:8`), a version the
-> constitution file does not record. The divergence is intentional — 009 pins to primary source.
-> Flagged for reconciliation if a v1.5.1 amendment is later located/authored.
+> **Constitution-version note (2026-05-30, revised per PR review):** 009 pins **v1.5.1** to match the
+> latest recorded amendment and the convention of sibling specs (`005/plan.md:8`,
+> `008/data-model.md:8`). The constitution **does** record this amendment in its header SYNC IMPACT
+> REPORT (`constitution.md:4`, "Version change: 1.5.0 → 1.5.1" — a PATCH clarification of Principle
+> VIII). Note an **inconsistency in the constitution itself**: its footer (`constitution.md:1329`)
+> still reads `**Version:** 1.5.0` while the header records 1.5.1 — i.e. the footer was not bumped.
+> The authoritative version is 1.5.1 (latest recorded amendment); the stale footer is flagged for a
+> separate governance correction (out of scope for this feature). The v1.5.1 amendment only clarifies
+> Principle VIII (custom user-DB vs local terminal unlock factor); 009 introduces no identity
+> primitive, so the Constitution Check below holds verbatim under either version.
 
 > ⚠️ **Planning artifact only.** `/speckit-plan` writes NO source, NO migrations, NO codegen, NO
 > package installs. Phase 0 ([research.md](./research.md)) and Phase 1 ([data-model.md](./data-model.md),
@@ -56,7 +61,7 @@ primitive, and no new connection-state visual.
 
 | Area | Choice | Source |
 |:--|:--|:--|
-| Runtime / packaging | Electron `^40` Windows 10/11 x64 (inherited) | constitution v1.5.0 / plan 001 |
+| Runtime / packaging | Electron `^40` Windows 10/11 x64 (inherited) | constitution v1.5.1 / plan 001 |
 | Renderer | React `^19` + Vite `^8` + TypeScript `^5.6`+ strict (inherited) | plan 001 |
 | Styling | Tailwind `^4` (CSS-first); design tokens from 003/007 (`src/renderer/ui/tokens/`) | 003 / 007 |
 | Routing | The search/lookup surface is **embedded in 003's `/app/*` shell** alongside the 005 cart pane; no new top-level route. Guarded by 004's `<OperatorRouteGuard>` (renderer-side, **secondary**; bridge gate is primary). | 003 / 004 |
@@ -201,7 +206,7 @@ model and the resolver output for *search and confirm*, not in the cart line.
 
 ## Constitution Check (Initial)
 
-Walked across Core Principles I–IX and Cross-Feature POS Principles P1–P18 (constitution v1.5.0).
+Walked across Core Principles I–IX and Cross-Feature POS Principles P1–P18 (constitution v1.5.1).
 
 ### Core Principles (I–IX)
 

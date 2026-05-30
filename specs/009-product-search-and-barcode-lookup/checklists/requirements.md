@@ -47,8 +47,11 @@
 - **Performance budgets owner-confirmed at `/speckit-clarify` (2026-05-30):** the agent-proposed
   defaults (NFR-1…NFR-4) were accepted as-is and validated at a ~50,000-product catalogue; no longer
   provisional.
-- **Constitution pinned to v1.5.0** (`.specify/memory/constitution.md:1329`), matching sibling specs'
-  convention of pinning an exact version.
+- **Constitution pinned to v1.5.1** (latest recorded amendment, `constitution.md:4`; matches siblings
+  005/008). The constitution's footer (`constitution.md:1329`) still reads v1.5.0 — a stale-footer
+  inconsistency in the constitution itself, flagged for separate governance correction. (Revised per
+  PR #305 CodeRabbit review — 009 originally pinned v1.5.0 to the footer; flipped to v1.5.1 to match
+  the recorded amendment and sibling convention.)
 - **`/speckit-clarify` session 2026-05-30 — 5 questions resolved:** (1) perf/UX budgets + scale →
   accepted defaults @ 50k; (2) lookup gating → active operator session, bridge-enforced (NFR-6a);
   (3) Arabic search folding → standard, both-sided (FR-12a/FR-12b); (4) English search folding →
