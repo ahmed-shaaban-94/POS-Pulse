@@ -1417,3 +1417,33 @@ the owner has not (yet) spoken to the bar. Therefore:
 
 Until that is answered, T520a and T523 remain OPEN (re-scoped to printer-only).
 The agent does not assume the bench smoke clears the bar.
+
+### Owner bar-answer — 2026-05-30 (Ahmed): bench smoke is sufficient → CLOSE T520a + T523
+
+> **Owner answer (2026-05-30, Ahmed):** "Bench smoke is enough — close T520a and
+> T523." The 2026-05-30 BIXOLON OS-print bench (official pipeline; Arabic+English
+> legible, 70 mm body, clean feed/cut, no card/voucher data) is **accepted as
+> sufficient evidence** for the printer-only §A5 perf bar and the printer
+> "tested" row. No ≥20-run p95 capture is required for the 008 MVP.
+
+**Effect:**
+
+- **T520a → CLOSED (owner-accepted, printer-only).** Accepted on the qualitative
+  bench evidence in lieu of a quantitative p95 capture. Honest record: **no
+  numeric p95 timings were captured** — this is an owner judgment that the
+  observed OS-print latency is acceptable for the MVP, not a measured
+  pass/fail against the NFR-005/006/007 millisecond budgets. The
+  `008-perf-budgets.bench.ts` harness (per the T520a task) was **not** authored;
+  if quantitative budgets are wanted later, that harness is the path. (Drawer
+  perf was already descoped.)
+- **T523 → CLOSED (owner-accepted, printer-only).** The **BIXOLON SRP-330 II**
+  printer row is promoted to a **tested (owner-accepted)** row in
+  `docs/hardware-matrix.md`. Honest record on **hardware-matrix rule 1**
+  (promotion requires "an integration test that exercises the device"): there is
+  **no automated CI integration test** for the physical print — CI has no
+  hardware. The promotion rests on the owner-run bench smoke (manual, observed,
+  photo on file). The row is annotated as owner-accepted-not-CI-tested so the
+  provenance is not overstated. Drawer + scanner rows stay
+  DESCOPED/OBSERVED respectively (unchanged by this answer).
+- **T529 — STILL OPEN.** Sign-off now waits only on **T512** (craft) and **T526**
+  (security review). T520a/T523 no longer block it.
