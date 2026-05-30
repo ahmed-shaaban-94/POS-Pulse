@@ -30,6 +30,17 @@ import type { SaleId } from '../../../shared/sales/types.js';
  * and the banner dismisses via the parent projection (the manual_override row
  * is a later print_events row, so banner-state-projector stops surfacing the
  * failure) — no local force-dismiss.
+ *
+ * T512 /impeccable POLISH pass (2026-05-30): the in-flight action now shows the
+ * shared `.btn__spinner` (DESIGN.md §5 "loading shows a spinner at the button's
+ * leading edge; label remains visible") + `aria-busy` on the active button. The
+ * `mutationPhase` value already distinguished retry vs manual-override; the UI
+ * now surfaces WHICH action is running instead of only disabling all three —
+ * closing the gap PRODUCT.md Principle 3 requires (the cashier must know the
+ * real state). Run as `polish` not `craft` because the component shipped green
+ * (preflight §4.2: a craft marker against green tests is a violation; polish is
+ * the post-merge marker). Spinner is `aria-hidden` — `aria-busy` is the SR
+ * signal — and is reduced-motion-neutralised by the global `.btn__spinner` rule.
  */
 
 /** The projected banner state: which sale's print failed + whether reprint is eligible. */
@@ -199,8 +210,12 @@ export function PrinterFailureBanner({
           className="btn btn--md btn--primary"
           onClick={handleRetry}
           disabled={mutationPhase !== 'idle'}
+          aria-busy={mutationPhase === 'retrying' ? 'true' : undefined}
           aria-label="Retry print — إعادة المحاولة"
         >
+          {mutationPhase === 'retrying' && (
+            <span className="btn__spinner" role="status" aria-hidden="true" />
+          )}
           <span lang="ar">إعادة المحاولة</span>
           <span aria-hidden="true">{' / '}</span>
           <span lang="en">Retry</span>
@@ -228,8 +243,12 @@ export function PrinterFailureBanner({
           className="btn btn--md btn--ghost"
           onClick={handleManualOverride}
           disabled={mutationPhase !== 'idle'}
+          aria-busy={mutationPhase === 'manual_override' ? 'true' : undefined}
           aria-label="Manual receipt — إيصال يدوي"
         >
+          {mutationPhase === 'manual_override' && (
+            <span className="btn__spinner" role="status" aria-hidden="true" />
+          )}
           <span lang="ar">إيصال يدوي</span>
           <span aria-hidden="true">{' / '}</span>
           <span lang="en">Manual receipt</span>

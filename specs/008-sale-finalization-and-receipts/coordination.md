@@ -315,6 +315,61 @@ Result: `Test Files 3 failed (3) · Tests no tests`. Craft invoked immediately a
 
 ---
 
+### T512 `<PrinterFailureBanner>` manual-override — `/impeccable` POLISH record + §A1 red-bar (2026-05-30, Slice 6)
+
+**Marker substitution — craft → polish (preflight §4.2).** T512's task text says `/impeccable craft 008-printer-failure-banner-manual-override`, but the functional core shipped earlier (PR #294) with **28 green tests**. Preflight §4.2: *"A craft marker invoked against green tests is a preflight violation"* — and §4.2 exempts the **polish** marker (*"post-merge, all tests green by definition"*). So the T512 UI gate was run as **`/impeccable polish`**, not craft. Owner-confirmed the substitution 2026-05-30. The §4.2 RED-bar check does NOT apply to a polish marker (it applies only to craft); recorded here for the audit trail rather than as a RED confirmation.
+
+**Pre-polish gate (impeccable setup, all pass):** `context=pass` (`load-context.mjs` → `hasProduct:true`, `hasDesign:true`, `register=product`), `command_reference=pass` (polish.md), `shape=not_required` (polish), `image_gate=skipped` (component-level polish, no mockup).
+
+**What the polish changed (one focused improvement, design-system-aligned):**
+- The in-flight mutating action now shows the **shared `.btn__spinner`** (the existing T030 spinner, reduced-motion-neutralised by the global rule) + **`aria-busy`** on the *active* button. Previously a click on Retry / Manual disabled all three buttons but gave no positive signal *which* action was running — the `mutationPhase` value already distinguished `'retrying'` vs `'manual_override'` internally, but the UI collapsed both into "all disabled."
+- **Why it is polish, not decoration:** DESIGN.md §5 Buttons — *"Loading shows a CSS spinner at the button's leading edge; label remains visible."* The banner's raw `<button>`s were a one-off that hadn't adopted this. Surfacing the active action closes the gap PRODUCT.md Principle 3 requires (*"the cashier must always know the real state"*) and Principle 1 (*"no affordance without a confirmed result"*). Drift classified as **one-off implementation** (the `.btn__spinner` / `<Button loading>` pattern existed; the banner hadn't used it).
+- Constraints held: bilingual ar/en intact, `role=status`/`aria-live` intact, 44×44 intact (unchanged `.btn--md`), color-never-sole-signal intact (spinner + `aria-busy` are non-color signals), no PII. Spinner is `aria-hidden` because `aria-busy` on the button is the canonical SR signal (no double-announce).
+
+**Verification:** 28 prior tests stay green; **+1 new test** (`PrinterFailureBanner.affordance-gating.test.tsx` — "surfaces aria-busy + spinner on the ACTIVE button only, per action") proves the polish behaviour and that the *other* in-flight-disabled button is NOT marked busy. Suite now **29 green**. typecheck + lint clean. (PR for T512 polish.)
+
+**§A1 red-bar record (owner design-judgment — Ahmed).** Per `impeccable-embed-preflight §3.2`, the §A1 reviewer is the approver of the impeccable output. This polish makes **no new visual-direction decision** — it adopts an already-ratified DESIGN.md pattern (the T030 spinner) into a surface that had missed it; no new color, no layout change, no copy change. The §A1 red-bar for T512 is therefore an **adopt-existing-pattern** confirmation, not a fresh direction call. **Owner accepts by merging the T512 polish PR** (the diff is the record). If the owner wants a different in-flight treatment, that is a re-open.
+
+---
+
+## T526 — §A4 security-review handoff: as-built verification (2026-05-30)
+
+> **⚠️ NATURE OF THIS RECORD — read first.** This is an **agent-performed
+> as-built verification** of the eight-item §A4 checklist against the shipped
+> bridge code, requested by the owner (Ahmed) under his standing authorization.
+> It is **NOT an independent human security review**: the agent (and its sibling
+> sessions) authored the surface under audit, so it cannot attest to its own
+> independence. The load-bearing **independent** sign-off is the **original §A4
+> human review by Ahmed, 2026-05-26** (`contracts/bridge-api.md` §A4 CLEARED;
+> coordination §"§A4 bridge-API reviewer thread (T004)"), which stands underneath
+> this. T526's job here is the narrower question: **did the implementation drift
+> from the §A4-approved design?** Answer below, per item, with file:line evidence.
+> A blocking finding would HOLD T526; a clean pass is owner-accepted, not
+> independently attested.
+
+**Surface audited:** `src/main/receipts/receipts-bridge.ts` + `src/main/sales/sales-bridge.ts` (the as-built bridge handlers), channels in `src/shared/{receipts,sales}/channels.ts`.
+
+| # | §A4 item | Verdict | As-built evidence |
+|:--:|:--|:--|:--|
+| 1 | Bridge surface enumeration | ⚠️ **MINOR DRIFT (non-blocking)** | 4 `receipts.*` (preview/retryPrint/reprint/manualOverride) ✅ + **4** `sales.*` (read/findByNumber/subscribe/**unsubscribe**) — the §A4 checklist text says "three `sales.*`". `unsubscribe` was added with the snapshot-subscribe pair AFTER the §A4 text was written. **No `drawer.*` renderer surface** (confirmed: no drawer channels file) ✅. Drift is **benign**: `unsubscribe` is a read-only no-op (snapshot mode, no registry) and is forbidden-field-guarded like the rest. Recommend updating the §A4 checklist text 3→4 to match; not a security regression. |
+| 2 | Forbidden-field guard at every handler entry | ✅ PASS | `findForbiddenKey(req)` is the **first** statement in all 8 handlers (`receipts-bridge.ts:170,222,355,452`; `sales-bridge.ts:253,286,321,375`), scanning `FORBIDDEN_PAYLOAD_KEYS` ∪ a bridge-local card/voucher/envelope set, recursively, cycle-safe (WeakSet). |
+| 3 | Refusal-envelope shape (closed enum) | ✅ PASS | Every refusal returns `{ kind: 'refused', reason: <closed-union> }`. **One documented exception:** `sales.unsubscribe` THROWS on a forbidden-key hit (its shared response type has no refusal branch) — surfaces as an IPC exception, no forbidden value logged (`sales-bridge.ts:366-378`). Intentional + commented. |
+| 4 | Idempotency contract | ✅ PASS | Mutating handlers accept `idempotency_key`; retry + manualOverride implement Path-A key-on-state idempotency (a prior success/override row is the key → no-op replay) (`receipts-bridge.ts:255-266,470-481`). |
+| 5 | Operator-attribution discipline (reprint = reprinting operator) | ✅ PASS | `reprint` ctx sets `attribution_operator_id: session.operator_id` (current signed-in operator), NOT `row.selling_operator_id` (`receipts-bridge.ts:407-411`). Selling-operator id is passed separately for the dual-attribution audit only. |
+| 6 | Tenant isolation; findByNumber cross-tenant → `sale_not_found` | ✅ PASS | `findByNumber` scopes by the session `(tenant,branch,terminal)` and refuses cross-scope/missing with `sale_not_found`, never `tenant_isolation` (no existence-leak) (`sales-bridge.ts:299-307`). Receipts mutating handlers share `scopedSale` with the same `sale_not_found` posture. |
+| 7 | `external_reference` `*****`-redacted in log sinks | ✅ PASS | audit-emitter substitutes `out.external_reference = '*****'` before emit (`audit-emitter.ts:260-261`); pino `SALES_REDACTED_KEYS=['external_reference']` (`logger.ts:145`); Sentry covered by `isForbiddenSentryKey` substring (`auth`/`reference` not needed — wholesale request/user drop). |
+| 8 | No raw `envelope_handoff_action_id` in responses | ✅ PASS | Neither bridge's response projection includes it; `projectSaleForRenderer` enumerates fields explicitly and omits it (`sales-bridge.ts:194-235`). Documented main-only in the bridge header. |
+
+**Verdict: 7 PASS, 1 minor non-blocking drift (item 1 count).** No security
+property promised by the §A4-approved contract is violated by the as-built code.
+The one drift is a checklist-text count that lagged a benign read-only handler
+addition; recommended follow-up is to update the §A4 checklist text to "four
+`sales.*`". **T526 is recorded as as-built-verified (agent-performed,
+owner-accepted); the independent attestation remains the 2026-05-26 Ahmed §A4
+sign-off.** No blocking finding → T526 does not hold §A5.
+
+---
+
 ## Dependencies
 
 ### 1. 005-sales-cart
