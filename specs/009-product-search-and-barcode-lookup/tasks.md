@@ -80,17 +80,17 @@ overridden by the constitution — same posture as 005 tasks.md.)
 
 ## Phase 1 — Setup
 
-- [ ] T001 Create the `src/main/catalogue/` module directory and an index barrel — `src/main/catalogue/index.ts`
-- [ ] T002 Create the renderer component directory `src/renderer/ui/catalogue/` with a barrel — `src/renderer/ui/catalogue/index.ts`
-- [ ] T003 [P] Add the `ProductSnapshot` cross-module type stub (display surface + seam subset per data-model.md) — `src/shared/catalogue/product-snapshot.ts`
-- [ ] T004 [P] Reserve the `catalogue.*` namespace block in the bridge-API type surface (types only; no handlers yet) — `src/shared/bridge-api.ts`
+- [X] T001 Create the `src/main/catalogue/` module directory and an index barrel — `src/main/catalogue/index.ts`
+- [X] T002 Create the renderer component directory `src/renderer/ui/catalogue/` with a barrel — `src/renderer/ui/catalogue/index.ts`
+- [X] T003 [P] Add the `ProductSnapshot` cross-module type stub (display surface + seam subset per data-model.md) — `src/shared/catalogue/product-snapshot.ts`
+- [X] T004 [P] Reserve the `catalogue.*` namespace block in the bridge-API type surface (types only; no handlers yet) — `src/shared/bridge-api.ts`
 
 ## Phase 2 — Foundational (blocking prerequisites)
 
-- [ ] T005 Test (RED): `normalize.ts` folding contract — Arabic alef/yaa/taa-marbuta/harakat/tatweel + English case/accent + numeral + whitespace, **both-sided idempotence** — `src/main/catalogue/__tests__/normalize.test.ts`
-- [ ] T006 Implement `normalize.ts` to GREEN the folding contract (load-bearing; ≥95% coverage target) — `src/main/catalogue/normalize.ts`
-- [ ] T007 [P] Test (RED): `catalogueSearchStore` 7-state FSM transitions (idle→searching→results/not_found/ambiguous/catalogue_unavailable/confirm_pending), mirrors-only-bridge-confirmed — `src/renderer/stores/__tests__/catalogueSearchStore.test.ts`
-- [ ] T008 Implement `catalogueSearchStore` (zustand; 7-state FSM; ~150 ms debounce on typed only; scanner bypass) to GREEN — `src/renderer/stores/catalogueSearchStore.ts`
+- [X] T005 Test (RED): `normalize.ts` folding contract — Arabic alef/yaa/taa-marbuta/harakat/tatweel + English case/accent + numeral + whitespace, **both-sided idempotence** — `src/main/catalogue/__tests__/normalize.test.ts`
+- [X] T006 Implement `normalize.ts` to GREEN the folding contract (load-bearing; ≥95% coverage target) — `src/main/catalogue/normalize.ts`
+- [X] T007 [P] Test (RED): `catalogueSearchStore` 7-state FSM transitions (idle→searching→results/not_found/ambiguous/catalogue_unavailable/confirm_pending), mirrors-only-bridge-confirmed — `src/renderer/stores/__tests__/catalogueSearchStore.test.ts`
+- [X] T008 Implement `catalogueSearchStore` (zustand; 7-state FSM; ~150 ms debounce on typed only; scanner bypass) to GREEN — `src/renderer/stores/catalogueSearchStore.ts` *(FSM core; debounce + scanner-bypass wiring deferred to T036/T037 in S3 per task graph)*
 
 ## Phase 3 — Slice S0: Visual Direction (non-code) · gate §A0
 
