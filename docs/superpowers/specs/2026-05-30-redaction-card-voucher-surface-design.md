@@ -100,7 +100,7 @@ forbidden field precisely, and makes all three layers consistently EXACT.
 - **Curated substring supplement** — preserves the genuinely-want-substring
   breadth the current Sentry regex has, kept SHORT and deliberate (not the full
   surface):
-  `SUPPLEMENTAL_SENTRY_SUBSTRING_TERMS = ['secret', 'token', 'password', 'credential', 'card', 'pan', 'cvv', 'email', 'phone', 'pin', 'jwt', 'clerk', 'auth', 'pair']`
+  `SUPPLEMENTAL_SENTRY_SUBSTRING_TERMS = ['secret', 'token', 'password', 'credential', 'card', 'pii', 'cvv', 'pan', 'email', 'phone', 'pin', 'jwt', 'clerk', 'auth', 'pair']`
   — i.e. exactly the terms in today's `DENYLIST_PATTERN`. This means the slice
   is **purely additive to Sentry**: every key the old regex caught is still
   caught (via the supplement), plus the newly-named exact fields. No legitimate
@@ -156,7 +156,7 @@ T522 BLOCK → "Resolved via observability slice `obs/redaction-card-voucher-sur
 
 ## Components / data flow
 
-```
+```text
 shared/audit/forbidden-keys.ts
   ├─ FORBIDDEN_PAYLOAD_KEYS              (the complete AD-9 surface, append-only)
   ├─ SUPPLEMENTAL_SENTRY_SUBSTRING_TERMS (frozen = today's regex terms)
