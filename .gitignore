@@ -69,6 +69,11 @@ Thumbs.db
 *.swp
 *~
 
+# Transient scratch / crash artifacts (bench smokes, MSYS stack dumps).
+# Never project source.
+.tmp/
+*.stackdump
+
 # Sentry
 .sentryclirc
 
