@@ -30,6 +30,11 @@ export default tsEslint.config(
       // production source. `.ts` scripts under `scripts/` (e.g., `verify-codegen.ts`)
       // remain covered by `tsconfig.json` and are NOT ignored.
       'scripts/**/*.mjs',
+      // Transient scratch directory for hardware bench smokes (e.g.
+      // `.tmp/receipt-smoke.ts`). Gitignored, outside any tsconfig project, and
+      // not production source — the project-service parser fails it with "was
+      // not found by the project service". Same rationale as `.claude/**` above.
+      '.tmp/**',
     ],
   },
   tsEslint.configs.strictTypeChecked,
