@@ -86,7 +86,16 @@ export async function verifyCodegen(options: VerifyCodegenOptions): Promise<Veri
       message: `${REGEN_HINT}\n${driftPreview}`,
     };
   } finally {
-    rmSync(tmpDir, { recursive: true, force: true });
+    // On Windows a just-closed file handle (or an AV scanner) can still
+    // hold the temp dir non-empty for a few ms, making `rmdir` throw
+    // ENOTEMPTY/EBUSY. `force` only ignores ENOENT — it does NOT retry the
+    // lock race — so add maxRetries/retryDelay, which Node backs off on
+    // exactly those codes. Keeps the codegen drift check from flaking CI.
+    try {
+      rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err: unknown) {
+      console.warn('[verify-codegen] temp cleanup failed:', err);
+    }
   }
 }
 
