@@ -226,7 +226,8 @@ selection (`selectResult`). **Nothing is added before the cashier confirms.**
   cart-mutation path**. On success the store goes `confirmAdd` → `idle` and focus
   returns to the input for the next item. A **re-scan/confirm of a product
   already on the cart increments the existing line** via 005's merge-by-`item_ref`
-  (Q4) default — no duplicate line, no 009-side cart logic (FR-21).
+  default (005's clarification **Q4** — same-`item_ref` adds merge into the
+  existing line) — no duplicate line, no 009-side cart logic (FR-21).
 - **Cancel** (or `Escape`) → `cancelConfirm` → `idle`; nothing added; focus
   returns to input.
 - **Missing required field guard:** if resolution is missing a field the cart /
