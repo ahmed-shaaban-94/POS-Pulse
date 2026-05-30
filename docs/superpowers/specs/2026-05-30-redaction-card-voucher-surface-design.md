@@ -176,6 +176,26 @@ and the shared list (`src/shared/audit/__tests__/`). Existing scrubber +
 redaction + no-jwt-guard tests MUST stay green. Coverage: the observability
 files are already in the §A5 floor set; keep them ≥ their current levels.
 
+## Dual-use blast-radius verification (audit-emitter refusal)
+
+`FORBIDDEN_PAYLOAD_KEYS` is dual-use: besides redaction (Sentry/pino), the
+audit-emitter's `findForbiddenKey` **refuses** any audit payload containing a
+listed key — app-wide (004 / 006 / 008 emitters), not just 008 finalize.
+Expanding the list therefore tightens refusal globally. Verified before merge:
+
+- Searched ALL `src` for every new key as an object key / bare identifier. The
+  only occurrences are (a) forbidden-list literals (the guard arrays
+  themselves), (b) `sign-in-handler.ts:115` / `takeover-handler.ts:170`
+  `device_token_attestation` — a **backend request body**, not an audit emit
+  payload (already a forbidden key pre-slice anyway), and (c) comments. No audit
+  `emit`/`emitRaw` payload uses any newly-added key.
+- `src/main/sales/audit-emitter.ts` already maintains its OWN `SALES_FORBIDDEN_KEYS`
+  set covering most of the voucher/card/envelope surface (`voucher_code`,
+  `voucher_balance`, `authority_payload`, `envelope_payload`, `raw_envelope`,
+  `jwt`, `issuer_name`, `pin_record_id`, …). So 008's emitter ALREADY refused
+  these; the shared-list change extends the same discipline to 004/006 emitters,
+  which have no colliding payloads. No new refusal regression.
+
 ## Out of scope / Not in this slice
 - No change to the audit-emitter's refusal behaviour (it already consumes the
   list; new keys tighten it, which is correct and desired).
