@@ -1088,3 +1088,27 @@ export interface ReceiptsBridgeAPI {
   /** Record a manual-receipt override after a print failure. Two-way response. */
   manualOverride(req: ReceiptsManualOverrideRequest): Promise<ReceiptsManualOverrideResponse>;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// 009-product-search-and-barcode-lookup — `catalogue.*` namespace (RESERVED)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// T004 (Phase 1 / Setup) RESERVES this namespace only — it declares no handler
+// interface and does NOT add a `catalogue?` member to `PreloadBridgeAPI` above.
+// That follows the codebase rule stated in the `operator.*` block (this file):
+// a typed surface signature is "a contract claim that the call exists, which is
+// misleading when the gate is closed." The `catalogue.*` slices are §A0-gated
+// (every slice) plus §A1/§A2 per handler.
+//
+// The typed surface is added later:
+//   • T015 (S1, §A1) — `CatalogueBridgeAPI` handler interface +
+//     request/response types (read-only): `lookupBarcode`, `lookupSku`,
+//     `search`, `resolve`. Source of truth:
+//     specs/009-product-search-and-barcode-lookup/contracts/bridge-api.md
+//   • T016 (S1, §A1) — wires that surface as an optional `catalogue?` member
+//     here and into `src/preload/index.ts`.
+//
+// The namespace is READ-ONLY (no insert/update/delete; 009 never writes the
+// catalogue — AD-2) and every handler will gate on `requireOperatorSession`
+// first (NFR-6a). The shared display + seam types it returns are already
+// declared in `./catalogue/product-snapshot.ts` (T003).
