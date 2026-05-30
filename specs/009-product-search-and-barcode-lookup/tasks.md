@@ -39,7 +39,7 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 **`catalogue.*` bridge handlers** (read-only; from `contracts/bridge-api.md`):
 `catalogue.lookupBarcode` · `catalogue.lookupSku` · `catalogue.search` · `catalogue.resolve`
 
-**R7 seam wired (NOT redesigned):** `cart.resolveItemRef` → `{ display_name, unit_price_minor, version }` (005 owns signature).
+**R7 seam wired (NOT redesigned):** `cart.resolveItemRef` → `{ display_name, unit_price_minor }` (005 owns signature; **§A1 ratified — no `version`**, matching 005's live `ItemRefResolver`; `version` deferred per R9).
 
 **Two SQLite tables** (read-only from 009; ship empty; migration order per `data-model.md`):
 1. `products` 2. `product_barcodes` (+ `name_fold`/`alias_fold` search columns/indexes)
@@ -108,8 +108,8 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** A typed, session-gated `catalogue.*` namespace (handlers stubbed) and component shells.
 **Independent test:** every handler refuses generically without an active session; shells render; store transitions on bridge confirmation. No persistence/search logic yet.
 
-- [X] T014 [US1] Test (RED): every `catalogue.*` handler calls `requireOperatorSession` first and refuses generically with no session / on tenant mismatch (NFR-6a) — `src/main/catalogue/__tests__/catalogue-bridge.gating.test.ts` — *gate unit (no_session / tenant_isolation / ok) + all 4 handlers session-gated. Tenant-isolation vs real product rows binds at S2.*
-- [X] T015 [US1] Implement the `catalogue.*` bridge skeleton: typed handlers `lookupBarcode`/`lookupSku`/`search`/`resolve`, each `requireOperatorSession`-first, all returning a stub refusal — `src/main/catalogue/catalogue-bridge.ts` (+ `require-catalogue-session.ts` gate) — *gate-first then honest `catalogue_unavailable` stub (read model lands S2). Resolve refusal widened to carry the gate reasons (NFR-6a).*
+- [X] T014 [US1] Test (RED): every `catalogue.*` handler calls the session gate (`requireCatalogueSession`, gating on an active operator session per NFR-6a) first and refuses generically with no session / on tenant mismatch — `src/main/catalogue/__tests__/catalogue-bridge.gating.test.ts` — *gate unit (no_session / tenant_isolation / ok) + all 4 handlers session-gated. Tenant-isolation vs real product rows binds at S2.*
+- [X] T015 [US1] Implement the `catalogue.*` bridge skeleton: typed handlers `lookupBarcode`/`lookupSku`/`search`/`resolve`, each `requireCatalogueSession`-first (the catalogue-side active-operator-session gate, mirrors 005/008), all returning a stub refusal — `src/main/catalogue/catalogue-bridge.ts` (+ `require-catalogue-session.ts` gate) — *gate-first then honest `catalogue_unavailable` stub (read model lands S2). Resolve refusal widened to carry the gate reasons (NFR-6a).*
 - [X] T016 [US1] Wire the typed `catalogue.*` surface into the preload bridge (renderer-reachable, contextIsolation preserved) — `src/shared/bridge-api.ts`, `src/preload/index.ts` (+ `src/shared/catalogue/channels.ts`, `src/preload/catalogue.ts`) — *types + `catalogue?` member + thin preload wiring done. **Main-process `ipcMain.handle` registration in the composition root is deferred to S2** (needs session-manager wiring; nothing calls `catalogue.*` in S1 — shells are layout-only).*
 - [ ] T017 [P] [US1] Test (RED): component shells render in the cart-bearing shell (search input, scan-capture, result-list placeholder) — `src/renderer/ui/catalogue/__tests__/shells.test.tsx`
 - [ ] T018 [US1] Implement layout-only component shells (`ProductSearchInput`, `ScanCaptureField`, `SearchResultList`, `ProductConfirmPanel`, `NotFoundState`, `CatalogueUnavailableState`, `AmbiguousBarcodeState`) — `src/renderer/ui/catalogue/*.tsx`
@@ -153,8 +153,8 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** Resolve a chosen/scanned product to the cart snapshot and add it through 005's existing path; duplicate scan increments via Q4 merge.
 **Independent test:** with the resolver wired, scanning/selecting a known active product, confirming, adds it to the cart (Arabic `display_name` + `unit_price_minor` snapshotted); a re-scan increments the existing line; 005's fixture tests stay green; missing-field blocks add.
 
-- [ ] T040 [US1] Test (RED): production resolver satisfies the **fixed** 005 seam signature `{ display_name, unit_price_minor, version }` and the `unknown_item`/`disabled`/`generic` refusals (resolver-seam.md) — `src/main/catalogue/__tests__/resolve-item-ref.test.ts` **(§A1)**
-- [ ] T041 [US1] Implement `resolve-item-ref.ts` production resolver (map `name_ar`→display_name, `price_minor`→unit_price_minor, `row_version`→version; active guard→disabled; missing field→generic) — `src/main/catalogue/resolve-item-ref.ts` **(§A1)**
+- [ ] T040 [US1] Test (RED): production resolver satisfies the **§A1-ratified** 005 seam signature `{ display_name, unit_price_minor }` (no `version` — matches 005's live `ItemRefResolver`) and the `unknown_item`/`disabled`/`generic` refusals (resolver-seam.md) — `src/main/catalogue/__tests__/resolve-item-ref.test.ts` **(§A1)**
+- [ ] T041 [US1] Implement `resolve-item-ref.ts` production resolver (map `name_ar`→display_name, `price_minor`→unit_price_minor; active guard→disabled; missing field→generic; `row_version` stays in the read model — `version` deferred per §A1/R9, NOT threaded) — `src/main/catalogue/resolve-item-ref.ts` **(§A1)**
 - [ ] T042 [US1] Test (RED): wiring 009's resolver into `cart-bridge.ts` `resolveItemRef` option replaces `DEFAULT_ITEM_REF_RESOLVER` in production; **005's existing cart fixture tests stay green** (seam unchanged) — `src/main/cart/__tests__/resolve-item-ref.wiring.test.ts` **(§A1)**
 - [ ] T043 [US1] Wire 009's resolver into the cart bridge composition root (production path; fixture stays test-only) — `src/main/index.ts` **(§A1)**
 - [ ] T044 [US1] Test (RED): confirm-first add — confirm panel → 005 `cart.lines.add`; no add before confirm (FR-5); missing required field → generic block, no partial line (FR-19/22) — `src/renderer/ui/catalogue/__tests__/ProductConfirmPanel.test.tsx`

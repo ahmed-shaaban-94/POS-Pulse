@@ -47,6 +47,12 @@ export default defineConfig({
         // correctness is proven by the ReceiptsBridgeAPI typing + the
         // ReceiptPreview window.api.receipts fallback test + the T181 smoke.
         'src/preload/receipts.ts',
+        // 009 S1: catalogue-specific preload entry — same posture as
+        // src/preload/sales.ts above. Thin ipcRenderer.invoke wire-up; no
+        // branchable logic. Correctness is proven by the CatalogueBridgeAPI
+        // typing (compile-time) + the main-side gating test + the manual
+        // Electron smoke when the main handlers wire up (S2).
+        'src/preload/catalogue.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',
