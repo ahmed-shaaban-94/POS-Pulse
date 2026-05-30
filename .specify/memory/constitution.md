@@ -1326,6 +1326,6 @@ feature) when 003 closes.
 
 ---
 
-**Version:** 1.5.0
+**Version:** 1.5.1
 **Ratified:** 2026-05-01
 **Last Amended:** 2026-05-05
