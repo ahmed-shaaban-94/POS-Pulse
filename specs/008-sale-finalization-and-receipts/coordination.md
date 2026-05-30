@@ -3,8 +3,8 @@
 **Feature:** 008-sale-finalization-and-receipts
 **Spec:** [./spec.md](./spec.md)
 **Plan:** [./plan.md](./plan.md) v1.0 (authored 2026-05-27)
-**Tasks:** [./tasks.md](./tasks.md) (DRAFT — all rows BLOCKED; embed activated PR #241)
-**Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — ACTIVATING)
+**Tasks:** [./tasks.md](./tasks.md) (all slices S0–S6 complete; embed activated PR #241)
+**Embed preflight:** [../../docs/impeccable-embed-preflight.md](../../docs/impeccable-embed-preflight.md) (v0.4 — active)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-05-27
 **Last updated:** 2026-05-30. (2026-05-30 additions: T301 OS-print bench result; T521 runtime-redaction assertion; owner §A5 hardware-target decision + bench-smoke bar-answer closing T520a/T523.) Earlier history — 2026-05-28, six passes: (1) S1c.3 closeout gap discovery: 4-field upstream gap recorded; Ahmed Q1+Q2 business decisions captured; Egyptian VAT §A5 production-readiness flag added; T094a/b/c task entries authored; T111/T112/T113 marked BLOCKED-BY T094c. (2) Backend-coordination blocker on T094a recorded post-PR #267 merge — framed as "Ahmed owns the backend PR" — **SUPERSEDED by pass (6); see §"Correction" below**. (3) Slice 2 prep audit recorded post-PR #268 merge: line-snapshot persistence finding + Ahmed's Option A decision (lines_json column on sales row); adds T028a migration task; updates T091 + T094b. (4) Second-pass Slice 2 environmental audit recorded same-PR: Tahoma Arabic-font assumption flagged for §A5 hardware-pair smoke; `src/shared/formatters/` absence flagged as Slice 2 T160 precursor. (5) Slice 3 prep audit recorded post-PR #269 merge: 3 print-pipeline findings — printer config provenance (Ahmed: extend 002 handshake same as Slice 1 Q2 path; folds into pending backend PR — **also SUPERSEDED by pass (6)**), retry policy (Ahmed: bounded exp backoff 3 retries 1s/4s/16s), receipt-byte hand-off type (engineering recommendation: `ReceiptRenderOutput` shape). Adds 2 §A5 checklist items. T094a backend PR scope grows by 3 printer-config fields. (6) Correction to passes (2) + (5) recorded post-PR #270 author-time: the "Ahmed owns the backend PR" framing was wrong. The OpenAPI snapshot is speculative per research.md §5 — contract authoring lives in Data-Pulse-2 and is Claude-doable, not Ahmed-blocked. Past pattern: Data-Pulse-2 PR #316 (vouchers V-A) + POS-Pulse commit `454914a`. See §"Correction (2026-05-28, post-PR #270 author-time discovery)" below.
@@ -40,12 +40,7 @@ This file is **not** a tasks file. It does not authorize implementation. It is t
 
 ## Current phase / status
 
-**Phase: IMPLEMENTATION — SLICES 1 + 2 CODE-COMPLETE (human smoke/sign-off pending).** Setup (Phase 1) and Slice 0 (§A1 visual direction) are closed. Slices 1 and 2 are merged and code-complete; each still needs its human dev-build smoke + functional sign-off before it is fully closed:
-
-- **Slice 1** (migrations + persistence + AD-2 finalize listener + `sales.*` bridge) — **code-complete** after PR #276 (T028a + T094b + T094c; the AD-2 worker is live behind the `sale_finalization` flag). T094a POS-Pulse-side pairing extension merged via PR #273. **Remaining: human smoke/sign-off — T111, T112, T113** (unchecked; checklist in §"Slice 1 closeout — T111 / T112 human smoke checklist" below, added via PR #277).
-- **Slice 2** (receipt payload + AD-6 template engine + `receipts.preview` + `<ReceiptPreview>`) — **code-complete** after PR #278. **Remaining: human smoke/sign-off — T181, T182** (unchecked).
-
-**Next-up:** complete the four open human smokes (T111/T112/T113 for Slice 1, T181/T182 for Slice 2), then Slice 3 (first-print pipeline). §A5 production-readiness remains **held** (rollout gate, not a slice-merge blocker).
+**Phase: COMPLETE — all slices S0–S6 merged; §A5 signed off (caveated) 2026-05-30, MVP/internal scope.** Implementation is complete. §A5 was signed off by Ahmed on 2026-05-30 (T529, PR #314) with the following standing caveats: T520a accepted on qualitative bench evidence (no quantitative p95 captured); T523 printer row promoted on owner-run manual smoke (not CI-tested); T526 as-built security re-check was agent-performed (independent attestation remains the 2026-05-26 Ahmed §A4 review); `total_tax_minor` hardcoded 0 — customer-facing fiscal production use **remains BLOCKED** pending 008-v2 (Egyptian VAT). §A2 = AD-12 no-op (formally still "Held" pending owner flip). Only 008-v2 VAT work remains.
 
 > Historical note: this file was authored in the pre-implementation phase; the original "PRE-IMPLEMENTATION — PHASE 1 SETUP" framing and the `/speckit-*` authoring rows below are preserved verbatim as the project record. The live status is the paragraph above.
 
