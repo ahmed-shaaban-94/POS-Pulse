@@ -8,6 +8,13 @@
  * never used for money arithmetic or storage.
  */
 export function formatPriceMinor(minor: number): string {
+  // P1 guard: monetary values are integer minor units. An invalid price never
+  // reaches display in practice — the resolver blocks it generically (FR-19) —
+  // but guard defensively so a stray NaN / Infinity / float / unsafe integer
+  // renders a neutral placeholder, never a wrong amount.
+  if (!Number.isSafeInteger(minor)) {
+    return '¤ —';
+  }
   const whole = Math.trunc(minor / 100);
   const frac = Math.abs(minor % 100)
     .toString()

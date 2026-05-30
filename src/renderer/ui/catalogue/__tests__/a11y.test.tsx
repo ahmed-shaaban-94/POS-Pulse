@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest';
 
 import {
   ProductSearchInput,
+  ScanCaptureField,
   SearchResultList,
   ProductConfirmPanel,
   NotFoundState,
@@ -43,6 +44,14 @@ describe('T019 — catalogue shell accessibility (axe-clean)', () => {
   it('ProductSearchInput (idle) is axe-clean', async () => {
     const { container } = render(<ProductSearchInput />);
     await expectNoAxeViolations(container);
+  });
+
+  it('ScanCaptureField is axe-clean and focusable (wedge target)', async () => {
+    const { container } = render(<ScanCaptureField />);
+    await expectNoAxeViolations(container);
+    const field = screen.getByTestId('scan-capture-field');
+    field.focus();
+    expect(field).toHaveFocus();
   });
 
   it('NotFoundState is axe-clean', async () => {
