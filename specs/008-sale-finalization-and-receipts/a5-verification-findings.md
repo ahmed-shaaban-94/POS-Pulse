@@ -51,7 +51,18 @@ logic. Not a coverage gap.
 - `codegen:verify` — no-op per AD-12 (008 makes zero backend calls); verified green on CI run 26671092551
 - `package:dir` — Windows-only CI step; not run locally. **Owner: confirm latest `main` CI package:dir is green.**
 
-### T521 — Redaction audit — **PARTIAL** (static evidence only; runtime assertion + support-bundle audit NOT done)
+### T521 — Redaction audit — **runtime assertion ✅ DONE (2026-05-30); support-bundle audit N/A (no tool exists)**
+
+> **Update 2026-05-30.** The *runtime* assertion below is now done — see
+> `coordination.md §"T521 — Runtime redaction assertion"` +
+> `tests/integration/sales/t521-runtime-redaction.test.ts` (drives the real
+> dispatchers through real pino + a console spy; asserts no forbidden key/value
+> at any depth; positive-control proves non-vacuity). The **support-bundle export
+> tool** audit is N/A: no such tool exists in `src/` yet (§P11 forward
+> requirement recorded). T521 stays OPEN as a checklist item pending the owner
+> accepting the support-bundle half as N/A-by-absence; the agent does not
+> self-tick it.
+
 What was verified (static):
 - No forbidden-field key appears as *data* in `src/main/receipts`. The only
   occurrences are the `FORBIDDEN_KEYS` *guard array* in `receipts-bridge.ts:43-60`
