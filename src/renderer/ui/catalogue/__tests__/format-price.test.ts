@@ -25,4 +25,12 @@ describe('formatPriceMinor', () => {
     expect(formatPriceMinor(15.5)).toBe('¤ —'); // float
     expect(formatPriceMinor(Number.MAX_SAFE_INTEGER + 1)).toBe('¤ —');
   });
+
+  it('rejects a negative price (non-negative catalogue domain) → placeholder', () => {
+    // A catalogue price is never negative (data-model invariant); a negative
+    // value is a data error, not a credit — render the neutral placeholder
+    // rather than a misleading "¤ -15.00".
+    expect(formatPriceMinor(-1500)).toBe('¤ —');
+    expect(formatPriceMinor(-1)).toBe('¤ —');
+  });
 });

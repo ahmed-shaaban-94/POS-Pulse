@@ -8,11 +8,13 @@
  * never used for money arithmetic or storage.
  */
 export function formatPriceMinor(minor: number): string {
-  // P1 guard: monetary values are integer minor units. An invalid price never
-  // reaches display in practice — the resolver blocks it generically (FR-19) —
-  // but guard defensively so a stray NaN / Infinity / float / unsafe integer
-  // renders a neutral placeholder, never a wrong amount.
-  if (!Number.isSafeInteger(minor)) {
+  // P1 guard: monetary values are integer minor units, and a catalogue price is
+  // non-negative (data-model invariant; cf. 005 computeLineSubtotal rejecting
+  // negative unit_price). An invalid price never reaches display in practice —
+  // the resolver blocks it generically (FR-19) — but guard defensively so a
+  // stray NaN / Infinity / float / unsafe / negative value renders a neutral
+  // placeholder, never a wrong amount.
+  if (!Number.isSafeInteger(minor) || minor < 0) {
     return '¤ —';
   }
   const whole = Math.trunc(minor / 100);
