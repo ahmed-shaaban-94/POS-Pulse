@@ -280,4 +280,47 @@ describe('T093 — forbidden-field defence-in-depth', () => {
       });
     }).toThrow(/forbidden field name: voucher_code/);
   });
+
+  it('refuses a SALES-only forbidden key not in the shared list (envelope_handoff_action_id_raw)', () => {
+    // `envelope_handoff_action_id_raw` is the one key in SALES_FORBIDDEN_KEYS
+    // that is NOT also in the shared FORBIDDEN_PAYLOAD_KEYS — so its ONLY guard
+    // is the sales-local set check (audit-emitter.ts:236). Asserting it confirms
+    // the sales-specific defense has no silent gap after the PR #299 shared-list
+    // unification folded the rest in.
+    const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
+    expect(() => {
+      emitter.emitRaw({
+        action_category: 'sale.receipt.printed',
+        attribution_operator_id: 'op-x',
+        tenant_id: 'tenant-1',
+        branch_id: 'branch-1',
+        originating_terminal_id: 'terminal-1',
+        session_id: 'sess-1',
+        created_at: '2026-05-27T10:11:00.000Z',
+        payload: { sale_id: 'sale-x', envelope_handoff_action_id_raw: 'RAW-LEAK' },
+      });
+    }).toThrow(/forbidden field name: envelope_handoff_action_id_raw/);
+  });
+
+  it('refuses a forbidden key nested INSIDE an array element (recursive array scan)', () => {
+    // The forbidden-key scanner recurses through arrays (audit-emitter.ts:224-229);
+    // a forbidden key buried in an array element must still be caught. Existing
+    // tests only nest under object keys, leaving the array-hit return uncovered.
+    const emitter = createSaleAuditEmitter({ sink: { write: () => {} } });
+    expect(() => {
+      emitter.emitRaw({
+        action_category: 'sale.receipt.printed',
+        attribution_operator_id: 'op-x',
+        tenant_id: 'tenant-1',
+        branch_id: 'branch-1',
+        originating_terminal_id: 'terminal-1',
+        session_id: 'sess-1',
+        created_at: '2026-05-27T10:12:00.000Z',
+        payload: {
+          sale_id: 'sale-x',
+          tender_lines_summary: [{ tender_type: 'cash' }, { jwt: 'JWT-LEAK-IN-ARRAY' }],
+        },
+      });
+    }).toThrow(/forbidden field name: jwt/);
+  });
 });
