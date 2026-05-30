@@ -40,7 +40,9 @@ function makeFakeWindow(
 ): PrintWindow & { destroyed: boolean } {
   const state = { destroyed: false };
   return {
-    destroyed: false,
+    get destroyed(): boolean {
+      return state.destroyed;
+    },
     loadHtml: overrides.loadHtml ?? ((): Promise<void> => Promise.resolve()),
     print:
       overrides.print ??
