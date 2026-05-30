@@ -233,6 +233,27 @@ Vendor + model + driver-version capture has been recorded in [../../docs/hardwar
 - Cash drawer: ESC/POS DK1/DK2 pulse-compatible; separate kick (not embedded-in-receipt — AD-8 PROHIBITED in 008 v1).
 - Driver-version capture in hardware-matrix.md is mandatory per Constitution Hardware section.
 
+### ⚠️ §A3 TARGET DECISION NEEDED — bench hardware diverges from the committed pair (flagged to Ahmed 2026-05-30)
+
+> **Owner action required:** the hardware observed on the §A5 bench (2026-05-30) is **not** the §A3-committed bring-up pair. Ahmed (the §A3 owner) must decide which pair the T200 bring-up + T520a perf-budget assertion target.
+
+**Committed pair (this thread, closed 2026-05-26, PR #258):** Epson TM-T20III printer + APG VBS320 cash drawer.
+
+**Observed on the §A5 bench (2026-05-30 — see §"§A5 hardware smoke evidence (2026-05-30)" below + [../../docs/hardware-matrix.md](../../docs/hardware-matrix.md)):**
+
+| Category | Committed target | Observed on bench | Match? |
+|:--|:--|:--|:--:|
+| Receipt printer | Epson TM-T20III | **BIXOLON SRP-330 II** (driver installed; Windows OS test page passed; ESC/POS direct path unverified) | ❌ |
+| Cash drawer | APG VBS320 (Vasario) | **none observed** (no drawer on the bench) | ❌ |
+| Barcode scanner | _(not part of the T006 §A3 pair; scope is wedge-HID-only)_ | **HONEYWELL HF680-RS-01 REV B** (general scan passed; `-RS` suffix → confirm wedge-HID vs RS-232) | n/a |
+
+**Decision for Ahmed — pick one:**
+
+- **Option A — Move the §A3 target to the bench hardware.** Commit BIXOLON SRP-330 II as the printer and procure/confirm a specific cash-drawer model (the bench currently has none). This requires a **fresh T006-style §A3 hardware-pair commitment** (new pending rows in `hardware-matrix.md` + a drawer model) and re-pointing T200 / T520a + the §A3 integration rows (T301/T302, T371/T372/T373, T462) at the new pair. Also confirm the BIXOLON's ESC/POS direct path (AD-6 prefers it; only the OS-print path is proven so far).
+- **Option B — Keep the committed Epson/APG pair.** Procure the Epson TM-T20III + APG VBS320 for the T200 bring-up; treat the BIXOLON/HONEYWELL bench results as opportunistic smoke only (already recorded as OBSERVED-not-tested rows). No change to the committed §A3 target.
+
+**Status:** ⏳ **OPEN — awaiting Ahmed.** This flag changes **nothing** on its own: the committed Epson/APG pair, the ticked T006 pair-selection item, and all gate labels remain as-is until Ahmed picks A or B. Recorded here (not as a doc-only rewrite of the committed target) so the §A3 owner makes the call. Tracked in §"Open coordination follow-ups" below.
+
 ### T201 — ESC/POS library pick + dependency audit (Slice 3, 2026-05-29)
 
 **Choice:** `node-thermal-printer@4.6.0` (the pre-pinned candidate from the T006 thread). Confirmed as the Slice 3 ESC/POS adapter library.
@@ -388,6 +409,7 @@ The `/impeccable` embed pattern is **activated** in this feature per PR #241 (20
 - [x] **T010 commission** — closed 2026-05-26. PR #254 (merged) landed the renderer-portion shape draft for (d)/(e)/(f)/(g) authored by `/impeccable shape`. (a)/(b)/(c) printed-slip portion accepted-with-deferred-authoring in the §A1 sign-off above.
 - [x] **T011 §A1 sign-off** — closed 2026-05-26 by this PR (§"§A1 sign-off (T011)" block above filled in).
 - [ ] **(a)/(b)/(c) printed-slip layouts — DEFERRED COMMITMENT** — Ahmed to author the `first_print` printed slip + `reprint_duplicate` printed slip with bilingual duplicate-copy marker + `preview` content confirmation in a follow-up commit to [./visual-direction/README.md](./visual-direction/README.md). MUST land BEFORE Slice 2's T173 craft fires. Tracked as a Slice 2 commission gate, not a Slice 1 blocker.
+- [ ] **⚠️ §A3 hardware-target decision (Ahmed) — flagged 2026-05-30** — the §A5 bench hardware (BIXOLON SRP-330 II printer; no cash drawer; HONEYWELL HF680-RS-01 scanner) **diverges from the committed T006 §A3 pair** (Epson TM-T20III + APG VBS320). Ahmed (the §A3 owner) must pick **Option A** (move the §A3 target to the bench hardware — needs a fresh hardware-pair commitment + a drawer model + re-pointing T200 / T520a / T301-T302 / T371-T373 / T462) or **Option B** (keep the committed Epson/APG pair and procure it for T200). Full options + comparison table in §"§A3 hardware-matrix coordination thread (T006)" → "⚠️ §A3 TARGET DECISION NEEDED" above. **No gate label / committed-pair / ticked-selection changed by this flag** — it stays open until Ahmed decides.
 
 ---
 
