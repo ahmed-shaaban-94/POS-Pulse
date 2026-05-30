@@ -303,4 +303,68 @@ describe('T262 — affordance gating', () => {
     // No throw; the banner stays up.
     expect(screen.getByText(/Receipt print failed/i)).toBeInTheDocument();
   });
+
+  // ── T512 /impeccable polish (2026-05-30) — in-flight action is surfaced ──
+  // The shared mutation phase already distinguishes which action is running;
+  // the polish pass makes that legible (DESIGN.md §5 + PRODUCT.md Principle 3:
+  // the cashier must know the real state). The ACTIVE button gets aria-busy +
+  // the .btn__spinner; the other in-flight-disabled buttons do NOT (so the
+  // cashier can tell retry-in-flight from manual-override-in-flight).
+  it('surfaces aria-busy + spinner on the ACTIVE button only, per action', async () => {
+    let resolveManual: (r: {
+      kind: 'ok';
+      print_event_id: string;
+      purpose: 'first_print';
+      outcome: 'manual_override';
+      overridden_at: string;
+    }) => void = () => {};
+    const bridge: ReceiptsBridgeAPI = {
+      preview: vi.fn(),
+      retryPrint: vi.fn(),
+      reprint: vi.fn(),
+      manualOverride: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveManual = resolve;
+          }),
+      ),
+    };
+    render(
+      <PrinterFailureBanner
+        printFailure={{
+          sale_id: 'sale-1',
+          failure_reason: 'printer_offline',
+          has_successful_print: true,
+        }}
+        onReprint={() => {}}
+        _testReceiptsBridge={bridge}
+      />,
+    );
+    const retry = screen.getByRole('button', { name: /retry/i });
+    const manual = screen.getByRole('button', { name: /manual/i });
+
+    // No action in flight → neither button is busy.
+    expect(retry).not.toHaveAttribute('aria-busy');
+    expect(manual).not.toHaveAttribute('aria-busy');
+
+    await userEvent.click(manual);
+
+    // Manual override is in flight → ONLY the manual button is busy + spins;
+    // Retry is disabled (shared lock) but NOT marked busy.
+    await waitFor(() => expect(manual).toHaveAttribute('aria-busy', 'true'));
+    expect(manual.querySelector('.btn__spinner')).not.toBeNull();
+    expect(retry).not.toHaveAttribute('aria-busy');
+    expect(retry.querySelector('.btn__spinner')).toBeNull();
+
+    // Settle → busy state clears.
+    resolveManual({
+      kind: 'ok',
+      print_event_id: 'pe-mo-1',
+      purpose: 'first_print',
+      outcome: 'manual_override',
+      overridden_at: '2026-05-27T10:00:11.000Z',
+    });
+    await waitFor(() => expect(manual).not.toHaveAttribute('aria-busy'));
+    expect(manual.querySelector('.btn__spinner')).toBeNull();
+  });
 });

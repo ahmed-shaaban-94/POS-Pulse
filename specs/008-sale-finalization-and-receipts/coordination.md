@@ -315,6 +315,23 @@ Result: `Test Files 3 failed (3) · Tests no tests`. Craft invoked immediately a
 
 ---
 
+### T512 `<PrinterFailureBanner>` manual-override — `/impeccable` POLISH record + §A1 red-bar (2026-05-30, Slice 6)
+
+**Marker substitution — craft → polish (preflight §4.2).** T512's task text says `/impeccable craft 008-printer-failure-banner-manual-override`, but the functional core shipped earlier (PR #294) with **28 green tests**. Preflight §4.2: *"A craft marker invoked against green tests is a preflight violation"* — and §4.2 exempts the **polish** marker (*"post-merge, all tests green by definition"*). So the T512 UI gate was run as **`/impeccable polish`**, not craft. Owner-confirmed the substitution 2026-05-30. The §4.2 RED-bar check does NOT apply to a polish marker (it applies only to craft); recorded here for the audit trail rather than as a RED confirmation.
+
+**Pre-polish gate (impeccable setup, all pass):** `context=pass` (`load-context.mjs` → `hasProduct:true`, `hasDesign:true`, `register=product`), `command_reference=pass` (polish.md), `shape=not_required` (polish), `image_gate=skipped` (component-level polish, no mockup).
+
+**What the polish changed (one focused improvement, design-system-aligned):**
+- The in-flight mutating action now shows the **shared `.btn__spinner`** (the existing T030 spinner, reduced-motion-neutralised by the global rule) + **`aria-busy`** on the *active* button. Previously a click on Retry / Manual disabled all three buttons but gave no positive signal *which* action was running — the `mutationPhase` value already distinguished `'retrying'` vs `'manual_override'` internally, but the UI collapsed both into "all disabled."
+- **Why it is polish, not decoration:** DESIGN.md §5 Buttons — *"Loading shows a CSS spinner at the button's leading edge; label remains visible."* The banner's raw `<button>`s were a one-off that hadn't adopted this. Surfacing the active action closes the gap PRODUCT.md Principle 3 requires (*"the cashier must always know the real state"*) and Principle 1 (*"no affordance without a confirmed result"*). Drift classified as **one-off implementation** (the `.btn__spinner` / `<Button loading>` pattern existed; the banner hadn't used it).
+- Constraints held: bilingual ar/en intact, `role=status`/`aria-live` intact, 44×44 intact (unchanged `.btn--md`), color-never-sole-signal intact (spinner + `aria-busy` are non-color signals), no PII. Spinner is `aria-hidden` because `aria-busy` on the button is the canonical SR signal (no double-announce).
+
+**Verification:** 28 prior tests stay green; **+1 new test** (`PrinterFailureBanner.affordance-gating.test.tsx` — "surfaces aria-busy + spinner on the ACTIVE button only, per action") proves the polish behaviour and that the *other* in-flight-disabled button is NOT marked busy. Suite now **29 green**. typecheck + lint clean. (PR for T512 polish.)
+
+**§A1 red-bar record (owner design-judgment — Ahmed).** Per `impeccable-embed-preflight §3.2`, the §A1 reviewer is the approver of the impeccable output. This polish makes **no new visual-direction decision** — it adopts an already-ratified DESIGN.md pattern (the T030 spinner) into a surface that had missed it; no new color, no layout change, no copy change. The §A1 red-bar for T512 is therefore an **adopt-existing-pattern** confirmation, not a fresh direction call. **Owner accepts by merging the T512 polish PR** (the diff is the record). If the owner wants a different in-flight treatment, that is a re-open.
+
+---
+
 ## Dependencies
 
 ### 1. 005-sales-cart
