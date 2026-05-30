@@ -1285,3 +1285,69 @@ OS-print path). All in `wrapReceiptDocument`; covered by unit tests.
   Epson/APG) — still OPEN.
 - Promotion to a *tested* row still needs the rule-1 integration test.
 - **T523 / T520a / T529 remain OPEN.**
+
+## T521 — Runtime redaction assertion (2026-05-30)
+
+T521 has two halves. The **runtime assertion** is now done; the **support-bundle
+export-tool audit** is recorded N/A (no such tool exists yet). T521 is therefore
+upgraded from PARTIAL (static-only) but is **not** ticked complete — see below.
+
+### 008 runtime sink map (verified against as-built code)
+
+The redaction surface T521 must cover, by sink:
+
+| Sink | 008 call-sites | What is emitted |
+|:--|:--|:--|
+| **pino** (`logger.ts`, real `REDACTION_PATHS`) | `print-dispatcher.ts:220/249`, `os-print-transport.ts:235/237`, `drawer-kick.ts:169/186/218/241` | Structured `{msg, sale_id, print_event_id, failure_reason}` only — **never a payload object**. |
+| **console** (bypasses pino) | `finalize-listener.ts:284` `console.error('…', err)` | A static string + the caught `err`. The ONE pino-bypass surface. **Instrumented, NOT exercised** by the T521 test — a console spy is installed and asserted empty for the driven dispatchers (catches a future `console.*` added inside them), but the test does NOT drive the finalize-listener tick-failure path that fires line 284. Residual risk low: `runTickOnce` operates on already-persisted `sales` rows whose forbidden fields were refused at finalize-time. Driving that path is a follow-up if the owner wants full console coverage. |
+| **audit_events** | `audit-emitter.ts` (refuses `FORBIDDEN_PAYLOAD_KEYS`); finalize refusal emits a fixed-shape `sale.finalization_refused` payload built field-by-field | Covered by the emitter's own refusal unit tests. |
+| **Sentry** | **none** in 008 dirs (`src/main/{sales,receipts,drawer,sync-outbox}`) | data-model.md §Forbidden-fields says the refusal "logs a high-severity event (Sentry capture)"; the **as-built refusal path emits ONLY through `auditEmitter.emitSaleFinalizationRefused(...)`** with a safe fixed payload — no direct 008 Sentry call. The doc's "Sentry capture" phrasing is aspirational; global `beforeSend`/`isForbiddenSentryKey` is the defence-in-depth net. |
+
+### Runtime assertion — ✅ DONE
+
+`tests/integration/sales/t521-runtime-redaction.test.ts` drives the **real**
+print + drawer dispatchers (first-print success, print failure, drawer
+opened/suppressed/failed) through the **real** `createLogger` pino instance
+(captured via an injected PassThrough) plus a `console` spy (asserted empty for
+the driven dispatchers — see the console-surface caveat in the sink table above),
+then:
+
+1. asserts no known sentinel **value** survives the captured output, and
+2. parses every NDJSON record and asserts no `FORBIDDEN_PAYLOAD_KEYS` entry
+   appears as an object **key** at any depth (catches a key deeper than pino's
+   4-level `*.*.*.key` redact paths).
+
+**Result: GREEN — and green is the correct result.** This is a regression
+**tripwire**, not a transformation proof: 008's dispatchers log only structured
+non-payload fields, so nothing forbidden is emitted today. A **positive control**
+in the same file injects a `pan` key at depth 5, confirms it survives redact AND
+that the scanner flags it (the tripwire fires) — proving the harness is not
+vacuous. Non-vacuity is further guarded by asserting the expected event
+categories (`sale.receipt.printed`, `sale.drawer.{opened,suppressed,failed}`)
+DO appear in the captured stream.
+
+**Scope limitation (deliberate, recorded honestly):** T521 is a key-name/value
+audit. The test does NOT scan for forbidden *cleartext* under innocently-named
+keys — that is beyond what T521 specifies and beyond what the harness can
+validate. The finalize-time forbidden-field guard (`finalize-transaction.ts`,
+`findForbiddenKey` over `FORBIDDEN_PAYLOAD_KEYS`) already refuses such fields at
+the 006→008 boundary, so they never enter an 008 object in the first place.
+
+### Support-bundle export-tool audit — N/A (no tool exists)
+
+Constitution **§P11** requires "support-bundle export tooling MUST run the same
+redaction pipeline as the on-disk log writer." Searched `src/` — **there is no
+support-bundle / log-export / diagnostic-bundle tool in the codebase** (the only
+matches are *comments* in `cart-bridge.ts:214` and `sales-bridge.ts:373`
+referencing the concept). The audit cannot pass-or-fail a tool that does not
+exist. **Recorded requirement:** when the support-bundle exporter is built (a
+future feature), it MUST route through `REDACTION_PATHS` / the same pino redact
+config — and a runtime assertion like this one MUST extend to cover it.
+
+### Net status
+
+- Runtime assertion: ✅ done (test merged this slice).
+- Support-bundle audit: N/A — no tool to audit; forward requirement recorded.
+- **T521 stays OPEN as a checklist item** until the owner accepts the
+  support-bundle half as N/A-by-absence. The agent does not self-tick it; this
+  is the reviewer's call. (T529 §A5 sign-off remains human-gated regardless.)
