@@ -1188,8 +1188,8 @@ not the T200 §A3 bring-up.
 
 | Category | Observed model | Smoke result | What is NOT yet verified |
 |:--|:--|:--|:--|
-| Receipt printer | **BIXOLON SRP-330 II** | Driver **installed**; **Windows OS test page printed successfully** | POS receipt print (actual 008 receipt) — **PENDING**; ESC/POS direct path — **NOT yet verified** (test page exercised the OS-print path only) |
-| Barcode scanner | **HONEYWELL HF680-RS-01 REV B** | **General scan smoke passed** (device emits scan data) | In-POS wedge-into-cart capture — **PENDING**; transport mode (wedge-HID vs the `-RS` RS-232 variant) — **to be confirmed** (scope is wedge-HID-only) |
+| Receipt printer | **BIXOLON SRP-330 II** | Driver **installed**; **Windows OS test page printed successfully**. **Browser/HTML receipt-template smoke also passed** — an HTML receipt generated from the POS-Pulse receipt **template engine** printed via the browser (2026-05-30). Best observed driver paper setting: **80 × 3276 mm continuous roll** (short fixed forms such as 80 × 287 mm may feed excessive blank paper; the continuous roll produced the best observed cut/feed behavior). | **NOT the official POS print pipeline** — `main` currently uses pre-T200 **stub transports**, so the browser/HTML smoke did not exercise the real OS-print / ESC-POS adapter path. **POS receipt-pipeline print smoke — PENDING** until T200 wires a real OS-print or ESC/POS adapter. **ESC/POS direct path — NOT yet verified.** |
+| Barcode scanner | **HONEYWELL HF680-RS-01 REV B** | **General scan smoke passed** (device emits scan data) AND an **in-POS screen scan smoke passed** — scanner data was captured inside the POS screen (2026-05-30). | **Wedge-into-cart *integration test* — PENDING** (manual in-POS capture is observed evidence, not the rule-1 integration test required for promotion); transport mode (wedge-HID vs the `-RS` RS-232 variant) — **to be confirmed** (scope is wedge-HID-only) |
 | Cash drawer | _none observed_ | — | **Drawer model unconfirmed**; **drawer-kick (DK1 pulse) test PENDING** |
 
 ### Divergence from the §A3-committed pair — flagged for owner
@@ -1197,8 +1197,12 @@ not the T200 §A3 bring-up.
 The §A3 hardware-matrix thread (T006, closed 2026-05-26, PR #258) committed
 **Epson TM-T20III** + **APG VBS320** as the Slice 3 / Slice 4 bring-up target and the
 T520a perf-budget pair. The bench hardware observed on 2026-05-30 is **different**:
-BIXOLON SRP-330 II (printer) + HONEYWELL HF680-RS-01 (scanner), with no cash drawer
-present. This entry records the observed hardware **alongside** the committed target;
+BIXOLON SRP-330 II (printer — OS test page + browser/HTML receipt-template render both
+printed; best driver paper setting 80 × 3276 mm continuous roll; **not** the official
+POS print pipeline, which is still on pre-T200 stub transports) + HONEYWELL
+HF680-RS-01 (scanner — OS-level scan + in-POS screen scan smoke both passed), with no
+cash drawer present. This entry records the observed hardware **alongside** the
+committed target;
 it does **not** change the committed §A3 target, the ticked §A3 pair-selection item,
 or any gate label. **Owner decision needed:** whether the §A3 bring-up target moves to
 the bench hardware (which would require a fresh hardware-matrix pair commitment + a
@@ -1228,7 +1232,16 @@ human-only run; record outcomes, and attach screenshots/logs for any failure.
    main-process log lines; note the device, the step, and the observed vs expected
    behavior here.
 
-> Note: steps 7–8 exercise printing on the BIXOLON via the **OS print path**. The
-> **ESC/POS direct path** and the **cash-drawer kick** are out of scope for this
-> checklist — they require the §A3 hardware bring-up (T200) and a confirmed
-> drawer model, and remain unverified.
+> Note: steps 7–8 depend on the **official POS receipt-pipeline print** being wired.
+> As of 2026-05-30 `main` uses **pre-T200 stub transports**, so the only printing
+> exercised so far is the OS test page and a **browser/HTML render of the
+> template-engine output** — NOT the official pipeline. The real POS-pipeline print
+> (OS-print path) becomes available once **T200** wires a real OS-print or ESC/POS
+> adapter; until then steps 7–8 cannot exercise the official pipeline. The **ESC/POS
+> direct path** and the **cash-drawer kick** are out of scope for this checklist —
+> they require the §A3 hardware bring-up (T200) and a confirmed drawer model, and
+> remain unverified.
+>
+> BIXOLON driver paper setting for step 7: use **80 × 3276 mm continuous roll** (best
+> observed cut/feed behavior; short fixed forms such as 80 × 287 mm may feed excessive
+> blank paper).
