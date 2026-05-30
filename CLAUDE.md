@@ -16,6 +16,8 @@ the POS surface of `smartdatapulse.tech`, packaged as an Electron application ta
 <!-- SPECKIT START -->
 **Active feature:** [`specs/008-sale-finalization-and-receipts`](specs/008-sale-finalization-and-receipts/) — Sale finalization & receipts. **`/speckit-specify` ✅** (2026-05-26) · **`/speckit-clarify` ✅** (2026-05-27; OQ-1/2/3 + reprint-permission resolved) · **`/speckit-plan` v1.0 ✅** (2026-05-27; see [plan.md](specs/008-sale-finalization-and-receipts/plan.md)). Implementation **blocked** pending artifact review, owner approval, and gates §A1–§A5.
 
+**§A5 status (2026-05-30):** **T522** (Sentry/pino scrubber coverage) **✅ RESOLVED** via observability slice `obs/redaction-card-voucher-surface` (PR #299 — `FORBIDDEN_PAYLOAD_KEYS` extended to the full AD-9 surface; scrubbers unified on one source of truth). Remaining §A5 gates still **open / owner-gated**: T512 (`/impeccable` craft), T520a (hardware perf bring-up), T521 (runtime redaction + support-bundle audit), T523 (hardware matrix), T524/T525 (runbook + rollback docs), T526 (security-review handoff), T529 (sign-off). See [`a5-verification-findings.md`](specs/008-sale-finalization-and-receipts/a5-verification-findings.md).
+
 **Recently closed:**
 - `specs/007-pos-visual-system` — POS Visual System Recovery. Complete; all six slices (S0–S6) merged. Closeout: PR #118 (S6) + PR for T087 checkbox flip + this banner update.
 
