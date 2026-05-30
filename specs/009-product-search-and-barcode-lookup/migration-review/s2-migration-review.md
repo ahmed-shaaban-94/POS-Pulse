@@ -3,7 +3,7 @@
 **Feature:** 009-product-search-and-barcode-lookup
 **Gate:** §A2 — `products` / `product_barcodes` / fold-column migration review (P4 + Constitution VII + P17)
 **Prepared by:** agent (Claude Code), 2026-05-31 — **review package for owner ratification**
-**Owner sign-off (§A2):** ⏳ **PENDING Ahmed ratification** (see §1 + §9)
+**Owner sign-off (§A2):** ✅ **RATIFIED by Ahmed 2026-05-31** — GO; decisions **D1–D6 all accepted as recommended** (see §1 + §7).
 **Base SHA at preparation:** `7aaaa55` (PR #320 merge — "feat(009): catalogue component shells + a11y (Slice S1b)")
 **Constitution version pinned:** v1.5.1
 
@@ -17,13 +17,14 @@
 
 ---
 
-## 1. Gate decision — recommendation
+## 1. Gate decision
 
-**Recommend GO**, conditional on the owner ruling on the **§7 open decisions**
-(they change the column/index shape, so they must be settled *before* T021 authors the SQL).
+**✅ §A2 RATIFIED — GO (2026-05-31, Ahmed).** The §7 decisions **D1–D6 were all
+accepted as recommended**; T021 authors the migrations to the §4 shape. S2
+(T020–T030) is now schedulable behind this sign-off.
 
-Per the §A0/§A1 convention, this is an agent-prepared recommendation; the §A2
-gate is the owner's to close. Conditions for clearance:
+Per the §A0/§A1 convention, this began as an agent-prepared recommendation and
+was ratified by the owner. Conditions for clearance — all met:
 
 | Condition | Status |
 |:--|:--:|
@@ -33,7 +34,7 @@ gate is the owner's to close. Conditions for clearance:
 | S1 component shells merged | ✅ PR #320 |
 | `data-model.md` describes both tables, fields, invariants, FK graph | ✅ |
 | Constitution P4 (append-only) analysis recorded per table | ✅ (§6 — N/A, read models) |
-| §7 open decisions ruled on by the owner | ⏳ **PENDING** |
+| §7 open decisions ruled on by the owner | ✅ **D1–D6 accepted as recommended (2026-05-31)** |
 | Test plan T020/T022/T023/T026/T028/T029 located | ✅ (§8) |
 | Implementation plan T020–T030 sequenced | ✅ (§9-impl) |
 
@@ -197,9 +198,10 @@ sourcing feature populates the model).
 
 ---
 
-## 7. Open decisions for owner ratification (settle BEFORE T021)
+## 7. Decisions — ✅ RATIFIED 2026-05-31 (all accepted as recommended)
 
-These change the column/index shape, so they need a ruling now:
+**Ahmed ruled: accept all six recommendations.** The "Recommendation" column is
+now the **binding decision** T021 implements; the §4 DDL already reflects it.
 
 | # | Decision | Recommendation | Why it matters |
 |:--|:--|:--|:--|
@@ -276,17 +278,13 @@ queries carry the tenant + active guards under test.
 
 ---
 
-## 11. Go / no-go recommendation
+## 11. Go / no-go conclusion
 
-**Recommend GO — pending the §7 owner decisions (D1–D6).** Once D1–D6 are ruled
-on, T021 authors the two migrations to the agreed shape and S2 (T020–T030)
-proceeds. The migration order, FK posture (logical-only), append-only analysis
-(N/A — read models), test plan, and implementation sequence are unambiguous and
-consistent with `data-model.md`, `research.md` (R1–R4, R9), and the
-0004/0010/0020 precedents.
-
-§A2 is **not** cleared by this file alone — it clears when the owner ratifies
-(with D1–D6 answered), the same way §A0/§A1 were ratified on merge.
+**✅ GO — §A2 ratified 2026-05-31 (Ahmed), D1–D6 accepted as recommended.** T021
+authors the two migrations to the §4 shape; S2 (T020–T030) proceeds. The
+migration order, FK posture (logical-only), append-only analysis (N/A — read
+models), test plan, and implementation sequence are consistent with
+`data-model.md`, `research.md` (R1–R4, R9), and the 0004/0010/0020 precedents.
 
 ---
 
@@ -296,7 +294,7 @@ consistent with `data-model.md`, `research.md` (R1–R4, R9), and the
 |:--|:--:|:--|
 | §A0 | ✅ RATIFIED 2026-05-30 (PR #318) | (none) |
 | §A1 | ✅ RATIFIED 2026-05-30 (seam = `{display_name, unit_price_minor}`, version deferred) | S4 wiring |
-| **§A2** | ⏳ **PENDING owner ratification** (this file; recommend GO + D1–D6) | **S2 (T020–T030) + S3** |
+| **§A2** | ✅ **RATIFIED 2026-05-31** (this file; D1–D6 accepted) | **S2 (T020–T030) + S3** |
 | §A5 | ⏳ rollout-time | production readiness |
 
 ---

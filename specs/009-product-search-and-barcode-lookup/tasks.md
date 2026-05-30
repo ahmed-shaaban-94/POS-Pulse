@@ -18,9 +18,9 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 
 ---
 
-> ✅ **§A0 + §A1 RATIFIED 2026-05-30** (PR #318 merge; seam approach = match 005's live signature, `version`
-> deferred). **S1 is unblocked.** S2/S3 still hold on **§A2** (migration review); S5 holds on **§A5**
-> (production readiness). No §A2/§A5-gated task starts until its gate clears.
+> ✅ **§A0 + §A1 RATIFIED 2026-05-30**; **§A2 RATIFIED 2026-05-31** (D1–D6 accepted; migrations at `0029`/`0030`).
+> **S1 done (PRs #317–#320); S2 + S3 unblocked.** Only **§A5** (production readiness) remains — it gates S5.
+> Seam approach (§A1) = match 005's live `{display_name, unit_price_minor}`; `version` deferred.
 
 ---
 
@@ -73,7 +73,7 @@ overridden by the constitution — same posture as 005 tasks.md.)
 |:--|:--|:--|
 | **§A0** — S0 visual-direction review + 005 seam-wiring coordination | every slice | ✅ **RATIFIED 2026-05-30** (on merge of PR #318 — S0 contact-sheet + review-record, T009–T013, checklist 1–13 all PASS). |
 | **§A1** — R7 seam-wiring approach ratified with 005 owner | S1, S2, S4 | ✅ **RATIFIED 2026-05-30** — 009 satisfies 005's **live** `{ display_name, unit_price_minor }` seam; **`version` deferred** (forward-looking provenance, R9; binds in code at S4). No 005 change. |
-| **§A2** — `products`/`product_barcodes`/fold-column migration review | S2, S3 | ⏳ open |
+| **§A2** — `products`/`product_barcodes`/fold-column migration review | S2, S3 | ✅ **RATIFIED 2026-05-31** — see [`migration-review/s2-migration-review.md`](./migration-review/s2-migration-review.md); decisions D1–D6 accepted (sku_norm, name_fold incl. en, tax_category NOT NULL, app-enforced uniqueness, partial `active=1` indexes, fold-scan + FTS5 fallback). Migrations land at `0029`/`0030`. |
 | **§A5** — production readiness (runbook, rollback, perf bring-up @ 50k) | S5 / rollout PR | ⏳ open |
 
 ---
@@ -120,8 +120,8 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** Exact barcode/SKU lookup against the (empty-shipped) read model, tenant-scoped, with the ambiguity block and the catalogue-unavailable state.
 **Independent test:** fixture-injected, exact barcode/SKU resolves the right single product; unknown→not-found; same-barcode-two-products→ambiguous-block; empty read model→catalogue-unavailable (distinct from not-found).
 
-- [ ] T020 [US1] Test (RED): migration creates `products` + `product_barcodes` + `name_fold`/`alias_fold` columns + indexes (barcode_norm, sku, fold) — `src/main/migrations/__tests__/0XXX-products.test.ts` **(§A2)**
-- [ ] T021 [US1] Author the migration for `products` + `product_barcodes` + search-fold columns/indexes; table ships **empty** (no seed rows) — `src/main/migrations/0XXX-products.ts` **(§A2)**
+- [X] T020 [US1] Test (RED): migration creates `products` + `product_barcodes` + `name_fold`/`alias_fold` columns + indexes (barcode_norm, sku_norm, name_fold) — `tests/integration/catalogue/migrations.test.ts` **(§A2)**
+- [X] T021 [US1] Author the migrations for `products` + `product_barcodes` + search-fold columns/indexes; tables ship **empty** (no seed rows) — `migrations/0029_create_products.sql` + `migrations/0030_create_product_barcodes.sql` **(§A2)**
 - [ ] T022 [US1] Test (RED): `product-repo` exact barcode lookup — one match / zero (not_found) / >1 active product (ambiguous) / inactive excluded / tenant-scoped — `src/main/catalogue/__tests__/product-repo.barcode.test.ts`
 - [ ] T023 [US1] Test (RED): `product-repo` exact SKU lookup (one / zero / inactive / tenant-scoped) — `src/main/catalogue/__tests__/product-repo.sku.test.ts`
 - [ ] T024 [US1] Implement `product-repo.ts` read-only queries (barcode_norm + sku exact lookup; tenant filter; active guard; ambiguity detection via COUNT distinct product_id) — `src/main/catalogue/product-repo.ts`
