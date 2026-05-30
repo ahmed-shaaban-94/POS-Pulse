@@ -1188,7 +1188,7 @@ not the T200 §A3 bring-up.
 
 | Category | Observed model | Smoke result | What is NOT yet verified |
 |:--|:--|:--|:--|
-| Receipt printer | **BIXOLON SRP-330 II** | Driver **installed**; **Windows OS test page printed successfully**. **Browser/HTML receipt-template smoke also passed** — an HTML receipt generated from the POS-Pulse receipt **template engine** printed via the browser (2026-05-30). **Render quality:** Arabic legible · English legible · content fits 80 mm width · **no** excess blank paper · feed/cut acceptable · receipt photo on file with owner. Best observed driver paper setting: **80 × 3276 mm continuous roll** (short fixed forms such as 80 × 287 mm may feed excessive blank paper; the continuous roll produced the best observed cut/feed behavior). | **NOT the official POS print pipeline** — `main` currently uses pre-T200 **stub transports**, so the browser/HTML smoke did not exercise the real OS-print / ESC-POS adapter path. **POS receipt-pipeline print smoke — PENDING** until T200 wires a real OS-print or ESC/POS adapter. **ESC/POS direct path — NOT yet verified.** |
+| Receipt printer | **BIXOLON SRP-330 II** | Driver **installed**; **Windows OS test page printed successfully**. **Browser/HTML receipt-template smoke passed** (2026-05-30). **✅ Official OS-print-pipeline smoke PASSED (T301, 2026-05-30)** — see §"T301 OS-print bench result" below: a real 008 receipt printed from the official POS-Pulse OS-print pipeline (`webContents.print`, PR #304); Arabic + English legible, no card/voucher data, clean feed/cut, body width tuned to 70 mm to clear edge clipping on the 80 mm roll. Best observed driver paper setting: **80 × 3276 mm continuous roll**. | **OS-print pipeline now exercised (T301 ✅).** Still PENDING/unverified: **ESC/POS direct path** (not selected; OS-print is the proven path), the **rule-1 integration test** for promotion to a *tested* row, the **§A3 hardware-matrix record / sign-off** (T200/T301/T302 doc rows), and the **owner hardware-target decision** (Option A/B). |
 | Barcode scanner | **HONEYWELL HF680-RS-01 REV B** | **General scan smoke passed** (device emits scan data) AND an **in-POS screen scan smoke passed** — scanner data was captured inside the POS screen (2026-05-30). | **Wedge-into-cart *integration test* — PENDING** (manual in-POS capture is observed evidence, not the rule-1 integration test required for promotion); transport mode (wedge-HID vs the `-RS` RS-232 variant) — **to be confirmed** (scope is wedge-HID-only) |
 | Cash drawer | _none observed_ | — | **Drawer model unconfirmed**; **drawer-kick (DK1 pulse) test PENDING** |
 
@@ -1245,3 +1245,43 @@ human-only run; record outcomes, and attach screenshots/logs for any failure.
 > BIXOLON driver paper setting for step 7: use **80 × 3276 mm continuous roll** (best
 > observed cut/feed behavior; short fixed forms such as 80 × 287 mm may feed excessive
 > blank paper).
+
+### T301 OS-print bench result (2026-05-30 — observed evidence, NOT a §A3 sign-off)
+
+The real OS-print transport landed in **PR #304** (`feat(008): wire real OS-print
+transport`) — `src/main/receipts/os-print-transport.ts` drives a genuine
+`webContents.print` through a secure offscreen window; the main bootstrap routes
+the print pipeline to the OS-print path (`probeEscposSupport: false`). With that
+build, the owner ran the bench smoke on the BIXOLON SRP-330 II:
+
+**Hardware / flow:**
+- Printer: **BIXOLON SRP-330 II**, Windows default printer; driver paper **80 × 3276 mm continuous roll**.
+- Dev bypass for pairing/operator + `POS_PULSE_DEV_ITEM_RESOLVER=1`; cart + payment driven through the official POS-Pulse bridges; `payments.confirm` returned `ok`.
+- **A real 008 slip printed from the official POS-Pulse OS-print pipeline.**
+
+**Result (after two CSS tuning passes — printable-area only, no content/template change):**
+
+| Check | Result |
+|:--|:--|
+| Slip physically printed (official OS-print pipeline) | ✅ yes |
+| Blank slip | ✅ no |
+| Arabic legible | ✅ yes |
+| English legible | ✅ yes |
+| No card / voucher data on the slip | ✅ confirmed |
+| Feed / cut acceptable; no excess blank feed | ✅ yes |
+| Darkness | ✅ acceptable (after `color:#000` + heavier base weight) |
+| Edge clipping | ✅ resolved at **70 mm** printable body width (73 mm clipped) |
+
+**Tuning recorded:** `pageSize` stays **80 mm** (physical roll); printable body
+`RECEIPT_BODY_WIDTH = 70 mm`, centred, for a horizontal safety margin; pure-black
+text + heavier font-weight for thermal darkness (no ESC/POS density on the
+OS-print path). All in `wrapReceiptDocument`; covered by unit tests.
+
+**Still open (this result changes NO gate):**
+- **ESC/POS direct path** — not selected, **unverified**.
+- **Cash drawer** model + **drawer-kick** — PENDING.
+- **§A3 hardware-matrix record + sign-off** (T200 doc rows / T301 / T302) and the
+  **owner hardware-target decision** (Option A BIXOLON vs Option B committed
+  Epson/APG) — still OPEN.
+- Promotion to a *tested* row still needs the rule-1 integration test.
+- **T523 / T520a / T529 remain OPEN.**
