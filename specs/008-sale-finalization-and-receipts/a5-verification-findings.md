@@ -138,7 +138,7 @@ does not assume it.
 ## Owner must clear (hardware / craft / human-judgment — agent cannot)
 - **T512** `/impeccable craft 008-printer-failure-banner-manual-override` polish pass + §A1 red-bar record. (Functional core + 100% test coverage already done; only the craft gate is open.)
 - **T520a** performance bring-up on real printer+drawer hardware (≥20 runs, p95 budgets). CI has no hardware. **Still OPEN** — the 2026-05-30 bench evidence (below) is device-level smoke, not a perf run; no p95 timings were captured, and the run did not go through the official POS print pipeline (pre-T200 stub transports).
-- **T523** hardware-matrix tested printer/drawer pair. **Still OPEN** — see the 2026-05-30 bench-evidence note below; the observed devices are logged as OBSERVED-not-tested, the integration tests required by hardware-matrix rule 1 are not yet written, and the bench pair diverges from the committed §A3 pair (owner decision pending).
+- **T523** hardware-matrix-tested printer/drawer pair. **Still OPEN** — see the 2026-05-30 bench-evidence note below; the observed devices are logged as OBSERVED-not-tested, the integration tests required by hardware-matrix rule 1 are not yet written, and the bench pair diverges from the committed §A3 pair (owner decision pending).
 
 > **2026-05-30 bench-evidence update (observed, NOT sign-off).** Owner ran an additional
 > hardware smoke. New evidence recorded in `docs/hardware-matrix.md` + `coordination.md`
