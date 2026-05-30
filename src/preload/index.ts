@@ -3,6 +3,7 @@ import { cart } from './cart.js';
 import { payments, tender, vouchers } from './payments.js';
 import { sales } from './sales.js';
 import { receipts } from './receipts.js';
+import { catalogue } from './catalogue.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -139,6 +140,9 @@ const api: PreloadBridgeAPI = {
   sales,
   // 008 Slice 2 — receipts.* namespace; receipts.preview only in S2.
   receipts,
+  // 009 Slice S1 — read-only catalogue.* namespace (session-gated skeleton;
+  // handlers return catalogue_unavailable until the read model lands in S2).
+  catalogue,
 };
 
 contextBridge.exposeInMainWorld('api', api);

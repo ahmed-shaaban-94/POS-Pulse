@@ -3,7 +3,7 @@
 **Feature:** 009-product-search-and-barcode-lookup
 **Slice:** S0 (non-code)
 **Reviewer (recommendation):** agent-performed review, 2026-05-30
-**Owner sign-off (§A0):** ⏳ **pending Ahmed Shaaban ratification** (see "Sign-off" below)
+**Owner sign-off (§A0):** ✅ **ratified by Ahmed on merge of PR #318 (2026-05-30)** — per the project's "recommendation; ratified on merge" gate convention (see "Sign-off" below)
 **Contact sheet:** `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
 **Constitution version pinned:** v1.5.1
 
@@ -225,11 +225,12 @@ the recommendation; the owner signs). The §A0 gate is the owner's to close.
 | 005 seam-wiring coordination | Approach agreed; `version` drift flagged for S4/§A1 |
 | Visual changes outstanding | None |
 | **Recommendation** | **PASS — recommend §A0 visual-direction sign-off** |
-| **Owner §A0 sign-off (Ahmed Shaaban)** | ⏳ **pending ratification** |
+| **Owner §A0 sign-off (Ahmed Shaaban)** | ✅ **RATIFIED on merge of PR #318, 2026-05-30** |
+| **§A1 seam approach (Ahmed)** | ✅ **RATIFIED 2026-05-30** — 009's resolver satisfies 005's **live** `ItemRefResolver` signature `{ display_name, unit_price_minor }`; **`version` is deferred** (forward-looking provenance per research §R9, NOT threaded through the seam). No 005 change; 005's fixture tests stay green. Binds in code at S4 (T040–T041). |
 
-Once the owner ratifies, every S1+ implementation PR (the gated slices) must
-cite this review record in its description. Implementers must not deviate from
-the contact sheet without a revised S0 review and re-sign-off.
+§A0 is ratified. Every S1+ implementation PR (the gated slices) must cite this
+review record in its description. Implementers must not deviate from the contact
+sheet without a revised S0 review and re-sign-off.
 
 ---
 

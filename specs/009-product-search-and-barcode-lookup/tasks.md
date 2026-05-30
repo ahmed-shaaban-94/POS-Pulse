@@ -18,9 +18,9 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 
 ---
 
-> ⚠️ **BLOCKED on §A0** (visual-direction S0 review + 005 R7 seam-wiring coordination). Slices also
-> hold on §A1 (seam ratified), §A2 (migration review), §A5 (production readiness) as noted per task.
-> No implementation task starts until its gate clears. `/speckit-plan` wrote NO source/migrations.
+> ✅ **§A0 + §A1 RATIFIED 2026-05-30** (PR #318 merge; seam approach = match 005's live signature, `version`
+> deferred). **S1 is unblocked.** S2/S3 still hold on **§A2** (migration review); S5 holds on **§A5**
+> (production readiness). No §A2/§A5-gated task starts until its gate clears.
 
 ---
 
@@ -71,8 +71,8 @@ overridden by the constitution — same posture as 005 tasks.md.)
 
 | Gate | Blocks | Status |
 |:--|:--|:--|
-| **§A0** — S0 visual-direction review + 005 seam-wiring coordination | every slice | ⏳ open — S0 contact-sheet + review-record landed (T009–T013); visual checklist 1–13 all PASS, agent **recommends** sign-off. Pending: owner (Ahmed) ratification + 005 seam-wiring coordination (the `version`-field drift, binds at S4/§A1). |
-| **§A1** — R7 seam-wiring approach ratified with 005 owner | S1, S2, S4 | ⏳ open |
+| **§A0** — S0 visual-direction review + 005 seam-wiring coordination | every slice | ✅ **RATIFIED 2026-05-30** (on merge of PR #318 — S0 contact-sheet + review-record, T009–T013, checklist 1–13 all PASS). |
+| **§A1** — R7 seam-wiring approach ratified with 005 owner | S1, S2, S4 | ✅ **RATIFIED 2026-05-30** — 009 satisfies 005's **live** `{ display_name, unit_price_minor }` seam; **`version` deferred** (forward-looking provenance, R9; binds in code at S4). No 005 change. |
 | **§A2** — `products`/`product_barcodes`/fold-column migration review | S2, S3 | ⏳ open |
 | **§A5** — production readiness (runbook, rollback, perf bring-up @ 50k) | S5 / rollout PR | ⏳ open |
 
@@ -108,9 +108,9 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** A typed, session-gated `catalogue.*` namespace (handlers stubbed) and component shells.
 **Independent test:** every handler refuses generically without an active session; shells render; store transitions on bridge confirmation. No persistence/search logic yet.
 
-- [ ] T014 [US1] Test (RED): every `catalogue.*` handler calls `requireOperatorSession` first and refuses generically with no session / on tenant mismatch (NFR-6a) — `src/main/catalogue/__tests__/catalogue-bridge.gating.test.ts`
-- [ ] T015 [US1] Implement the `catalogue.*` bridge skeleton: typed handlers `lookupBarcode`/`lookupSku`/`search`/`resolve`, each `requireOperatorSession`-first, all returning a stub refusal — `src/main/catalogue/catalogue-bridge.ts`
-- [ ] T016 [US1] Wire the typed `catalogue.*` surface into the preload bridge (renderer-reachable, contextIsolation preserved) — `src/shared/bridge-api.ts`, `src/preload/index.ts`
+- [X] T014 [US1] Test (RED): every `catalogue.*` handler calls `requireOperatorSession` first and refuses generically with no session / on tenant mismatch (NFR-6a) — `src/main/catalogue/__tests__/catalogue-bridge.gating.test.ts` — *gate unit (no_session / tenant_isolation / ok) + all 4 handlers session-gated. Tenant-isolation vs real product rows binds at S2.*
+- [X] T015 [US1] Implement the `catalogue.*` bridge skeleton: typed handlers `lookupBarcode`/`lookupSku`/`search`/`resolve`, each `requireOperatorSession`-first, all returning a stub refusal — `src/main/catalogue/catalogue-bridge.ts` (+ `require-catalogue-session.ts` gate) — *gate-first then honest `catalogue_unavailable` stub (read model lands S2). Resolve refusal widened to carry the gate reasons (NFR-6a).*
+- [X] T016 [US1] Wire the typed `catalogue.*` surface into the preload bridge (renderer-reachable, contextIsolation preserved) — `src/shared/bridge-api.ts`, `src/preload/index.ts` (+ `src/shared/catalogue/channels.ts`, `src/preload/catalogue.ts`) — *types + `catalogue?` member + thin preload wiring done. **Main-process `ipcMain.handle` registration in the composition root is deferred to S2** (needs session-manager wiring; nothing calls `catalogue.*` in S1 — shells are layout-only).*
 - [ ] T017 [P] [US1] Test (RED): component shells render in the cart-bearing shell (search input, scan-capture, result-list placeholder) — `src/renderer/ui/catalogue/__tests__/shells.test.tsx`
 - [ ] T018 [US1] Implement layout-only component shells (`ProductSearchInput`, `ScanCaptureField`, `SearchResultList`, `ProductConfirmPanel`, `NotFoundState`, `CatalogueUnavailableState`, `AmbiguousBarcodeState`) — `src/renderer/ui/catalogue/*.tsx`
 - [ ] T019 [P] [US1] axe-clean + keyboard-path smoke on idle/error shell states — `src/renderer/ui/catalogue/__tests__/a11y.test.tsx`

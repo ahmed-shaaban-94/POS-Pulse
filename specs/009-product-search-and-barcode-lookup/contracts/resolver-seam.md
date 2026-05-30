@@ -15,15 +15,24 @@
 
 ## The fixed seam signature (owned by 005 — reproduced, not redefined)
 
+> **§A1 ratified 2026-05-30 (correction):** 005's **live** `ItemRefResolver`
+> success shape (`src/main/cart/cart-bridge.ts:81`) is
+> `{ kind: 'ok', display_name, unit_price_minor }` — it carries **no `version`
+> field**. An earlier draft of this doc reproduced a `version` field that 005
+> never shipped. The ratified decision is to satisfy 005's live signature and
+> **defer `version`** (forward-looking provenance per R9; added later only as an
+> additive change agreed with the 005 owner). The signature below is corrected
+> accordingly.
+
 ```text
 cart.resolveItemRef({ item_ref: string })
-  → | { kind: 'ok', display_name: string, unit_price_minor: integer, version: string }
+  → | { kind: 'ok', display_name: string, unit_price_minor: integer }
     | { kind: 'refused', reason: 'unknown_item' | 'disabled' | 'no_connection' | 'generic' }
 ```
 
-(005 contracts/bridge-api.md:416-427; 005 research.md §R7. The `kind: 'ok'` wrapper and the three
+(005 contracts/bridge-api.md:416-427; 005 research.md §R7. The `kind: 'ok'` wrapper and the two
 fields are the contract 005's `cart.lines.add` consumes — it reads `display_name` + `unit_price_minor`
-into the new line and ignores the rest.)
+into the new line.)
 
 ## The injection point (005-side, currently unwired)
 
@@ -45,7 +54,7 @@ replacing the generic-refusal fallback in production builds. The fixture path st
 |:--|:--|:--|
 | `display_name` | `products.name_ar` | The **single** Arabic-first name (AD-6; 008 renders one `display_name` per line). |
 | `unit_price_minor` | `products.price_minor` | Carried verbatim; integer minor units; `Number.isSafeInteger`-guarded (AD-5). |
-| `version` | `products.row_version` | Product row-version provenance; **currently unconsumed** by the cart (AD-4 / R9). Distinct from `CartLine.version` (a separate monotonic concurrency token, 005 data-model.md:107). |
+| ~~`version`~~ | `products.row_version` | **§A1: NOT in the seam** — 005's live seam never carried it. Deferred forward-looking provenance (AD-4 / R9); `products.row_version` stays in the read model, unconsumed by the cart, available if a future additive seam revision (agreed with the 005 owner) needs it. Distinct from `CartLine.version` (005 data-model.md:107). |
 
 **Refusal mapping:**
 
@@ -60,7 +69,7 @@ replacing the generic-refusal fallback in production builds. The fixture path st
 
 009's read model + its `catalogue.resolve` UI output carry the richer sellable surface — English name,
 `tax_category`, `unit_pack_label`, barcode/SKU, controlled/Rx flags. **None of these pass through this
-seam**, because the seam's fixed shape is `{ display_name, unit_price_minor, version }`. Verified
+seam**, because the seam's fixed shape is `{ display_name, unit_price_minor }` (§A1). Verified
 against 008:
 - **Per-line tax/category is not threaded:** 008 locked **OQ-3 → sale-level VAT only for MVP**; the
   envelope lines carry no per-line tax.
