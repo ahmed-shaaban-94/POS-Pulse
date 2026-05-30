@@ -3,7 +3,7 @@
 **Feature:** 009-product-search-and-barcode-lookup
 **Slice:** S0 (non-code)
 **Reviewer (recommendation):** agent-performed review, 2026-05-30
-**Owner sign-off (§A0):** ⏳ **pending Ahmed Shaaban ratification** (see "Sign-off" below)
+**Owner sign-off (§A0):** ✅ **ratified by Ahmed on merge of PR #318 (2026-05-30)** — per the project's "recommendation; ratified on merge" gate convention (see "Sign-off" below)
 **Contact sheet:** `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
 **Constitution version pinned:** v1.5.1
 
@@ -175,35 +175,30 @@ S3 (T036/T037). No final formatting rule or timer is invented in S0.
 
 ## 005 seam-wiring coordination (the second §A0 component)
 
-**Status:** approach agreed in the artifacts; **one drift item flagged for the
-005 owner**, to be ratified at S4 / §A1.
+**Status:** ✅ **RESOLVED / ratified 2026-05-30 (§A1).**
 
 - **Approach (from research §R7 / `contracts/resolver-seam.md`):** 009 wires its
   production resolver into 005's existing `cart-bridge.ts` `resolveItemRef`
   constructor option — the injection point 005 deliberately left unwired
   (production falls back to `DEFAULT_ITEM_REF_RESOLVER`). 009 does **not** change
-  the seam signature. This is consistent with how 005 documented the seam.
-- **⚠ Drift to resolve with the 005 owner (recorded during Phase 1–2, PR #317):**
-  009's contracts document the seam success shape as
-  `{ display_name, unit_price_minor, version }`, but 005's **live**
-  `ItemRefResolver` (`src/main/cart/cart-bridge.ts:81`) is
-  `{ kind: 'ok', display_name, unit_price_minor }` — it carries **no `version`
-  field**. 009's `ResolvedSeam` type records the documented intent with this
-  drift flagged in-code. **Whether `version` is added to the seam is an additive
-  change to be agreed with the 005 owner — not assumed by 009.** This is the
-  open coordination item; it is resolved concretely at **S4 (T040–T041) under
-  §A1**, not by this visual review.
-
-This visual-direction review does not itself ratify the seam wiring; it records
-the coordination state so §A0 sign-off is made with the open item in view.
+  the seam signature.
+- **`version`-field question — RESOLVED:** an earlier draft of 009's contracts
+  documented the seam as `{ display_name, unit_price_minor, version }`, but 005's
+  **live** `ItemRefResolver` (`src/main/cart/cart-bridge.ts:81`) is
+  `{ kind: 'ok', display_name, unit_price_minor }` — **no `version`**. The
+  ratified decision (Ahmed, 2026-05-30) is to satisfy 005's **live** signature
+  and **defer `version`** (forward-looking provenance per R9; added later only as
+  an additive change agreed with the 005 owner). This is now reflected in code
+  (`ResolvedSeam`), `contracts/resolver-seam.md`, `contracts/bridge-api.md`,
+  `tasks.md`, and the §A1 sign-off row below. The S4 resolver (T040–T041)
+  satisfies the ratified shape; 005's fixture tests stay green.
 
 ---
 
 ## Open issues at review time
 
-1. **Seam `version`-field drift** (above) — owner + 005-owner coordination;
-   binds at S4/§A1. Does not block S0 visual sign-off (no visual surface depends
-   on it).
+None outstanding. The seam `version` question (the second §A0 component) is
+**resolved/ratified** under §A1 (above), so both §A0 components are closed.
 
 No visual changes to the contact sheet were identified during this review.
 
@@ -225,11 +220,12 @@ the recommendation; the owner signs). The §A0 gate is the owner's to close.
 | 005 seam-wiring coordination | Approach agreed; `version` drift flagged for S4/§A1 |
 | Visual changes outstanding | None |
 | **Recommendation** | **PASS — recommend §A0 visual-direction sign-off** |
-| **Owner §A0 sign-off (Ahmed Shaaban)** | ⏳ **pending ratification** |
+| **Owner §A0 sign-off (Ahmed Shaaban)** | ✅ **RATIFIED on merge of PR #318, 2026-05-30** |
+| **§A1 seam approach (Ahmed)** | ✅ **RATIFIED 2026-05-30** — 009's resolver satisfies 005's **live** `ItemRefResolver` signature `{ display_name, unit_price_minor }`; **`version` is deferred** (forward-looking provenance per research §R9, NOT threaded through the seam). No 005 change; 005's fixture tests stay green. Binds in code at S4 (T040–T041). |
 
-Once the owner ratifies, every S1+ implementation PR (the gated slices) must
-cite this review record in its description. Implementers must not deviate from
-the contact sheet without a revised S0 review and re-sign-off.
+§A0 is ratified. Every S1+ implementation PR (the gated slices) must cite this
+review record in its description. Implementers must not deviate from the contact
+sheet without a revised S0 review and re-sign-off.
 
 ---
 

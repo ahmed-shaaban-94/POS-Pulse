@@ -46,24 +46,23 @@ export interface ProductSnapshotDisplay {
 }
 
 /**
- * (a) The seam subset the 005 cart consumes — the documented R7 success shape
- * `{ display_name, unit_price_minor, version }` (resolver-seam.md; data-model.md
- * §"Entity: ProductSnapshot" (a)).
+ * (a) The seam subset the 005 cart consumes at add-time.
  *
- * ⚠️ DRIFT to reconcile at S4 (T040/T041, §A1): 005's *current* production seam
- * (`ItemRefResolver` success, `src/main/cart/cart-bridge.ts:81`) is
- * `{ kind: 'ok', display_name, unit_price_minor }` — it has **no `version`
- * field**. The 009 contracts document `version` (← `products.row_version`,
- * currently unconsumed provenance, AD-4/R9). The wiring task must satisfy 005's
- * *actual* signature; whether `version` is added to the seam is an additive
- * change agreed with the 005 owner, not assumed here. This type records the
- * documented intent; T040 verifies it against the real seam.
+ * **§A1 ratified 2026-05-30 (Ahmed):** this mirrors 005's **live**
+ * `ItemRefResolver` success shape `{ display_name, unit_price_minor }`
+ * (`src/main/cart/cart-bridge.ts:81`) — there is **no `version` field**.
+ *
+ * 009's contracts originally documented a `version` token (←
+ * `products.row_version`, forward-looking provenance per research §R9), but
+ * 005's live seam never carried or consumed it. The ratified decision is to
+ * match the live signature and **defer `version`** until a real consumer
+ * exists — adding it later is an additive change agreed with the 005 owner,
+ * not assumed by 009. The production resolver (S4 / T040–T041) satisfies this
+ * exact shape, so 005's fixture tests stay green.
  */
 export interface ResolvedSeam {
   /** ← `products.name_ar` (the single Arabic-first name, AD-6). */
   readonly display_name: string;
   /** ← `products.price_minor` (integer minor units, AD-5). */
   readonly unit_price_minor: number;
-  /** ← `products.row_version`; provenance, currently unconsumed by the cart (AD-4/R9). See the drift note above. */
-  readonly version: string;
 }

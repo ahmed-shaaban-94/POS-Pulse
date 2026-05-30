@@ -104,12 +104,14 @@ Resolves a chosen product to the snapshot for confirm-and-add. Used after a `sea
 
 ```text
 | { kind: 'ok', snapshot: ProductSnapshotDisplay, seam: ResolvedSeam }
-| { kind: 'refused', reason: 'unknown_item' | 'disabled' | 'missing_required_field' | 'generic' }
+| { kind: 'refused', reason: 'no_session' | 'tenant_isolation'            // gate refusals (NFR-6a)
+                            | 'unknown_item' | 'disabled' | 'missing_required_field' | 'generic' }
 | { kind: 'catalogue_unavailable' }
 ```
 
-`ResolvedSeam` is exactly the 005 seam success shape `{ display_name, unit_price_minor, version }`
-(see [resolver-seam.md](./resolver-seam.md)). A product missing a required field (e.g. `price_minor`)
+`ResolvedSeam` is exactly the 005 seam success shape `{ display_name, unit_price_minor }` (§A1
+ratified — **no `version`**; matches 005's live `ItemRefResolver`, see
+[resolver-seam.md](./resolver-seam.md)). A product missing a required field (e.g. `price_minor`)
 → `missing_required_field` (generic to the cashier; blocks add per FR-19/FR-22). An `active = false`
 product → `disabled`.
 

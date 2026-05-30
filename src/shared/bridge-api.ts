@@ -545,6 +545,14 @@ export interface PreloadBridgeAPI {
    * same staged-wiring reason as `sales` above.
    */
   receipts?: ReceiptsBridgeAPI;
+  /**
+   * 009-product-search-and-barcode-lookup Slice S1: read-only `catalogue.*`
+   * namespace (lookupBarcode / lookupSku / search / resolve). Wired into the
+   * preload in S1 (T016); session-gated main-side (NFR-6a). Optional for the
+   * same staged-wiring reason as `sales`/`receipts` — S1 ships a gated skeleton
+   * (handlers return `catalogue_unavailable` until the read model lands in S2).
+   */
+  catalogue?: CatalogueBridgeAPI;
 }
 
 /**
@@ -1090,25 +1098,92 @@ export interface ReceiptsBridgeAPI {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 009-product-search-and-barcode-lookup — `catalogue.*` namespace (RESERVED)
+// 009-product-search-and-barcode-lookup — `catalogue.*` namespace (read-only)
 // ────────────────────────────────────────────────────────────────────────────
 //
-// T004 (Phase 1 / Setup) RESERVES this namespace only — it declares no handler
-// interface and does NOT add a `catalogue?` member to `PreloadBridgeAPI` above.
-// That follows the codebase rule stated in the `operator.*` block (this file):
-// a typed surface signature is "a contract claim that the call exists, which is
-// misleading when the gate is closed." The `catalogue.*` slices are §A0-gated
-// (every slice) plus §A1/§A2 per handler.
+// Schema source of truth:
+//   specs/009-product-search-and-barcode-lookup/contracts/bridge-api.md
 //
-// The typed surface is added later:
-//   • T015 (S1, §A1) — `CatalogueBridgeAPI` handler interface +
-//     request/response types (read-only): `lookupBarcode`, `lookupSku`,
-//     `search`, `resolve`. Source of truth:
-//     specs/009-product-search-and-barcode-lookup/contracts/bridge-api.md
-//   • T016 (S1, §A1) — wires that surface as an optional `catalogue?` member
-//     here and into `src/preload/index.ts`.
-//
-// The namespace is READ-ONLY (no insert/update/delete; 009 never writes the
-// catalogue — AD-2) and every handler will gate on `requireOperatorSession`
-// first (NFR-6a). The shared display + seam types it returns are already
-// declared in `./catalogue/product-snapshot.ts` (T003).
+// Slice S1 (§A0/§A1 ratified 2026-05-30) lands the typed surface + a
+// session-gated SKELETON (every handler returns the `catalogue_unavailable`
+// stub until the read model is wired). Exact lookup lands in S2 (§A2), folded
+// search in S3 (§A2), resolve + 005 seam wiring in S4 (§A1). The namespace is
+// READ-ONLY — there is no insert/update/delete handler (AD-2). Every handler's
+// first step is the active-session gate (NFR-6a); refusals are generic.
+
+import type { ProductSnapshotDisplay, ResolvedSeam } from './catalogue/product-snapshot.js';
+
+export interface CatalogueLookupBarcodeRequest {
+  barcode: string;
+}
+export interface CatalogueLookupSkuRequest {
+  sku: string;
+}
+export interface CatalogueSearchRequest {
+  query: string;
+}
+export interface CatalogueResolveRequest {
+  product_id: string;
+}
+
+/**
+ * Generic gate refusals (NFR-6a). The `reason` is for diagnostic logging only
+ * and is NEVER echoed to the cashier verbatim. No role gate beyond an active
+ * session — cashier/manager/admin all look up products.
+ */
+export type CatalogueRefusalReason = 'no_session' | 'tenant_isolation';
+
+/** Shared by `lookupBarcode` + `lookupSku` (exact lookup, FR-4/FR-9). */
+export type CatalogueLookupResponse =
+  | { kind: 'one'; product: ProductSnapshotDisplay } // exactly one active product → confirm-first (FR-5)
+  | { kind: 'not_found' } // zero matches (FR-6)
+  | { kind: 'ambiguous' } // >1 active product for this barcode (FR-7)
+  | { kind: 'catalogue_unavailable' } // empty/missing/unreadable read model (FR-24)
+  | { kind: 'refused'; reason: CatalogueRefusalReason };
+
+/** Folded substring name/alias search (FR-11/12/13). */
+export type CatalogueSearchResponse =
+  | { kind: 'results'; items: readonly ProductSnapshotDisplay[]; truncated: boolean } // ranked, ≤20 (NFR-4)
+  | { kind: 'not_found' }
+  | { kind: 'too_short' } // < 2 normalized chars (FR-16)
+  | { kind: 'catalogue_unavailable' }
+  | { kind: 'refused'; reason: CatalogueRefusalReason };
+
+/**
+ * Resolve a chosen product to the confirm-and-add snapshot. `seam` is the 005
+ * cart-seam success shape (`ResolvedSeam` = `{ display_name, unit_price_minor }`
+ * — §A1 ratified: no `version`, matching 005's live `ItemRefResolver`).
+ */
+export type CatalogueResolveResponse =
+  | { kind: 'ok'; snapshot: ProductSnapshotDisplay; seam: ResolvedSeam }
+  | {
+      kind: 'refused';
+      // Gate refusals (NFR-6a — resolve is session-gated like every handler)
+      // PLUS the resolve-specific refusals (FR-18/FR-19): inactive product,
+      // unknown id, missing required field, or any other generic failure.
+      reason:
+        | CatalogueRefusalReason
+        | 'unknown_item'
+        | 'disabled'
+        | 'missing_required_field'
+        | 'generic';
+    }
+  | { kind: 'catalogue_unavailable' };
+
+/**
+ * 009 read-only `catalogue.*` bridge surface. Gated server-side on an active
+ * operator session (NFR-6a); renderer-side checks are never load-bearing.
+ * Tenant scoping is derived from the session at the repo layer (S2). Optional
+ * for the same staged-wiring reason as `sales`/`receipts` above — the preload
+ * (`src/preload/index.ts`) wires it in S1 (T016).
+ */
+export interface CatalogueBridgeAPI {
+  /** Exact barcode lookup (FR-4). */
+  lookupBarcode(req: CatalogueLookupBarcodeRequest): Promise<CatalogueLookupResponse>;
+  /** Exact SKU lookup (FR-9). */
+  lookupSku(req: CatalogueLookupSkuRequest): Promise<CatalogueLookupResponse>;
+  /** Folded substring name/alias search (FR-11/12/13). */
+  search(req: CatalogueSearchRequest): Promise<CatalogueSearchResponse>;
+  /** Resolve a chosen product to the confirm-and-add snapshot (FR-19). */
+  resolve(req: CatalogueResolveRequest): Promise<CatalogueResolveResponse>;
+}
