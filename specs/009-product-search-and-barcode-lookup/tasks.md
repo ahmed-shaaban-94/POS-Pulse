@@ -120,8 +120,8 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** Exact barcode/SKU lookup against the (empty-shipped) read model, tenant-scoped, with the ambiguity block and the catalogue-unavailable state.
 **Independent test:** fixture-injected, exact barcode/SKU resolves the right single product; unknown→not-found; same-barcode-two-products→ambiguous-block; empty read model→catalogue-unavailable (distinct from not-found).
 
-- [ ] T020 [US1] Test (RED): migration creates `products` + `product_barcodes` + `name_fold`/`alias_fold` columns + indexes (barcode_norm, sku, fold) — `src/main/migrations/__tests__/0XXX-products.test.ts` **(§A2)**
-- [ ] T021 [US1] Author the migration for `products` + `product_barcodes` + search-fold columns/indexes; table ships **empty** (no seed rows) — `src/main/migrations/0XXX-products.ts` **(§A2)**
+- [X] T020 [US1] Test (RED): migration creates `products` + `product_barcodes` + `name_fold`/`alias_fold` columns + indexes (barcode_norm, sku_norm, name_fold) — `tests/integration/catalogue/migrations.test.ts` **(§A2)**
+- [X] T021 [US1] Author the migrations for `products` + `product_barcodes` + search-fold columns/indexes; tables ship **empty** (no seed rows) — `migrations/0029_create_products.sql` + `migrations/0030_create_product_barcodes.sql` **(§A2)**
 - [ ] T022 [US1] Test (RED): `product-repo` exact barcode lookup — one match / zero (not_found) / >1 active product (ambiguous) / inactive excluded / tenant-scoped — `src/main/catalogue/__tests__/product-repo.barcode.test.ts`
 - [ ] T023 [US1] Test (RED): `product-repo` exact SKU lookup (one / zero / inactive / tenant-scoped) — `src/main/catalogue/__tests__/product-repo.sku.test.ts`
 - [ ] T024 [US1] Implement `product-repo.ts` read-only queries (barcode_norm + sku exact lookup; tenant filter; active guard; ambiguity detection via COUNT distinct product_id) — `src/main/catalogue/product-repo.ts`
