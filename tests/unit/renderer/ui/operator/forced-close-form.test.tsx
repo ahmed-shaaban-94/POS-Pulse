@@ -68,7 +68,7 @@ describe('ForcedCloseForm — initial state', () => {
 describe('ForcedCloseForm — reason selection enables submit', () => {
   for (const reason of FORCED_CLOSE_REASONS) {
     it(`selecting "${reason}" enables submit`, async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       setup();
       await user.click(screen.getByDisplayValue(reason));
       const btn = screen.getByRole('button', { name: /confirm|force.?close|submit/i });
@@ -79,7 +79,7 @@ describe('ForcedCloseForm — reason selection enables submit', () => {
 
 describe('ForcedCloseForm — submit payload correctness', () => {
   it('payload.forced_close_reason equals the selected reason', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_no_show'));
     await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
@@ -92,7 +92,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
   });
 
   it('annotation text appears in payload.annotation, not in forced_close_reason', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('other'));
     const annotationInput = screen.getByRole('textbox');
@@ -109,7 +109,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
   });
 
   it('payload without annotation omits annotation key or sets it undefined', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('terminal_failure'));
     await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
@@ -122,7 +122,7 @@ describe('ForcedCloseForm — submit payload correctness', () => {
   });
 
   it('payload does not include any financial or PII fields', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     const { onSubmit } = setup(vi.fn());
     await user.click(screen.getByDisplayValue('cashier_illness'));
     await user.click(screen.getByRole('button', { name: /confirm|force.?close|submit/i }));
