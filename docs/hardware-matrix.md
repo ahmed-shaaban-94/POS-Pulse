@@ -42,7 +42,7 @@ a native bridge, etc.) — wedge mode is the only transport.
 
 | Model | Transport | Driver / firmware | Tested in feature | Known caveats |
 |:------|:----------|:------------------|:------------------|:--------------|
-| _None tested yet — first entry lands in feature 002+_ |  |  |  |  |
+| _OBSERVED (not promoted to tested)_ — **HONEYWELL HF680-RS-01 REV B** | Keyboard-wedge (HID) expected; model carries an **-RS** suffix implying an RS-232 variant — confirm wedge/HID mode before promotion | OS-level HID; no native SDK (wedge-only per scope) | 008 §A5 bench (observed 2026-05-30; see [specs/008-sale-finalization-and-receipts/coordination.md](../specs/008-sale-finalization-and-receipts/coordination.md) §"§A5 hardware smoke evidence (2026-05-30)") — **not promoted to a tested row; in-POS wedge-into-cart integration test PENDING** | General scan smoke **passed** at the OS level (scanner emits data). In-POS wedge-into-cart capture (scan into the cart/search input → item lookup/add) **NOT yet verified**. Transport mode (wedge-HID vs RS-232) **to be confirmed** — scope is wedge-HID-only (rule 2). Differs from the §A3-committed scanner expectation; divergence flagged in coordination.md for owner review. |
 
 ### Receipt printer
 
@@ -54,7 +54,8 @@ same template renders on either path.
 
 | Model | Transport | Driver / firmware | Tested in feature | Known caveats |
 |:------|:----------|:------------------|:------------------|:--------------|
-| _PENDING_ — **Epson TM-T20III** | USB (serial fallback supported) | Epson Advanced Printer Driver (APD) v5.13+; ESC/POS direct command set | 008 (committed at T006 2026-05-26 in [specs/008-sale-finalization-and-receipts/coordination.md](../specs/008-sale-finalization-and-receipts/coordination.md) §"§A3 hardware-matrix coordination thread"); promotion to "tested" row at Slice 3 T200 hardware bring-up | None known; widely deployed in MEA pharmacy retail. ESC/POS direct path is preferred; OS-print fallback works on same physical device. |
+| _PENDING_ — **Epson TM-T20III** | USB (serial fallback supported) | Epson Advanced Printer Driver (APD) v5.13+; ESC/POS direct command set | 008 (committed at T006 2026-05-26 in [specs/008-sale-finalization-and-receipts/coordination.md](../specs/008-sale-finalization-and-receipts/coordination.md) §"§A3 hardware-matrix coordination thread"); promotion to "tested" row at Slice 3 T200 hardware bring-up | None known; widely deployed in MEA pharmacy retail. ESC/POS direct path is preferred; OS-print fallback works on same physical device. **NOTE:** the §A5 bench (2026-05-30) observed a different physical printer — **BIXOLON SRP-330 II** (row below). Divergence from this §A3-committed target flagged in coordination.md for owner review. |
+| _OBSERVED (not promoted to tested)_ — **BIXOLON SRP-330 II** | USB (OS print queue); ESC/POS-capable thermal printer (direct path not yet exercised) | Vendor driver **installed**; ESC/POS direct command set expected but unverified on this unit | 008 §A5 bench (observed 2026-05-30; see [specs/008-sale-finalization-and-receipts/coordination.md](../specs/008-sale-finalization-and-receipts/coordination.md) §"§A5 hardware smoke evidence (2026-05-30)") — **not promoted to a tested row; POS receipt print + ESC/POS direct integration test PENDING** | Windows **OS test-page printed successfully** (driver/transport proven). **POS receipt print smoke PENDING** (actual 008 receipt not yet printed on this unit). **ESC/POS direct path NOT yet verified** (OS-print path is what the test page exercised). Differs from the §A3-committed Epson TM-T20III target; divergence flagged in coordination.md for owner review. |
 
 ### Cash drawer
 
@@ -65,7 +66,7 @@ MUST NOT block the receipt print, and it MUST NOT auto-dismiss.
 
 | Model | Transport | Driver / firmware | Tested in feature | Known caveats |
 |:------|:----------|:------------------|:------------------|:--------------|
-| _PENDING_ — **APG VBS320 (Vasario)** | RJ-12 to printer (DK1 pulse) | Driven via Epson TM-T20III's DK1 ESC/POS command; no native USB driver required | 008 (committed at T006 2026-05-26 alongside the TM-T20III printer pairing; promotion to "tested" row at Slice 4 drawer-kick bring-up) | None known. Pairs natively with TM-T20III via the printer's DRAWER port. Drawer-kick is a printer ESC/POS DK1 command, not a peripheral driver call. Satisfies AD-8 separate-command requirement (no embedded-in-receipt kick). |
+| _PENDING_ — **APG VBS320 (Vasario)** | RJ-12 to printer (DK1 pulse) | Driven via Epson TM-T20III's DK1 ESC/POS command; no native USB driver required | 008 (committed at T006 2026-05-26 alongside the TM-T20III printer pairing; promotion to "tested" row at Slice 4 drawer-kick bring-up) | None known. Pairs natively with TM-T20III via the printer's DRAWER port. Drawer-kick is a printer ESC/POS DK1 command, not a peripheral driver call. Satisfies AD-8 separate-command requirement (no embedded-in-receipt kick). **NOTE (2026-05-30 §A5 bench):** no cash-drawer model was observed on the bench — **drawer model unconfirmed; drawer-kick (DK1 pulse) test PENDING.** See coordination.md §"§A5 hardware smoke evidence (2026-05-30)". |
 
 ## Out of Scope (MVP)
 

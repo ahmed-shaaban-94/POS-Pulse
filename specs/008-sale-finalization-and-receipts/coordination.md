@@ -1143,3 +1143,70 @@ consistency nit, not a leak).
       no `BridgeApi['drawer']`; the drawer pipeline is main-only (AD-5). The only
       renderer affordance is the banner's manual-override → `receipts.manualOverride`
       (a `receipts.*` handler, Slice 6).
+
+---
+
+## §A5 hardware smoke evidence (2026-05-30)
+
+**Status:** Owner ran a first-pass hardware bench on a Windows machine and reported
+device-level smoke results. These are recorded here as **observed evidence**, NOT as
+§A3/§A5 sign-off. No tasks are marked complete by this entry: **T523 (hardware-matrix
+completeness check) stays unchecked**, **T520a (perf-budget timing assertion) stays
+unchecked**, and the Slice 3 / Slice 4 / Slice 5 §A3 hardware integration rows
+(T301/T302, T371/T372/T373, T462) remain open. This is a pre-bring-up evidence log,
+not the T200 §A3 bring-up.
+
+> **Smoke ≠ tested.** Per [docs/hardware-matrix.md](../../docs/hardware-matrix.md)
+> operational rule 1, promoting a model to a *tested* row requires both the matrix row
+> AND an integration test exercising the device. Neither device below has its
+> integration test yet, so both are logged as **OBSERVED (not promoted to tested)** in
+> the matrix's *Known caveats* column.
+
+### Observed hardware
+
+| Category | Observed model | Smoke result | What is NOT yet verified |
+|:--|:--|:--|:--|
+| Receipt printer | **BIXOLON SRP-330 II** | Driver **installed**; **Windows OS test page printed successfully** | POS receipt print (actual 008 receipt) — **PENDING**; ESC/POS direct path — **NOT yet verified** (test page exercised the OS-print path only) |
+| Barcode scanner | **HONEYWELL HF680-RS-01 REV B** | **General scan smoke passed** (device emits scan data) | In-POS wedge-into-cart capture — **PENDING**; transport mode (wedge-HID vs the `-RS` RS-232 variant) — **to be confirmed** (scope is wedge-HID-only) |
+| Cash drawer | _none observed_ | — | **Drawer model unconfirmed**; **drawer-kick (DK1 pulse) test PENDING** |
+
+### Divergence from the §A3-committed pair — flagged for owner
+
+The §A3 hardware-matrix thread (T006, closed 2026-05-26, PR #258) committed
+**Epson TM-T20III** + **APG VBS320** as the Slice 3 / Slice 4 bring-up target and the
+T520a perf-budget pair. The bench hardware observed on 2026-05-30 is **different**:
+BIXOLON SRP-330 II (printer) + HONEYWELL HF680-RS-01 (scanner), with no cash drawer
+present. This entry records the observed hardware **alongside** the committed target;
+it does **not** change the committed §A3 target, the ticked §A3 pair-selection item,
+or any gate label. **Owner decision needed:** whether the §A3 bring-up target moves to
+the bench hardware (which would require a fresh hardware-matrix pair commitment + a
+cash-drawer model), or the committed Epson/APG pair is procured for the T200 bring-up.
+
+### Manual smoke checklist — next local run
+
+Run on a Windows dev build (`npm run dev` with the three 008 env vars per
+§"Slice 1 closeout — T111 / T112 human smoke checklist" above). This is a
+human-only run; record outcomes, and attach screenshots/logs for any failure.
+
+1. **Scan a barcode into the cart/search input** — focus the cart search field and
+   scan a known product barcode on the HONEYWELL HF680-RS-01.
+2. **Confirm item lookup/add behavior** — the scanned code resolves to a product and
+   adds (or surfaces a not-found message); no stray characters leak into other fields.
+3. **Build a cart** — add ≥ 2 line items (mix scan + manual where possible).
+4. **Hand off to payment** — the cart hands off cleanly to the 006 payment surface.
+5. **Complete payment** — tender a **Cash** payment ≥ subtotal; 006 settles it.
+6. **Finalize the sale** — the AD-2 worker finalizes (durable `sales` row; observe the
+   `finalize_dispatch:finalized` log; sale number format `<terminal_label>-<YYYY-MM-DD>-NNNNNN`).
+7. **Print the actual POS receipt on the BIXOLON SRP-330 II** via the OS print path —
+   confirm the printed slip matches the preview (bilingual RTL layout, sale number,
+   VAT footer, no card/voucher data).
+8. **Reprint the receipt** — confirm the duplicate-copy marker
+   ("نسخة طبق الأصل — DUPLICATE COPY") appears on the reprint and NOT on the first print.
+9. **Record failures** — capture any failure with screenshots and/or the relevant
+   main-process log lines; note the device, the step, and the observed vs expected
+   behavior here.
+
+> Note: steps 7–8 exercise printing on the BIXOLON via the **OS print path**. The
+> **ESC/POS direct path** and the **cash-drawer kick** are out of scope for this
+> checklist — they require the §A3 hardware bring-up (T200) and a confirmed
+> drawer model, and remain unverified.

@@ -1,5 +1,7 @@
 import type { BrowserOptions, ErrorEvent, EventHint } from '@sentry/electron/renderer';
 
+import { isForbiddenSentryKey } from '../../shared/audit/forbidden-keys.js';
+
 /**
  * Phase 9 / US7 — renderer-process Sentry init.
  *
@@ -93,32 +95,16 @@ export async function initSentryRenderer(opts: InitSentryRendererOptions): Promi
 }
 
 /**
- * Denylist of keys (case-insensitive substring match).
+ * Key denylist for renderer Sentry scrubbing lives in the shared single source
+ * of truth: `isForbiddenSentryKey` (exact-key over `FORBIDDEN_PAYLOAD_KEYS` ∪
+ * the frozen curated substring supplement). See `shared/audit/forbidden-keys.ts`.
  *
- * 004-operator-session T050 additions (PR-1 / FR-030 / FR-027 alignment) —
- * mirrors `src/main/observability/sentry-main.ts`'s rationale:
- *   - `pin`     — PIN values / hashes / salts (S4 cashier credential).
- *                 Substring match accepts the `pinpoint`/`spinning`
- *                 false-positive trade-off; POS-Pulse's renderer
- *                 vocabulary does not collide.
- *   - `JWT`     — Clerk JSON Web Tokens and any other JWT-bearing field.
- *                 Spelt uppercase in this file to satisfy the renderer's
- *                 case-sensitive PR-1 invariant guard (lowercase JWT
- *                 vocabulary MUST NOT exist in renderer source); the
- *                 `/i` flag below still matches keys with any letter
- *                 case at runtime.
- *   - `clerk`   — defence-in-depth for Clerk-namespaced credentials.
- *   - `auth`    — catches HTTP-auth header names and `authToken`-style keys.
- *   - `pair`    — `pairing_code` and any future pairing-namespaced
- *                 credential field.
- *
- * Audit-event `FORBIDDEN_PAYLOAD_KEYS` (raw cardholder data, full PII,
- * credential fragments, PIN values, Clerk JSON Web Tokens, session
- * tokens, device-token attestations, pairing codes) are all covered —
- * their substrings are present.
+ * Deriving from the shared symbol (import-only — the forbidden literals live in
+ * `shared/`, outside renderer source) also removes this file's prior need to
+ * spell credential vocabulary in upper-case to dodge the renderer's static
+ * no-credential-token-vocabulary guard (the `004 PR-1` static test): no such
+ * literal appears in this file anymore.
  */
-const DENYLIST_PATTERN =
-  /secret|token|password|credential|card|pii|cvv|pan|email|phone|pin|JWT|clerk|auth|pair/i;
 
 /**
  * Renderer-side `beforeSend`. Same posture as main's `scrubEvent` but
@@ -178,7 +164,7 @@ function stripDenylistedKeys(value: unknown): unknown {
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (DENYLIST_PATTERN.test(key)) continue;
+      if (isForbiddenSentryKey(key)) continue;
       out[key] = stripDenylistedKeys(child);
     }
     return out;
