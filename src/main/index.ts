@@ -53,6 +53,11 @@ import { registerReceiptsHandlers } from './ipc/receipts.js';
 import { createPrintPipeline } from './receipts/print-pipeline.js';
 import { createEscposAdapter } from './receipts/escpos-adapter.js';
 import { createOsPrintAdapter } from './receipts/os-print-adapter.js';
+import {
+  createOsPrintTransport,
+  createDefaultPrintWindow,
+  type PrinterInfoLike,
+} from './receipts/os-print-transport.js';
 import { createPrintDispatcher } from './receipts/print-dispatcher.js';
 import { dispatchFirstPrintOnFinalize } from './receipts/dispatch-first-print-on-finalize.js';
 import { createDrawerKickDispatcher } from './drawer/drawer-kick.js';
@@ -217,6 +222,31 @@ function createWindow(): void {
     win.webContents.openDevTools();
   } else {
     void win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  }
+}
+
+/**
+ * Enumerate the system printers via a live window's webContents
+ * (`getPrintersAsync` is a webContents method). Returns `[]` if no window is
+ * available yet — the OS-print transport then resolves an empty device name and
+ * Electron falls back to the system default printer. Wrapped so a discovery
+ * failure never throws into the print path (the print still attempts the
+ * default printer; a real fault surfaces as a recorded failure + banner).
+ */
+async function getCurrentPrinters(): Promise<PrinterInfoLike[]> {
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+  if (win === undefined) return [];
+  try {
+    const printers = await win.webContents.getPrintersAsync();
+    // Electron 40's PrinterInfo carries no portable `isDefault` flag (the
+    // default lives in platform-specific `options`). We do NOT try to infer it
+    // here: when no device is configured, the transport resolves an empty
+    // deviceName and Electron's silent-print path picks the system default
+    // itself. The list is surfaced only so a CONFIGURED exact name can be
+    // honored / logged.
+    return printers.map((p) => ({ name: p.name, isDefault: false }));
+  } catch {
+    return [];
   }
 }
 
@@ -849,13 +879,23 @@ app
           },
         },
       });
-      // The real ESC/POS transport (node-thermal-printer ↔ Epson TM-T20III) +
-      // the offscreen `webContents.print` window are the §A3 HARDWARE bring-up
-      // (T200), deferred. Until then an honest STUB transport reports `offline`,
-      // so a print records a clean `printer_offline` failure row + raises the
-      // banner while the Sale stays durable — no fake "success" is recorded.
-      // T200 swaps these two adapters for the real transports; nothing else
-      // changes.
+      // 008 §A3 print transports.
+      //
+      // OS-print path (T200): the REAL `webContents.print` transport is wired —
+      // an actual 008 receipt prints through the Windows OS print path on a
+      // physically attached printer (e.g. the BIXOLON SRP-330 II from the §A5
+      // bench). The slip is rendered to 80 mm continuous-roll width to match the
+      // recorded browser/HTML render-quality smoke. `getPrintersAsync` enumerates
+      // the system printers; an unconfigured `deviceName` targets the system
+      // default. (Mapping a SPECIFIC queue to the paired terminal is a follow-up:
+      // pairing/T094a carries USB vendor/product/com-port ids, NOT the Windows
+      // print-queue name.) Verified on the bench by T301; the pure parts are
+      // unit-tested in os-print-transport.test.ts.
+      //
+      // ESC/POS-direct path: still an honest STUB reporting `offline` — that path
+      // (node-thermal-printer ↔ printer status byte) remains unverified (a5
+      // findings) and is NOT selected. We route to OS-print via
+      // `probeEscposSupport: false`, the proven path.
       const printPipeline = createPrintPipeline({
         escposAdapter: createEscposAdapter({
           transport: {
@@ -865,15 +905,16 @@ app
           statusTimeoutMs: 3000,
         }),
         osPrintAdapter: createOsPrintAdapter({
-          print: (_html, cb) => {
-            cb(false, 'os_print_transport_not_wired_until_T200');
-          },
+          print: createOsPrintTransport({
+            createPrintWindow: createDefaultPrintWindow,
+            listPrinters: () => getCurrentPrinters(),
+            logger: mainLogger,
+          }),
         }),
-        // Pre-T200: route to the ESC/POS path so the `offline` stub produces a
-        // clean `printer_offline` failure (matching the wiring comment), NOT
-        // the OS-print `os_print_error`. T200 replaces the probe with a real
-        // status-byte check.
-        probeEscposSupport: () => Promise.resolve(true),
+        // Route to the OS-print path: it is the proven transport (the ESC/POS
+        // direct path is unverified). The cashier never sees which path ran
+        // unless the print fails (path is for audit only — T212).
+        probeEscposSupport: () => Promise.resolve(false),
       });
       // Shared clock for the print dispatcher + receipts bridge so a reprint's
       // rendered slip time (bridge) matches the print_events.printed_at the
