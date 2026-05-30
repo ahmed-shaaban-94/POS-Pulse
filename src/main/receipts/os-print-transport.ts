@@ -134,7 +134,21 @@ export function resolvePrinterDeviceName(
  *
  * The fragment is trusted template-engine output (it already HTML-escaped its
  * own text in `toHtml`), so it is embedded verbatim — not re-escaped.
+ *
+ * Tuning (T301 bench, BIXOLON SRP-330 II): the physical page stays 80 mm
+ * (`pageSize` in `buildPrintOptions`), but the printable BODY is narrowed to
+ * {@link RECEIPT_BODY_WIDTH} and centred, so content sits inside the printhead's
+ * reliable marking zone (the outer ~3-4 mm of a thermal head often will not mark
+ * cleanly → edge clipping). Darkness on the OS-print path cannot use ESC/POS
+ * density commands, so we lean on glyph coverage: explicit pure-black text plus
+ * a heavier base weight ({@link RECEIPT_BASE_FONT_WEIGHT}).
  */
+
+/** Printable body width — narrower than the 80 mm roll for a horizontal safety margin. */
+export const RECEIPT_BODY_WIDTH = '73mm';
+/** Base font weight — heavier than normal so thermal output reads darker. */
+export const RECEIPT_BASE_FONT_WEIGHT = 600;
+
 export function wrapReceiptDocument(fragmentHtml: string): string {
   return `<!doctype html>
 <html lang="ar" dir="rtl">
@@ -146,16 +160,25 @@ export function wrapReceiptDocument(fragmentHtml: string): string {
   body {
     inline-size: 80mm;
     width: 80mm;
-    padding: 3mm;
     box-sizing: border-box;
     font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', monospace;
     font-size: 0.7rem;
     line-height: 1.35;
     direction: rtl;
+    /* Pure black + heavier weight → darker thermal output (no ESC/POS density
+       on the OS-print path). */
+    color: #000;
+    font-weight: ${String(RECEIPT_BASE_FONT_WEIGHT)};
   }
-  .receipt { inline-size: 100%; }
+  .receipt {
+    /* Narrower than the 80 mm roll, centred — keeps content inside the
+       printhead's reliable marking zone (T301 edge-clipping tuning). */
+    inline-size: ${RECEIPT_BODY_WIDTH};
+    max-inline-size: ${RECEIPT_BODY_WIDTH};
+    margin-inline: auto;
+  }
   .band, .rule { white-space: pre; }
-  .receipt-emph { font-weight: 700; }
+  .receipt-emph { font-weight: 800; }
 </style>
 </head>
 <body>${fragmentHtml}</body>

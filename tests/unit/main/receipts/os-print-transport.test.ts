@@ -24,6 +24,8 @@ import {
   buildPrintOptions,
   wrapReceiptDocument,
   RECEIPT_WIDTH_MICRONS,
+  RECEIPT_BODY_WIDTH,
+  RECEIPT_BASE_FONT_WEIGHT,
   type PrintWindow,
   type PrinterInfoLike,
 } from '../../../../src/main/receipts/os-print-transport.js';
@@ -124,13 +126,31 @@ describe('T200 — wrapReceiptDocument (print-parity styling)', () => {
     expect(doc).toContain(FRAGMENT);
   });
 
-  it('embeds the 80 mm width, monospace font, and RTL direction in the print CSS', () => {
+  it('embeds the 80 mm page width, monospace font, and RTL direction in the print CSS', () => {
     const doc = wrapReceiptDocument(FRAGMENT);
+    // Physical page stays the full 80 mm roll (pageSize); the body matches.
     expect(doc).toContain('80mm');
     expect(doc).toContain('monospace');
     // Column alignment (rule lines + bands) depends on preserved whitespace.
     expect(doc).toContain('white-space: pre');
     expect(doc).toMatch(/<html[^>]*dir="rtl"|direction:\s*rtl/);
+  });
+
+  it('narrows the printable body inside the 80 mm roll (T301 edge-clipping tuning)', () => {
+    const doc = wrapReceiptDocument(FRAGMENT);
+    // The .receipt body is narrower than the 80 mm physical roll and centred,
+    // keeping content inside the printhead's reliable marking zone.
+    expect(doc).toContain(RECEIPT_BODY_WIDTH);
+    expect(RECEIPT_BODY_WIDTH).not.toBe('80mm');
+    expect(doc).toMatch(/\.receipt\s*\{[^}]*margin-inline:\s*auto/);
+  });
+
+  it('forces darker thermal output: pure-black text + heavier base weight (T301)', () => {
+    const doc = wrapReceiptDocument(FRAGMENT);
+    expect(doc).toContain('color: #000');
+    expect(doc).toContain(`font-weight: ${String(RECEIPT_BASE_FONT_WEIGHT)}`);
+    // Base weight is heavier than normal (400) for darker glyph coverage.
+    expect(RECEIPT_BASE_FONT_WEIGHT).toBeGreaterThan(400);
   });
 
   it('declares UTF-8 so Arabic glyphs render', () => {
