@@ -148,12 +148,14 @@ does not assume it.
 >   test** is still PENDING; transport mode (wedge-HID vs the `-RS` RS-232 variant) still
 >   to be confirmed.
 > - **BIXOLON SRP-330 II** printed a **browser/HTML receipt** generated from the
->   POS-Pulse receipt **template engine**. **This was NOT the official POS print
->   pipeline** — `main` uses pre-T200 stub transports. POS receipt-pipeline print smoke
->   stays PENDING until T200 wires a real OS-print or ESC/POS adapter; ESC/POS direct
->   path stays unverified. Best observed BIXOLON driver paper setting: **80 × 3276 mm
->   continuous roll** (short fixed forms such as 80 × 287 mm may feed excessive blank
->   paper).
+>   POS-Pulse receipt **template engine**. Render quality on the printed slip: Arabic
+>   legible, English legible, content fits the 80 mm width, no excess blank paper,
+>   feed/cut acceptable; receipt photo on file with owner. **This was NOT the official
+>   POS print pipeline** — `main` uses pre-T200 stub transports. POS receipt-pipeline
+>   print smoke stays PENDING until T200 wires a real OS-print or ESC/POS adapter;
+>   ESC/POS direct path stays unverified. Best observed BIXOLON driver paper setting:
+>   **80 × 3276 mm continuous roll** (short fixed forms such as 80 × 287 mm may feed
+>   excessive blank paper).
 > - **Cash drawer** model still unconfirmed; drawer-kick (DK1 pulse) test still PENDING.
 >
 > No task is marked complete by this evidence: **T523**, **T520a**, and **T529** all
