@@ -76,7 +76,26 @@ Every `encryptString`/`decryptString` (write-capable) call lives in 001 secrets,
 `src/main/sales`, `src/main/drawer`, `src/main/sync-outbox`). 008 only reads
 cached terminal config. Confirmed.
 
-## ⚠️ T522 — Sentry scrubber decision tree — **CASE (b): HARD NON-COVERAGE → BLOCK + ESCALATE**
+## ✅ T522 — Sentry/pino scrubber decision tree — **RESOLVED (was case (b) BLOCK)**
+
+> **Resolved 2026-05-30** by observability slice `obs/redaction-card-voucher-surface`
+> (PR #299): `FORBIDDEN_PAYLOAD_KEYS` was extended to the full AD-9 surface and
+> both Sentry scrubbers + pino now derive from that single source of truth (via
+> `isForbiddenSentryKey` for Sentry; `logger.ts` already derived `REDACTION_PATHS`
+> from the list). The seven previously-uncovered fields (`track1`, `track2`,
+> `cryptogram`, `issuer_name`, `receipt_text`, `voucher_code`, `voucher_balance`)
+> are now scrubbed by exact-key match. Verified by the auto-extended
+> `*-audit-redaction.test.ts` suites (main + renderer + pino) plus the new
+> `forbidden-keys-sentry-matcher.test.ts`. The case-(b) block is cleared.
+>
+> Note (unchanged, out of scope): today's curated substring supplement still
+> strips the permitted `voucher_authority_redemption_id` + `intent_token_*`
+> reason codes from Sentry (pre-existing `auth`/`token` breadth). Narrowing that
+> would *reduce* redaction; tracked separately if desired.
+
+---
+
+**Original finding (historical record):**
 
 T522's tree: ANY AD-9 redaction-surface field NOT covered by the scrubber →
 case (b), block §A5 pending a focused observability slice. These are not "might
@@ -120,7 +139,7 @@ does not assume it.
 - **T512** `/impeccable craft 008-printer-failure-banner-manual-override` polish pass + §A1 red-bar record. (Functional core + 100% test coverage already done; only the craft gate is open.)
 - **T520a** performance bring-up on real printer+drawer hardware (≥20 runs, p95 budgets). CI has no hardware.
 - **T523** hardware-matrix tested printer/drawer pair.
-- **T522** the case-(b) decision above (extend scrubbers via an observability slice, or record an evidence-backed (a) override).
+- **T522** ✅ RESOLVED via observability slice `obs/redaction-card-voucher-surface` (PR #299) — no longer an owner gate.
 - **T526** security-review handoff (8-item §A4 checklist) — needs a reviewer.
 - **T524 / T525** runbook + rollback docs — authoring deferred (T524 partly depends on the T522 resolution).
 - **T529** the actual sign-off record (reviewer + date) — by definition human.
