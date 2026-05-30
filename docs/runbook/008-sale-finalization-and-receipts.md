@@ -99,7 +99,7 @@ You can tell them apart **two** ways — on the physical slip, and in the data.
 `variant === 'reprint_duplicate'`, which prints a **duplicate-copy marker band at
 the very top** that the original (`first_print`) never has:
 
-```
+```text
 نسخة طبق الأصل
 DUPLICATE COPY
 Duplicate # N
