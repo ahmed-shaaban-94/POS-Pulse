@@ -1502,3 +1502,54 @@ The agent does not assume the bench smoke clears the bar.
   DESCOPED/OBSERVED respectively (unchanged by this answer).
 - **T529 — STILL OPEN.** Sign-off now waits only on **T512** (craft) and **T526**
   (security review). T520a/T523 no longer block it.
+
+## T529 — §A5 production-readiness sign-off record (2026-05-30)
+
+> **This is a recommendation for ratification, NOT a unilateral sign-off.** The
+> agent does not have the authority to *declare* 008 production-ready — §P15 +
+> §A5 make that the owner's call. What this record does: assert that **every §A5
+> sub-item is now closed or owner-accepted**, enumerate the **caveats each one
+> carries**, and recommend ratification. **The owner's (Ahmed's) merge of the PR
+> carrying this record IS the §A5 sign-off** — an informed ratification given the
+> caveats below. If any caveat is unacceptable, the merge is withheld and the
+> corresponding gate re-opens. Nothing here is past-tense "signed"; it is "ready
+> to be signed by merge."
+
+**Sub-item ledger (all ticked in tasks.md as of this record):**
+
+| Gate | State | Caveat carried into sign-off (read before ratifying) |
+|:--|:--|:--|
+| T500–T504, T510–T512 | ✅ done | Slice 6 manual-override tests + impl + the T512 polish. T512's §A1 red-bar is an adopt-existing-pattern confirmation (no new visual direction). |
+| T520 | ✅ done | Coverage floors met (a5-findings §T520). Clean. |
+| T520a | ✅ owner-accepted | **No quantitative p95 captured.** Owner accepted the BIXOLON OS-print bench as MVP-sufficient in lieu of the ≥20-run measurement; drawer perf descoped. Not a measured NFR pass. |
+| T521 | ✅ closed | Runtime redaction assertion done (#309). **Support-bundle audit N/A by absence** (no such export tool exists yet); owner-accepted N/A. |
+| T522 | ✅ resolved | Scrubber coverage unified (#299). Clean. |
+| T523 | ✅ owner-accepted | **Not CI-tested.** Printer row promoted to *tested* on the owner-run **manual** bench smoke (no automated hardware test — CI has no hardware). Drawer/DK1 + ESC/POS **descoped** to a future peripheral spec. Scanner = wedge-observed only. |
+| T524 / T525 | ✅ done | Runbook + rollback authored (#308). Clean. |
+| T526 | ✅ as-built-verified | **Agent-performed, NOT independent.** 7/8 §A4 items PASS + 1 minor non-blocking drift (surface count 3→4 `sales.*`). The independent attestation underneath is **Ahmed's §A4 human review, 2026-05-26**. |
+| T527 | ✅ done | safeStorage read-only in 008 confirmed. Clean. |
+| T528 | ✅ verified (1 pending re-confirm) | typecheck/lint/test/codegen + `package:dir` green on CI run **26683045246** (sha `70480ab4`). **Caveat for THIS sign-off:** that run is a pre-T512 tree; the sign-off attests to **current main `282c436`** (the #311 merge), whose CI run **`26684664263`** must be confirmed green incl. `package:dir` before ratification. The T529 PR is docs-only (CI skips `package:dir` on it), so the confirmation MUST come from `282c436`'s run, not this PR's. |
+
+**Honest summary for the ratifier.** 008 Slice 6 + the §A5 audit are functionally
+and structurally complete. The residual risk the owner is asked to accept is
+concentrated in three places, all already owner-touched: (1) **performance is
+owner-judged, not measured** (T520a — no p95 numbers); (2) **hardware is
+manually smoke-tested, not CI/integration-tested** (T523 — and the drawer is
+descoped entirely); (3) **the security re-check was agent-performed against an
+already-human-approved §A4 contract** (T526 — independence rests on the
+2026-05-26 review, not this pass). None is a known defect; each is a
+**reduced-rigor acceptance** the owner has already signalled. The constitution's
+"no down-migration of financial tables; forward-fix" posture (T525 / §P15) bounds
+the downside of shipping.
+
+**Ratification.** Reviewer: **Ahmed** (the standing §A1/§A3/§A4 reviewer + owner).
+Date of record: **2026-05-30**. **Sign-off mechanism: merge of this PR** — AND
+one objective precondition that must be true at merge time: **current main
+(`282c436`) CI run `26684664263` is green, including the `package:dir` step.**
+(That run was still `queued` when this record was authored; the T529 PR is
+docs-only and CI skips `package:dir` on it, so the green must come from
+`282c436`'s own run — re-run it if it hits the known self-hosted flake.) On merge
+WITH that CI confirmed green, 008 §A5 is signed off for the MVP rollout subject to
+the caveats above, and the CLAUDE.md banner flips to "§A5 signed off (caveated)."
+Until both (merge + green `282c436` CI) hold, §A5 remains OPEN and this is a
+recommendation only.
