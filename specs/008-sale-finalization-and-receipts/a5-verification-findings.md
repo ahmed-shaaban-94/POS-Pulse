@@ -97,7 +97,7 @@ either scrubbing layer, which is the literal (b) trigger.
    `receipt_text`, `voucher_code`, `voucher_balance` are not matched by any
    substring.
 
-**Why this is (b) not (a):** six AD-9 fields (`track1`, `track2`, `cryptogram`,
+**Why this is (b) not (a):** seven AD-9 fields (`track1`, `track2`, `cryptogram`,
 `issuer_name`, `receipt_text`, `voucher_code`, `voucher_balance`) are scrubbed
 by NEITHER layer — not the pino exact-key list, not the Sentry substring regex.
 That is hard non-coverage, the literal (b) trigger. Defense-in-depth is strong
