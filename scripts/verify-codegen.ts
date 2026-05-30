@@ -91,7 +91,11 @@ export async function verifyCodegen(options: VerifyCodegenOptions): Promise<Veri
     // ENOTEMPTY/EBUSY. `force` only ignores ENOENT — it does NOT retry the
     // lock race — so add maxRetries/retryDelay, which Node backs off on
     // exactly those codes. Keeps the codegen drift check from flaking CI.
-    rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    try {
+      rmSync(tmpDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (err: unknown) {
+      console.warn('[verify-codegen] temp cleanup failed:', err);
+    }
   }
 }
 
