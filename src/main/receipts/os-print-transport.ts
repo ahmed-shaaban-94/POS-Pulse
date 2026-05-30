@@ -144,8 +144,13 @@ export function resolvePrinterDeviceName(
  * a heavier base weight ({@link RECEIPT_BASE_FONT_WEIGHT}).
  */
 
-/** Printable body width — narrower than the 80 mm roll for a horizontal safety margin. */
-export const RECEIPT_BODY_WIDTH = '73mm';
+/**
+ * Printable body width — narrower than the 80 mm roll for a horizontal safety
+ * margin. Tuned on the BIXOLON SRP-330 II: 73 mm still clipped at the edge
+ * (T301 second smoke) → 70 mm. If 70 mm still clips, try 68 mm; if it reads too
+ * narrow, 71 mm. This is printable-area tuning, not a content/template change.
+ */
+export const RECEIPT_BODY_WIDTH = '70mm';
 /** Base font weight — heavier than normal so thermal output reads darker. */
 export const RECEIPT_BASE_FONT_WEIGHT = 600;
 
