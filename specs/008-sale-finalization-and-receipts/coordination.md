@@ -532,6 +532,8 @@ Q1's answer ships receipts that legally **do not comply** with Egyptian Tax Auth
 
 This flag is recorded here so it cannot be forgotten when Slice 6 (production-readiness gate) lands. Slice 2's receipt template will already display `tenant_tax_registration_id` from the 002-handshake extension (T094a) — only the tax-line value remains to be computed in a future feature.
 
+> **Disposition 2026-05-30 (owner, via §A5 sign-off):** this flag is **NOT discharged** — its three boxes stay `[ ]` because the work is genuinely not done. It is **carried as an explicit scope caveat** on the §A5 sign-off (see §"T529 — §A5 production-readiness sign-off record"): §A5 is signed off for an **internal/dev MVP rollout only**, and **customer-facing fiscal production use remains BLOCKED** until these requirements are met in 008-v2. Recorded as known-deferred, not silently dropped.
+
 ### Chosen resolution path
 
 **Path B (revised — three new tasks).** Both answers above collapse the original three-path matrix to a single concrete plan. Three new task entries between T093 and T100 in tasks.md:
@@ -646,7 +648,7 @@ This is also a useful reference for **Slices 2-6**: any time a future audit iden
 - [ ] **T094c PR** — `feat(008): wire AD-2 worker + sales.* bridge into main (T094c, closes S1c.3)`. After T094b merges (transitively blocked by backend).
 - [ ] **T111/T112 manual smokes** — BLOCKED-BY T094c. Will be unblocked once T094c lands.
 - [ ] **T113 Slice 1 sign-off** — BLOCKED-BY T111/T112.
-- [ ] **§A5 production-readiness gate** — flagged: re-open Q1 (Egyptian VAT compliance) before sign-off.
+- [ ] **§A5 production-readiness gate** — flagged: re-open Q1 (Egyptian VAT compliance) before sign-off. **DISPOSITION 2026-05-30 (owner):** NOT discharged; carried as an explicit scope caveat on the §A5 sign-off (MVP = internal/dev/non-fiscal; customer-facing fiscal use BLOCKED pending 008-v2). Box stays `[ ]` — the VAT work remains for 008-v2. See §A5 sign-off record + §"Egyptian VAT compliance flag".
 
 ---
 
@@ -1529,6 +1531,7 @@ The agent does not assume the bench smoke clears the bar.
 | T526 | ✅ as-built-verified | **Agent-performed, NOT independent.** 7/8 §A4 items PASS + 1 minor non-blocking drift (surface count 3→4 `sales.*`). The independent attestation underneath is **Ahmed's §A4 human review, 2026-05-26**. |
 | T527 | ✅ done | safeStorage read-only in 008 confirmed. Clean. |
 | T528 | ✅ verified (1 pending re-confirm) | typecheck/lint/test/codegen + `package:dir` green on CI run **26683045246** (sha `70480ab4`). **Caveat for THIS sign-off:** that run is a pre-T512 tree; the sign-off attests to **current main `282c436`** (the #311 merge), whose CI run **`26684664263`** must be confirmed green incl. `package:dir` before ratification. The T529 PR is docs-only (CI skips `package:dir` on it), so the confirmation MUST come from `282c436`'s run, not this PR's. |
+| **Egyptian VAT (Q1 flag)** | ⚠️ **deferred — owner-accepted scope limit (2026-05-30)** | `total_tax_minor` hardcoded `0` (Q1 = zero-for-v1); receipts carry **no VAT line / no tax-registration fiscal compliance**. The "MUST resolve BEFORE §A5 sign-off" flag (§"Egyptian VAT compliance flag") is **NOT discharged** — its 3 requirements stay open. Carried as an explicit scope caveat: **this sign-off covers an internal/dev MVP rollout only; customer-facing fiscal production use remains BLOCKED** pending 008-v2. |
 
 **Honest summary for the ratifier.** 008 Slice 6 + the §A5 audit are functionally
 and structurally complete. The residual risk the owner is asked to accept is
@@ -1541,6 +1544,8 @@ already-human-approved §A4 contract** (T526 — independence rests on the
 **reduced-rigor acceptance** the owner has already signalled. The constitution's
 "no down-migration of financial tables; forward-fix" posture (T525 / §P15) bounds
 the downside of shipping.
+
+**(4) Egyptian VAT — known limitation, not reduced rigor (owner-accepted scope, 2026-05-30).** Unlike (1)–(3), this is a deliberately deferred feature: Q1 fixed `total_tax_minor = 0` for v1, so finalized receipts are **not Egyptian-Tax-Authority fiscal-compliant** (no tax line, no tax-registration posture). The "MUST resolve BEFORE §A5 sign-off" flag was raised 2026-05-28 and is **not discharged**. The owner accepts this as a **scope limit**: §A5 is signed off for an **internal/dev MVP rollout only**; **customer-facing fiscal production use remains BLOCKED** until the VAT flag's 3 requirements are met in 008-v2.
 
 **Ratification.** Reviewer: **Ahmed** (the standing §A1/§A3/§A4 reviewer + owner).
 Date of record: **2026-05-30**. **Sign-off mechanism: merge of this PR** — AND
