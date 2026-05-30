@@ -137,8 +137,27 @@ does not assume it.
 
 ## Owner must clear (hardware / craft / human-judgment — agent cannot)
 - **T512** `/impeccable craft 008-printer-failure-banner-manual-override` polish pass + §A1 red-bar record. (Functional core + 100% test coverage already done; only the craft gate is open.)
-- **T520a** performance bring-up on real printer+drawer hardware (≥20 runs, p95 budgets). CI has no hardware.
-- **T523** hardware-matrix tested printer/drawer pair.
+- **T520a** performance bring-up on real printer+drawer hardware (≥20 runs, p95 budgets). CI has no hardware. **Still OPEN** — the 2026-05-30 bench evidence (below) is device-level smoke, not a perf run; no p95 timings were captured, and the run did not go through the official POS print pipeline (pre-T200 stub transports).
+- **T523** hardware-matrix-tested printer/drawer pair. **Still OPEN** — see the 2026-05-30 bench-evidence note below; the observed devices are logged as OBSERVED-not-tested, the integration tests required by hardware-matrix rule 1 are not yet written, and the bench pair diverges from the committed §A3 pair (owner decision pending).
+
+> **2026-05-30 bench-evidence update (observed, NOT sign-off).** Owner ran an additional
+> hardware smoke. New evidence recorded in `docs/hardware-matrix.md` + `coordination.md`
+> §"§A5 hardware smoke evidence (2026-05-30)":
+> - **HONEYWELL HF680-RS-01 REV B** scanned successfully **inside the POS screen** (in
+>   addition to the earlier OS-level scan). The rule-1 wedge-into-cart **integration
+>   test** is still PENDING; transport mode (wedge-HID vs the `-RS` RS-232 variant) still
+>   to be confirmed.
+> - **BIXOLON SRP-330 II** printed a **browser/HTML receipt** generated from the
+>   POS-Pulse receipt **template engine**. **This was NOT the official POS print
+>   pipeline** — `main` uses pre-T200 stub transports. POS receipt-pipeline print smoke
+>   stays PENDING until T200 wires a real OS-print or ESC/POS adapter; ESC/POS direct
+>   path stays unverified. Best observed BIXOLON driver paper setting: **80 × 3276 mm
+>   continuous roll** (short fixed forms such as 80 × 287 mm may feed excessive blank
+>   paper).
+> - **Cash drawer** model still unconfirmed; drawer-kick (DK1 pulse) test still PENDING.
+>
+> No task is marked complete by this evidence: **T523**, **T520a**, and **T529** all
+> remain OPEN.
 - **T522** ✅ RESOLVED via observability slice `obs/redaction-card-voucher-surface` (PR #299) — no longer an owner gate.
 - **T526** security-review handoff (8-item §A4 checklist) — needs a reviewer.
 - **T524 / T525** runbook + rollback docs — authoring deferred (T524 partly depends on the T522 resolution).
