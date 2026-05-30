@@ -71,7 +71,7 @@ overridden by the constitution — same posture as 005 tasks.md.)
 
 | Gate | Blocks | Status |
 |:--|:--|:--|
-| **§A0** — S0 visual-direction review + 005 seam-wiring coordination | every slice | ⏳ open |
+| **§A0** — S0 visual-direction review + 005 seam-wiring coordination | every slice | ⏳ open — S0 contact-sheet + review-record landed (T009–T013); visual checklist 1–13 all PASS, agent **recommends** sign-off. Pending: owner (Ahmed) ratification + 005 seam-wiring coordination (the `version`-field drift, binds at S4/§A1). |
 | **§A1** — R7 seam-wiring approach ratified with 005 owner | S1, S2, S4 | ⏳ open |
 | **§A2** — `products`/`product_barcodes`/fold-column migration review | S2, S3 | ⏳ open |
 | **§A5** — production readiness (runbook, rollback, perf bring-up @ 50k) | S5 / rollout PR | ⏳ open |
@@ -97,11 +97,11 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** A reviewed contact sheet for every search/lookup surface, recorded before any code slice.
 **Independent test:** the review document exists and is signed off under `visual-direction/`.
 
-- [ ] T009 [US1] Produce the contact sheet: search input + scan-capture field (focused, wedge-ready), 003/007 tokens, RTL Arabic-first, 44×44 floor — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
-- [ ] T010 [P] [US2] Add result-list + result-row mock: Arabic-first name, price, unit/pack, barcode/SKU where useful; keyboard selection highlight (FR-17a) — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
-- [ ] T011 [P] [US1] Add confirm-panel mock (single-match, confirm-first: name/price/unit-pack; Add/Cancel; controlled/Rx flag badge per C1) — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
-- [ ] T012 [P] [US3] Add not-found, **catalogue-unavailable (visually distinct)**, ambiguous-barcode, and empty/too-short idle mocks — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
-- [ ] T013 [US1] Record the S0 review (against 003/007 tokens, RTL, role-indicator slot, keyboard path, axe-clean) — `specs/009-product-search-and-barcode-lookup/visual-direction/review-record.md` **(§A0)**
+- [X] T009 [US1] Produce the contact sheet: search input + scan-capture field (focused, wedge-ready), 003/007 tokens, RTL Arabic-first, 44×44 floor — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
+- [X] T010 [P] [US2] Add result-list + result-row mock: Arabic-first name, price, unit/pack, barcode/SKU where useful; keyboard selection highlight (FR-17a) — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
+- [X] T011 [P] [US1] Add confirm-panel mock (single-match, confirm-first: name/price/unit-pack; Add/Cancel; controlled/Rx flag badge per C1) — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
+- [X] T012 [P] [US3] Add not-found, **catalogue-unavailable (visually distinct)**, ambiguous-barcode, and empty/too-short idle mocks — `specs/009-product-search-and-barcode-lookup/visual-direction/contact-sheet.md`
+- [X] T013 [US1] Record the S0 review (against 003/007 tokens, RTL, role-indicator slot, keyboard path, axe-clean) — `specs/009-product-search-and-barcode-lookup/visual-direction/review-record.md` **(§A0)** — *review recorded; checklist 1–13 all PASS; **recommends** §A0 sign-off. Owner (Ahmed) ratification + 005 seam-wiring coordination still pending; gate stays open until ratified.*
 
 ## Phase 4 — Slice S1: `catalogue.*` bridge skeleton + session gating + store wiring · gates §A0, §A1
 
