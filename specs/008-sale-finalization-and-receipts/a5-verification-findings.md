@@ -148,8 +148,8 @@ does not assume it.
 
 ## Owner must clear (hardware / craft / human-judgment — agent cannot)
 - **T512** `/impeccable craft 008-printer-failure-banner-manual-override` polish pass + §A1 red-bar record. (Functional core + 100% test coverage already done; only the craft gate is open.)
-- **T520a** performance bring-up on real printer+drawer hardware (≥20 runs, p95 budgets). CI has no hardware. **Still OPEN** — the 2026-05-30 bench evidence (below) is device-level smoke, not a perf run; no p95 timings were captured, and the run did not go through the official POS print pipeline (pre-T200 stub transports).
-- **T523** hardware-matrix-tested printer/drawer pair. **Still OPEN** — see the 2026-05-30 bench-evidence note below; the observed devices are logged as OBSERVED-not-tested, the integration tests required by hardware-matrix rule 1 are not yet written, and the bench pair diverges from the committed §A3 pair (owner decision pending).
+- **T520a** performance bring-up. **RE-SCOPED 2026-05-30 by owner decision → printer-only, OS-print** (drawer perf descoped; see `coordination.md §"Owner decision — 008 §A5 hardware target (2026-05-30)"`). **Still OPEN** — remaining work is a **printer-only OS-print p95 run, ≥20 iterations through the official pipeline**. The 2026-05-30 bench was device-level smoke; no p95 timings captured. Re-scoping does not produce the numbers. **Owner bar-question pending** (does the bench smoke satisfy the perf bar, or is a ≥20-run p95 capture still required?).
+- **T523** hardware-matrix-tested pair. **RE-SCOPED 2026-05-30 by owner decision.** Option A (**BIXOLON SRP-330 II**) accepted as the 008 §A5 printer target; the §A3-committed Epson/APG pair is superseded for 008 MVP (the §A3 sign-off record itself is unchanged). **Drawer/DK1 row DESCOPED** → deferred to a future hardware/peripheral spec (drawer *code* stays; only hardware validation defers). **ESC/POS DESCOPED**; OS-print is the accepted path. **Still OPEN** — the **printer row** is logged OBSERVED-not-tested; promotion to a *tested* row needs the rule-1 evidence, which (no CI hardware) is an **owner-accepts** call. **Owner bar-question pending** (same as T520a).
 
 > **2026-05-30 bench-evidence update (observed, NOT sign-off).** Owner ran an additional
 > hardware smoke. New evidence recorded in `docs/hardware-matrix.md` + `coordination.md`
@@ -173,5 +173,5 @@ does not assume it.
 > remain OPEN.
 - **T522** ✅ RESOLVED via observability slice `obs/redaction-card-voucher-surface` (PR #299) — no longer an owner gate.
 - **T526** security-review handoff (8-item §A4 checklist) — needs a reviewer.
-- **T524 / T525** runbook + rollback docs — authoring deferred (T524 partly depends on the T522 resolution).
+- **T524 / T525** runbook + rollback docs — ✅ **DONE** (authored in PR #308: `docs/runbook/008-sale-finalization-and-receipts.md`; both ticked in tasks.md).
 - **T529** the actual sign-off record (reviewer + date) — by definition human.

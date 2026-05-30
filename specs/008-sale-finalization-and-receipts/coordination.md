@@ -1351,3 +1351,69 @@ config — and a runtime assertion like this one MUST extend to cover it.
 - **T521 stays OPEN as a checklist item** until the owner accepts the
   support-bundle half as N/A-by-absence. The agent does not self-tick it; this
   is the reviewer's call. (T529 §A5 sign-off remains human-gated regardless.)
+
+## Owner decision — 008 §A5 hardware target (2026-05-30, Ahmed)
+
+> **Provenance.** Owner (Ahmed) decision delivered 2026-05-30, resolving the
+> §A3 hardware-target divergence flagged in PR #301 and in §"Divergence from the
+> §A3-committed pair" above. This record is **append-only**: it does NOT rewrite
+> the 2026-05-26 §A3 hardware-matrix sign-off (Epson TM-T20III + APG VBS320, see
+> §"§A3 hardware-matrix coordination thread (T006)"). That committed pair is
+> **superseded for the 008 MVP** by the decision below; it remains on record.
+
+**The decision, verbatim (five points):**
+
+1. 008 MVP **will not block on cash-drawer hardware**.
+2. Cash-drawer / DK1 drawer-kick **hardware validation is deferred** to a future
+   hardware/peripheral spec.
+3. 008 §A5 hardware target is **printer-only** for receipt finalization, using
+   **the current bench printer** (BIXOLON SRP-330 II — "Option A").
+4. **Scanner** model is recorded as **observed/tested for wedge input only**, not
+   as native-SDK integration.
+5. **ESC/POS direct path is deferred**; the **OS-print path is the accepted 008
+   print path**.
+
+### What this resolves (scope / judgment sub-items — now settled)
+
+- **Option A vs B — RESOLVED → Option A (BIXOLON SRP-330 II).** The §A3-committed
+  Epson/APG pair is superseded for 008 MVP. (§A3 record itself is unchanged.)
+- **Drawer / DK1 — DESCOPED from 008.** The drawer-kick *code* (`drawer-kick.ts`,
+  `DrawerFailureBanner`, the `drawer_events` table) stays — it is built, 100%
+  covered, and merged. Only the **hardware validation** of a physical drawer
+  defers to the future peripheral spec. T523's drawer row and any drawer-perf
+  portion of T520a are removed from 008's §A5 scope.
+- **ESC/POS — DESCOPED; OS-print accepted.** Matches the as-built routing
+  (`probeEscposSupport: false` at the composition root; the real path is
+  `os-print-transport.ts` via `webContents.print`). "ESC/POS direct path
+  unverified" is **no longer a §A5 gap** for 008.
+- **Scanner — bounded to wedge-HID observed/tested only.** No native-SDK
+  integration is in 008 scope.
+
+### What this does NOT resolve (evidence sub-items — STILL OPEN)
+
+The decision narrows *what is in scope* to printer-only/OS-print. It does **not**
+state whether the existing 2026-05-30 BIXOLON bench smoke (see §"T301 OS-print
+bench result") **satisfies the evidence bar**. Those are different questions, and
+the owner has not (yet) spoken to the bar. Therefore:
+
+- **T520a — STILL OPEN (re-scoped).** Drawer perf is removed; what remains is a
+  **printer-only OS-print p95 run, ≥20 iterations through the official pipeline**.
+  The T301 run was device-level smoke — no p95 timings captured. Re-scoping does
+  not produce the numbers.
+- **T523 — STILL OPEN (re-scoped).** The drawer row is descoped. The **printer
+  row** is still logged **OBSERVED, not tested** — promotion to a *tested* row
+  needs the hardware-matrix rule-1 evidence. CI has no real hardware, so whether
+  the bench smoke clears this bar is inherently an **owner-accepts** call.
+- **T529 — STILL OPEN (human sign-off).** Waits on the bar answer above plus
+  T512 (craft) and T526 (security review).
+
+### Open question for the owner (the bar question)
+
+> Does the 2026-05-30 BIXOLON OS-print **bench smoke** (Arabic+English legible,
+> 70 mm body, clean feed/cut, no card/voucher data, official OS-print pipeline)
+> **satisfy** the **T520a perf bar** and the **T523 printer "tested" row** — or do
+> you still want a **≥20-run p95 capture** through the official pipeline before
+> those two gates close?
+
+Until that is answered, T520a and T523 remain OPEN (re-scoped to printer-only).
+The agent does not assume the bench smoke clears the bar.
