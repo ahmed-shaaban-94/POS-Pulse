@@ -1,5 +1,7 @@
 import type { ElectronMainOptions, ErrorEvent, EventHint } from '@sentry/electron/main';
 
+import { isForbiddenSentryKey } from '../../shared/audit/forbidden-keys.js';
+
 /**
  * Phase 9 / US7 — main-process Sentry init.
  *
@@ -91,38 +93,16 @@ export function initSentryMain(opts: InitSentryMainOptions): void {
 }
 
 /**
- * Denylist of keys that MUST be removed from `event.extra` and from
- * every per-context bag in `event.contexts`. Matches case-insensitively
- * via substring, so `ApiToken`, `userPassword`, `cardReaderId`, etc. are
- * all stripped.
+ * Key denylist for Sentry scrubbing lives in the shared single source of
+ * truth: `isForbiddenSentryKey` (exact-key over `FORBIDDEN_PAYLOAD_KEYS` ∪ the
+ * frozen curated substring supplement). See `shared/audit/forbidden-keys.ts`.
  *
- * NOTE: `phone` is intentionally substring-matched — it catches
- * `phoneNumber`, `customerPhone`, etc. The trade-off is false positives
- * on words that contain "phone" coincidentally; in practice nothing in
- * POS-Pulse's domain vocabulary collides.
- *
- * 004-operator-session T050 additions (PR-1 / FR-030 / FR-027 alignment):
- *   - `pin`     — PIN values, PIN hashes, PIN salts (cashier credential
- *                 surface; ships in S4). Trade-off mirrors `phone`: the
- *                 substring may catch false-positive words like `pinpoint`
- *                 or `spinning`, but POS-Pulse's domain vocabulary does
- *                 not collide. Reviewers MUST flag any future field name
- *                 containing `pin` in a non-credential sense.
- *   - `jwt`     — Clerk JWT and any other JWT-bearing field (catches
- *                 `clerk_jwt`, `clerkJwt`, `jwtPayload`).
- *   - `clerk`   — defence-in-depth for `clerk_session_token` and any
- *                 future Clerk-namespaced credential field.
- *   - `auth`    — catches `authorization`, `authToken`, `authHeader`.
- *   - `pair`    — catches `pairing_code` and any future pairing-namespaced
- *                 credential field.
- *
- * The audit-event payload's `FORBIDDEN_PAYLOAD_KEYS` (raw cardholder
- * data, full PII, credential fragments, PIN values, Clerk JWTs, session
- * tokens, device-token attestations, pairing codes) are all covered by
- * this regex now — their substrings are present.
+ * Keys are removed from `event.extra` and from every per-context bag in
+ * `event.contexts`, recursively at any depth (T050). The exact-key half covers
+ * every named AD-9 forbidden field (T522); the substring supplement preserves
+ * the prior breadth (`ApiToken`, `userPassword`, `cardReaderId`, `customerPhone`,
+ * etc.) so this layer is purely additive vs the prior hand-maintained regex.
  */
-const DENYLIST_PATTERN =
-  /secret|token|password|credential|card|pii|cvv|pan|email|phone|pin|jwt|clerk|auth|pair/i;
 
 /**
  * Sentry `beforeSend` hook. Returns `null` to drop the event entirely
@@ -215,7 +195,7 @@ function stripDenylistedKeys(value: unknown): unknown {
   if (value !== null && typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      if (DENYLIST_PATTERN.test(key)) continue;
+      if (isForbiddenSentryKey(key)) continue;
       out[key] = stripDenylistedKeys(child);
     }
     return out;
