@@ -33,7 +33,7 @@ export type CatalogueSearchState =
   | { kind: 'idle' }
   | { kind: 'searching'; query: string }
   | { kind: 'results'; items: readonly ProductSnapshotDisplay[]; truncated: boolean }
-  | { kind: 'not_found' }
+  | { kind: 'not_found'; query: string }
   | { kind: 'ambiguous' }
   | { kind: 'catalogue_unavailable' }
   | { kind: 'confirm_pending'; product: ProductSnapshotDisplay };
@@ -80,7 +80,9 @@ export const useCatalogueSearchStore = create<CatalogueSearchStore>((set) => ({
   resolveNotFound: () => {
     set((s) => {
       if (s.state.kind !== 'searching') return s;
-      return { state: { kind: 'not_found' } };
+      // Carry the searched value so Surface 5 can echo it back (FR-6 recovery —
+      // "shows the scanned/typed value").
+      return { state: { kind: 'not_found', query: s.state.query } };
     });
   },
   resolveAmbiguous: () => {
