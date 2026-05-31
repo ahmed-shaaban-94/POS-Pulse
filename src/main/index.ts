@@ -13,6 +13,7 @@ import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 // 009-product-search-and-barcode-lookup S4 (T043) — production R7 resolver.
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
+import { applyDevSeedCatalogueIfRequested } from './catalogue/dev-seed-catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import { bindPaymentAttemptsRepository } from './payments/repositories/payment-attempts.repository.js';
 import { bindPaymentTenderLinesRepository } from './payments/repositories/payment-tender-lines.repository.js';
@@ -325,6 +326,18 @@ app
     const files = readMigrationsFromDisk(resolveMigrationsDir());
     runMigrations({ db: bindMigrationsDb(dbHandle), files });
     mainLogger.info({ count: files.length }, 'db:migrations-applied');
+
+    // 009 T049b — dev-only catalogue fixture seed. Fail-closed: no-op in any
+    // packaged build (the env var is never consulted there) and unless
+    // POS_PULSE_DEV_SEED_CATALOGUE is truthy. Lets the live T049a surface +
+    // S5 review tasks exercise real rows. Meant to run alongside the
+    // POS_PULSE_DEV_SKIP_* flags (same dev-tenant).
+    applyDevSeedCatalogueIfRequested({
+      isPackaged: app.isPackaged,
+      env: process.env,
+      db: dbHandle,
+      logger: mainLogger,
+    });
 
     // T048 wire-in: construct the SecretStore on the same long-lived
     // handle to validate factory wiring (production refusal will throw
