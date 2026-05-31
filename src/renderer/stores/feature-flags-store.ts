@@ -18,12 +18,19 @@ export interface FeatureFlagsState {
   payments: boolean;
   /** 008-sale-finalization-and-receipts T002: enables 008 finalize listener + receipts UI. Fail-closed default: false. */
   saleFinalization: boolean;
+  /** 009-product-search-and-barcode-lookup T049a: enables the catalogue search/scan/add surface. Fail-closed default: false. */
+  productSearch: boolean;
   /** Whether the flag map has been hydrated from main (vs. boot defaults). */
   hydrated: boolean;
 }
 
 export interface FeatureFlagsStore extends FeatureFlagsState {
-  hydrate(flags: { cart?: boolean; payments?: boolean; saleFinalization?: boolean }): void;
+  hydrate(flags: {
+    cart?: boolean;
+    payments?: boolean;
+    saleFinalization?: boolean;
+    productSearch?: boolean;
+  }): void;
   reset(): void;
 }
 
@@ -31,6 +38,7 @@ const INITIAL: FeatureFlagsState = {
   cart: false,
   payments: false,
   saleFinalization: false,
+  productSearch: false,
   hydrated: false,
 };
 
@@ -41,6 +49,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsStore>((set) => ({
       cart: flags.cart === true,
       payments: flags.payments === true,
       saleFinalization: flags.saleFinalization === true,
+      productSearch: flags.productSearch === true,
       hydrated: true,
     });
   },
