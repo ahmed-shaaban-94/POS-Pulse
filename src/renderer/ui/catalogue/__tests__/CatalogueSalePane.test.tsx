@@ -335,6 +335,166 @@ describe('CatalogueSalePane — remaining response mappings (T049a coverage)', (
   });
 });
 
+describe('CatalogueSalePane — error-state surfaces are mounted live (T050 F1)', () => {
+  it('renders the not-found surface when a search misses (Surface 5 / FR-6)', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'zzz' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-not-found')).toBeInTheDocument();
+    });
+  });
+
+  it('the not-found surface echoes the searched value (Surface 5 — "shows the scanned/typed value")', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: '6221000000000' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-not-found')).toHaveTextContent('6221000000000');
+    });
+  });
+
+  it('renders the ambiguous-barcode surface when a scan is ambiguous (Surface 7 / FR-7)', async () => {
+    const lookupBarcode = vi.fn().mockResolvedValue({ kind: 'ambiguous' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '111' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-ambiguous')).toBeInTheDocument();
+    });
+  });
+
+  it('renders the catalogue-unavailable surface when the read model is unavailable (Surface 6 / FR-24)', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'catalogue_unavailable' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'xyz' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-unavailable')).toBeInTheDocument();
+    });
+  });
+
+  it('the not-found Edit control clears the FSM back to idle (FR-6 recovery)', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'zzz' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-not-found')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /تعديل/ }));
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+
+  it('returns focus to the search input after not-found Edit (S0 keyboard recovery)', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'zzz' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-not-found')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /تعديل/ }));
+    await waitFor(() => {
+      expect(screen.getByRole('searchbox')).toHaveFocus();
+    });
+  });
+
+  it('the ambiguous Edit control clears the FSM back to idle (FR-7 recovery)', async () => {
+    const lookupBarcode = vi.fn().mockResolvedValue({ kind: 'ambiguous' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '111' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-ambiguous')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /تعديل/ }));
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+
+  it('exposes a busy indicator while a search is in flight (Surface 2 / aria-busy)', async () => {
+    // A search that never resolves keeps the FSM in `searching` so the busy
+    // surface is observable (F2).
+    const search = vi.fn().mockReturnValue(new Promise(() => {}));
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'بنادول' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(screen.getByTestId('catalogue-searching')).toHaveAttribute('aria-busy', 'true');
+    });
+  });
+});
+
 describe('CatalogueSalePane — bridge rejection degrades to idle (T049a resilience)', () => {
   it('a rejected catalogue.search resets the FSM to idle (no stuck searching)', async () => {
     const search = vi.fn().mockRejectedValue(new Error('ipc transport error'));

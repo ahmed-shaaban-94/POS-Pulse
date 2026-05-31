@@ -8,10 +8,13 @@ import type {
 import type { AddedLineResult } from '../cart/CartPane.js';
 import { useCatalogueSearchStore } from '../../stores/catalogueSearchStore.js';
 import { useCartStore } from '../../stores/cart-store.js';
-import { ProductSearchInput } from './ProductSearchInput.js';
+import { ProductSearchInput, type ProductSearchInputHandle } from './ProductSearchInput.js';
 import { ScanCaptureField } from './ScanCaptureField.js';
 import { SearchResultList } from './SearchResultList.js';
 import { CatalogueAddController } from './CatalogueAddController.js';
+import { NotFoundState } from './NotFoundState.js';
+import { AmbiguousBarcodeState } from './AmbiguousBarcodeState.js';
+import { CatalogueUnavailableState } from './CatalogueUnavailableState.js';
 
 /**
  * 009 Slice S5 (T049a) — the live catalogue sale surface.
@@ -57,6 +60,15 @@ export function CatalogueSalePane({
   const state = useCatalogueSearchStore((s) => s.state);
   const activeCart = useCartStore((s) => s.activeCart);
   const creatingRef = useRef(false);
+  const searchInputRef = useRef<ProductSearchInputHandle>(null);
+
+  // Clear the FSM to idle and return focus to the search input — the S0
+  // recovery contract for every terminal error surface (FR-6/7 keyboard
+  // recovery: "every terminal state returns focus to the input").
+  const recoverToInput = useCallback((): void => {
+    useCatalogueSearchStore.getState().clear();
+    searchInputRef.current?.focus();
+  }, []);
 
   const getCart = useCallback((): CartBridgeAPI => {
     /* v8 ignore next — readBridges() arm only reachable in Electron; tests inject the bridge */
@@ -166,8 +178,22 @@ export function CatalogueSalePane({
 
   return (
     <div className="catalogue-sale-pane" data-testid="catalogue-sale-pane">
-      <ProductSearchInput onSearch={runTypedSearch} />
+      <ProductSearchInput ref={searchInputRef} onSearch={runTypedSearch} />
       <ScanCaptureField onScan={runScan} />
+      {/* In-flight surface (T050 F2 / Surface 2): the bridge call is pending.
+          `aria-busy` announces the wait; no spin glyph so reduced-motion is
+          honoured by construction. No controls of its own (a new scan/keystroke
+          supersedes via the input). */}
+      {state.kind === 'searching' && (
+        <p
+          className="catalogue-searching"
+          data-testid="catalogue-searching"
+          role="status"
+          aria-busy="true"
+        >
+          جارٍ البحث… (searching…)
+        </p>
+      )}
       {state.kind === 'results' && (
         <SearchResultList
           items={items}
@@ -177,6 +203,14 @@ export function CatalogueSalePane({
           }}
         />
       )}
+      {/* Error-state surfaces (T050 F1): the FSM reaches these via the bridge
+          response mappings above, so the live pane MUST mount them or the screen
+          goes blank. `onEdit` clears the FSM to idle for the next scan (FR-6/7
+          recovery). The danger/warning/muted treatments are owned by the
+          components (SC-10 — three distinct error states). */}
+      {state.kind === 'not_found' && <NotFoundState query={state.query} onEdit={recoverToInput} />}
+      {state.kind === 'ambiguous' && <AmbiguousBarcodeState onEdit={recoverToInput} />}
+      {state.kind === 'catalogue_unavailable' && <CatalogueUnavailableState />}
       {effectiveCartId !== '' && (
         <CatalogueAddController
           cartId={effectiveCartId}

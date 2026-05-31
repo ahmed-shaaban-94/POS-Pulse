@@ -1,6 +1,18 @@
-import { useState, type ChangeEvent, type KeyboardEvent, type JSX } from 'react';
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react';
 
 import { useDebouncedSearch } from '../../stores/useDebouncedSearch.js';
+
+/** Imperative handle: lets a parent return focus to the input (FR-6 recovery). */
+export interface ProductSearchInputHandle {
+  focus(): void;
+}
 
 export interface ProductSearchInputProps {
   /**
@@ -26,51 +38,54 @@ export interface ProductSearchInputProps {
  * synchronously (a wedge fires keys + terminator fast; a ref/controlled read
  * avoids a stale-closure submit).
  */
-export function ProductSearchInput({
-  onSearch,
-  defaultValue = '',
-  disabled = false,
-}: ProductSearchInputProps): JSX.Element {
-  const [value, setValue] = useState(defaultValue);
-  // Hold the hook result as one object (rather than destructuring its methods)
-  // so the `@typescript-eslint/unbound-method` rule doesn't flag the extracted
-  // handlers — they are `this`-free arrows, but the lint is conservative.
-  const search = useDebouncedSearch((q) => onSearch?.(q));
+export const ProductSearchInput = forwardRef<ProductSearchInputHandle, ProductSearchInputProps>(
+  function ProductSearchInput({ onSearch, defaultValue = '', disabled = false }, ref) {
+    const [value, setValue] = useState(defaultValue);
+    const inputRef = useRef<HTMLInputElement>(null);
+    useImperativeHandle(ref, () => ({
+      focus: () => inputRef.current?.focus(),
+    }));
+    // Hold the hook result as one object (rather than destructuring its methods)
+    // so the `@typescript-eslint/unbound-method` rule doesn't flag the extracted
+    // handlers — they are `this`-free arrows, but the lint is conservative.
+    const search = useDebouncedSearch((q) => onSearch?.(q));
 
-  function handleChange(event: ChangeEvent<HTMLInputElement>): void {
-    const next = event.target.value;
-    setValue(next);
-    search.onType(next);
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key === 'Enter') {
-      // Wedge terminator (or manual Enter): submit the current value now,
-      // bypassing the debounce (FR-8). Preventing default keeps a stray Enter
-      // from submitting an enclosing form.
-      event.preventDefault();
-      search.onScanSubmit(value);
+    function handleChange(event: ChangeEvent<HTMLInputElement>): void {
+      const next = event.target.value;
+      setValue(next);
+      search.onType(next);
     }
-  }
 
-  return (
-    <div className="catalogue-search" data-testid="product-search-input">
-      <input
-        type="search"
-        className="catalogue-search__input"
-        dir="rtl"
-        aria-label="ابحث عن منتج بالاسم أو امسح الباركود (search products by name or scan a barcode)"
-        aria-describedby="catalogue-search-hint"
-        placeholder="ابحث بالاسم أو امسح الباركود…"
-        autoComplete="off"
-        value={value}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        disabled={disabled}
-      />
-      <p className="catalogue-search__hint" id="catalogue-search-hint">
-        اكتب حرفين على الأقل للبحث بالاسم
-      </p>
-    </div>
-  );
-}
+    function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+      if (event.key === 'Enter') {
+        // Wedge terminator (or manual Enter): submit the current value now,
+        // bypassing the debounce (FR-8). Preventing default keeps a stray Enter
+        // from submitting an enclosing form.
+        event.preventDefault();
+        search.onScanSubmit(value);
+      }
+    }
+
+    return (
+      <div className="catalogue-search" data-testid="product-search-input">
+        <input
+          ref={inputRef}
+          type="search"
+          className="catalogue-search__input"
+          dir="rtl"
+          aria-label="ابحث عن منتج بالاسم أو امسح الباركود (search products by name or scan a barcode)"
+          aria-describedby="catalogue-search-hint"
+          placeholder="ابحث بالاسم أو امسح الباركود…"
+          autoComplete="off"
+          value={value}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
+        />
+        <p className="catalogue-search__hint" id="catalogue-search-hint">
+          اكتب حرفين على الأقل للبحث بالاسم
+        </p>
+      </div>
+    );
+  },
+);
