@@ -162,6 +162,43 @@ describe('CatalogueAddController — refusal (FR-19 / FR-22)', () => {
     expect(addLine).not.toHaveBeenCalled();
     expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
   });
+
+  it('on bridge REJECTION (thrown IPC error) → generic block, no add, and the guard is released so a retry works', async () => {
+    const user = userEvent.setup();
+    // First call rejects; the retry resolves ok — proving the in-flight guard
+    // was released after the rejection (no dead-lock; CodeRabbit #326).
+    const add = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ipc transport error'))
+      .mockResolvedValueOnce(OK_RESPONSE);
+    const bridge = {
+      create: vi.fn(),
+      lines: { add, update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
+      discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
+      void: vi.fn(),
+      handoff: vi.fn(),
+      subscribe: vi.fn(),
+    } as unknown as CartBridgeAPI;
+    const addLine = vi.fn();
+    enterConfirmPending();
+    render(<CatalogueAddController cartId="cart-1" bridge={bridge} onLineAdded={addLine} />);
+
+    await user.click(screen.getByRole('button', { name: /إضافة|Add/ }));
+
+    // Generic block, no partial line, still pending.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+    });
+    expect(addLine).not.toHaveBeenCalled();
+    expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
+
+    // The guard was released — a retry actually fires the bridge again and succeeds.
+    await user.click(screen.getByRole('button', { name: /إضافة|Add/ }));
+    await waitFor(() => {
+      expect(addLine).toHaveBeenCalledTimes(1);
+    });
+    expect(add).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('CatalogueAddController — re-entrancy', () => {

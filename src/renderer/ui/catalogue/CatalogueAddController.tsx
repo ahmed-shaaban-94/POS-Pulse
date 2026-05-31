@@ -82,34 +82,41 @@ export function CatalogueAddController({
     if (adding) return; // guard against a double-tap re-entrancy
     setAdding(true);
     setAddError(null);
-    const res = await getBridge().lines.add({
-      cart_id: cartId,
-      item_ref: product.product_id,
-      quantity,
-      idempotency_key: crypto.randomUUID(),
-    });
-    // Always release the in-flight guard — the controller instance persists
-    // across confirm_pending cycles (a fresh scan re-enters confirm_pending on
-    // the same mounted controller), so leaving `adding` true would dead-lock the
-    // next add.
-    setAdding(false);
-    if (res.kind === 'ok') {
-      // 005's confirmed line snapshot → CartPane's list (the only write path).
-      onLineAdded({
-        line_id: res.line_id,
-        display_name: res.display_name,
-        unit_price_minor: res.unit_price_minor,
-        line_subtotal_minor: res.line_subtotal_minor,
-        quantity: res.quantity,
-        version: res.version,
-        merged: res.merged,
+    try {
+      const res = await getBridge().lines.add({
+        cart_id: cartId,
+        item_ref: product.product_id,
+        quantity,
+        idempotency_key: crypto.randomUUID(),
       });
-      // Clear 009's search state for the next item (FSM owns no cart state).
-      useCatalogueSearchStore.getState().confirmAdd();
-    } else {
-      // Generic, non-leaking block (FR-19). Stay in confirm_pending — no partial
-      // line was created (FR-22); the cashier can retry or cancel.
+      if (res.kind === 'ok') {
+        // 005's confirmed line snapshot → CartPane's list (the only write path).
+        onLineAdded({
+          line_id: res.line_id,
+          display_name: res.display_name,
+          unit_price_minor: res.unit_price_minor,
+          line_subtotal_minor: res.line_subtotal_minor,
+          quantity: res.quantity,
+          version: res.version,
+          merged: res.merged,
+        });
+        // Clear 009's search state for the next item (FSM owns no cart state).
+        useCatalogueSearchStore.getState().confirmAdd();
+      } else {
+        // Generic, non-leaking block (FR-19). Stay in confirm_pending — no partial
+        // line was created (FR-22); the cashier can retry or cancel.
+        setAddError(GENERIC_ADD_ERROR);
+      }
+    } catch {
+      // A thrown/rejected bridge call (IPC transport error) is a resolution
+      // failure to the cashier — same generic, non-leaking block as a refusal
+      // (FR-19). No detail surfaces; stay in confirm_pending so a retry works.
       setAddError(GENERIC_ADD_ERROR);
+    } finally {
+      // ALWAYS release the in-flight guard — on success, refusal, AND rejection.
+      // The controller instance persists across confirm_pending cycles, so
+      // leaving `adding` true would dead-lock every future add.
+      setAdding(false);
     }
   }
 
