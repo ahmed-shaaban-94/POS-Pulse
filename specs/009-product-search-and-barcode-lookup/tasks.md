@@ -171,9 +171,10 @@ overridden by the constitution — same posture as 005 tasks.md.)
 
 ## Phase 8 — Slice S5: final polish + production readiness · gate §A5
 
-**Goal:** Consistency with S0, docs, perf bring-up on target hardware, agent-context update.
-**Independent test:** all prior tests green; axe-clean across all states; full keyboard walkthrough; NFR-1/NFR-2 bring-up evidence recorded.
+**Goal:** Runnable end-to-end add (T049a), consistency with S0, docs, perf bring-up on target hardware, agent-context update.
+**Independent test:** scan→confirm→add runs live next to `CartPane`; all prior tests green; axe-clean across all states; full keyboard walkthrough; NFR-1/NFR-2 bring-up evidence recorded.
 
+- [ ] T049a [US1] **(folded into S5 from S4b planning, 2026-05-31 — owner decision)** Wire the catalogue surface into a cart-bearing route next to `CartPane`: mount `ProductSearchInput`/`SearchResultList`/`ProductConfirmPanel` (via the S4b `CatalogueAddController`), thread `CartPane.onLineAdded` so a confirmed add appends/merges a line, and add the renderer cart-lifecycle entry point (`cart.create` → `applyCartCreated`) — **none exist today** (no renderer code calls `cart.create`; `CartPane` is mounted bare in `CartPlaceholder.tsx`; the S1 catalogue shells are in no route). **Intersects 005's cart lifecycle** (cart creation is 005's `cart.create`). **This is the S5 prerequisite** — T050 (screenshot review) and T056 (keyboard walkthrough) both need the surface actually mounted to exercise the live path. — `src/renderer/routes/app/*`, `src/renderer/stores/cart-store.ts`
 - [ ] T050 [US1] Screenshot/contact-sheet review of the live surfaces against S0; record consistency fixes — `specs/009-product-search-and-barcode-lookup/visual-direction/s5-screenshot-review.md`
 - [ ] T051 [P] axe-clean across all states (idle/searching/results/not-found/catalogue-unavailable/ambiguous/confirm) — `src/renderer/ui/catalogue/__tests__/a11y.full.test.tsx`
 - [ ] T052 [P] Author the support runbook + failure-mode catalogue — `docs/runbook/product-search.md` **(§A5)**
@@ -205,8 +206,12 @@ S2 migration + exact lookup (T020–T030) ─┤ §A2  ← US1 exact-lookup + US
 S3 folded search (T031–T039) ────────────┤ §A2  ← US2 search (needs normalize.ts from Foundational)
    │                                     │
 S4 resolver wiring + add (T040–T049) ────┘ §A1  ← US1+US2 add-to-cart (shared path); needs S2 repo
+   │     • S4a = R7 resolver + cart wiring (main-process, PR #325)
+   │     • S4b = confirm-first add + flags + scan terminator (renderer, PR #326)
    │
-S5 polish + readiness (T050–T055) ── §A5
+S5 polish + readiness (T049a, T050–T055) ── §A5
+   │     • T049a = screen composition + cart lifecycle (makes scan→confirm→add RUNNABLE;
+   │               prerequisite for T050 screenshot review + T056 keyboard walkthrough)
    │
 Final (T056–T058)
 ```
@@ -222,7 +227,8 @@ lookup phase — it is not a standalone increment. This is why phases = slices, 
 - **S0:** T010/T011/T012 are `[P]` (independent mock sections) after T009 seeds the sheet.
 - **S2:** T029 (redaction smoke) is `[P]` with the lookup-impl tests; migration (T020/T021) must
   precede repo tests (T022+).
-- **S5:** T051/T052/T053 run in parallel (a11y vs runbook vs rollback — different files).
+- **S5:** T049a (screen composition) runs FIRST — it makes the live path exist; T051/T052/T053 then
+  run in parallel (a11y vs runbook vs rollback — different files); T050/T056 need T049a's mounted surface.
 
 ## Implementation Strategy
 
