@@ -10,10 +10,11 @@
  * reserved cart slot. The flag defaults to `false`, so the 003-era
  * placeholder remains the default surface until §A5 sign-off.
  */
-import type { JSX } from 'react';
+import { useCallback, useRef, type JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
-import { CartPane } from '../../ui/cart/CartPane';
+import { CartPane, type AddedLineResult } from '../../ui/cart/CartPane';
+import { CatalogueSalePane } from '../../ui/catalogue/CatalogueSalePane';
 import { useFeatureFlagsStore } from '../../stores/feature-flags-store';
 
 function resolveDevState(): string {
@@ -26,6 +27,7 @@ function resolveDevState(): string {
 
 export function CartPlaceholder(): JSX.Element {
   const cartFlag = useFeatureFlagsStore((s) => s.cart);
+  const productSearchFlag = useFeatureFlagsStore((s) => s.productSearch);
   const devState = resolveDevState();
 
   if (devState === 'loading') {
@@ -46,11 +48,7 @@ export function CartPlaceholder(): JSX.Element {
   }
 
   if (cartFlag) {
-    return (
-      <Workspace title="Cart">
-        <CartPane />
-      </Workspace>
-    );
+    return <CartWorkspace showCatalogue={productSearchFlag} />;
   }
 
   return (
@@ -58,6 +56,31 @@ export function CartPlaceholder(): JSX.Element {
       <section className="placeholder-pane">
         <p>Cart functionality coming soon.</p>
       </section>
+    </Workspace>
+  );
+}
+
+/**
+ * 009 T049a — Cart workspace with the optional catalogue sale surface.
+ *
+ * CartPane's `onLineAdded` is a REGISTER-callback: it hands up its internal
+ * `addLine(res)` fn. We capture it in a ref and pass a stable wrapper to
+ * `CatalogueSalePane`, so a confirmed add flows search → confirm → CartPane's
+ * line list — the single write path (FR-20). No parallel cart mutation.
+ */
+function CartWorkspace({ showCatalogue }: { showCatalogue: boolean }): JSX.Element {
+  const addLineRef = useRef<((res: AddedLineResult) => void) | null>(null);
+  const registerAddLine = useCallback((addLine: (res: AddedLineResult) => void): void => {
+    addLineRef.current = addLine;
+  }, []);
+  const forwardAddLine = useCallback((res: AddedLineResult): void => {
+    addLineRef.current?.(res);
+  }, []);
+
+  return (
+    <Workspace title="Cart">
+      {showCatalogue && <CatalogueSalePane onLineAdded={forwardAddLine} />}
+      <CartPane onLineAdded={registerAddLine} />
     </Workspace>
   );
 }

@@ -53,5 +53,15 @@ export interface AppConfig {
      * (authored at Slice 6 T524 / T525) for the rollback path.
      */
     saleFinalization?: boolean;
+    /**
+     * 009-product-search-and-barcode-lookup T049a — enables the catalogue
+     * search/scan/confirm/add surface in the Cart workspace.
+     *
+     * Defaults to `false`. Flip via `POS_PULSE_FEATURE_PRODUCT_SEARCH` in main.
+     * Fail-closed: disabled keeps the cart surface search-free. Independent of
+     * the `cart` flag, but the surface mounts only when BOTH are on (it needs
+     * CartPane present to receive added lines).
+     */
+    productSearch?: boolean;
   };
 }
