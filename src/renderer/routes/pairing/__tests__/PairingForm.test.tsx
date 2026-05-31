@@ -872,9 +872,14 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
 
     const form = submitWithCode('CODE');
 
+    // Wait for the settled rate-limited state (status message) rather than
+    // the transient in-flight `submitting` disable, so the second submit
+    // below is genuinely tested against the `isRateLimited` guard — not a
+    // still-pending first call.
     await waitFor(() => {
-      expect(screen.getByRole('button')).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(RATE_LIMITED_MESSAGE);
     });
+    expect(screen.getByRole('button')).toBeDisabled();
     expect(submit).toHaveBeenCalledTimes(1);
 
     // Try to submit again while disabled. The form's isRateLimited
@@ -894,9 +899,19 @@ describe('PairingForm — RATE_LIMITED outcome (T056, US5)', () => {
 
     submitWithCode('CODE');
 
+    // Wait for the SETTLED rate-limited state, not the transient in-flight
+    // one. `button toBeDisabled` is satisfied while `submitting` is still
+    // true (the button gates on `submitting || isRateLimited`) — and at that
+    // instant the INPUT is also disabled (`disabled={submitting}`), so an
+    // input-enabled assertion races the promise resolution and flakes under
+    // CI load. The rate-limit `role="status"` message is set in the same
+    // commit as `setDisabledUntil`, AFTER the await resolves and
+    // `submitting` has flipped back to false — so waiting on it guarantees
+    // only `isRateLimited` gates the button.
     await waitFor(() => {
-      expect(screen.getByRole('button')).toBeDisabled();
+      expect(screen.getByRole('status')).toHaveTextContent(RATE_LIMITED_MESSAGE);
     });
+    expect(screen.getByRole('button')).toBeDisabled();
 
     // The input MUST remain enabled — operators may correct a typo
     // while waiting for the timer. Only the submit BUTTON gates.
