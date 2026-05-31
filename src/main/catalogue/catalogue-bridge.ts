@@ -24,6 +24,7 @@ import type {
   CatalogueLookupBarcodeRequest,
   CatalogueLookupSkuRequest,
   CatalogueLookupResponse,
+  CatalogueSearchRequest,
   CatalogueSearchResponse,
   CatalogueResolveResponse,
 } from '../../shared/bridge-api.js';
@@ -31,9 +32,13 @@ import {
   requireCatalogueSession,
   type OperatorSessionForCatalogue,
 } from './require-catalogue-session.js';
-import type { ProductLookupResult, ProductRepo } from './product-repo.js';
+import type { ProductLookupResult, ProductRepo, ProductSearchResult } from './product-repo.js';
+import { normalize } from './normalize.js';
 
 export type CatalogueBridge = CatalogueBridgeAPI;
+
+/** Minimum NORMALIZED query length for a name search (FR-16). */
+const MIN_SEARCH_LENGTH = 2;
 
 export interface CatalogueBridgeDependencies {
   /** The current operator session, or null when none is active (NFR-6a gate). */
@@ -57,6 +62,18 @@ function lookupResultToResponse(result: ProductLookupResult): CatalogueLookupRes
       return { kind: 'not_found' };
     case 'ambiguous':
       return { kind: 'ambiguous' };
+    case 'unavailable':
+      return { kind: 'catalogue_unavailable' };
+  }
+}
+
+/** Map the repo's search result to the bridge search response. */
+function searchResultToResponse(result: ProductSearchResult): CatalogueSearchResponse {
+  switch (result.kind) {
+    case 'results':
+      return { kind: 'results', items: result.items, truncated: result.truncated };
+    case 'not_found':
+      return { kind: 'not_found' };
     case 'unavailable':
       return { kind: 'catalogue_unavailable' };
   }
@@ -90,10 +107,18 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
       return await Promise.resolve(lookupResultToResponse(result));
     },
 
-    async search(): Promise<CatalogueSearchResponse> {
+    async search(req: CatalogueSearchRequest): Promise<CatalogueSearchResponse> {
       const gate = requireCatalogueSession(getCurrentSession());
       if (gate.kind === 'refused') return gate;
-      return await Promise.resolve({ kind: 'catalogue_unavailable' });
+      // FR-16: guard on the NORMALIZED length (defense-in-depth — the input also
+      // debounces + min-length-guards renderer-side). A whitespace- or
+      // diacritic-only query folds below the minimum and must NOT scan.
+      if (normalize(req.query).length < MIN_SEARCH_LENGTH)
+        return await Promise.resolve({ kind: 'too_short' });
+      if (productRepo === undefined)
+        return await Promise.resolve({ kind: 'catalogue_unavailable' });
+      const result = productRepo.search(gate.session.tenant_id, req.query);
+      return await Promise.resolve(searchResultToResponse(result));
     },
 
     async resolve(): Promise<CatalogueResolveResponse> {

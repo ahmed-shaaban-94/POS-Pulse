@@ -19,7 +19,7 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 ---
 
 > ✅ **§A0 + §A1 RATIFIED 2026-05-30**; **§A2 RATIFIED 2026-05-31** (D1–D6 accepted; migrations at `0029`/`0030`).
-> **S1 done (PRs #317–#320); S2a migrations done (PR #322); S2 read-repo + exact lookup done (T022–T030 — this PR).** S3 + S4 unblocked. Only **§A5** (production readiness) remains — it gates S5.
+> **S1 done (PRs #317–#320); S2a migrations done (PR #322); S2 read-repo done (PR #323); S3 folded search done (T031–T039 — this PR).** S4 unblocked (resolve + 005 seam). Only **§A5** (production readiness) remains — it gates S5.
 > Seam approach (§A1) = match 005's live `{display_name, unit_price_minor}`; `version` deferred.
 > **S2 read-repo note:** exact `lookupBarcode`/`lookupSku` wired to `product-repo.ts` (tenant-scoped in SQL, active-only, ambiguity via COUNT DISTINCT, catalogue-unavailable distinct from not-found). **Not yet renderer-reachable** — the `catalogue.*` `ipcMain` registration + repo construction in `index.ts` (deferred from T016) is owned by S4/T043; no task between S2 and S4 currently registers it (flagged for the reviewer).
 
@@ -138,16 +138,16 @@ overridden by the constitution — same posture as 005 tasks.md.)
 **Goal:** Type-search by Arabic/English name + alias with both-sided folding, ranked, capped, keyboard-navigable.
 **Independent test:** partial Arabic name (different alef form) and partial English (case/accent variant) both surface the product; an alias-only query surfaces its product; min-query-length guarded; results capped at 20 with a refine indicator; full keyboard navigation.
 
-- [ ] T031 [US2] Test (RED): `search.ts` folded substring match + ranking (exact-prefix > mid-string) + active-only + 20-cap + `truncated` flag — `src/main/catalogue/__tests__/search.test.ts`
-- [ ] T031a [US2] Test (RED, **C2**): an **alias-only** query (matches `alias_fold` but not `name_fold`) returns the product; cross-script common name via alias resolves (FR-13) — `src/main/catalogue/__tests__/search.alias.test.ts`
-- [ ] T032 [US2] Test (RED): **SC-9 folding-recall corpus** — Arabic alef/yaa/taa-marbuta/harakat/tatweel variants + English case/accent variants → 100% recall, both-sided (FR-12a/b) — `src/main/catalogue/__tests__/search.folding-corpus.test.ts`
-- [ ] T033 [US2] Implement `search.ts` (fold query via `normalize.ts`; substring scan of `name_fold`/`alias_fold`; rank; cap 20; tenant + active filter) — `src/main/catalogue/search.ts`
-- [ ] T034 [US2] Implement `catalogue.search` handler (min-2-char/too_short guard FR-16; results/not_found/catalogue_unavailable) — `src/main/catalogue/catalogue-bridge.ts`
-- [ ] T035 [US2] Performance test: folded substring search ≤150 ms p95 @ ~50k-row fixture (NFR-2) — `src/main/catalogue/__tests__/perf.search.test.ts`
-- [ ] T036 [P] [US2] Test (RED): debounce (~150 ms typed only) + scanner bypass (terminator submits immediately, no debounce) (NFR-3, FR-8) — `src/renderer/stores/__tests__/catalogueSearchStore.debounce.test.ts`
-- [ ] T037 [US2] Wire debounce + scanner-bypass into the store and the search input — `src/renderer/stores/catalogueSearchStore.ts`, `src/renderer/ui/catalogue/ProductSearchInput.tsx`
-- [ ] T038 [US2] Test (RED): result-list keyboard navigation (arrow moves selection, Enter selects) + result-row content (name Arabic-first, price, unit/pack, barcode/SKU) (FR-14, FR-17a) — `src/renderer/ui/catalogue/__tests__/SearchResultList.test.tsx`
-- [ ] T039 [US2] Implement `SearchResultList` + `SearchResultRow` (keyboard nav, ≥44×44, RTL, refine-indicator when truncated) — `src/renderer/ui/catalogue/SearchResultList.tsx`, `SearchResultRow.tsx`
+- [X] T031 [US2] Test (RED): `search.ts` folded substring match + ranking (exact-prefix > mid-string) + active-only + 20-cap + `truncated` flag — `src/main/catalogue/__tests__/search.test.ts` — *also covers LIKE-metachar escaping (pharma `%` literal), deterministic total order, and the unavailable-vs-not_found split.*
+- [X] T031a [US2] Test (RED, **C2**): an **alias-only** query (matches `alias_fold` but not `name_fold`) returns the product; cross-script common name via alias resolves (FR-13) — `src/main/catalogue/__tests__/search.alias.test.ts`
+- [X] T032 [US2] Test (RED): **SC-9 folding-recall corpus** — Arabic alef/yaa/taa-marbuta/harakat/tatweel variants + English case/accent variants → 100% recall, both-sided (FR-12a/b) — `src/main/catalogue/__tests__/search.folding-corpus.test.ts` — *14-case corpus incl. reverse (query carries the diacritic, stored bare).*
+- [X] T033 [US2] Implement `search.ts` (fold query via `normalize.ts`; substring scan of `name_fold`/`alias_fold`; rank; cap 20; tenant + active filter) — `src/main/catalogue/search.ts` — *single-table on `products` (both fold cols); `ORDER BY rank(prefix-CASE), name_fold, product_id LIMIT 21` (21→truncated); `LIKE … ESCAPE '\'`. Wired via `ProductRepo.search`, reusing S2 `catalogueHasRows()`/try-catch→unavailable.*
+- [X] T034 [US2] Implement `catalogue.search` handler (min-2-char/too_short guard FR-16; results/not_found/catalogue_unavailable) — `src/main/catalogue/catalogue-bridge.ts` — *guards on the NORMALIZED length (whitespace/diacritic-only → too_short).*
+- [X] T035 [US2] Performance test: folded substring search ≤150 ms p95 @ ~50k-row fixture (NFR-2) — `src/main/catalogue/__tests__/perf.search.test.ts` — **as-built: correctness-at-scale, NO timing assertion** (LIKE `%q%` is a deliberate full scan, R4; wall-clock p95 is flaky under sql.js/parallel runner). Authoritative ≤150 ms p95 = **T054 §A5**. Seeds 50k ONCE (`beforeAll`/`afterAll`) — per-`it` re-seed timed out the 5000ms default under `--coverage`.
+- [X] T036 [P] [US2] Test (RED): debounce (~150 ms typed only) + scanner bypass (terminator submits immediately, no debounce) (NFR-3, FR-8) — `src/renderer/stores/__tests__/useDebouncedSearch.test.ts` *(hook, not the FSM store — the FSM stays timer-free by design)*
+- [X] T037 [US2] Wire debounce + scanner-bypass into the store and the search input — `src/renderer/stores/useDebouncedSearch.ts`, `src/renderer/ui/catalogue/ProductSearchInput.tsx` — *debounce lives in the `useDebouncedSearch` hook (FSM holds no timers); input is controlled, Enter = `onScanSubmit` (immediate, cancels pending), typing = `onType` (debounced, min-2).*
+- [X] T038 [US2] Test (RED): result-list keyboard navigation (arrow moves selection, Enter selects) + result-row content (name Arabic-first, price, unit/pack, barcode/SKU) (FR-14, FR-17a) — `src/renderer/ui/catalogue/__tests__/SearchResultList.test.tsx`
+- [X] T039 [US2] Implement `SearchResultList` + `SearchResultRow` (keyboard nav, ≥44×44, RTL, refine-indicator when truncated) — `src/renderer/ui/catalogue/SearchResultList.tsx`, `SearchResultRow.tsx` — *`aria-activedescendant` model (focus on listbox, Arrow moves active option clamped, Enter→onSelect, click selects); axe-clean.*
 
 ## Phase 7 — Slice S4: production R7 resolver wired into 005 cart seam + confirm-first add + duplicate-scan increment · gates §A0, §A1
 

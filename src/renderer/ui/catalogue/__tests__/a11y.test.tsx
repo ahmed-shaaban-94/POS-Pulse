@@ -77,7 +77,7 @@ describe('T019 — catalogue shell accessibility (axe-clean)', () => {
   });
 
   it('SearchResultList (populated) is axe-clean', async () => {
-    const { container } = render(<SearchResultList items={[PRODUCT]} selectedIndex={0} />);
+    const { container } = render(<SearchResultList items={[PRODUCT]} onSelect={() => {}} />);
     await expectNoAxeViolations(container);
   });
 });
