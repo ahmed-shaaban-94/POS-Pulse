@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot.js';
 import { formatPriceMinor } from './format-price.js';
+import { ControlledFlags } from './ControlledFlags.js';
 
 export interface SearchResultRowProps {
   product: ProductSnapshotDisplay;
@@ -54,6 +55,7 @@ export function SearchResultRow({
         <span className="catalogue-result-row__pack">{product.unit_pack_label}</span>
       )}
       {code !== undefined && <span className="catalogue-result-row__code">{code}</span>}
+      <ControlledFlags product={product} className="catalogue-result-row__flags" />
     </div>
   );
 }
