@@ -1,7 +1,7 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { freshCatalogueDb, handleFor, initCatalogueSql } from './__helpers__/catalogue-fixture.js';
-import { createProductRepo } from '../product-repo.js';
+import { createProductRepo, type ProductRepo } from '../product-repo.js';
 import { normalize } from '../normalize.js';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
@@ -27,9 +27,26 @@ import type { Database as SqlJsDatabase } from 'sql.js';
 
 const TENANT = 'tenant-1';
 const ROWS = 50_000;
+// The ~50k-row sql.js seed + full-migration apply is expensive ONCE; doing it
+// per-`it` (×2) timed out the 5000ms default under `--coverage` instrumentation
+// in the full parallel suite. Seed ONCE in beforeAll, share the read-only DB
+// across the cases, close in afterAll. The generous suite timeout is
+// defense-in-depth for the single irreducible seed under coverage.
+const SUITE_TIMEOUT_MS = 60_000;
+
+let db: SqlJsDatabase;
+let repo: ProductRepo;
+let target: { barcode: string; sku: string };
 
 beforeAll(async () => {
   await initCatalogueSql();
+  db = freshCatalogueDb();
+  target = seedLargeCatalogue(db);
+  repo = createProductRepo(handleFor(db));
+}, SUITE_TIMEOUT_MS);
+
+afterAll(() => {
+  db.close();
 });
 
 /** Bulk-seed ~50k products + one barcode each inside a single transaction. */
@@ -86,29 +103,19 @@ function seedLargeCatalogue(db: SqlJsDatabase): { barcode: string; sku: string }
 
 describe('T028 — exact lookup correctness @ ~50k rows (sql.js; NFR-1 p95 bring-up = T054)', () => {
   it('resolves the right single product by barcode against a 50k-row table', () => {
-    const db = freshCatalogueDb();
-    const { barcode } = seedLargeCatalogue(db);
-    const repo = createProductRepo(handleFor(db));
-
-    const r = repo.lookupByBarcode(TENANT, barcode);
+    const r = repo.lookupByBarcode(TENANT, target.barcode);
     expect(r.kind).toBe('one');
-    if (r.kind === 'one') expect(r.product.selling_barcode).toBe(barcode);
+    if (r.kind === 'one') expect(r.product.selling_barcode).toBe(target.barcode);
 
     // An absent barcode is not_found (not a false positive) at scale.
     expect(repo.lookupByBarcode(TENANT, 'no-such-barcode').kind).toBe('not_found');
-    db.close();
   });
 
   it('resolves the right single product by SKU against a 50k-row table', () => {
-    const db = freshCatalogueDb();
-    const { sku } = seedLargeCatalogue(db);
-    const repo = createProductRepo(handleFor(db));
-
-    const r = repo.lookupBySku(TENANT, sku);
+    const r = repo.lookupBySku(TENANT, target.sku);
     expect(r.kind).toBe('one');
-    if (r.kind === 'one') expect(r.product.sku).toBe(sku);
+    if (r.kind === 'one') expect(r.product.sku).toBe(target.sku);
 
     expect(repo.lookupBySku(TENANT, 'NO-SUCH-SKU').kind).toBe('not_found');
-    db.close();
   });
 });

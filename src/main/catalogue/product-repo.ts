@@ -29,6 +29,7 @@
 import type { DatabaseHandle } from '../db/client.js';
 import type { ProductSnapshotDisplay } from '../../shared/catalogue/product-snapshot.js';
 import { normalize } from './normalize.js';
+import { buildSearchParams, buildSearchSql, SEARCH_CAP } from './search.js';
 
 // ── Narrow better-sqlite3 statement surfaces (no native binding at test time) ──
 
@@ -61,11 +62,24 @@ export type ProductLookupResult =
   | { kind: 'ambiguous' }
   | { kind: 'unavailable' };
 
+/** The search result. `truncated` is true when matches exceeded the cap (FR-17). */
+export type ProductSearchResult =
+  | { kind: 'results'; items: readonly ProductSnapshotDisplay[]; truncated: boolean }
+  | { kind: 'not_found' }
+  | { kind: 'unavailable' };
+
 export interface ProductRepo {
   /** Exact barcode lookup (FR-4). `rawBarcode` is folded via `normalize()`. */
   lookupByBarcode(tenantId: string, rawBarcode: string): ProductLookupResult;
   /** Exact SKU lookup (FR-9). `rawSku` is folded via `normalize()`. */
   lookupBySku(tenantId: string, rawSku: string): ProductLookupResult;
+  /**
+   * Folded substring name/alias search (FR-11/12/14/17). `rawQuery` is folded
+   * via `normalize()`; ranked (prefix > mid-string), capped at 20 with a
+   * `truncated` flag. The caller (handler) enforces the min-length guard
+   * (FR-16) before calling this.
+   */
+  search(tenantId: string, rawQuery: string): ProductSearchResult;
 }
 
 // Qualified with the `p.` alias: in the barcode JOIN, `products` and
@@ -151,7 +165,25 @@ export function createProductRepo(db: DatabaseHandle): ProductRepo {
     }
   }
 
-  return { lookupByBarcode, lookupBySku };
+  function search(tenantId: string, rawQuery: string): ProductSearchResult {
+    const folded = normalize(rawQuery);
+    try {
+      if (!catalogueHasRows()) return { kind: 'unavailable' };
+
+      const stmt = db.prepare(buildSearchSql(PRODUCT_COLUMNS)) as PrepareAll<ProductRow>;
+      const rows = stmt.all(...buildSearchParams(tenantId, folded));
+
+      if (rows.length === 0) return { kind: 'not_found' };
+      // We fetched CAP + 1: more than CAP rows means matches were truncated.
+      const truncated = rows.length > SEARCH_CAP;
+      const items = rows.slice(0, SEARCH_CAP).map((r) => toSnapshot(r));
+      return { kind: 'results', items, truncated };
+    } catch {
+      return { kind: 'unavailable' };
+    }
+  }
+
+  return { lookupByBarcode, lookupBySku, search };
 }
 
 /**

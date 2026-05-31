@@ -1,23 +1,58 @@
-import type { JSX } from 'react';
+import { useState, type ChangeEvent, type KeyboardEvent, type JSX } from 'react';
+
+import { useDebouncedSearch } from '../../stores/useDebouncedSearch.js';
 
 export interface ProductSearchInputProps {
+  /**
+   * Fired with the query when a search should run: debounced after typing
+   * settles (~150 ms, NFR-3), or immediately when the wedge terminator (Enter)
+   * submits (FR-8). The caller drives `catalogueSearchStore.beginSearch` + the
+   * `catalogue.search` bridge call. Sub-2-char typed input never fires (FR-16).
+   */
+  onSearch?: (query: string) => void;
   defaultValue?: string;
   disabled?: boolean;
 }
 
 /**
- * 009 Slice S1 layout-only shell — Surface 1 (search/scan input).
+ * 009 Surface 1 — search/scan input. S1 shipped the layout shell; S3 (T037)
+ * wires the debounce + scanner-bypass hook:
+ *   - typing → `onType` (debounced ~150 ms, min-2-char), and
+ *   - Enter  → `onScanSubmit` (immediate; the wedge scanner appends a terminator),
+ * both routed through `useDebouncedSearch`. The FSM (`catalogueSearchStore`)
+ * holds no timers; the debounce lives here.
  *
- * The wedge-ready, RTL Arabic-first input the cashier scans or types into.
- * Debounce (~150 ms, typed-only) + scanner-bypass + `catalogueSearchStore`
- * binding land in S3 (T037); this shell renders the field + the min-length idle
- * hint. Auto-focus on mount is wired when the shell is mounted into the cart
- * shell (S2+).
+ * The input is controlled so the Enter handler reads the live value
+ * synchronously (a wedge fires keys + terminator fast; a ref/controlled read
+ * avoids a stale-closure submit).
  */
 export function ProductSearchInput({
-  defaultValue,
+  onSearch,
+  defaultValue = '',
   disabled = false,
 }: ProductSearchInputProps): JSX.Element {
+  const [value, setValue] = useState(defaultValue);
+  // Hold the hook result as one object (rather than destructuring its methods)
+  // so the `@typescript-eslint/unbound-method` rule doesn't flag the extracted
+  // handlers — they are `this`-free arrows, but the lint is conservative.
+  const search = useDebouncedSearch((q) => onSearch?.(q));
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>): void {
+    const next = event.target.value;
+    setValue(next);
+    search.onType(next);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'Enter') {
+      // Wedge terminator (or manual Enter): submit the current value now,
+      // bypassing the debounce (FR-8). Preventing default keeps a stray Enter
+      // from submitting an enclosing form.
+      event.preventDefault();
+      search.onScanSubmit(value);
+    }
+  }
+
   return (
     <div className="catalogue-search" data-testid="product-search-input">
       <input
@@ -28,7 +63,9 @@ export function ProductSearchInput({
         aria-describedby="catalogue-search-hint"
         placeholder="ابحث بالاسم أو امسح الباركود…"
         autoComplete="off"
-        defaultValue={defaultValue}
+        value={value}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
         disabled={disabled}
       />
       <p className="catalogue-search__hint" id="catalogue-search-hint">
