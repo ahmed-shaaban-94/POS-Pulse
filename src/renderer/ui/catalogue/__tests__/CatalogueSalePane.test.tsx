@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { CatalogueSalePane } from '../CatalogueSalePane.js';
 import { useCatalogueSearchStore } from '../../../stores/catalogueSearchStore.js';
+import { useCartStore } from '../../../stores/cart-store.js';
 import type { CartBridgeAPI, CatalogueBridgeAPI } from '../../../../shared/bridge-api.js';
 import type { ProductSnapshotDisplay } from '../../../../shared/catalogue/product-snapshot.js';
 
@@ -168,5 +169,62 @@ describe('CatalogueSalePane — scan → exact lookup → FSM (T049a wiring a)',
     await waitFor(() => {
       expect(useCatalogueSearchStore.getState().state.kind).toBe('confirm_pending');
     });
+  });
+});
+
+describe('CatalogueSalePane — eager cart lifecycle (T049a wiring b)', () => {
+  beforeEach(() => {
+    useCartStore.getState().reset();
+  });
+
+  it('creates a cart on mount when none exists, then records it in the store', async () => {
+    const create = vi.fn().mockResolvedValue({ kind: 'ok', cart_id: 'cart-new' });
+    const cb = {
+      create,
+      lines: { add: vi.fn(), update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
+      discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
+      void: vi.fn(),
+      handoff: vi.fn(),
+      subscribe: vi.fn(),
+    } as unknown as CartBridgeAPI;
+
+    render(
+      <CatalogueSalePane
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge()}
+        cartBridge={cb}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(useCartStore.getState().activeCart?.cart_id).toBe('cart-new');
+    });
+  });
+
+  it('does NOT create a cart when one already exists', async () => {
+    useCartStore.getState().applyCartCreated('cart-existing');
+    const create = vi.fn();
+    const cb = {
+      create,
+      lines: { add: vi.fn(), update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
+      discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
+      void: vi.fn(),
+      handoff: vi.fn(),
+      subscribe: vi.fn(),
+    } as unknown as CartBridgeAPI;
+
+    render(
+      <CatalogueSalePane
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge()}
+        cartBridge={cb}
+      />,
+    );
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(create).not.toHaveBeenCalled();
   });
 });
