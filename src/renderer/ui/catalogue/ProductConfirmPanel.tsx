@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import { useEffect, useRef, type JSX, type KeyboardEvent } from 'react';
 
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot.js';
 import { formatPriceMinor } from './format-price.js';
@@ -11,20 +11,39 @@ export interface ProductConfirmPanelProps {
 }
 
 /**
- * 009 Slice S1 layout-only shell — Surface 4 (confirm-first panel, FR-5).
+ * 009 — Surface 4 (confirm-first panel, FR-5). Presentational: the add flow
+ * (005 `cart.lines.add`, FR-20) and the missing-required-field guard
+ * (FR-19/22) live in `CatalogueAddController`; controlled/Rx badges via
+ * `ControlledFlags` (C1). Nothing is added before the cashier confirms; Add is
+ * the primary affordance. Renders nothing when there is no pending product.
  *
- * Renders the dialog with the product summary + Add/Cancel. The actual add flow
- * (005 `cart.lines.add`, FR-20), the missing-required-field guard (FR-19/22),
- * and controlled/Rx flag surfacing (C1) land in S4 (T045/T045b). Nothing is
- * added before the cashier confirms; Add is the primary affordance. Renders
- * nothing when there is no pending product.
+ * Keyboard operability (T056 / SC-1): on open, focus moves to the **Add**
+ * button so a keyboard-only cashier is never stranded outside this `aria-modal`
+ * surface; **Escape** triggers `onCancel`. Tab naturally cycles the two buttons
+ * within the dialog. Focus-return to the search input after Add/Cancel is the
+ * controller's job (it owns the FSM transition back to idle).
  */
 export function ProductConfirmPanel({
   product,
   onAdd,
   onCancel,
 }: ProductConfirmPanelProps): JSX.Element | null {
+  const addRef = useRef<HTMLButtonElement>(null);
+
+  // Move focus into the dialog on open (SC-1) — the primary affordance (Add).
+  useEffect(() => {
+    addRef.current?.focus();
+  }, []);
+
   if (product === undefined) return null;
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel?.();
+    }
+  }
+
   return (
     <div
       role="dialog"
@@ -32,6 +51,7 @@ export function ProductConfirmPanel({
       aria-labelledby="catalogue-confirm-title"
       className="catalogue-confirm"
       data-testid="product-confirm-panel"
+      onKeyDown={handleKeyDown}
     >
       <h2 id="catalogue-confirm-title" className="catalogue-confirm__title">
         تأكيد الإضافة
@@ -57,7 +77,7 @@ export function ProductConfirmPanel({
         <button type="button" className="btn btn--ghost btn--md" onClick={onCancel}>
           إلغاء (Cancel)
         </button>
-        <button type="button" className="btn btn--primary btn--md" onClick={onAdd}>
+        <button ref={addRef} type="button" className="btn btn--primary btn--md" onClick={onAdd}>
           إضافة (Add)
         </button>
       </div>
