@@ -158,20 +158,23 @@ overridden by the constitution — same posture as 005 tasks.md.)
 - [X] T041 [US1] Implement `resolve-item-ref.ts` production resolver (map `name_ar`→display_name, `price_minor`→unit_price_minor; active guard→disabled; missing field→generic; `row_version` stays in the read model — `version` deferred per §A1/R9, NOT threaded) — `src/main/catalogue/resolve-item-ref.ts` **(§A1)** — *`item_ref` = `product_id` (exported `CATALOGUE_ITEM_REF_KIND` pins the scheme so T044/T046 can't drift). **As-built: a new `ProductRepo.resolveForSeam(tenant, productId)` was added to `product-repo.ts`** — the S2 `lookupBySku`/`lookupByBarcode` are `active=1`-filtered and structurally CANNOT produce `disabled`; the resolver needs the raw `active` flag, so a non-active-filtered tenant-scoped read was required. Money guard (`Number.isSafeInteger`, FR-19) lives on this resolve path, not on the read. unavailable→generic (no `no_connection` use; local lookup).*
 - [X] T042 [US1] Test (RED): wiring 009's resolver into `cart-bridge.ts` `resolveItemRef` option replaces `DEFAULT_ITEM_REF_RESOLVER` in production; **005's existing cart fixture tests stay green** (seam unchanged) — `src/main/cart/__tests__/resolve-item-ref.wiring.test.ts` **(§A1)** — *packaged build + production resolver → known `product_id` resolves + line persists; unknown/inactive → generic cart refusal (reasons collapse to `wrong_owner` at `linesAdd`, locked at resolver level in T040); duplicate-scan → 005 merge (FR-21, one line). 005's `cart-wiring-production.test.ts` 3-case fixture matrix unchanged (they pass no `productionResolver`).*
 - [X] T043 [US1] Wire 009's resolver into the cart bridge composition root (production path; fixture stays test-only) — `src/main/index.ts` **(§A1)** — *added optional `productionResolver?: ItemRefResolver` to `wire-cart-handlers.ts` `CartHandlersDeps` (cart factory stays ignorant of catalogue internals); **additive precedence**: dev+fixture-flag → fixture (unchanged), else → production resolver, else → DEFAULT (refuses). `index.ts` builds `createCatalogueResolver({ repo: createProductRepo(dbHandle), getTenantId: () => session?.tenant_id ?? '' })`. **Shipped as PR S4a (keystone); renderer add-flow T044–T049 follows as S4b.***
-- [ ] T044 [US1] Test (RED): confirm-first add — confirm panel → 005 `cart.lines.add`; no add before confirm (FR-5); missing required field → generic block, no partial line (FR-19/22) — `src/renderer/ui/catalogue/__tests__/ProductConfirmPanel.test.tsx`
-- [ ] T045 [US1] Implement `ProductConfirmPanel` add flow calling 005 `cart.lines.add` (no parallel mutation path; FR-20) — `src/renderer/ui/catalogue/ProductConfirmPanel.tsx`
-- [ ] T045a [US1] Test (RED, **C1**): the confirm panel and result row **surface** the `controlled_substance` / `prescription_required` flags (display only — NO enforcement; spec Out-of-Scope) — `src/renderer/ui/catalogue/__tests__/controlled-flag-surfacing.test.tsx`
-- [ ] T045b [US1] Implement controlled/Rx flag surfacing on the confirm panel + result row (badge/label; read-only; enforcement remains out of scope) — `src/renderer/ui/catalogue/ProductConfirmPanel.tsx`, `SearchResultRow.tsx`
-- [ ] T046 [US1] Test (RED): duplicate scan of an in-cart product **increments** the existing line via 005 Q4 merge, not a duplicate line (FR-21) — `src/renderer/ui/catalogue/__tests__/duplicate-scan.test.tsx`
-- [ ] T047 [US1] Verify/implement duplicate-scan path delegating to 005's merge-by-`item_ref` (009 changes no cart behaviour) — `src/renderer/ui/catalogue/ProductConfirmPanel.tsx`
-- [ ] T048 [P] [US1] Test (RED): scanner Enter-suffix submits the lookup safely; does not leak into cart or trigger an unrelated default action (FR-8) — `src/renderer/ui/catalogue/__tests__/scan-terminator.test.tsx`
-- [ ] T049 [US1] Implement scan-terminator handling in `ScanCaptureField` (focus-confined wedge input; NFR-6) — `src/renderer/ui/catalogue/ScanCaptureField.tsx`
+- [X] T044 [US1] Test (RED): confirm-first add — confirm panel → 005 `cart.lines.add`; no add before confirm (FR-5); missing required field → generic block, no partial line (FR-19/22) — `src/renderer/ui/catalogue/__tests__/CatalogueAddController.test.tsx` — *as-built: add-flow lives in the thin **`CatalogueAddController`** (per S4b plan), NOT in the presentational panel; test file named for the controller. Also covers render-gating (renders only in `confirm_pending`) + cancel + double-tap re-entrancy guard. Bridge injected via `bridge` prop (mirrors CartPane `_testBridge`).*
+- [X] T045 [US1] Implement the add flow calling 005 `cart.lines.add` (no parallel mutation path; FR-20) — `src/renderer/ui/catalogue/CatalogueAddController.tsx` — *on `ok` → `onLineAdded`'s `addLine(res)` (CartPane's single write path) + `catalogueSearchStore.confirmAdd()`; on `refused` → stay `confirm_pending` + GENERIC block (no reason leak, FR-19), no partial line (FR-22). `item_ref = product_id`, quantity 1. `ProductConfirmPanel` stays presentational (`onAdd`/`onCancel`).*
+- [X] T045a [US1] Test (RED, **C1**): the confirm panel and result row **surface** the `controlled_substance` / `prescription_required` flags (display only — NO enforcement; spec Out-of-Scope) — `src/renderer/ui/catalogue/__tests__/controlled-flag-surfacing.test.tsx`
+- [X] T045b [US1] Implement controlled/Rx flag surfacing on the confirm panel + result row (badge/label; read-only; enforcement remains out of scope) — `src/renderer/ui/catalogue/ProductConfirmPanel.tsx`, `SearchResultRow.tsx` — *shared **`ControlledFlags.tsx`** badge component (colour-independent — each badge carries text, not colour alone); renders nothing when both flags false.*
+- [X] T046 [US1] Test (RED): duplicate scan of an in-cart product **increments** the existing line via 005 Q4 merge, not a duplicate line (FR-21) — `src/renderer/ui/catalogue/__tests__/duplicate-scan.test.tsx` — *verifies the controller forwards `merged:true` through unchanged + re-uses the same `item_ref` on each scan (drives 005's merge). Surfaced a real bug: the in-flight `adding` guard was never reset on the success path → second add dead-locked; fixed by releasing `adding` on every exit.*
+- [X] T047 [US1] Verify/implement duplicate-scan path delegating to 005's merge-by-`item_ref` (009 changes no cart behaviour) — `src/renderer/ui/catalogue/CatalogueAddController.tsx` — *no new merge logic: a re-scan re-calls `cart.lines.add` with the same `item_ref`; 005 merges + returns `merged:true`; CartPane's `handleAddLine` updates qty/version in place. 009 changes no cart behaviour.*
+- [X] T048 [P] [US1] Test (RED): scanner Enter-suffix submits the lookup safely; does not leak into cart or trigger an unrelated default action (FR-8) — `src/renderer/ui/catalogue/__tests__/scan-terminator.test.tsx`
+- [X] T049 [US1] Implement scan-terminator handling in `ScanCaptureField` (focus-confined wedge input; NFR-6) — `src/renderer/ui/catalogue/ScanCaptureField.tsx` — *controlled field; Enter → `preventDefault` (no leak to a surrounding form) + submit buffered value via `onScan` once + clear buffer; empty buffer / non-Enter keys submit nothing. `inputMode="none"` retained.*
+
+> **S4b note (2026-05-31):** the confirm-add bridge call lives in a thin container **`CatalogueAddController.tsx`** (reads `cart_id` from `useCartStore().activeCart`, calls `cart.lines.add` via a `_testBridge`/`readCartBridge()` seam mirroring `CartPane`, then on `ok` → `onLineAdded`'s `addLine(res)` + `catalogueSearchStore.confirmAdd()`; on `refused`/rejection → stay `confirm_pending` + generic block, FR-19/22). `ProductConfirmPanel` stays presentational (`onAdd`/`onCancel`). No parallel cart-mutation path (FR-20). S4b is **decoupled from S4a** — tests mock the bridge response; the resolver is never imported.
 
 ## Phase 8 — Slice S5: final polish + production readiness · gate §A5
 
-**Goal:** Consistency with S0, docs, perf bring-up on target hardware, agent-context update.
-**Independent test:** all prior tests green; axe-clean across all states; full keyboard walkthrough; NFR-1/NFR-2 bring-up evidence recorded.
+**Goal:** Runnable end-to-end add (T049a), consistency with S0, docs, perf bring-up on target hardware, agent-context update.
+**Independent test:** scan→confirm→add runs live next to `CartPane`; all prior tests green; axe-clean across all states; full keyboard walkthrough; NFR-1/NFR-2 bring-up evidence recorded.
 
+- [ ] T049a [US1] **(folded into S5 from S4b planning, 2026-05-31 — owner decision)** Wire the catalogue surface into a cart-bearing route next to `CartPane`: mount `ProductSearchInput`/`SearchResultList`/`ProductConfirmPanel` (via the S4b `CatalogueAddController`), thread `CartPane.onLineAdded` so a confirmed add appends/merges a line, and add the renderer cart-lifecycle entry point (`cart.create` → `applyCartCreated`) — **none exist today** (no renderer code calls `cart.create`; `CartPane` is mounted bare in `CartPlaceholder.tsx`; the S1 catalogue shells are in no route). **Intersects 005's cart lifecycle** (cart creation is 005's `cart.create`). **This is the S5 prerequisite** — T050 (screenshot review) and T056 (keyboard walkthrough) both need the surface actually mounted to exercise the live path. — `src/renderer/routes/app/*`, `src/renderer/stores/cart-store.ts`
 - [ ] T050 [US1] Screenshot/contact-sheet review of the live surfaces against S0; record consistency fixes — `specs/009-product-search-and-barcode-lookup/visual-direction/s5-screenshot-review.md`
 - [ ] T051 [P] axe-clean across all states (idle/searching/results/not-found/catalogue-unavailable/ambiguous/confirm) — `src/renderer/ui/catalogue/__tests__/a11y.full.test.tsx`
 - [ ] T052 [P] Author the support runbook + failure-mode catalogue — `docs/runbook/product-search.md` **(§A5)**
@@ -203,8 +206,12 @@ S2 migration + exact lookup (T020–T030) ─┤ §A2  ← US1 exact-lookup + US
 S3 folded search (T031–T039) ────────────┤ §A2  ← US2 search (needs normalize.ts from Foundational)
    │                                     │
 S4 resolver wiring + add (T040–T049) ────┘ §A1  ← US1+US2 add-to-cart (shared path); needs S2 repo
+   │     • S4a = R7 resolver + cart wiring (main-process, PR #325)
+   │     • S4b = confirm-first add + flags + scan terminator (renderer, PR #326)
    │
-S5 polish + readiness (T050–T055) ── §A5
+S5 polish + readiness (T049a, T050–T055) ── §A5
+   │     • T049a = screen composition + cart lifecycle (makes scan→confirm→add RUNNABLE;
+   │               prerequisite for T050 screenshot review + T056 keyboard walkthrough)
    │
 Final (T056–T058)
 ```
@@ -220,7 +227,8 @@ lookup phase — it is not a standalone increment. This is why phases = slices, 
 - **S0:** T010/T011/T012 are `[P]` (independent mock sections) after T009 seeds the sheet.
 - **S2:** T029 (redaction smoke) is `[P]` with the lookup-impl tests; migration (T020/T021) must
   precede repo tests (T022+).
-- **S5:** T051/T052/T053 run in parallel (a11y vs runbook vs rollback — different files).
+- **S5:** T049a (screen composition) runs FIRST — it makes the live path exist; T051/T052/T053 then
+  run in parallel (a11y vs runbook vs rollback — different files); T050/T056 need T049a's mounted surface.
 
 ## Implementation Strategy
 

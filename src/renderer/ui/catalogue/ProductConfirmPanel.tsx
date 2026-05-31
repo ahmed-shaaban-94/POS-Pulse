@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 
 import type { ProductSnapshotDisplay } from '../../../shared/catalogue/product-snapshot.js';
 import { formatPriceMinor } from './format-price.js';
+import { ControlledFlags } from './ControlledFlags.js';
 
 export interface ProductConfirmPanelProps {
   product?: ProductSnapshotDisplay;
@@ -51,6 +52,7 @@ export function ProductConfirmPanel({
           </>
         )}
       </dl>
+      <ControlledFlags product={product} className="catalogue-confirm__flags" />
       <div className="catalogue-confirm__actions">
         <button type="button" className="btn btn--ghost btn--md" onClick={onCancel}>
           إلغاء (Cancel)

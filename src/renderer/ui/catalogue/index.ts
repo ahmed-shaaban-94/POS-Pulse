@@ -6,6 +6,7 @@
 export { ProductSearchInput } from './ProductSearchInput.js';
 export type { ProductSearchInputProps } from './ProductSearchInput.js';
 export { ScanCaptureField } from './ScanCaptureField.js';
+export type { ScanCaptureFieldProps } from './ScanCaptureField.js';
 export { SearchResultList } from './SearchResultList.js';
 export type { SearchResultListProps } from './SearchResultList.js';
 export { ProductConfirmPanel } from './ProductConfirmPanel.js';
@@ -15,3 +16,7 @@ export type { NotFoundStateProps } from './NotFoundState.js';
 export { CatalogueUnavailableState } from './CatalogueUnavailableState.js';
 export { AmbiguousBarcodeState } from './AmbiguousBarcodeState.js';
 export type { AmbiguousBarcodeStateProps } from './AmbiguousBarcodeState.js';
+// S4b — confirm-first add controller + shared controlled/Rx surfacing badge.
+export { CatalogueAddController } from './CatalogueAddController.js';
+export type { CatalogueAddControllerProps } from './CatalogueAddController.js';
+export { ControlledFlags } from './ControlledFlags.js';
