@@ -62,7 +62,13 @@ describe('T026 — catalogue-unavailable detection (distinct from not_found)', (
         throw new Error('disk I/O error');
       },
       exec: () => undefined,
-      transaction: <T extends (...args: never[]) => unknown>(fn: T): T => fn,
+      // Faithful to the real DatabaseHandle.transaction: returns a wrapped
+      // CALLABLE that runs `fn` when invoked (not `fn()` — that would call it
+      // immediately with zero args and return its result, which is the wrong
+      // shape). The repo is read-only and never opens a transaction, so this is
+      // never exercised today; the wrapper keeps the stub correct if it ever is.
+      transaction: <T extends (...args: never[]) => unknown>(fn: T): T =>
+        ((...args: never[]): unknown => fn(...args)) as T,
       close: () => undefined,
     };
     const repo = createProductRepo(throwing);

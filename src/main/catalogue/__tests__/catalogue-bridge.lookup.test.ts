@@ -157,4 +157,34 @@ describe('T025 — catalogue.lookupSku wired to the repo', () => {
     expect((await bridgeFor(db).lookupSku({ sku: 'SKU-X' })).kind).toBe('catalogue_unavailable');
     db.close();
   });
+
+  it('returns ambiguous when a duplicate active SKU spans two distinct products', async () => {
+    const db = freshCatalogueDb();
+    seedProduct(db, { product_id: 'p-1', sku: 'SKU-DUP' });
+    seedProduct(db, { product_id: 'p-2', sku: 'SKU-DUP' });
+
+    expect((await bridgeFor(db).lookupSku({ sku: 'SKU-DUP' })).kind).toBe('ambiguous');
+    db.close();
+  });
+
+  it('never returns a tenant-B product to a tenant-A session (P17)', async () => {
+    const db = freshCatalogueDb();
+    seedProduct(db, { product_id: 'p-2', tenant_id: 'tenant-2', sku: 'SKU-X' });
+
+    // Session is tenant-1; the only product is tenant-2 → catalogue is non-empty
+    // globally, so this is not_found (the tenant filter excludes it), not unavailable.
+    expect((await bridgeFor(db).lookupSku({ sku: 'SKU-X' })).kind).toBe('not_found');
+    db.close();
+  });
+
+  it('still refuses no_session before touching the repo', async () => {
+    const db = freshCatalogueDb();
+    seedProduct(db, { product_id: 'p-1', sku: 'SKU-PARA-500' });
+
+    await expect(bridgeFor(db, null).lookupSku({ sku: 'SKU-PARA-500' })).resolves.toEqual({
+      kind: 'refused',
+      reason: 'no_session',
+    });
+    db.close();
+  });
 });
