@@ -1,6 +1,6 @@
 import type { Logger } from 'pino';
 
-import { CartBridgeHandlers } from './cart-bridge.js';
+import { CartBridgeHandlers, type ItemRefResolver } from './cart-bridge.js';
 import { bindCartStore } from './cart-store.js';
 import { resolveItemRef as fixtureResolver } from './resolve-item-ref.js';
 import type { DatabaseHandle } from '../db/client.js';
@@ -18,6 +18,16 @@ export interface CartHandlersDeps {
    * `POS_PULSE_DEV_ITEM_RESOLVER` is set in the environment.
    */
   isPackaged: boolean;
+  /**
+   * 009 R7 — the REAL catalogue-backed resolver (`createCatalogueResolver`).
+   * When supplied it is the production resolver: it wins in any packaged build
+   * and in a dev build with the fixture flag absent. The dev fixture
+   * (`POS_PULSE_DEV_ITEM_RESOLVER` + unpackaged) still takes precedence so 005's
+   * dev workflow is unchanged. When omitted (e.g. 005's own tests, or before
+   * 009 ships), the handler falls back to `DEFAULT_ITEM_REF_RESOLVER` (refuses
+   * generically) — the prior behaviour.
+   */
+  productionResolver?: ItemRefResolver;
 }
 
 /**
@@ -51,6 +61,14 @@ function isDevResolverEnvSet(): boolean {
 export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHandlers {
   const useFixtureResolver = !deps.isPackaged && isDevResolverEnvSet();
 
+  // Precedence (additive — preserves 005's dev behaviour exactly):
+  //   dev + fixture flag  → fixture resolver (the dev escape hatch; never in a
+  //                         packaged build — `!isPackaged` guards it)
+  //   otherwise           → 009's production resolver when supplied; else the
+  //                         dep is omitted and CartBridgeHandlers falls back to
+  //                         DEFAULT_ITEM_REF_RESOLVER (refuses generically).
+  const resolveItemRef = useFixtureResolver ? fixtureResolver : deps.productionResolver;
+
   const baseDeps = {
     getCurrentSession: deps.getCurrentSession,
     cartStore: bindCartStore(deps.dbHandle),
@@ -58,7 +76,10 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
     auditEmitter: deps.auditEmitter,
   };
 
+  // Only attach `resolveItemRef` when one was resolved — omitting it lets
+  // CartBridgeHandlers apply its DEFAULT_ITEM_REF_RESOLVER fallback
+  // (`exactOptionalPropertyTypes`: never set the key to `undefined`).
   return new CartBridgeHandlers(
-    useFixtureResolver ? { ...baseDeps, resolveItemRef: fixtureResolver } : baseDeps,
+    resolveItemRef !== undefined ? { ...baseDeps, resolveItemRef } : baseDeps,
   );
 }
