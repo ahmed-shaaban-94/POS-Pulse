@@ -72,9 +72,9 @@ export function CatalogueSalePane({
           useCartStore.getState().applyCartCreated(res.cart_id);
         }
       })
-      /* v8 ignore next 3 — create rejection is an Electron-transport edge; tests script resolves */
       .catch(() => {
-        /* leave activeCart null; a later mount/effect retries */
+        // A rejected create (IPC transport edge) leaves activeCart null; a later
+        // mount/effect retries. Swallowed so the effect never throws.
       })
       .finally(() => {
         creatingRef.current = false;
@@ -111,8 +111,9 @@ export function CatalogueSalePane({
               break;
           }
         })
-        /* v8 ignore next 3 — bridge invoke rejection is an Electron-transport edge; tests script resolves */
         .catch(() => {
+          // A rejected bridge invoke (IPC transport edge) degrades to idle —
+          // never leaves the FSM stuck in `searching`.
           useCatalogueSearchStore.getState().clear();
         });
     },
@@ -144,8 +145,9 @@ export function CatalogueSalePane({
               break;
           }
         })
-        /* v8 ignore next 3 — bridge invoke rejection is an Electron-transport edge; tests script resolves */
         .catch(() => {
+          // A rejected bridge invoke (IPC transport edge) degrades to idle —
+          // never leaves the FSM stuck in `searching`.
           useCatalogueSearchStore.getState().clear();
         });
     },

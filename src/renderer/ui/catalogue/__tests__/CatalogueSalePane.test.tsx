@@ -228,3 +228,175 @@ describe('CatalogueSalePane — eager cart lifecycle (T049a wiring b)', () => {
     expect(create).not.toHaveBeenCalled();
   });
 });
+
+describe('CatalogueSalePane — remaining response mappings (T049a coverage)', () => {
+  it('typed search too_short clears the FSM back to idle', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'too_short' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'بنادول' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(search).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+
+  it('typed search refused clears the FSM back to idle (generic, NFR-6a)', async () => {
+    const search = vi.fn().mockResolvedValue({ kind: 'refused', reason: 'no_session' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'بنادول' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(search).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+
+  it('a scan with no match → not_found', async () => {
+    const lookupBarcode = vi.fn().mockResolvedValue({ kind: 'not_found' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '000' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('not_found');
+    });
+  });
+
+  it('a scan against an unavailable catalogue → catalogue_unavailable', async () => {
+    const lookupBarcode = vi.fn().mockResolvedValue({ kind: 'catalogue_unavailable' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '222' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('catalogue_unavailable');
+    });
+  });
+
+  it('a refused scan clears the FSM back to idle (generic, NFR-6a)', async () => {
+    const lookupBarcode = vi
+      .fn()
+      .mockResolvedValue({ kind: 'refused', reason: 'tenant_isolation' });
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '333' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await waitFor(() => {
+      expect(lookupBarcode).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+});
+
+describe('CatalogueSalePane — bridge rejection degrades to idle (T049a resilience)', () => {
+  it('a rejected catalogue.search resets the FSM to idle (no stuck searching)', async () => {
+    const search = vi.fn().mockRejectedValue(new Error('ipc transport error'));
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ search })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const input = screen.getByRole('searchbox');
+    fireEvent.change(input, { target: { value: 'بنادول' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => {
+      expect(search).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+
+  it('a rejected catalogue.lookupBarcode resets the FSM to idle', async () => {
+    const lookupBarcode = vi.fn().mockRejectedValue(new Error('ipc transport error'));
+    render(
+      <CatalogueSalePane
+        cartId="cart-1"
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge({ lookupBarcode })}
+        cartBridge={cartBridge()}
+      />,
+    );
+    const scan = screen.getByTestId('scan-capture-field');
+    fireEvent.change(scan, { target: { value: '444' } });
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await waitFor(() => {
+      expect(lookupBarcode).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(useCatalogueSearchStore.getState().state.kind).toBe('idle');
+    });
+  });
+
+  it('a rejected cart.create leaves activeCart null (retried on a later mount)', async () => {
+    useCartStore.getState().reset();
+    const create = vi.fn().mockRejectedValue(new Error('ipc transport error'));
+    const cb = {
+      create,
+      lines: { add: vi.fn(), update: vi.fn(), remove: vi.fn(), setNote: vi.fn() },
+      discountPlaceholders: { add: vi.fn(), remove: vi.fn() },
+      void: vi.fn(),
+      handoff: vi.fn(),
+      subscribe: vi.fn(),
+    } as unknown as CartBridgeAPI;
+    render(
+      <CatalogueSalePane
+        onLineAdded={vi.fn()}
+        catalogueBridge={catalogueBridge()}
+        cartBridge={cb}
+      />,
+    );
+    await waitFor(() => {
+      expect(create).toHaveBeenCalled();
+    });
+    // The rejection is swallowed; no cart recorded, no throw.
+    expect(useCartStore.getState().activeCart).toBeNull();
+  });
+});
