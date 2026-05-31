@@ -117,12 +117,14 @@ describe('applyDevSeedCatalogueIfRequested — feeds the production read path', 
       logger: silentLogger(),
     });
     const repo = createProductRepo(handleFor(db));
-    const withBarcode = DEV_CATALOGUE_FIXTURE.find((p) => p.barcodes.length > 0);
-    if (withBarcode === undefined) throw new Error('no fixture product has a barcode');
+    // An ACTIVE product with a unique barcode → deterministic `one` (FR-4). The
+    // active guard ensures we never pick the inactive fixture row (→ not_found).
+    const withBarcode = DEV_CATALOGUE_FIXTURE.find((p) => p.active === 1 && p.barcodes.length > 0);
+    if (withBarcode === undefined) throw new Error('no active fixture product has a barcode');
     const firstBarcode = withBarcode.barcodes[0];
     if (firstBarcode === undefined) throw new Error('barcode list empty');
     const res = repo.lookupByBarcode(DEV_SEED_TENANT_ID, firstBarcode.barcode);
-    expect(['one', 'not_found', 'ambiguous']).toContain(res.kind);
+    expect(res.kind).toBe('one');
   });
 });
 

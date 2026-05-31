@@ -288,6 +288,12 @@ export function applyDevSeedCatalogueIfRequested(deps: DevSeedCatalogueDeps): bo
 
   const seed = deps.db.transaction(() => {
     for (const p of DEV_CATALOGUE_FIXTURE) {
+      // Money safety (P1): a fixture price must be a non-negative safe integer
+      // before it reaches products.price_minor. The hardcoded fixtures satisfy
+      // this; the guard documents the invariant and fails loud on a bad edit.
+      if (!Number.isSafeInteger(p.price_minor) || p.price_minor < 0) {
+        throw new Error(`dev-seed: invalid price_minor for fixture product ${p.product_id}`);
+      }
       const nameFoldSource = p.name_en === null ? p.name_ar : `${p.name_ar} ${p.name_en}`;
       // Fold the alias terms (JSON array) into one searchable string, or null.
       let aliasFold: string | null = null;
