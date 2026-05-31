@@ -4,9 +4,26 @@
 **Plan:** [./plan.md](./plan.md) v1.0
 **Created:** 2026-05-30
 
-> Reviewer's walkthrough — how to test each user story independently after each slice. No
-> implementation exists yet; this is the acceptance path `/speckit-tasks` derives test tasks from.
-> All slices are gated (§A0–§A5); nothing here is runnable until the slices land.
+> Reviewer's walkthrough — how to test each user story independently after each slice. This is the
+> acceptance path `/speckit-tasks` derived test tasks from. Slices are gated (§A0–§A5).
+
+> **Live as of S5/T049a+T049b (2026-05-31):** the search/scan/confirm/add path is now runnable in a
+> **dev build**. Launch with the catalogue surface mounted + seeded:
+>
+> ```bash
+> POS_PULSE_DEV_SKIP_PAIRING=1 \
+> POS_PULSE_DEV_SKIP_OPERATOR_SIGNIN=1 \
+> POS_PULSE_FEATURE_CART=1 \
+> POS_PULSE_FEATURE_PRODUCT_SEARCH=1 \
+> POS_PULSE_DEV_SEED_CATALOGUE=1 \
+> npm run dev
+> ```
+>
+> The four `POS_PULSE_DEV_*` / `_FEATURE_*` flags are fail-closed and ignored in packaged builds (see
+> `.env.example`). `PRODUCT_SEARCH` needs `CART` (the surface mounts next to CartPane); `DEV_SEED_CATALOGUE`
+> fills the otherwise-empty catalogue with ~12 fixture products on `dev-tenant` (matching the dev session's
+> tenant) so the happy path resolves instead of `catalogue_unavailable`. Without the seed, a real build
+> only exercises the `catalogue_unavailable` / `not_found` states.
 
 ---
 
