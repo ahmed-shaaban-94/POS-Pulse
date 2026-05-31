@@ -68,6 +68,25 @@ export type ProductSearchResult =
   | { kind: 'not_found' }
   | { kind: 'unavailable' };
 
+/**
+ * The minimal seam-relevant slice of a product row, as seen by the S4 resolver.
+ * Unlike the lookup/search reads this is NOT active-filtered: the resolver needs
+ * the raw `active` flag to distinguish `disabled` (exists-but-inactive, FR-18)
+ * from `unknown_item` (no such product). `price_minor` is carried raw — the
+ * `Number.isSafeInteger` money guard lives on the resolve path (FR-19), not here.
+ */
+export interface SeamProductRow {
+  readonly name_ar: string;
+  readonly price_minor: number;
+  readonly active: boolean;
+}
+
+/** The resolve read result. `unavailable` is the repo's infra signal (FR-24). */
+export type ProductResolveResult =
+  | { kind: 'found'; product: SeamProductRow }
+  | { kind: 'not_found' }
+  | { kind: 'unavailable' };
+
 export interface ProductRepo {
   /** Exact barcode lookup (FR-4). `rawBarcode` is folded via `normalize()`. */
   lookupByBarcode(tenantId: string, rawBarcode: string): ProductLookupResult;
@@ -80,6 +99,14 @@ export interface ProductRepo {
    * (FR-16) before calling this.
    */
   search(tenantId: string, rawQuery: string): ProductSearchResult;
+  /**
+   * Read the seam-relevant slice of a product by its `product_id`, WITHOUT the
+   * active filter (S4 / R7). Tenant-scoped in SQL (P17). The resolver
+   * (`resolve-item-ref.ts`) branches the `active` flag into `ok` / `disabled`.
+   * `not_found` = no such product in a populated catalogue; `unavailable` =
+   * empty / missing / unreadable read model.
+   */
+  resolveForSeam(tenantId: string, productId: string): ProductResolveResult;
 }
 
 // Qualified with the `p.` alias: in the barcode JOIN, `products` and
@@ -183,7 +210,30 @@ export function createProductRepo(db: DatabaseHandle): ProductRepo {
     }
   }
 
-  return { lookupByBarcode, lookupBySku, search };
+  function resolveForSeam(tenantId: string, productId: string): ProductResolveResult {
+    try {
+      if (!catalogueHasRows()) return { kind: 'unavailable' };
+
+      // NOT active-filtered — the resolver needs the raw `active` flag to tell
+      // `disabled` (exists, inactive) from `unknown_item` (no such product).
+      const stmt = db.prepare(`
+        SELECT p.name_ar, p.price_minor, p.active
+        FROM products p
+        WHERE p.tenant_id = ? AND p.product_id = ?
+      `) as PrepareGet<{ name_ar: string; price_minor: number; active: number }>;
+      const row = stmt.get(tenantId, productId);
+      if (row === undefined) return { kind: 'not_found' };
+
+      return {
+        kind: 'found',
+        product: { name_ar: row.name_ar, price_minor: row.price_minor, active: row.active === 1 },
+      };
+    } catch {
+      return { kind: 'unavailable' };
+    }
+  }
+
+  return { lookupByBarcode, lookupBySku, search, resolveForSeam };
 }
 
 /**

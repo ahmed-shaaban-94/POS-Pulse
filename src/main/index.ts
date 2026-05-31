@@ -10,6 +10,9 @@ import { registerPairingHandlers } from './ipc/pairing.js';
 import { registerOperatorHandlers } from './ipc/operator.js';
 import { registerCartHandlers } from './ipc/cart.js';
 import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
+// 009-product-search-and-barcode-lookup S4 (T043) — production R7 resolver.
+import { createProductRepo } from './catalogue/product-repo.js';
+import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import { bindPaymentAttemptsRepository } from './payments/repositories/payment-attempts.repository.js';
 import { bindPaymentTenderLinesRepository } from './payments/repositories/payment-tender-lines.repository.js';
@@ -571,15 +574,29 @@ app
       }),
     });
 
+    // 009-product-search-and-barcode-lookup S4 (T043) — the production R7
+    // resolver. 005 left `cart.resolveItemRef` unwired (refusing stub); 009
+    // wires a real read-model-backed resolver behind the SAME §A1 seam. It
+    // re-reads name/price authoritatively from the catalogue (the renderer
+    // supplies only `{ item_ref }`), tenant-scoped to the live session (P17).
+    // The dev fixture still wins in an unpackaged build with the fixture flag
+    // set (see wire-cart-handlers.ts precedence); this is the production path.
+    const catalogueResolver = createCatalogueResolver({
+      repo: createProductRepo(dbHandle),
+      // `linesAdd` gates `no_session` before the resolver runs, so a null
+      // session never reaches here; coalesce defensively so the closure's
+      // `string` return is total and never throws.
+      getTenantId: () => operatorSessionManager.getCurrent()?.tenant_id ?? '',
+    });
+
     // 005-sales-cart S2 — register `cart:*` IPC with DB-backed CartStore.
-    // resolveItemRef defaults to the refusing stub in cart-bridge.ts until
-    // the item-catalogue feature ships (T053 / R7).
     const cartBridgeHandlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => operatorSessionManager.getCurrent(),
       logger: mainLogger,
       auditEmitter,
       isPackaged: app.isPackaged,
+      productionResolver: catalogueResolver,
     });
     registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
 
