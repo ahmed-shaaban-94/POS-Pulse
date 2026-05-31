@@ -21,6 +21,8 @@
 
 import type {
   CatalogueBridgeAPI,
+  CatalogueLookupBarcodeRequest,
+  CatalogueLookupSkuRequest,
   CatalogueLookupResponse,
   CatalogueSearchResponse,
   CatalogueResolveResponse,
@@ -29,34 +31,63 @@ import {
   requireCatalogueSession,
   type OperatorSessionForCatalogue,
 } from './require-catalogue-session.js';
+import type { ProductLookupResult, ProductRepo } from './product-repo.js';
 
 export type CatalogueBridge = CatalogueBridgeAPI;
 
 export interface CatalogueBridgeDependencies {
   /** The current operator session, or null when none is active (NFR-6a gate). */
   getCurrentSession: () => OperatorSessionForCatalogue | null;
+  /**
+   * The read-only product repo (S2). Tenant scoping flows through the session's
+   * `tenant_id` into the repo's `WHERE tenant_id = ?` (P17). Optional: when
+   * absent (the S1 skeleton), every lookup returns the honest
+   * `catalogue_unavailable` stub — the read model is genuinely not wired.
+   * `search` / `resolve` remain stubs until S3 / S4.
+   */
+  productRepo?: ProductRepo;
+}
+
+/** Map the repo's discriminated result to the bridge lookup response. */
+function lookupResultToResponse(result: ProductLookupResult): CatalogueLookupResponse {
+  switch (result.kind) {
+    case 'one':
+      return { kind: 'one', product: result.product };
+    case 'not_found':
+      return { kind: 'not_found' };
+    case 'ambiguous':
+      return { kind: 'ambiguous' };
+    case 'unavailable':
+      return { kind: 'catalogue_unavailable' };
+  }
 }
 
 export function createCatalogueBridge(deps: CatalogueBridgeDependencies): CatalogueBridge {
-  const { getCurrentSession } = deps;
+  const { getCurrentSession, productRepo } = deps;
 
-  // S1 skeleton: each handler gates on an active session first (NFR-6a), then
-  // returns the honest `catalogue_unavailable` stub (the read model lands in
-  // S2). The `req` params the interface declares are intentionally omitted here
-  // — there is nothing to read yet; S2/S3/S4 reintroduce them when the repo,
-  // search, and resolver are wired. (`await Promise.resolve` keeps these async
-  // per the interface without an unused-await lint, mirroring the sales bridge.)
+  // S2: `lookupBarcode` / `lookupSku` gate first (NFR-6a), then query the
+  // tenant-scoped repo (the session's `tenant_id` is the only tenant the repo
+  // ever sees, P17) and map the result. With no repo wired (S1 skeleton) the
+  // catalogue is genuinely unavailable. `search` / `resolve` stay stubs until
+  // S3 / S4. (`await Promise.resolve` on the stubs keeps them async per the
+  // interface without an unused-await lint, mirroring the sales bridge.)
   return {
-    async lookupBarcode(): Promise<CatalogueLookupResponse> {
+    async lookupBarcode(req: CatalogueLookupBarcodeRequest): Promise<CatalogueLookupResponse> {
       const gate = requireCatalogueSession(getCurrentSession());
       if (gate.kind === 'refused') return gate;
-      return await Promise.resolve({ kind: 'catalogue_unavailable' });
+      if (productRepo === undefined)
+        return await Promise.resolve({ kind: 'catalogue_unavailable' });
+      const result = productRepo.lookupByBarcode(gate.session.tenant_id, req.barcode);
+      return await Promise.resolve(lookupResultToResponse(result));
     },
 
-    async lookupSku(): Promise<CatalogueLookupResponse> {
+    async lookupSku(req: CatalogueLookupSkuRequest): Promise<CatalogueLookupResponse> {
       const gate = requireCatalogueSession(getCurrentSession());
       if (gate.kind === 'refused') return gate;
-      return await Promise.resolve({ kind: 'catalogue_unavailable' });
+      if (productRepo === undefined)
+        return await Promise.resolve({ kind: 'catalogue_unavailable' });
+      const result = productRepo.lookupBySku(gate.session.tenant_id, req.sku);
+      return await Promise.resolve(lookupResultToResponse(result));
     },
 
     async search(): Promise<CatalogueSearchResponse> {

@@ -19,8 +19,9 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 ---
 
 > ✅ **§A0 + §A1 RATIFIED 2026-05-30**; **§A2 RATIFIED 2026-05-31** (D1–D6 accepted; migrations at `0029`/`0030`).
-> **S1 done (PRs #317–#320); S2 + S3 unblocked.** Only **§A5** (production readiness) remains — it gates S5.
+> **S1 done (PRs #317–#320); S2a migrations done (PR #322); S2 read-repo + exact lookup done (T022–T030 — this PR).** S3 + S4 unblocked. Only **§A5** (production readiness) remains — it gates S5.
 > Seam approach (§A1) = match 005's live `{display_name, unit_price_minor}`; `version` deferred.
+> **S2 read-repo note:** exact `lookupBarcode`/`lookupSku` wired to `product-repo.ts` (tenant-scoped in SQL, active-only, ambiguity via COUNT DISTINCT, catalogue-unavailable distinct from not-found). **Not yet renderer-reachable** — the `catalogue.*` `ipcMain` registration + repo construction in `index.ts` (deferred from T016) is owned by S4/T043; no task between S2 and S4 currently registers it (flagged for the reviewer).
 
 ---
 
@@ -122,15 +123,15 @@ overridden by the constitution — same posture as 005 tasks.md.)
 
 - [X] T020 [US1] Test (RED): migration creates `products` + `product_barcodes` + `name_fold`/`alias_fold` columns + indexes (barcode_norm, sku_norm, name_fold) — `tests/integration/catalogue/migrations.test.ts` **(§A2)**
 - [X] T021 [US1] Author the migrations for `products` + `product_barcodes` + search-fold columns/indexes; tables ship **empty** (no seed rows) — `migrations/0029_create_products.sql` + `migrations/0030_create_product_barcodes.sql` **(§A2)**
-- [ ] T022 [US1] Test (RED): `product-repo` exact barcode lookup — one match / zero (not_found) / >1 active product (ambiguous) / inactive excluded / tenant-scoped — `src/main/catalogue/__tests__/product-repo.barcode.test.ts`
-- [ ] T023 [US1] Test (RED): `product-repo` exact SKU lookup (one / zero / inactive / tenant-scoped) — `src/main/catalogue/__tests__/product-repo.sku.test.ts`
-- [ ] T024 [US1] Implement `product-repo.ts` read-only queries (barcode_norm + sku exact lookup; tenant filter; active guard; ambiguity detection via COUNT distinct product_id) — `src/main/catalogue/product-repo.ts`
-- [ ] T025 [US1] Implement `catalogue.lookupBarcode` + `catalogue.lookupSku` handlers (normalize → repo → `one`/`not_found`/`ambiguous`/`catalogue_unavailable`) — `src/main/catalogue/catalogue-bridge.ts`
-- [ ] T026 [US3] Test (RED): catalogue-unavailable detection — empty / missing / unreadable read model all return ONE generic `catalogue_unavailable`, **distinct from `not_found`** (SC-10 matrix) — `src/main/catalogue/__tests__/catalogue-unavailable.test.ts`
-- [ ] T027 [US3] Implement the empty/missing/unreadable detection path feeding the `catalogue_unavailable` state (FR-24; staleness NOT surfaced, FR-24a) — `src/main/catalogue/product-repo.ts`
-- [ ] T028 [US1] Performance test: exact barcode/SKU lookup ≤50 ms p95 @ ~50k-row fixture (NFR-1) — `src/main/catalogue/__tests__/perf.exact.test.ts`
-- [ ] T029 [P] [US1] Extend cross-process redaction smoke to `catalogue.*` payloads (no raw query/PII/credential leakage; NFR-7) — `src/main/catalogue/__tests__/redaction.smoke.test.ts`
-- [ ] T030 [US1] Bridge-surface **security review** (mirrors 005 S2): walk the `catalogue.*` diff line-by-line; record findings — `specs/009-product-search-and-barcode-lookup/security-review/s2-review.md`
+- [X] T022 [US1] Test (RED): `product-repo` exact barcode lookup — one match / zero (not_found) / >1 active product (ambiguous) / inactive excluded / tenant-scoped — `src/main/catalogue/__tests__/product-repo.barcode.test.ts` — *also covers active+inactive-share-a-barcode → `one` (not ambiguous) and the normalize() round trip.*
+- [X] T023 [US1] Test (RED): `product-repo` exact SKU lookup (one / zero / inactive / tenant-scoped) — `src/main/catalogue/__tests__/product-repo.sku.test.ts`
+- [X] T024 [US1] Implement `product-repo.ts` read-only queries (barcode_norm + sku exact lookup; tenant filter; active guard; ambiguity detection via COUNT distinct product_id) — `src/main/catalogue/product-repo.ts` — *folds the raw query via `normalize()` internally (single `_norm` contract); columns `p.`-qualified to avoid the JOIN ambiguous-column trap; 100% stmt/func coverage.*
+- [X] T025 [US1] Implement `catalogue.lookupBarcode` + `catalogue.lookupSku` handlers (normalize → repo → `one`/`not_found`/`ambiguous`/`catalogue_unavailable`) — `src/main/catalogue/catalogue-bridge.ts` — *`productRepo` is an OPTIONAL dep — absent ⇒ honest `catalogue_unavailable` (keeps the S1 gating test green); gate-first preserved.*
+- [X] T026 [US3] Test (RED): catalogue-unavailable detection — empty / missing / unreadable read model all return ONE generic `catalogue_unavailable`, **distinct from `not_found`** (SC-10 matrix) — `src/main/catalogue/__tests__/catalogue-unavailable.test.ts`
+- [X] T027 [US3] Implement the empty/missing/unreadable detection path feeding the `catalogue_unavailable` state (FR-24; staleness NOT surfaced, FR-24a) — `src/main/catalogue/product-repo.ts` — *empty = `catalogueHasRows()` false (**global**, not tenant-scoped — valid for the single-tenant-per-terminal MVP; see PR/security-review); missing/unreadable = caught query throw → `unavailable`, never rethrown across IPC.*
+- [X] T028 [US1] Performance test: exact barcode/SKU lookup ≤50 ms p95 @ ~50k-row fixture (NFR-1) — `src/main/catalogue/__tests__/perf.exact.test.ts` — **as-built: correctness-at-scale, NO timing assertion.** A wall-clock p95 (absolute OR ratio) is irreducibly flaky under the parallel Vitest runner / sql.js; the test asserts the repo stays correct at ~50k rows. The authoritative ≤50 ms p95 is **T054 at §A5** on target hardware (008 bench-smoke precedent).
+- [X] T029 [P] [US1] Extend cross-process redaction smoke to `catalogue.*` payloads (no raw query/PII/credential leakage; NFR-7) — `src/main/catalogue/__tests__/redaction.smoke.test.ts` — *asserts (a) central pino redaction scrubs forbidden keys nested in a catalogue payload, (b) the `one` snapshot surface carries zero forbidden keys (display-only allowlist). No new redaction key needed; the bridge logs nothing in S2.*
+- [X] T030 [US1] Bridge-surface **security review** (mirrors 005 S2): walk the `catalogue.*` diff line-by-line; record findings — `specs/009-product-search-and-barcode-lookup/security-review/s2-review.md` — *CLEARED; risks R-WIRING / R-PERF-FIDELITY / R-CATCH-BREADTH logged (all LOW).*
 
 ## Phase 6 — Slice S3: folded substring search + ranking + cap + debounce + result list · gates §A0, §A2
 

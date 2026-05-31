@@ -617,9 +617,7 @@ describe('T020 — 009 S2 migrations (products / product_barcodes)', () => {
                  'بنادول', 'بنادول', 100, 'standard', 'v1',
                  '2026-05-31T00:00:00.000Z', '2026-05-31T00:00:00.000Z')`,
       );
-      const r = db.exec(
-        "SELECT prescription_required FROM products WHERE product_id = 'p-def'",
-      );
+      const r = db.exec("SELECT prescription_required FROM products WHERE product_id = 'p-def'");
       expect(Number(r[0]?.values[0]?.[0])).toBe(0);
       db.close();
     });
