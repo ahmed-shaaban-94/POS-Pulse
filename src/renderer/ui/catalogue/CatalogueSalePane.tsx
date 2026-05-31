@@ -35,6 +35,10 @@ export interface CatalogueSalePaneProps {
 /* v8 ignore start — only reachable in Electron; jsdom never sets window.api (tests inject bridges) */
 function readBridges(): { catalogue: CatalogueBridgeAPI; cart: CartBridgeAPI } {
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
+  // `catalogue` is optional on PreloadBridgeAPI (staged wiring), so it MUST be
+  // guarded. `cart` is NON-optional (`cart: CartBridgeAPI`), so the type
+  // guarantees it once `api` is present — guarding it trips
+  // `no-unnecessary-condition`. Narrowing `catalogue` is sufficient.
   if (!api || api.catalogue === undefined) {
     throw new Error(
       'CatalogueSalePane: window.api.catalogue missing — preload bridge not initialised.',
@@ -63,6 +67,9 @@ export function CatalogueSalePane({
   // always has a target. The renderer's SOLE cart.create caller. `creatingRef`
   // de-dupes against a re-render firing a second create before the first resolves.
   useEffect(() => {
+    // An explicit `cartId` means the caller already owns a cart target — never
+    // create a redundant/orphan one (the prop is the authority when supplied).
+    if (cartId !== undefined && cartId !== '') return;
     if (activeCart !== null || creatingRef.current) return;
     creatingRef.current = true;
     void getCart()
@@ -79,7 +86,7 @@ export function CatalogueSalePane({
       .finally(() => {
         creatingRef.current = false;
       });
-  }, [activeCart, getCart]);
+  }, [activeCart, cartId, getCart]);
 
   const effectiveCartId = cartId ?? activeCart?.cart_id ?? '';
 

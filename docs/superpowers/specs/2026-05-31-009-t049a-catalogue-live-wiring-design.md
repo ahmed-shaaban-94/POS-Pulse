@@ -36,7 +36,7 @@ path. It is the ONLY new stateful piece; every existing component stays unchange
 contract. It is mounted by `CartPlaceholder` only when **both** the `cart` flag (CartPane
 must be present to receive lines) **and** the new `productSearch` flag are on.
 
-```
+```text
 CartPlaceholder (/app/cart)
   └─ Workspace "Cart"
        ├─ CatalogueSalePane            ← NEW (gated: cart && productSearch)

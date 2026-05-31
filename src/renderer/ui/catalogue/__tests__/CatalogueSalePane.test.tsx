@@ -40,6 +40,9 @@ function cartBridge(): CartBridgeAPI {
 
 beforeEach(() => {
   useCatalogueSearchStore.getState().reset();
+  // Reset the cart store suite-wide too — `activeCart` would otherwise leak
+  // across tests and make later cases order-sensitive (CodeRabbit #327).
+  useCartStore.getState().reset();
 });
 afterEach(() => {
   cleanup();
