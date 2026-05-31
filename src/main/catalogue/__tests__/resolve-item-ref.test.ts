@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Database as SqlJsDatabase } from 'sql.js';
 
+import type { DatabaseHandle } from '../../db/client.js';
 import { createProductRepo } from '../product-repo.js';
 import { createCatalogueResolver, CATALOGUE_ITEM_REF_KIND } from '../resolve-item-ref.js';
 import {
@@ -145,11 +146,35 @@ describe('catalogue resolver — tenant isolation (P17)', () => {
 });
 
 describe('catalogue resolver — catalogue unavailable → generic (FR-24)', () => {
-  it('refuses generic when the read model is unavailable (empty/unreadable)', async () => {
+  it('refuses generic when the read model is EMPTY (unavailable signal)', async () => {
     db = freshCatalogueDb(); // products table empty → unavailable signal
     const resolved = await resolverFor()('p-1');
     // The seam has no `no_connection` use by 009 (local/offline); an unavailable
     // catalogue is a resolution failure → generic to the cashier (reason logged).
+    expect(resolved).toEqual({ kind: 'refused', reason: 'generic' });
+  });
+
+  it('refuses generic when the read model is UNREADABLE (query throws — FR-24)', async () => {
+    // FR-24: empty / missing / UNREADABLE all collapse to one generic state. The
+    // missing/unreadable path is the repo's try/catch → `unavailable` →
+    // resolver `generic`. A throwing handle (dropped table / disk I/O) is the
+    // canonical unreadable case (mirrors `catalogue-unavailable.test.ts`).
+    const throwing: DatabaseHandle = {
+      pragma: () => null,
+      prepare: () => {
+        throw new Error('disk I/O error');
+      },
+      exec: () => undefined,
+      transaction: <T extends (...args: never[]) => unknown>(fn: T): T =>
+        ((...args: never[]): unknown => fn(...args)) as T,
+      close: () => undefined,
+    };
+    const resolve = createCatalogueResolver({
+      repo: createProductRepo(throwing),
+      getTenantId: () => TENANT,
+    });
+
+    const resolved = await resolve('p-1');
     expect(resolved).toEqual({ kind: 'refused', reason: 'generic' });
   });
 });
