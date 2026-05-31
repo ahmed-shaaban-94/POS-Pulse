@@ -215,6 +215,7 @@ export function CatalogueSalePane({
         <CatalogueAddController
           cartId={effectiveCartId}
           onLineAdded={onLineAdded}
+          onResolved={() => searchInputRef.current?.focus()}
           {...(cartBridge !== undefined ? { bridge: cartBridge } : {})}
         />
       )}

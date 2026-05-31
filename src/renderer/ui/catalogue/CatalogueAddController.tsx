@@ -41,6 +41,13 @@ export interface CatalogueAddControllerProps {
    * cart-line-list write path (no parallel mutation, FR-20).
    */
   onLineAdded: (res: AddedLineResult) => void;
+  /**
+   * Called after the panel resolves to idle — a successful add OR a cancel
+   * (NOT a generic refusal, which stays in `confirm_pending` for retry). The
+   * owner uses this to return focus to the search input for the next item
+   * (T056 / SC-1 keyboard recovery). Refusal keeps focus in the dialog.
+   */
+  onResolved?: () => void;
   /** Test-only bridge injection (mirrors CartPane `_testBridge`). MUST NOT be used in production. */
   bridge?: CartBridgeAPI;
   /** Confirm-add quantity. Always 1 for confirm-first (FR-5); a prop only for testability. */
@@ -62,6 +69,7 @@ function readCartBridge(): CartBridgeAPI {
 export function CatalogueAddController({
   cartId,
   onLineAdded,
+  onResolved,
   bridge,
   quantity = 1,
 }: CatalogueAddControllerProps): JSX.Element | null {
@@ -102,6 +110,8 @@ export function CatalogueAddController({
         });
         // Clear 009's search state for the next item (FSM owns no cart state).
         useCatalogueSearchStore.getState().confirmAdd();
+        // Hand focus back to the input for the next scan (SC-1).
+        onResolved?.();
       } else {
         // Generic, non-leaking block (FR-19). Stay in confirm_pending — no partial
         // line was created (FR-22); the cashier can retry or cancel.
@@ -123,6 +133,8 @@ export function CatalogueAddController({
   function handleCancel(): void {
     setAddError(null);
     useCatalogueSearchStore.getState().cancelConfirm();
+    // Return focus to the input (Escape / Cancel recovery, SC-1).
+    onResolved?.();
   }
 
   return (
