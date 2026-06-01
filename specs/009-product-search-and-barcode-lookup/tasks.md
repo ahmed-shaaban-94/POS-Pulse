@@ -19,7 +19,7 @@ description: "Task list for 009-product-search-and-barcode-lookup — slice-orga
 ---
 
 > ✅ **§A0 + §A1 RATIFIED 2026-05-30**; **§A2 RATIFIED 2026-05-31** (D1–D6 accepted; migrations at `0029`/`0030`).
-> **S1 done (PRs #317–#320); S2a migrations done (PR #322); S2 read-repo done (PR #323); S3 folded search done (T031–T039 — this PR).** S4 unblocked (resolve + 005 seam). Only **§A5** (production readiness) remains — it gates S5.
+> **009 COMPLETE — §A5 SIGNED OFF (caveated) 2026-06-01.** All slices S0–S5 merged (#317–#338); T054 perf bring-up PASS on target hardware. Deferred/waived: manual legs of T050/T056 (packaged build + human; jsdom-automated coverage stands in). See the §A5 gate row below.
 > Seam approach (§A1) = match 005's live `{display_name, unit_price_minor}`; `version` deferred.
 > **S2 read-repo note:** exact `lookupBarcode`/`lookupSku` wired to `product-repo.ts` (tenant-scoped in SQL, active-only, ambiguity via COUNT DISTINCT, catalogue-unavailable distinct from not-found). **Not yet renderer-reachable** — the `catalogue.*` `ipcMain` registration + repo construction in `index.ts` (deferred from T016) is owned by S4/T043; no task between S2 and S4 currently registers it (flagged for the reviewer).
 
@@ -75,7 +75,7 @@ overridden by the constitution — same posture as 005 tasks.md.)
 | **§A0** — S0 visual-direction review + 005 seam-wiring coordination | every slice | ✅ **RATIFIED 2026-05-30** (on merge of PR #318 — S0 contact-sheet + review-record, T009–T013, checklist 1–13 all PASS). |
 | **§A1** — R7 seam-wiring approach ratified with 005 owner | S1, S2, S4 | ✅ **RATIFIED 2026-05-30** — 009 satisfies 005's **live** `{ display_name, unit_price_minor }` seam; **`version` deferred** (forward-looking provenance, R9; binds in code at S4). No 005 change. |
 | **§A2** — `products`/`product_barcodes`/fold-column migration review | S2, S3 | ✅ **RATIFIED 2026-05-31** — see [`migration-review/s2-migration-review.md`](./migration-review/s2-migration-review.md); decisions D1–D6 accepted (sku_norm, name_fold incl. en, tax_category NOT NULL, app-enforced uniqueness, partial `active=1` indexes, fold-scan + FTS5 fallback). Migrations land at `0029`/`0030`. |
-| **§A5** — production readiness (runbook, rollback, perf bring-up @ 50k) | S5 / rollout PR | ⏳ open |
+| **§A5** — production readiness (runbook, rollback, perf bring-up @ 50k) | S5 / rollout PR | ✅ **SIGNED OFF (caveated) 2026-06-01** — runbook (#331) + rollback (#331) authored; **T054 perf bring-up PASS** on target hardware (LENOVO 82K2 / Ryzen 7 5800H / NVMe SSD, SHA `3461f00`: NFR-1 worst p95 0.160 ms ≤ 50, NFR-2 worst p95 15.170 ms ≤ 150; R-RISK-1/FTS5 NOT triggered — [`perf-bringup.md`](./perf-bringup.md), #338) + owner sign-off. **Caveat:** manual legs of T050 (screenshot/contact-sheet) + T056 (packaged no-mouse walkthrough) deferred/waived for the internal/dev surface (need packaged build + human; jsdom-automated coverage stands in). |
 
 ---
 
