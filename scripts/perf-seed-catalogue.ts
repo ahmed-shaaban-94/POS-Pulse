@@ -77,21 +77,42 @@ function parseArgs(argv: string[]): Args {
     keep: false,
   };
   for (let i = 0; i < argv.length; i++) {
-    const flag = argv[i] ?? '';
+    const token = argv[i] ?? '';
+
+    // npm's `--` separator forwarding is inconsistent across platforms/npm
+    // versions — a bare `--` sometimes survives into argv. Skip it so
+    // `npm run perf:seed -- --rows 50000` works regardless. (See the project
+    // memory note: npm `--` is unreliable on this machine.)
+    if (token === '--') continue;
+
+    // Accept both `--rows 50000` (space form) and `--rows=50000` (equals form);
+    // the equals form is robust to any npm reordering of forwarded args.
+    const eq = token.indexOf('=');
+    const flag = eq === -1 ? token : token.slice(0, eq);
+    const inlineValue = eq === -1 ? undefined : token.slice(eq + 1);
     const next = (): string => {
+      if (inlineValue !== undefined) return inlineValue;
       const v = argv[++i];
       if (v === undefined) throw new Error(`flag ${flag} needs a value`);
       return v;
     };
+
     if (flag === '--rows') a.rows = Number.parseInt(next(), 10);
     else if (flag === '--out') a.out = path.resolve(next());
     else if (flag === '--samples') a.samples = Number.parseInt(next(), 10);
     else if (flag === '--warmup') a.warmup = Number.parseInt(next(), 10);
     else if (flag === '--measure') a.measure = true;
     else if (flag === '--keep') a.keep = true;
-    else throw new Error(`unknown flag: ${flag}`);
+    // Hard error on a genuinely unknown flag. Do NOT silently ignore: a typo'd
+    // flag silently falling back to the default (e.g. 50k rows when you meant
+    // something else) would corrupt the perf evidence without warning.
+    else throw new Error(`unknown flag: ${token}`);
   }
   if (!Number.isInteger(a.rows) || a.rows < 1) throw new Error('--rows must be a positive integer');
+  if (!Number.isInteger(a.samples) || a.samples < 1)
+    throw new Error('--samples must be a positive integer');
+  if (!Number.isInteger(a.warmup) || a.warmup < 0)
+    throw new Error('--warmup must be a non-negative integer');
   return a;
 }
 
