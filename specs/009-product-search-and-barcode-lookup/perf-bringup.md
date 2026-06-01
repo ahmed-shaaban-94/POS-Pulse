@@ -1,14 +1,14 @@
-# 009 T054 — Performance bring-up (NFR-1 / NFR-2) — SCAFFOLD
+# 009 T054 — Performance bring-up (NFR-1 / NFR-2)
 
-> **Status: T054 NOT RUN — §A5 remains OPEN.** This document is the turn-key
-> harness + recording template for the performance bring-up. The methodology,
-> seed recipe, measurement protocol, and decision gate are pre-filled; **the
-> numbers, the verdict, and the hardware spec are deliberately `[TBD — target
-> hardware]` and MUST be filled by the owner on the real Windows terminal.**
-> No agent may self-tick this — there is no CI substitute (see §0).
+> **Status: T054 RUN on target hardware 2026-06-01 — NFR-1 PASS, NFR-2 PASS.
+> §A5 remains OPEN (owner sign-off gated).** The methodology, seed recipe, and
+> measurement protocol are below; §2 (hardware) and §5 (results) are now filled
+> with **real target-terminal measurements** the owner ran and supplied (two
+> 1000-sample runs, agreed within noise). R-RISK-1 / FTS5-fallback review is
+> **NOT** triggered. This document records evidence for the human reviewer — it
+> is **NOT** an §A5 sign-off; §A5 stays owner-gated.
 >
-> Same bench-smoke posture as 008 (`a5-verification-findings.md`): this records
-> evidence for the human reviewer, it is not a sign-off.
+> Same bench-smoke posture as 008 (`a5-verification-findings.md`).
 
 ---
 
@@ -60,20 +60,21 @@ the repo number, not the full bridge round-trip.
 
 ---
 
-## 2. Target hardware — `[TBD — owner to fill]`
+## 2. Target hardware — recorded 2026-06-01 (owner-supplied)
 
-SQLite performance is dominated by storage and single-core speed. Record:
+SQLite performance is dominated by storage and single-core speed. As run on the
+designated target POS terminal (owner-confirmed):
 
 | Field | Value |
 |:--|:--|
-| Machine / model | `[TBD]` |
-| CPU (model + base clock) | `[TBD]` |
-| RAM | `[TBD]` |
-| **Disk type (SSD vs HDD — load-bearing for SQLite)** | `[TBD]` |
-| OS build | `[TBD]` (Windows 10/11 x64 per constitution) |
-| `better-sqlite3` version | `[TBD]` (from `package.json` lockfile on the build) |
-| Build under test | `[TBD]` — packaged `package:dir` build, commit SHA |
-| Power profile | `[TBD]` — run on AC / "High performance", not battery-saver |
+| Machine / model | LENOVO 82K2 |
+| CPU (model + base clock) | AMD Ryzen 7 5800H with Radeon Graphics, MaxClockSpeed 3201 MHz |
+| RAM | 13.9 GB |
+| **Disk type (SSD vs HDD — load-bearing for SQLite)** | NVMe SSD — INTEL SSDPEKNW512GZL (512 GB) + Lexar SSD NM620 512 GB (both NVMe) |
+| OS build | Microsoft Windows 11 Pro build 22631 (x64) |
+| `better-sqlite3` version | 12.9.0 |
+| Build under test | commit SHA `3461f00`; production `better-sqlite3` binding (`npm rebuild better-sqlite3` → system Node), real on-disk `.sqlite` via `npm run perf:seed` / `npx tsx scripts/perf-seed-catalogue.ts` |
+| Power profile | AC / not battery-saver (owner-confirmed; exact power-plan query was denied by permissions — owner attests AC / not battery-saver) |
 
 ---
 
@@ -166,33 +167,52 @@ For each scenario in §5, on the seeded on-disk DB:
 
 ---
 
-## 5. Scenarios + results table — `[TBD — target hardware]`
+## 5. Scenarios + results — recorded 2026-06-01 (target hardware, owner-supplied)
 
-> Fill every `[TBD]`. **Do not pre-fill PASS/FAIL** — the verdict is the owner's,
-> on real numbers. A fabricated number is worse than `[TBD]`.
+> Two fresh-process runs, 1000 samples/scenario, 50 warm-up discarded. Numbers
+> are verbatim from the `npx tsx scripts/perf-seed-catalogue.ts --rows 50000
+> --measure --samples 1000` stdout the owner supplied; all times in **ms**.
 
 ### NFR-1 — exact lookup (budget ≤ 50 ms p95)
 
-| Scenario | min | p50 | **p95** | max | Budget | Verdict |
-|:--|:--|:--|:--|:--|:--|:--|
-| `lookupByBarcode` — mid-set hit | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 50 ms | `[TBD]` |
-| `lookupBySku` — mid-set hit | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 50 ms | `[TBD]` |
-| `lookupByBarcode` — absent key (not_found) | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 50 ms | `[TBD]` |
+| Scenario | Run | min | p50 | **p95** | max | Budget | Verdict |
+|:--|:--|:--|:--|:--|:--|:--|:--|
+| `lookupByBarcode` — mid-set hit | 1 | 0.063 | 0.068 | **0.119** | 5.176 | ≤ 50 ms | ✅ PASS |
+| `lookupByBarcode` — mid-set hit | 2 | 0.064 | 0.071 | **0.137** | 1.475 | ≤ 50 ms | ✅ PASS |
+| `lookupBySku` — mid-set hit | 1 | 0.042 | 0.046 | **0.078** | 6.652 | ≤ 50 ms | ✅ PASS |
+| `lookupBySku` — mid-set hit | 2 | 0.043 | 0.047 | **0.089** | 6.889 | ≤ 50 ms | ✅ PASS |
+| `lookupByBarcode` — absent key (not_found) | 1 | 0.048 | 0.051 | **0.097** | 0.190 | ≤ 50 ms | ✅ PASS |
+| `lookupByBarcode` — absent key (not_found) | 2 | 0.049 | 0.055 | **0.160** | 8.670 | ≤ 50 ms | ✅ PASS |
+
+**NFR-1 worst p95 across both runs = 0.160 ms ≤ 50 ms → PASS** (~300× headroom; index-served, as the spec predicted).
 
 ### NFR-2 — partial folded search (budget ≤ 150 ms p95) — **decision-critical**
 
-Vary selectivity — the `LIKE '%q%'` scan cost is ~constant (full scan) but
-result-set assembly + ranking differs between a capped broad match and a narrow
-one:
+The `LIKE '%q%'` scan cost is ~constant (full scan, R4) but result-set assembly +
+ranking differs between a capped broad match and a narrow one:
 
-| Scenario | min | p50 | **p95** | max | Budget | Verdict |
-|:--|:--|:--|:--|:--|:--|:--|
-| broad token → 20-cap + `truncated` (`"product"`) | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 150 ms | `[TBD]` |
-| narrow → single match (`"zinctablet"`) | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 150 ms | `[TBD]` |
-| absent token → not_found | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 150 ms | `[TBD]` |
-| Arabic folded query (alef/yaa variant) | `[TBD]` | `[TBD]` | `[TBD]` | `[TBD]` | ≤ 150 ms | `[TBD]` |
+| Scenario | Run | min | p50 | **p95** | max | Budget | Verdict |
+|:--|:--|:--|:--|:--|:--|:--|:--|
+| broad token → 20-cap + `truncated` (`"product"`) | 1 | 12.422 | 13.244 | **15.170** | 21.898 | ≤ 150 ms | ✅ PASS |
+| broad token → 20-cap + `truncated` (`"product"`) | 2 | 12.473 | 13.139 | **15.034** | 24.887 | ≤ 150 ms | ✅ PASS |
+| narrow → single match (`"zinctablet"`) | 1 | 8.517 | 8.949 | **10.087** | 16.405 | ≤ 150 ms | ✅ PASS |
+| narrow → single match (`"zinctablet"`) | 2 | 8.434 | 9.121 | **10.283** | 17.735 | ≤ 150 ms | ✅ PASS |
+| absent token → not_found | 1 | 8.435 | 9.083 | **10.752** | 15.866 | ≤ 150 ms | ✅ PASS |
+| absent token → not_found | 2 | 7.935 | 8.956 | **9.910** | 15.414 | ≤ 150 ms | ✅ PASS |
+| Arabic folded query (alef/yaa variant) | — | — | — | — | — | ≤ 150 ms | ⚠️ not emitted — see note |
 
-Pragmas in effect during the run: `[TBD]`. Sample size N: `[TBD]`. Runs agreed within noise: `[TBD]`.
+**NFR-2 worst p95 across both runs = 15.170 ms ≤ 150 ms → PASS** (~10× headroom). **R-RISK-1 / FTS5-fallback review NOT triggered.**
+
+> **Honesty note (owner-directed).** The current T054 harness
+> (`scripts/perf-seed-catalogue.ts`) does **not** emit a separate Arabic-folded-query
+> metric — its three NFR-2 scenarios are `broad`, `narrow`, and `absent`. No separate
+> Arabic-folded p95 was produced; it is recorded here as **not emitted by the current
+> harness; no separate p95 produced** — deliberately **not** fabricated. Arabic-fold
+> *correctness* is covered elsewhere (SC-9 folded-variant tests + the `normalize()`
+> module); only a dedicated *timing* scenario is absent. A follow-up harness extension
+> can add it if the owner wants the explicit metric.
+
+Pragmas in effect during the runs: `journal_mode=wal`, `synchronous=2` (FULL — WAL default), `foreign_keys=ON` (set by `openDatabase`). Sample size N: **1000** per scenario (50 warm-up discarded). Runs agreed within noise: **yes** (e.g. broad-search p95 15.170 vs 15.034; narrow 10.087 vs 10.283).
 
 ---
 
@@ -216,25 +236,40 @@ present on the measured DB (§3 step 2) before escalating.
 | NFR-2 p95 > 150 ms | **Open R-RISK-1 / FTS5-fallback review** (stack amendment); §A5 stays blocked on it. |
 | NFR-1 p95 > 50 ms | Re-verify indexes on the measured DB first; if still over, escalate. |
 
-**Verdict: `[TBD — owner, on target hardware]`.**
+**Verdict (2026-06-01, target hardware — LENOVO 82K2, Ryzen 7 5800H, NVMe SSD):**
+- **NFR-1 PASS** — worst p95 = 0.160 ms ≤ 50 ms.
+- **NFR-2 PASS** — worst p95 = 15.170 ms ≤ 150 ms.
+- **R-RISK-1 / FTS5-fallback review NOT triggered** — both budgets met with ample
+  headroom across two within-noise runs.
+- This is the **perf evidence** for §A5; it is **NOT** an §A5 sign-off. §A5 remains
+  owner-gated (see §7).
 
 ---
 
 ## 7. Owner must clear (the non-CI gates)
 
-- [ ] Bring-up run on the **real target Windows terminal** with the **packaged
-      build** + production `better-sqlite3` (not sql.js, not a dev laptop unless
-      it *is* the target).
-- [ ] Hardware spec recorded (§2), especially **disk type**.
-- [ ] Seed built through the **real migration runner**; `0029`/`0030` indexes
-      confirmed present on the measured DB.
-- [ ] §5 tables filled; §6 verdict decided on real numbers.
-- [ ] If NFR-2 missed → R-RISK-1 / FTS5-fallback review opened.
-- [ ] §A5 sign-off references this completed document as the perf evidence.
+- [x] Bring-up run on the **real target Windows terminal** (owner-confirmed: target
+      POS terminal, LENOVO 82K2) with **production `better-sqlite3`** (12.9.0,
+      `npm rebuild`→system Node; not sql.js). **Caveat:** run via
+      `npx tsx scripts/perf-seed-catalogue.ts` (dev-build invocation of the real
+      repo binding), **not** the packaged `package:dir` build. The measured path is
+      the production `ProductRepo` query over a real on-disk SQLite with the real
+      indexes — identical to packaged behaviour for the repo-level metric — but a
+      packaged-build re-confirm is the owner's call at §A5 if desired.
+- [x] Hardware spec recorded (§2), including **disk type** (NVMe SSD).
+- [x] Seed built through the **real migration runner** (30 migrations applied);
+      `0029`/`0030` indexes confirmed present on the measured DB
+      (`idx_products_tenant_sku_norm`, `idx_product_barcodes_tenant_norm`, fold
+      indexes — see the `[seed] indexes present` line).
+- [x] §5 tables filled; §6 verdict decided on real numbers — **NFR-1 PASS, NFR-2 PASS**.
+- [x] NFR-2 not missed → R-RISK-1 / FTS5-fallback review **NOT** needed.
+- [ ] **§A5 sign-off** references this completed document as the perf evidence —
+      **OWNER-GATED, not done in this PR.** §A5 remains OPEN pending owner sign-off.
 
 ---
 
-*Scaffold authored 2026-06-01 (agent). Methodology grounded in the as-built
-T028/T035 CI tests, `product-repo.ts`, the `0029`/`0030` migrations, and spec
-NFR-1/NFR-2 + R4/R-RISK-1. Numbers/verdict/hardware intentionally left `[TBD]`
-— this is a template, not a result.*
+*Authored 2026-06-01 (agent) as a scaffold; §2/§5/§6/§7 filled 2026-06-01 with
+real target-hardware measurements the owner ran and supplied (two 1000-sample runs).
+Methodology grounded in the as-built T028/T035 CI tests, `product-repo.ts`, the
+`0029`/`0030` migrations, and spec NFR-1/NFR-2 + R4/R-RISK-1. No numbers fabricated;
+the Arabic-folded timing scenario is recorded as not-emitted, not invented (§5 note).*
