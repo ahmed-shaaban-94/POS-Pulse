@@ -1,12 +1,12 @@
 # 009 T054 — Performance bring-up (NFR-1 / NFR-2)
 
 > **Status: T054 RUN on target hardware 2026-06-01 — NFR-1 PASS, NFR-2 PASS.
-> §A5 remains OPEN (owner sign-off gated).** The methodology, seed recipe, and
-> measurement protocol are below; §2 (hardware) and §5 (results) are now filled
-> with **real target-terminal measurements** the owner ran and supplied (two
-> 1000-sample runs, agreed within noise). R-RISK-1 / FTS5-fallback review is
-> **NOT** triggered. This document records evidence for the human reviewer — it
-> is **NOT** an §A5 sign-off; §A5 stays owner-gated.
+> §A5 SIGNED OFF (caveated) 2026-06-01 — owner accepted this as the perf evidence.**
+> §2 (hardware) and §5 (results) hold **real target-terminal measurements** the
+> owner ran and supplied (two 1000-sample runs, agreed within noise). R-RISK-1 /
+> FTS5-fallback review is **NOT** triggered. **Caveat:** the manual legs of T050
+> (screenshots) + T056 (packaged no-mouse walkthrough) are deferred/waived for the
+> internal/dev surface (see §7) — jsdom-automated coverage stands in.
 >
 > Same bench-smoke posture as 008 (`a5-verification-findings.md`).
 
@@ -263,8 +263,12 @@ present on the measured DB (§3 step 2) before escalating.
       indexes — see the `[seed] indexes present` line).
 - [x] §5 tables filled; §6 verdict decided on real numbers — **NFR-1 PASS, NFR-2 PASS**.
 - [x] NFR-2 not missed → R-RISK-1 / FTS5-fallback review **NOT** needed.
-- [ ] **§A5 sign-off** references this completed document as the perf evidence —
-      **OWNER-GATED, not done in this PR.** §A5 remains OPEN pending owner sign-off.
+- [x] **§A5 SIGNED OFF (caveated) 2026-06-01** — owner accepted this document as the
+      perf evidence. **Caveat:** the manual legs of T050 (screenshot/contact-sheet)
+      and T056 (packaged no-mouse walkthrough) are deferred/waived for the
+      internal/dev surface (need a packaged build + human; jsdom-automated coverage —
+      T050 #330, T051 axe #331, T056 keyboard #333 — stands in). A packaged-build
+      perf re-confirm remains available to the owner if ever required.
 
 ---
 
