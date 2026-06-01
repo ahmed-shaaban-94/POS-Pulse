@@ -108,10 +108,36 @@ are comparable):**
 5. Optionally include a slice of inactive rows to confirm the partial
    `WHERE active = 1` index is exercised, not bypassed.
 
-**Note (optional follow-up, owner-gated):** a runnable Node/tsx seed script that
-does the above is hardware-independent and could be authored now to make this
-fully turn-key. It was NOT written as part of this scaffold (the task asked for
-the `.md`). Say the word and it can be added as a sibling script.
+### Runnable harness — `scripts/perf-seed-catalogue.ts`
+
+The seed + p95 harness is **authored and lint/typecheck-clean** —
+[`scripts/perf-seed-catalogue.ts`](../../scripts/perf-seed-catalogue.ts), exposed as
+`npm run perf:seed`. It does §3 + §4 + §5 end-to-end through the production seams
+(`openDatabase` → migration runner → `createProductRepo`), folds via the real
+`normalize()`, confirms the `0029`/`0030` indexes, prints the pragmas in effect,
+and (with `--measure`) prints the full min/p50/p95/max per scenario. It **prints**
+numbers — it never writes them into this doc; you transcribe into §5 and decide §6.
+
+```bash
+# seed a 50k-row on-disk db (no timing)
+npm run perf:seed -- --rows 50000 --out ./perf-catalogue.db
+# seed + run the p95 harness (1000 samples/scenario, 50 warm-up discarded)
+npm run perf:seed -- --rows 50000 --measure --samples 1000
+```
+
+> **ABI prerequisite (load-bearing — do this first on the target machine).**
+> `better-sqlite3`'s native binary is built for **Electron**'s Node ABI by
+> `postinstall` (`electron-rebuild`). A plain `tsx`/node run uses **system** Node,
+> so the binding fails to load with `NODE_MODULE_VERSION` mismatch (confirmed on
+> the dev box: binding=143 vs system-node=127). Before running the harness:
+> ```bash
+> npm rebuild better-sqlite3          # retarget the binding to system Node
+> npm run perf:seed -- --rows 50000 --measure
+> npx @electron/rebuild -f -w better-sqlite3   # restore the Electron build afterward
+> ```
+> The script catches the load failure and prints this exact guidance rather than
+> crashing raw. (Alternatively, run the seed from inside an Electron main-process
+> context, where the binding loads as-is.)
 
 ---
 
