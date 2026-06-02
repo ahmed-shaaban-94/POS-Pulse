@@ -44,6 +44,16 @@ Open the [interactive Three.js terminal map](docs/architecture/pos-pulse-live-ma
 
 ---
 
+## Repository structure flow
+
+Every layer of POS Pulse — from the cashier's first scan to the SaaS handoff — is laid out in a single animated diagram, framed by Spec Kit governance on the left and the quality + state machinery on the right.
+
+![POS Pulse animated repository structure flow](docs/assets/structure-flowchart.svg)
+
+Open [docs/assets/structure-flowchart.svg](docs/assets/structure-flowchart.svg) directly for the full-resolution animated view. Tokens travel each authenticated path: UI events into the renderer, validated payloads through the typed bridge, durable writes into SQLite, secrets through `safeStorage`, and contract-backed sync to the platform — with spec-kit gates and migrations taps illuminated alongside.
+
+---
+
 ## Current implementation status
 
 The current active feature is `specs/008-sale-finalization-and-receipts`; implementation is blocked pending artifact review, owner approval, and approval gates. Earlier terminal foundation, pairing, shell, operator, sales-cart, payments, and visual-system work are complete.
@@ -179,7 +189,10 @@ A sale travels through every process boundary — and never crosses one without 
 | `migrations` | Versioned SQLite migration files applied by the local migration runner |
 | `tests` | Unit and integration coverage outside process-local source test folders |
 | `specs` | Spec Kit artifacts for foundation, pairing, POS shell, operator sessions, sales, payments, visual system |
-| `docs` | Documentation index · hardware matrix · product · design system · assets |
+| `docs` | Documentation index · hardware matrix · product · design system · runbooks · architecture · assets |
+| `scripts` | Codegen, dev-electron launcher, perf seeds, LOC badge automation |
+| `.specify` | Spec Kit infrastructure · constitution v1.3.0 · templates |
+| `.github` | CI workflows · PR template · `windows-latest` gates |
 
 ### What this repo owns
 Windows 10/11 x64 Electron POS terminal · secure process boundaries · typed preload bridge · local SQLite migrations and terminal state · pairing, operator session, audit, logging, renderer shell · POS UI primitives, routes, and design tokens · MVP hardware compatibility docs.
@@ -242,7 +255,7 @@ The active feature is `specs/008-sale-finalization-and-receipts`, covering sale 
 | **Security** | [Constitution](.specify/memory/constitution.md) · [Operator security review](specs/004-operator-session/security-review/s1-review.md) |
 | **Integration** | [Pairing HTTP contract](specs/002-terminal-pairing/contracts/pairing-http.md) · [Operator bridge contract](specs/004-operator-session/contracts/bridge-api.md) · [API snapshot](scripts/openapi-snapshot.json) |
 
-Full navigation lives in [docs/README.md](docs/README.md).
+Full navigation lives in [docs/README.md](docs/README.md). Operational playbooks live in [docs/runbook](docs/runbook) (payments, sale finalization, product search, sales cart, security review, preflight).
 
 ---
 

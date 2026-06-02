@@ -1,0 +1,354 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="780" viewBox="0 0 1280 780" role="img" aria-labelledby="title desc">
+  <title id="title">POS Pulse repository structure and runtime flow</title>
+  <desc id="desc">Animated structure diagram showing how cashier input travels through the React renderer, typed preload bridge, Electron main process, into local SQLite migrations and secrets, and out to the SmartDataPulse SaaS backend. Side rails show Spec Kit governance, the test suite, and the migration runner that frame every layer.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#020617"/>
+      <stop offset="0.5" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+    <radialGradient id="bg-glow" cx="0.5" cy="0.45" r="0.6">
+      <stop offset="0" stop-color="#1e3a8a" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e293b" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#1e293b" stop-opacity="0.18"/>
+    </linearGradient>
+
+    <linearGradient id="n-blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="0.6" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="n-teal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="0.6" stop-color="#0d9488"/>
+      <stop offset="1" stop-color="#134e4a"/>
+    </linearGradient>
+    <linearGradient id="n-violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="0.6" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#4c1d95"/>
+    </linearGradient>
+    <linearGradient id="n-amber" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fcd34d"/>
+      <stop offset="0.6" stop-color="#d97706"/>
+      <stop offset="1" stop-color="#7c2d12"/>
+    </linearGradient>
+    <linearGradient id="n-emerald" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#86efac"/>
+      <stop offset="0.6" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#14532d"/>
+    </linearGradient>
+    <linearGradient id="n-rose" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fda4af"/>
+      <stop offset="0.6" stop-color="#e11d48"/>
+      <stop offset="1" stop-color="#881337"/>
+    </linearGradient>
+    <linearGradient id="n-slate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#cbd5e1"/>
+      <stop offset="0.6" stop-color="#475569"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="0.35" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <symbol id="node" overflow="visible">
+      <rect x="-110" y="-44" width="220" height="88" rx="18" fill="#0f172a" opacity="0.92" filter="url(#lift)"/>
+      <rect x="-110" y="-44" width="220" height="88" rx="18" fill="url(#gloss)" opacity="0.35"/>
+      <rect x="-110" y="-44" width="220" height="88" rx="18" fill="none" stroke="#1e293b" stroke-width="1"/>
+    </symbol>
+
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrow-bright" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#60a5fa"/>
+    </marker>
+  </defs>
+
+  <rect width="1280" height="780" fill="url(#bg)"/>
+  <rect width="1280" height="780" fill="url(#bg-glow)"/>
+
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif" fill="#e2e8f0">
+    <text x="40" y="56" font-size="26" font-weight="800" fill="#f8fafc" letter-spacing="0.4">POS Pulse · runtime &amp; repository flow</text>
+    <text x="40" y="84" font-size="14" fill="#94a3b8">Cashier ➜ Renderer ➜ Typed bridge ➜ Main ➜ SQLite + Secrets ➜ SaaS · governed by Spec Kit, migrations, and tests.</text>
+
+    <!-- Governance rails -->
+    <g opacity="0.95">
+      <rect x="40" y="120" width="180" height="600" rx="22" fill="url(#rail)"/>
+      <rect x="40" y="120" width="180" height="600" rx="22" fill="none" stroke="#1e293b"/>
+      <text x="130" y="148" text-anchor="middle" font-size="13" font-weight="700" fill="#cbd5e1">SPEC KIT GOVERNANCE</text>
+      <text x="130" y="166" text-anchor="middle" font-size="11" fill="#64748b">.specify/ · constitution · gates</text>
+      <g font-size="12" fill="#cbd5e1" text-anchor="middle">
+        <text x="130" y="220">specs/001 ▸ 009</text>
+        <text x="130" y="246" fill="#94a3b8" font-size="11">foundation → product search</text>
+        <text x="130" y="298">/speckit-specify</text>
+        <text x="130" y="324">/speckit-plan</text>
+        <text x="130" y="350">/speckit-tasks</text>
+        <text x="130" y="376">/speckit-analyze</text>
+        <text x="130" y="402">/speckit-implement</text>
+        <text x="130" y="470" fill="#94a3b8" font-size="11">constitutional rules</text>
+        <text x="130" y="492">no float money</text>
+        <text x="130" y="514">typed bridge only</text>
+        <text x="130" y="536">durable local state</text>
+        <text x="130" y="558">test-first</text>
+        <text x="130" y="580">audit ≠ PII</text>
+      </g>
+    </g>
+
+    <g opacity="0.95">
+      <rect x="1060" y="120" width="180" height="600" rx="22" fill="url(#rail)"/>
+      <rect x="1060" y="120" width="180" height="600" rx="22" fill="none" stroke="#1e293b"/>
+      <text x="1150" y="148" text-anchor="middle" font-size="13" font-weight="700" fill="#cbd5e1">QUALITY &amp; STATE</text>
+      <text x="1150" y="166" text-anchor="middle" font-size="11" fill="#64748b">tests · migrations · CI</text>
+      <g font-size="12" fill="#cbd5e1" text-anchor="middle">
+        <text x="1150" y="220">vitest · happy-dom</text>
+        <text x="1150" y="244">axe-core a11y</text>
+        <text x="1150" y="268">tests/integration</text>
+        <text x="1150" y="292">tests/contract</text>
+        <text x="1150" y="346">migrations/ (SQL)</text>
+        <text x="1150" y="370">transactional runner</text>
+        <text x="1150" y="394">0001 → 0030</text>
+        <text x="1150" y="448">.github/workflows</text>
+        <text x="1150" y="472">windows-latest CI</text>
+        <text x="1150" y="496">typecheck · lint</text>
+        <text x="1150" y="520">vitest · package:dir</text>
+        <text x="1150" y="586">electron-builder</text>
+        <text x="1150" y="610">--win --dir (unsigned)</text>
+      </g>
+    </g>
+
+    <!-- ============= MAIN PIPELINE ============= -->
+
+    <!-- 1. Cashier -->
+    <g transform="translate(640 165)">
+      <use href="#node"/>
+      <circle cx="-72" cy="0" r="20" fill="url(#n-amber)"/>
+      <circle cx="-72" cy="-6" r="7" fill="#fef3c7"/>
+      <path d="M-84 8c0-6 5-10 12-10s12 4 12 10" fill="#fef3c7"/>
+      <text x="-30" y="-6" font-size="14" font-weight="800" fill="#fafafa">Cashier / Operator</text>
+      <text x="-30" y="14" font-size="11" fill="#94a3b8">scan · keypad · receipt</text>
+    </g>
+
+    <!-- 2. Renderer -->
+    <g transform="translate(640 285)">
+      <use href="#node"/>
+      <rect x="-92" y="-22" width="44" height="44" rx="8" fill="url(#n-blue)"/>
+      <circle cx="-70" cy="0" r="6" fill="#dbeafe"/>
+      <ellipse cx="-70" cy="0" rx="14" ry="5.5" fill="none" stroke="#dbeafe" stroke-width="2" transform="rotate(60 -70 0)"/>
+      <ellipse cx="-70" cy="0" rx="14" ry="5.5" fill="none" stroke="#dbeafe" stroke-width="2" transform="rotate(-60 -70 0)"/>
+      <ellipse cx="-70" cy="0" rx="14" ry="5.5" fill="none" stroke="#dbeafe" stroke-width="2"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">src/renderer</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">React 19 · Vite 8 · Tailwind 4</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">cart · search · shell · tokens</text>
+    </g>
+
+    <!-- 3. Preload bridge -->
+    <g transform="translate(640 405)">
+      <use href="#node"/>
+      <rect x="-92" y="-22" width="44" height="44" rx="8" fill="url(#n-violet)"/>
+      <path d="M-86 0 L-54 0" stroke="#ede9fe" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="-78" cy="0" r="4" fill="#ede9fe"/>
+      <circle cx="-62" cy="0" r="4" fill="#ede9fe"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">src/preload</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">typed contextBridge</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">bridge-api.ts · Zod-validated</text>
+    </g>
+
+    <!-- 4. Main process -->
+    <g transform="translate(640 525)">
+      <use href="#node"/>
+      <rect x="-92" y="-22" width="44" height="44" rx="8" fill="url(#n-teal)"/>
+      <rect x="-84" y="-12" width="28" height="6" rx="2" fill="#ccfbf1"/>
+      <rect x="-84" y="-2" width="22" height="4" rx="2" fill="#99f6e4"/>
+      <rect x="-84" y="6" width="26" height="4" rx="2" fill="#99f6e4"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">src/main</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">Electron sandboxed</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">money · audit · IPC · session</text>
+    </g>
+
+    <!-- 5a. SQLite (bottom left) -->
+    <g transform="translate(440 660)">
+      <use href="#node"/>
+      <ellipse cx="-72" cy="-12" rx="20" ry="7" fill="url(#n-emerald)"/>
+      <path d="M-92 -12 v22 c0 4 9 8 20 8s20-4 20-8 v-22" fill="url(#n-emerald)"/>
+      <path d="M-92 -12 v22 c0 4 9 8 20 8s20-4 20-8 v-22" fill="url(#gloss)" opacity="0.4"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">SQLite (local)</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">better-sqlite3 · WAL</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">durable terminal state</text>
+    </g>
+
+    <!-- 5b. safeStorage / secrets (bottom center) -->
+    <g transform="translate(700 660)">
+      <use href="#node"/>
+      <rect x="-86" y="-6" width="36" height="28" rx="4" fill="url(#n-rose)"/>
+      <path d="M-82 -6 v-8 a14 14 0 0 1 28 0 v8" fill="none" stroke="#fecdd3" stroke-width="3"/>
+      <circle cx="-68" cy="6" r="3.5" fill="#fff1f2"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">safeStorage</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">Windows DPAPI</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">device + pairing secrets</text>
+    </g>
+
+    <!-- 5c. SaaS backend (top right) -->
+    <g transform="translate(940 285)">
+      <use href="#node"/>
+      <circle cx="-70" cy="0" r="22" fill="url(#n-slate)"/>
+      <path d="M-92 0 a22 22 0 0 0 44 0 M-70 -22 a30 18 0 0 1 0 44 M-70 -22 a30 18 0 0 0 0 44" fill="none" stroke="#e2e8f0" stroke-width="1.5"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">SmartDataPulse</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">SaaS · OpenAPI 3.1</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">contract-backed sync</text>
+    </g>
+
+    <!-- 5d. Hardware (top left of renderer) -->
+    <g transform="translate(340 285)">
+      <use href="#node"/>
+      <rect x="-92" y="-18" width="44" height="32" rx="5" fill="url(#n-amber)"/>
+      <rect x="-86" y="-12" width="32" height="14" rx="2" fill="#fef3c7"/>
+      <rect x="-78" y="6" width="16" height="6" rx="2" fill="#fed7aa"/>
+      <text x="-30" y="-8" font-size="14" font-weight="800" fill="#fafafa">Hardware</text>
+      <text x="-30" y="10" font-size="11" fill="#94a3b8">scanner · printer · drawer</text>
+      <text x="-30" y="26" font-size="10" fill="#64748b">MVP matrix · keyboard wedge</text>
+    </g>
+
+    <!-- ============= EDGES ============= -->
+    <g fill="none" stroke="#475569" stroke-width="1.5">
+      <!-- Cashier ↔ Renderer -->
+      <path id="e1" d="M640 209 L640 241" marker-end="url(#arrow)"/>
+      <!-- Cashier ↔ Hardware (diagonal) -->
+      <path d="M530 165 Q430 165 380 245" marker-end="url(#arrow)"/>
+      <!-- Renderer → Preload -->
+      <path id="e2" d="M640 329 L640 361" marker-end="url(#arrow)"/>
+      <!-- Preload → Main -->
+      <path id="e3" d="M640 449 L640 481" marker-end="url(#arrow)"/>
+      <!-- Main → SQLite -->
+      <path id="e4" d="M580 545 Q500 600 440 616"  marker-end="url(#arrow)"/>
+      <!-- Main → Secrets -->
+      <path id="e5" d="M640 569 L680 616" marker-end="url(#arrow)"/>
+      <!-- Main → SaaS (long curve to top-right) -->
+      <path id="e6" d="M700 525 Q860 480 900 329" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+      <!-- Renderer ↔ Hardware (UX-only) -->
+      <path d="M555 280 Q470 282 400 282" stroke-dasharray="3 5" marker-end="url(#arrow)"/>
+    </g>
+
+    <!-- Edge labels -->
+    <g font-size="10" fill="#94a3b8">
+      <text x="650" y="232">cart state</text>
+      <text x="650" y="352">typed bridge call</text>
+      <text x="650" y="472">validated payload</text>
+      <text x="478" y="592">migration commit</text>
+      <text x="660" y="600">DPAPI write</text>
+      <text x="810" y="450" fill="#7dd3fc">idempotent sync</text>
+      <text x="430" y="270">wedge / print</text>
+    </g>
+
+    <!-- ============= ANIMATED TOKENS ============= -->
+    <!-- token: Cashier → Renderer → Preload → Main → SQLite -->
+    <circle r="6" fill="#60a5fa" filter="url(#glow)">
+      <animateMotion dur="6s" repeatCount="indefinite" rotate="auto" keyTimes="0;0.18;0.36;0.55;0.85;1" keyPoints="0;0.18;0.36;0.55;0.85;1" calcMode="linear">
+        <mpath href="#full-path"/>
+      </animateMotion>
+      <animate attributeName="r" values="6;8;6" dur="1.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="5" fill="#34d399" filter="url(#glow)">
+      <animateMotion dur="6s" begin="1.5s" repeatCount="indefinite">
+        <mpath href="#full-path"/>
+      </animateMotion>
+    </circle>
+    <circle r="5" fill="#a78bfa" filter="url(#glow)">
+      <animateMotion dur="6s" begin="3s" repeatCount="indefinite">
+        <mpath href="#full-path"/>
+      </animateMotion>
+    </circle>
+    <circle r="5" fill="#fbbf24" filter="url(#glow)">
+      <animateMotion dur="6s" begin="4.5s" repeatCount="indefinite">
+        <mpath href="#full-path"/>
+      </animateMotion>
+    </circle>
+
+    <!-- hidden long path that traces cashier → renderer → preload → main → sqlite -->
+    <path id="full-path" d="M640 145 L640 241 L640 329 L640 361 L640 449 L640 481 L640 545 Q540 600 440 616" fill="none" stroke="none"/>
+
+    <!-- secondary animated token: main → SaaS sync -->
+    <circle r="5" fill="#7dd3fc" filter="url(#glow)">
+      <animateMotion dur="3.6s" repeatCount="indefinite">
+        <mpath href="#sync-path"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="3.6s" repeatCount="indefinite"/>
+    </circle>
+    <path id="sync-path" d="M700 525 Q860 480 900 329" fill="none" stroke="none"/>
+
+    <!-- secrets pulse -->
+    <circle r="4" fill="#fda4af" filter="url(#glow)">
+      <animateMotion dur="2.8s" repeatCount="indefinite">
+        <mpath href="#secret-path"/>
+      </animateMotion>
+      <animate attributeName="opacity" values="0;1;1;0" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+    <path id="secret-path" d="M640 569 L680 616" fill="none" stroke="none"/>
+
+    <!-- migration tap rail (right side) -->
+    <g>
+      <line x1="760" y1="525" x2="1060" y2="370" stroke="#334155" stroke-width="1.2" stroke-dasharray="3 4"/>
+      <circle r="4" fill="#86efac" filter="url(#glow)">
+        <animate attributeName="opacity" values="0;1;0" dur="2.4s" repeatCount="indefinite"/>
+        <animateMotion dur="2.4s" repeatCount="indefinite">
+          <mpath href="#mig-path"/>
+        </animateMotion>
+      </circle>
+      <path id="mig-path" d="M760 525 L1060 370" fill="none" stroke="none"/>
+    </g>
+    <text x="900" y="455" font-size="10" fill="#94a3b8">applies migration</text>
+
+    <!-- spec kit governance tap rail (left side) -->
+    <g>
+      <line x1="540" y1="285" x2="220" y2="285" stroke="#334155" stroke-width="1.2" stroke-dasharray="3 4"/>
+      <circle r="4" fill="#a5b4fc" filter="url(#glow)">
+        <animate attributeName="opacity" values="0;1;0" dur="2.8s" repeatCount="indefinite"/>
+        <animateMotion dur="2.8s" repeatCount="indefinite">
+          <mpath href="#gov-path"/>
+        </animateMotion>
+      </circle>
+      <path id="gov-path" d="M540 285 L220 285" fill="none" stroke="none"/>
+    </g>
+    <text x="320" y="278" font-size="10" fill="#94a3b8">spec-of-record · gates A0–A5</text>
+
+    <!-- bottom legend -->
+    <g transform="translate(40 736)" font-size="11">
+      <rect x="0" y="-14" width="1200" height="32" rx="8" fill="#0f172a" opacity="0.7" stroke="#1e293b"/>
+      <circle cx="20" cy="2" r="5" fill="#60a5fa"/>
+      <text x="32" y="6" fill="#cbd5e1">UI event</text>
+      <circle cx="120" cy="2" r="5" fill="#a78bfa"/>
+      <text x="132" y="6" fill="#cbd5e1">bridge call</text>
+      <circle cx="240" cy="2" r="5" fill="#34d399"/>
+      <text x="252" y="6" fill="#cbd5e1">main-process work</text>
+      <circle cx="400" cy="2" r="5" fill="#fbbf24"/>
+      <text x="412" y="6" fill="#cbd5e1">durable write</text>
+      <circle cx="540" cy="2" r="5" fill="#7dd3fc"/>
+      <text x="552" y="6" fill="#cbd5e1">contract sync</text>
+      <circle cx="680" cy="2" r="5" fill="#fda4af"/>
+      <text x="692" y="6" fill="#cbd5e1">secret write</text>
+      <circle cx="800" cy="2" r="5" fill="#a5b4fc"/>
+      <text x="812" y="6" fill="#cbd5e1">spec-kit gate</text>
+      <circle cx="940" cy="2" r="5" fill="#86efac"/>
+      <text x="952" y="6" fill="#cbd5e1">migration tap</text>
+      <text x="1080" y="6" fill="#64748b">SVG · CSS-free SMIL animations</text>
+    </g>
+  </g>
+</svg>
