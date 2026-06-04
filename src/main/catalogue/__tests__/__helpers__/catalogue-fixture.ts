@@ -30,6 +30,16 @@ const ALL_MIGRATIONS = readdirSync(MIGRATIONS_DIR)
   .filter((f) => f.endsWith('.sql'))
   .sort((a, b) => a.localeCompare(b));
 
+/**
+ * Narrow a value the test KNOWS is present (a `.get()` of a row that must exist,
+ * a `read()` after a write) to non-null without a forbidden `!` assertion. Throws
+ * (failing the test) if the value is absent.
+ */
+export function nn<T>(value: T | null | undefined, message = 'expected a value, got null'): T {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
+}
+
 let SQL: SqlJsStatic | undefined;
 
 /** Initialise the sql.js engine once. Call in a `beforeAll`. */
