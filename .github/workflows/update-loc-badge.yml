@@ -31,10 +31,11 @@ jobs:
 
       - name: Commit badge if changed
         run: |
-          git diff --quiet docs/assets/badges/loc.svg && exit 0
+          git diff --quiet docs/assets/badges/loc.svg
+          if ($LASTEXITCODE -eq 0) { exit 0 }
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/assets/badges/loc.svg
           git commit -m "chore: update LOC badge [skip ci]"
           git push
-        shell: bash
+        shell: pwsh
