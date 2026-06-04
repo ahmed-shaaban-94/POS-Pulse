@@ -3,7 +3,7 @@
 **Feature:** 010-pos-catalog-read-down-consumption
 **Gate:** §A2 — staging + sync-state migrations (`0031`–`0033`) + the promote transaction (P3 + Constitution VII + P17 + II/P1)
 **Prepared by:** agent (Claude Code), 2026-06-04 — **review package for owner ratification**
-**Owner sign-off (§A2):** ⛔ **NOT RATIFIED — held `source-mapping-pending`** (see §0 + §7).
+**Owner sign-off (§A2):** ⛔ **NOT RATIFIED — held `auth-pending` (narrowed 2026-06-04)** (see §0 + §7).
 **Base SHA at preparation:** `056d829` (PR #342 merge — 010 spec artifacts)
 **Constitution version pinned:** v1.5.1
 
@@ -15,30 +15,70 @@
 
 ---
 
-## 0. ⛔ Why this is HELD (read first)
+## 0. ⛔ Why this is HELD (read first) — UPDATED 2026-06-04: narrowed to `branch_id`/GAP-4 only
 
-**The table *schema* is reviewable and stable; the *ingest mapping that fills it* is NOT yet decided.**
-The [§A6 reconciliation findings](../a6-reconciliation-findings.md) showed the real backend contract
-(`SellableCatalogRow`) cannot currently populate three columns 009's read model requires:
+**Update (2026-06-04):** Two of the three originally-held column dimensions are now **RESOLVED** by the
+owner-ratified §A6 decisions (D-NAME + D-BARCODE, [a6-reconciliation-findings.md](../a6-reconciliation-findings.md)
+2026-06-04). The hold is **narrowed** from `source-mapping-pending` (held on three) to **`auth-pending`**
+(held on **one** — `branch_id` scoping, which depends on the still-open backend auth/contract decisions
+D-AUTH-1/D-DEPLOY, [Data-Pulse-2 #488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)).
 
-| 009 column (staging mirrors it) | Backend v1 provides? | Blocks ratification because… |
+| 009 column (staging mirrors it) | Backend v1 provides? | Status |
 |:--|:--|:--|
-| `products.name_ar` **NOT NULL** | ❌ single `name`, no ar/en (GAP-3) | A `NOT NULL name_ar` migration locks a column the backend can't fill until GAP-3 is decided (map `name`→`name_ar`, or wait for bilingual columns). |
-| `product_barcodes` rows | ❌ barcode is opaque inside `aliases[]` (GAP-2) | If the staging mirror keeps a `barcode_norm NOT NULL` table, there is no clean source to populate it until the backend exposes barcode type. |
-| `products.price_minor` INTEGER | ⚠️ major-unit decimal+currency (GAP-1) | Schema is fine (INTEGER), but the *converter* (decimal→minor) is the ingest contract, reviewed with the writer, not the migration. |
+| `products.name_ar` **NOT NULL** | single `name`, no ar/en (GAP-3) | ✅ **RESOLVED (D-NAME).** Writer maps the single backend `name` → `name_ar`; `name_ar` **stays `NOT NULL`** because ingest always supplies `name`. No nullability change. (See §0a.) |
+| `product_barcodes` rows | barcode opaque inside `aliases[]` (GAP-2) | ✅ **RESOLVED (D-BARCODE).** `product_barcodes_staging` **exists**, column-identical to `0030`; `barcode_kind` stays nullable (always NULL in v1 — type unknown). Population from the untyped bag is a **writer/S2 ingest concern**, not a table-shape fact. (See §0a.) |
+| `products.price_minor` INTEGER | major-unit decimal+currency (GAP-1) | ✅ Schema fine (INTEGER); the decimal→minor *converter* is the ingest contract, reviewed with the writer — never was a table-shape blocker. |
+| `products.branch_id` nullability | store_id first-class in contract, but auth/scope shape open (GAP-4) | ⛔ **STILL HELD.** Whether `branch_id` should be `NOT NULL` (and how it's populated) depends on D-AUTH-1 (device-principal scope = `(tenant_id, store_id)`) + the deployed contract. Open on #488. |
 
-**Therefore:** this package reviews **table-creation + promote-transaction safety** (which ARE stable —
-the staging tables mirror 009's already-shipped `0029`/`0030` shape). It is **held** until GAP-1/2/3 are
-decided, because those decisions may change the staging column shape (e.g. `name_ar` nullability, whether
-`product_barcodes_staging` exists in v1 at all). Ratify only after the §A6 decision round.
+**Therefore:** this package reviews **table-creation + promote-transaction safety** (stable — the staging
+tables mirror 009's already-shipped `0029`/`0030` shape). It remains **held**, but now **only on the
+`branch_id`/GAP-4 dimension** pending the backend auth/contract decisions. The name and barcode column
+shapes are now final. Ratify once D-AUTH-1 + D-DEPLOY land.
+
+---
+
+## 0a. Resolved-shape mapping (D-NAME + D-BARCODE — owner-ratified 2026-06-04)
+
+**D-NAME → `name_*` columns (table shape FINAL):**
+- The backend supplies a single `tenant_products.name` (no ar/en split — GAP-3, deferred to a future 003
+  spec). The writer maps it to **`name_ar := name`** (the `NOT NULL` Arabic-first display column, `0029:31`).
+- **`name_en := NULL`.** This **refines** the wording in the merged ratification note
+  ([a6-reconciliation-findings.md](../a6-reconciliation-findings.md), which said "map `name` into *both*
+  fold inputs"): search behaviour is identical either way because `name_fold = normalize(name_ar + ' ' +
+  name_en)` with `name_en` absent collapses to `normalize(name)`; but storing `name_en = NULL` (rather than
+  a redundant copy of `name`) is the **truthful** mapping — `0029:32` defines `name_en` as "nullable;
+  English when available," and no English name is available. The *fold input* still uses `name` for both
+  positions (so search is unaffected); only the **stored** `name_en` column is NULL. No schema change to
+  `0029`'s shape — `name_ar NOT NULL` stays, `name_en` stays nullable.
+- **Consequence:** no Arabic-specific display in v1 (the displayed `name_ar` is just the backend's
+  language-neutral `name`); restored only when a future backend spec adds a real Arabic column. Owner-accepted.
+
+**D-BARCODE → `product_barcodes_staging` (table shape FINAL; population deferred to S2 writer):**
+- The table **exists** and is **column-identical to `0030`** (`barcode_id`, `product_id`, `tenant_id`,
+  `barcode`, `barcode_norm`, `barcode_kind?`, `created_at`). `barcode_kind` stays nullable and is **always
+  NULL in v1** (the backend `aliases[]` is untyped — GAP-2; we cannot know "pack" vs "unit" vs even
+  "is-this-actually-a-barcode").
+- **The bag→table *population* is a writer/S2 ingest decision, NOT a §A2 table-shape fact** (same boundary
+  this package already draws for the money converter). For review-context only (not binding here): the
+  lowest-risk reading of D-BARCODE keeps 009's exact-**scan** path (`product_barcodes.barcode_norm`,
+  `idx_product_barcodes_tenant_norm`, `0030:27`) working by exploding each untyped `aliases[]` entry into a
+  `product_barcodes` row (`barcode := alias`, `barcode_norm := normalize(alias)`, `barcode_kind := NULL`),
+  while the same bag is also stored in `products.aliases_json`/`alias_fold` for substring **search**. Same
+  source → both 009 destinations, **zero change to 009's query path**. This is exactly the *lossy* behaviour
+  the owner accepted (a supplier_code resolves as if a barcode). **One new fact vs 009 the writer must
+  own:** bag entries are bare strings with no upstream id, so the writer **synthesizes `barcode_id`** — fine
+  under the full-replace promote (it need not be stable across runs). Mechanism = S2 (T032), confirmed not
+  to need a schema change here.
 
 ---
 
 ## 1. Gate decision
 
-⛔ **NOT RATIFIED — `source-mapping-pending`.** Table/promote safety is sound (§§3–6, 9); ratification
-waits on the §A6 GAP-1/2/3 decisions (§0) that fix the staging column shape. The §7 migration-shape
-decisions (D1–D5) are recorded as recommendations for when the hold lifts.
+⛔ **NOT RATIFIED — `auth-pending` (narrowed 2026-06-04).** Table/promote safety is sound (§§3–6, 9), and
+the **name + barcode column shapes are now FINAL** (D-NAME + D-BARCODE resolved — §0/§0a). Ratification now
+waits on **one** remaining dimension: `branch_id` scoping (GAP-4), which depends on the backend auth/contract
+decisions D-AUTH-1 + D-DEPLOY ([#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). The §7
+migration-shape decisions (D1–D5) are recorded as recommendations for when the hold fully lifts.
 
 ---
 
@@ -61,7 +101,7 @@ decisions (D1–D5) are recorded as recommendations for when the hold lifts.
 | # | File (proposed) | Notes |
 |:--|:--|:--|
 | 0031 | `migrations/0031_create_products_staging.sql` | Mirrors `products` columns (incl. fold columns). No outbound FK. Ships empty. |
-| 0032 | `migrations/0032_create_product_barcodes_staging.sql` | Mirrors `product_barcodes`. Logical FK `product_id` → staging products (NOT SQL-enforced). Ships empty. **Existence gated on GAP-2 (§0).** |
+| 0032 | `migrations/0032_create_product_barcodes_staging.sql` | Mirrors `product_barcodes` (`0030` shape). Logical FK `product_id` → staging products (NOT SQL-enforced). Ships empty. **✅ Existence RESOLVED (D-BARCODE) — table exists in v1 (§0a).** |
 | 0033 | `migrations/0033_create_catalogue_sync_state.sql` | One row per tenant: bookkeeping. Ships empty. |
 
 **Numbering invariant:** all three land in one PR (or sequential commits in one PR) so the schema is never
@@ -82,12 +122,12 @@ half-installed on `main` — same invariant as 009's `0029`/`0030`.
 CREATE TABLE IF NOT EXISTS products_staging (
   product_id            TEXT    NOT NULL PRIMARY KEY,
   tenant_id             TEXT    NOT NULL,
-  branch_id             TEXT,                                   -- ⚠(GAP-4/§A6) store_id is first-class in the backend contract; may become NOT NULL
+  branch_id             TEXT,                                   -- ⚠(GAP-4 — THE ONLY STILL-HELD COLUMN) store_id first-class in contract; NOT NULL? pending D-AUTH-1/D-DEPLOY (#488)
   sku                   TEXT    NOT NULL,
   sku_norm              TEXT    NOT NULL,                       -- normalize(sku)
-  name_ar               TEXT    NOT NULL,                       -- ⚠(GAP-3) backend has single `name`, no ar/en — nullability/mapping HELD
-  name_en               TEXT,
-  name_fold             TEXT    NOT NULL,                       -- normalize(name_ar + ' ' + name_en) — R1 composition
+  name_ar               TEXT    NOT NULL,                       -- ✅(D-NAME RESOLVED) := backend single `name`; stays NOT NULL (ingest always supplies name). §0a
+  name_en               TEXT,                                   -- ✅(D-NAME RESOLVED) := NULL in v1 (no English name; refines ratification note). §0a
+  name_fold             TEXT    NOT NULL,                       -- normalize(name + ' ' + name) = normalize(name) — R1 composition (D-NAME). §0a
   aliases_json          TEXT,
   alias_fold            TEXT,
   price_minor           INTEGER NOT NULL CHECK (price_minor >= 0),  -- ⚠(GAP-1) converted from backend decimal+currency at ingest (writer, not migration)
@@ -103,7 +143,7 @@ CREATE TABLE IF NOT EXISTS products_staging (
 -- Staging carries NO lookup indexes (009 never reads it). Indexes live only on the live tables.
 ```
 
-### 0032 — `product_barcodes_staging`  ⚠ existence HELD on GAP-2
+### 0032 — `product_barcodes_staging`  ✅ existence RESOLVED (D-BARCODE) — table EXISTS, column-identical to `0030`
 
 ```sql
 CREATE TABLE IF NOT EXISTS product_barcodes_staging (
@@ -116,11 +156,11 @@ CREATE TABLE IF NOT EXISTS product_barcodes_staging (
   created_at    TEXT NOT NULL
 );
 ```
-⚠ **GAP-2:** the backend snapshot does not expose typed barcodes (only an opaque `aliases[]`). Until the
-backend exposes barcode type (or a barcode endpoint), there is **no clean source** for these rows. Options
-when the hold lifts: (a) populate from typed barcodes once the backend adds them; (b) ship the table empty
-in v1 and accept that barcode-scan returns "not found" until barcoded data arrives; (c) defer this table
-to a later migration. **Decision belongs to the §A6 round, not this review.**
+✅ **GAP-2 RESOLVED (D-BARCODE, owner-ratified 2026-06-04):** the table **exists** and ships with the
+`0030` shape; `barcode_kind` stays nullable (always NULL in v1 — the backend `aliases[]` is untyped). The
+*population* (explode the untyped bag into rows; synthesize `barcode_id`) is a **writer/S2 ingest decision**
+per §0a — **not a table-shape concern for this review**. The table-shape question this §A2 package owns is
+now closed: it exists, identical to `0030`. (Lossy-but-functional v1 barcode scan; owner-accepted.)
 
 ### 0033 — `catalogue_sync_state`
 
@@ -193,8 +233,12 @@ of a financial record (P4 N/A).
 | **D4** | Logical FKs only, no SQL `FOREIGN KEY` (009 convention)? | **Yes** | Matches every migration since `0004`; the writer enforces integrity. |
 | **D5** | `products_staging.unit_pack_label` / `controlled_substance` / `prescription_required` ship as defaulted/nullable (not in backend v1)? | **Yes — nullable/defaulted** | Backend v1 can't populate them (read-down.yaml:43-45); 009 only *surfaces* them; harmless as defaults. |
 
-> **Held decisions (NOT D-items — they belong to the §A6 round):** `name_ar` nullability (GAP-3), whether
-> `product_barcodes_staging` exists in v1 (GAP-2), `branch_id` nullability (GAP-4 store scoping).
+> **Held decisions (NOT D-items — they belong to the §A6 round):**
+> - ✅ `name_ar` nullability (GAP-3) — **RESOLVED (D-NAME):** stays `NOT NULL`, := backend `name` (§0a).
+> - ✅ whether `product_barcodes_staging` exists in v1 (GAP-2) — **RESOLVED (D-BARCODE):** it exists,
+>   `0030` shape (§0a).
+> - ⛔ `branch_id` nullability (GAP-4 store scoping) — **STILL HELD** pending D-AUTH-1 + D-DEPLOY
+>   ([#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). The single remaining blocker.
 
 ---
 
@@ -213,11 +257,13 @@ of a financial record (P4 N/A).
 
 ## 9. Go / no-go conclusion
 
-**⛔ NO-GO for now — `source-mapping-pending`.** The table-creation + promote-transaction safety is sound
-and ready (§§3–6); the package is **held** only because the §A6 GAP-1/2/3 decisions can still change the
-staging column shape (`name_ar` nullability, `product_barcodes_staging` existence, `branch_id` scoping).
-**Ratify after the §A6 decision round**, at which point D1–D5 become binding and the held columns are
-finalized. This is the honest split: review what's stable now, don't lock what's still open.
+**⛔ NO-GO for now — `auth-pending` (narrowed 2026-06-04).** Table-creation + promote-transaction safety is
+sound and ready (§§3–6), and the **name + barcode column shapes are now FINAL** (D-NAME + D-BARCODE
+resolved — §0/§0a). The package is now **held on a single dimension: `branch_id` scoping (GAP-4)**, which
+depends on the still-open backend auth/contract decisions D-AUTH-1 + D-DEPLOY
+([#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). **Ratify once those land**, at which
+point D1–D5 become binding and `branch_id` is finalized. This is the honest split: two of three held
+dimensions are now closed; do not lock the last one while auth is open.
 
 ---
 
@@ -225,12 +271,14 @@ finalized. This is the honest split: review what's stable now, don't lock what's
 
 | Gate | Status | Blocks |
 |:--|:--:|:--|
-| §A2 (this) | ⛔ held `source-mapping-pending` | migration tasks T011–T013 |
+| §A2 (this) | ⛔ held `auth-pending` (narrowed — name/barcode shapes FINAL; held on `branch_id`/GAP-4 only) | migration tasks T011–T013 |
 | §A4 (P8 bridge) | ⛔ required | bridge tasks T043/T044 |
 | §A5 (prod readiness) | ⏳ rollout-time | rollout PR |
 | §A6 (backend contract) | ⛔ EXTERNAL — the upstream blocker | this §A2 hold + all network code |
 
 ---
 
-**End of §A2 review package.** Prepared for the owner; not self-cleared. Held on the §A6 reconciliation
-decisions — see [`a6-reconciliation-findings.md`](../a6-reconciliation-findings.md).
+**End of §A2 review package.** Prepared for the owner; not self-cleared. **Updated 2026-06-04:** D-NAME +
+D-BARCODE resolved the name/barcode column shapes (now FINAL); the hold is **narrowed to `branch_id`/GAP-4**,
+pending the backend auth/contract decisions on [`a6-reconciliation-findings.md`](../a6-reconciliation-findings.md)
+/ [Data-Pulse-2 #488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488).
