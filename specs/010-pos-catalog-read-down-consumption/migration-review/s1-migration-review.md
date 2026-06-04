@@ -3,7 +3,7 @@
 **Feature:** 010-pos-catalog-read-down-consumption
 **Gate:** §A2 — staging + sync-state migrations (`0031`–`0033`) + the promote transaction (P3 + Constitution VII + P17 + II/P1)
 **Prepared by:** agent (Claude Code), 2026-06-04 — **review package for owner ratification**
-**Owner sign-off (§A2):** ⛔ **NOT RATIFIED — held `auth-pending` (narrowed 2026-06-04)** (see §0 + §7).
+**Owner sign-off (§A2):** ✅ **RATIFIED — 2026-06-05 (owner).** `branch_id`/store scope = **`NOT NULL TEXT`** (the last held dimension; auth/scope resolved by Data-Pulse-2 PR #490). Clears the **G3 decision precondition for the offline S1+S2 correctness core only** — see the **§A2 Ratification** block below. Does NOT clear §A4, §A5, or the D-DEPLOY live-client blocker (#349).
 **Base SHA at preparation:** `056d829` (PR #342 merge — 010 spec artifacts)
 **Constitution version pinned:** v1.5.1
 
@@ -15,7 +15,31 @@
 
 ---
 
-## 0. ⛔ Why this is HELD (read first) — UPDATED 2026-06-04: narrowed to `branch_id`/GAP-4 only
+## §A2 Ratification — 2026-06-05 (owner)
+
+✅ **§A2 is RATIFIED.** The single remaining held dimension — `branch_id`/store scope (GAP-4) — is now decided. The auth/scope shape it was waiting on **landed**: Data-Pulse-2 **PR #490** (issue **#488 CLOSED**) authenticates read-down by the **device-principal token** and resolves **`(tenant_id, store_id)`** from the store-bound `devices` row. Read-down is therefore **store-scoped by the paired device principal**.
+
+**1. Decision.** The store/branch-scope column is **`NOT NULL TEXT`** wherever the POS-010 read-down **staging** and **sync-state** model stores branch/store scope.
+
+**2. Scope.** Applies to the POS-010 migrations **when they are authored later** (this record does not author them):
+- `0031 products_staging.branch_id` → **`TEXT NOT NULL`**.
+- `0033 catalogue_sync_state.branch_id` → **`TEXT NOT NULL`** (part of the row's scope alongside the `tenant_id` PK).
+- `0032 product_barcodes_staging` mirrors `0030` and has **no** branch/store column of its own — barcode rows are store-scoped transitively via `tenant_id` + their `product_id` link to a (now store-scoped) `products_staging` row. **No new column is added to 0032.**
+This supersedes the prior illustrative `branch_id TEXT` (nullable) shown for 0031/0033 in §4 and the "STILL HELD" notes in §0/§7.
+
+**3. Rationale.** POS read-down is store-scoped via Data-Pulse device-principal auth (PR #490): tenant/store context is resolved from the paired device row, so every staged/promoted catalog row belongs to a known store. Price, availability, and tax may vary by store, so a staged or promoted catalog row **without** branch/store scope is invalid. Nullable store scope is therefore disallowed in POS-010 catalogue staging and sync-state.
+
+**4. Boundary.** This is a **decision record only**. It does **not** author or modify any migration, does **not** start POS-010 S1+S2 implementation, and does **not** modify 009's live `0029`/`0030`. 009's live `products.branch_id` stays **nullable** (009-owned, `0029`; unchanged here); the NOT-NULL constraint is enforced on **010's staging** at ingest, and the promote's `INSERT … SELECT` carries the non-null staged value into 009's (nullable) live column — fully compatible. The writer must **reject any source row lacking resolvable store scope** before it reaches staging.
+
+**5. Gate impact.** Clears the **G3 (migration) decision precondition** for the **offline S1+S2 correctness core only** (unblocks *authoring* tasks T011–T013 when implementation is later approved). Does **NOT** clear **§A4** (bridge security), **§A5** (production readiness / perf), or the **D-DEPLOY live-client blocker** (Data-Pulse-2 **#349** — backend edge HTTP 521; gates T002/T020/T021/T039).
+
+**6. Stop condition.** If implementation later requires a **nullable** `branch_id` or **global (store-less) catalogue rows**, STOP and return to the owner for a new decision — this ratification does **not** authorize a global-catalogue layer (that would be a separate future migration).
+
+> Recorded for honesty (not a §A2 blocker): the malformed-record **abort-threshold** value (FR-9 / R-RISK-4, task T035) remains undecided — an S2 writer-tuning decision, not a table-shape decision.
+
+---
+
+## 0. ⛔ Why this WAS HELD (historical) — UPDATED 2026-06-04: narrowed to `branch_id`/GAP-4 only · ✅ RESOLVED 2026-06-05 (see §A2 Ratification above)
 
 **Update (2026-06-04):** Two of the three originally-held column dimensions are now **RESOLVED** by the
 owner-ratified §A6 decisions (D-NAME + D-BARCODE, [a6-reconciliation-findings.md](../a6-reconciliation-findings.md)
@@ -28,12 +52,14 @@ D-AUTH-1/D-DEPLOY, [Data-Pulse-2 #488](https://github.com/ahmed-shaaban-94/Data-
 | `products.name_ar` **NOT NULL** | single `name`, no ar/en (GAP-3) | ✅ **RESOLVED (D-NAME).** Writer maps the single backend `name` → `name_ar`; `name_ar` **stays `NOT NULL`** because ingest always supplies `name`. No nullability change. (See §0a.) |
 | `product_barcodes` rows | barcode opaque inside `aliases[]` (GAP-2) | ✅ **RESOLVED (D-BARCODE).** `product_barcodes_staging` **exists**, column-identical to `0030`; `barcode_kind` stays nullable (always NULL in v1 — type unknown). Population from the untyped bag is a **writer/S2 ingest concern**, not a table-shape fact. (See §0a.) |
 | `products.price_minor` INTEGER | major-unit decimal+currency (GAP-1) | ✅ Schema fine (INTEGER); the decimal→minor *converter* is the ingest contract, reviewed with the writer — never was a table-shape blocker. |
-| `products.branch_id` nullability | store_id first-class in contract, but auth/scope shape open (GAP-4) | ⛔ **STILL HELD.** Whether `branch_id` should be `NOT NULL` (and how it's populated) depends on D-AUTH-1 (device-principal scope = `(tenant_id, store_id)`) + the deployed contract. Open on #488. |
+| `products.branch_id` nullability | store_id first-class; device scope = `(tenant_id, store_id)` (GAP-4) | ✅ **RESOLVED 2026-06-05.** Auth/scope landed (PR #490 / #488 CLOSED). Owner ratified **`branch_id`/store scope = `NOT NULL TEXT`** on 010 staging + sync-state (see §A2 Ratification). |
 
 **Therefore:** this package reviews **table-creation + promote-transaction safety** (stable — the staging
-tables mirror 009's already-shipped `0029`/`0030` shape). It remains **held**, but now **only on the
-`branch_id`/GAP-4 dimension** pending the backend auth/contract decisions. The name and barcode column
-shapes are now final. Ratify once D-AUTH-1 + D-DEPLOY land.
+tables mirror 009's already-shipped `0029`/`0030` shape). The name and barcode shapes were finalized
+2026-06-04 (D-NAME + D-BARCODE), and the last held dimension — `branch_id`/GAP-4 — is now **RESOLVED and
+RATIFIED 2026-06-05** (`NOT NULL TEXT`; see §A2 Ratification above), the auth/scope shape having landed in
+PR #490. **§A2 is ratified for the offline S1+S2 correctness core.** (D-DEPLOY #349 remains a *live-client*
+blocker, not a migration-shape one.)
 
 ---
 
@@ -74,11 +100,12 @@ shapes are now final. Ratify once D-AUTH-1 + D-DEPLOY land.
 
 ## 1. Gate decision
 
-⛔ **NOT RATIFIED — `auth-pending` (narrowed 2026-06-04).** Table/promote safety is sound (§§3–6, 9), and
-the **name + barcode column shapes are now FINAL** (D-NAME + D-BARCODE resolved — §0/§0a). Ratification now
-waits on **one** remaining dimension: `branch_id` scoping (GAP-4), which depends on the backend auth/contract
-decisions D-AUTH-1 + D-DEPLOY ([#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). The §7
-migration-shape decisions (D1–D5) are recorded as recommendations for when the hold fully lifts.
+✅ **RATIFIED — 2026-06-05 (owner).** Table/promote safety is sound (§§3–6, 9), the name + barcode shapes
+were finalized 2026-06-04 (D-NAME + D-BARCODE — §0/§0a), and the last dimension — `branch_id` scoping
+(GAP-4) — is decided: **`branch_id`/store scope = `NOT NULL TEXT`** on 010 staging + sync-state (auth/scope
+resolved by PR #490 / #488 CLOSED). See the **§A2 Ratification** block. The §7 migration-shape decisions
+D1–D5 are now **binding**, joined by **D6** (`branch_id NOT NULL`). This clears the **G3 decision
+precondition for the offline S1+S2 correctness core only**; §A4 / §A5 / D-DEPLOY (#349) remain.
 
 ---
 
@@ -122,7 +149,7 @@ half-installed on `main` — same invariant as 009's `0029`/`0030`.
 CREATE TABLE IF NOT EXISTS products_staging (
   product_id            TEXT    NOT NULL PRIMARY KEY,
   tenant_id             TEXT    NOT NULL,
-  branch_id             TEXT,                                   -- ⚠(GAP-4 — THE ONLY STILL-HELD COLUMN) store_id first-class in contract; NOT NULL? pending D-AUTH-1/D-DEPLOY (#488)
+  branch_id             TEXT    NOT NULL,                       -- ✅(GAP-4 RESOLVED + RATIFIED 2026-06-05) store/branch scope NOT NULL (device scope = (tenant_id, store_id), PR #490). NOTE: 009 live products.branch_id stays nullable (0029, unchanged); staging is stricter — promote INSERT…SELECT non-null→nullable is fine.
   sku                   TEXT    NOT NULL,
   sku_norm              TEXT    NOT NULL,                       -- normalize(sku)
   name_ar               TEXT    NOT NULL,                       -- ✅(D-NAME RESOLVED) := backend single `name`; stays NOT NULL (ingest always supplies name). §0a
@@ -167,7 +194,7 @@ now closed: it exists, identical to `0030`. (Lossy-but-functional v1 barcode sca
 ```sql
 CREATE TABLE IF NOT EXISTS catalogue_sync_state (
   tenant_id          TEXT NOT NULL PRIMARY KEY,
-  branch_id          TEXT,
+  branch_id          TEXT NOT NULL,       -- ✅(RATIFIED 2026-06-05) store/branch scope NOT NULL — read-down is store-scoped (PR #490). §A2 Ratification.
   last_success_at    TEXT,                -- written INSIDE the promote tx (SC-10 truthfulness)
   source_snapshot_id TEXT,                -- opaque backend cursor/snapshot id (provenance, not a sync cursor)
   last_attempt_at    TEXT,
@@ -232,13 +259,15 @@ of a financial record (P4 N/A).
 | **D3** | `catalogue_sync_state` is one-row-per-tenant (PK `tenant_id`)? | **Yes** | Terminal is single-tenant; freshness reads one row off the hot path. |
 | **D4** | Logical FKs only, no SQL `FOREIGN KEY` (009 convention)? | **Yes** | Matches every migration since `0004`; the writer enforces integrity. |
 | **D5** | `products_staging.unit_pack_label` / `controlled_substance` / `prescription_required` ship as defaulted/nullable (not in backend v1)? | **Yes — nullable/defaulted** | Backend v1 can't populate them (read-down.yaml:43-45); 009 only *surfaces* them; harmless as defaults. |
+| **D6** | `branch_id`/store scope on `products_staging` (0031) + `catalogue_sync_state` (0033) — `NOT NULL`? | ✅ **RATIFIED 2026-06-05 — `NOT NULL TEXT`** | Read-down is store-scoped by the device principal (PR #490; scope = `(tenant_id, store_id)`); a row without store scope is invalid (price/availability/tax vary by store). `0032` has no store column (scoped via `tenant_id` + `product_id`). 009 live `0029`/`0030` unchanged; staging stricter than live is compatible with the promote. See §A2 Ratification. |
 
 > **Held decisions (NOT D-items — they belong to the §A6 round):**
 > - ✅ `name_ar` nullability (GAP-3) — **RESOLVED (D-NAME):** stays `NOT NULL`, := backend `name` (§0a).
 > - ✅ whether `product_barcodes_staging` exists in v1 (GAP-2) — **RESOLVED (D-BARCODE):** it exists,
 >   `0030` shape (§0a).
-> - ⛔ `branch_id` nullability (GAP-4 store scoping) — **STILL HELD** pending D-AUTH-1 + D-DEPLOY
->   ([#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). The single remaining blocker.
+> - ✅ `branch_id` nullability (GAP-4 store scoping) — **RESOLVED + RATIFIED 2026-06-05 (D6):** `NOT NULL TEXT`
+>   on 010 staging + sync-state (auth/scope landed in PR #490 / #488 CLOSED; device scope = `(tenant_id, store_id)`).
+>   See §A2 Ratification.
 
 ---
 
@@ -257,13 +286,14 @@ of a financial record (P4 N/A).
 
 ## 9. Go / no-go conclusion
 
-**⛔ NO-GO for now — `auth-pending` (narrowed 2026-06-04).** Table-creation + promote-transaction safety is
-sound and ready (§§3–6), and the **name + barcode column shapes are now FINAL** (D-NAME + D-BARCODE
-resolved — §0/§0a). The package is now **held on a single dimension: `branch_id` scoping (GAP-4)**, which
-depends on the still-open backend auth/contract decisions D-AUTH-1 + D-DEPLOY
-([#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). **Ratify once those land**, at which
-point D1–D5 become binding and `branch_id` is finalized. This is the honest split: two of three held
-dimensions are now closed; do not lock the last one while auth is open.
+**✅ GO (for the offline S1+S2 correctness core) — RATIFIED 2026-06-05.** Table-creation + promote-transaction
+safety is sound (§§3–6); the name + barcode shapes were finalized 2026-06-04 (D-NAME + D-BARCODE); and the
+last dimension — `branch_id` scoping (GAP-4) — is decided: **`NOT NULL TEXT`** (auth/scope landed in PR #490 /
+#488 CLOSED; device scope = `(tenant_id, store_id)`). D1–D6 (§7) are binding. This GO authorizes **authoring**
+migrations 0031–0033 (tasks T011–T013) **only when implementation is separately approved** — it does not
+itself start implementation. **Still NO-GO for the live client / rollout:** §A4 (bridge security), §A5
+(production readiness / perf), and **D-DEPLOY (#349)** remain open and gate T002 / T020 / T021 / T039 + the
+bridge / rollout slices.
 
 ---
 
@@ -271,14 +301,15 @@ dimensions are now closed; do not lock the last one while auth is open.
 
 | Gate | Status | Blocks |
 |:--|:--:|:--|
-| §A2 (this) | ⛔ held `auth-pending` (narrowed — name/barcode shapes FINAL; held on `branch_id`/GAP-4 only) | migration tasks T011–T013 |
+| §A2 (this) | ✅ **RATIFIED 2026-06-05** (`branch_id`/store scope = `NOT NULL TEXT`; offline S1+S2 core) | unblocks migration tasks T011–T013 *when implementation is approved* |
 | §A4 (P8 bridge) | ⛔ required | bridge tasks T043/T044 |
 | §A5 (prod readiness) | ⏳ rollout-time | rollout PR |
 | §A6 (backend contract) | ⛔ EXTERNAL — the upstream blocker | this §A2 hold + all network code |
 
 ---
 
-**End of §A2 review package.** Prepared for the owner; not self-cleared. **Updated 2026-06-04:** D-NAME +
-D-BARCODE resolved the name/barcode column shapes (now FINAL); the hold is **narrowed to `branch_id`/GAP-4**,
-pending the backend auth/contract decisions on [`a6-reconciliation-findings.md`](../a6-reconciliation-findings.md)
-/ [Data-Pulse-2 #488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488).
+**End of §A2 review package.** Prepared for the owner. **Updated 2026-06-05:** §A2 **RATIFIED** by the owner —
+`branch_id`/store scope = **`NOT NULL TEXT`** (the last held dimension; auth/scope resolved in PR #490 / #488
+CLOSED). G3 decision precondition cleared for the **offline S1+S2 correctness core only**; **§A4, §A5, and
+D-DEPLOY (#349) remain**. See the **§A2 Ratification** block at the top. (Prior: 2026-06-04 D-NAME + D-BARCODE
+finalized the name/barcode shapes; see [`a6-reconciliation-findings.md`](../a6-reconciliation-findings.md).)
