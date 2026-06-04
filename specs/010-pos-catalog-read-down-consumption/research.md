@@ -37,21 +37,21 @@ Confirmed against the repo so the plan commits to reality, not assumption:
   outcome with a `no_connection` / `authority_unreachable` sentinel; `AbortSignal.timeout()`. The voucher
   clients consume **generated** `components['schemas']['…']` types from `src/shared/api-types.ts`
   (`reverse.ts:19,32-33`) — confirming Constitution V codegen is live and enforced.
-- **Device-token attachment — `X-Terminal-Token` header (CORRECTED).** The **constitution is the
-  controlling authority**: Platform Integration §Auth (`constitution.md:955-960`) mandates that *"every
-  backend request from POS-Pulse MUST carry both headers"* — `Authorization` (Clerk JWT) **and
-  `X-Terminal-Token`** (the device token from pairing); the pairing call is *"the only backend call where
-  `X-Terminal-Token` is absent"* (`constitution.md:978`). `src/main/index.ts:121` confirms the as-built
-  intent: `DEVICE_TOKEN_KEY` is "re-used by … any future feature that reads the token to set
-  **`X-Terminal-Token` on backend calls**" — i.e., this feature. The device token is read from
-  `secretStore.get(DEVICE_TOKEN_KEY)` in the main process.
-  > **Correction note (review finding, 2026-06-04):** an earlier draft of this file claimed *"no
-  > `X-Terminal-Token` header exists; the as-built idiom is body-field attestation."* That was **wrong** —
-  > it over-generalized from the *voucher* clients (which carry an operator JWT and no token header) and
-  > 004's `signIn` `device_token_attestation` **body field** (a sign-in-specific signed attestation, sent
-  > *alongside* a JWT — not the general per-request terminal-auth mechanism). The read-down runs with **no
-  > operator JWT** (Constitution VIII background-sync allowance), so the `X-Terminal-Token` header is
-  > exactly the mechanism it needs. Constitution §Auth + `index.ts:121` are the verified sources.
+- **Device-token attachment — `Authorization: Bearer <device_token>` (RESOLVED 2026-06-04, verified
+  against the shipped backend).** The read-down GET carries the device token in the **`Authorization: Bearer`**
+  header. The backend's `PosDeviceAuthGuard` (Data-Pulse-2 PR #490 / issue #488) reads a **single opaque
+  bearer in `Authorization`** — verified firsthand in `Data-Pulse-2/apps/api/src/auth/auth.guard.ts` — and
+  resolves `(tenant_id, store_id)` from the store-bound `devices` row; there is **no `X-Terminal-Token` seam
+  on the backend at all.** The read-down carries **no operator JWT** (Constitution VIII background sync), so
+  the device bearer is the sole credential. The token is read from `secretStore.get(DEVICE_TOKEN_KEY)` in the
+  main process.
+  > **Reversal (2026-06-04):** earlier drafts of this file claimed the device token rides the
+  > constitution-mandated **`X-Terminal-Token`** header (`constitution.md:955-960`). The POS constitution
+  > *assumes* the backend implements that header — but the **backend does not** (its guard reads
+  > `Authorization: Bearer` only). The read-down therefore follows the **backend's actual, shipped contract**:
+  > `Authorization: Bearer <device_token>`, recorded as a **documented per-surface exception** to the
+  > `X-Terminal-Token` mandate (plan AD-7 / R-RISK-2). Ground truth = the shipped guard, not the POS
+  > constitution's assumption.
   Also note (`constitution.md:950-951`): *"A single typed API client (generated from the OpenAPI spec) is
   the only path to the backend; ad-hoc `fetch` … is PROHIBITED."* — reinforces R6's codegen requirement.
 - **Background-task pattern** — `src/main/sales/finalize-listener.ts`: a factory returning
@@ -198,30 +198,33 @@ sellable-catalogue snapshot. The HTTP client reuses the established pattern (fac
   scope — another reason implementation is gated), **or** an explicit Constitution V waiver is filed
   for a temporary hand-typed shape with an expiry condition.
 
-**Terminal-token attachment — `X-Terminal-Token` header (CORRECTED — constitution-mandated).** The
-read-down GET MUST carry the device token in the **`X-Terminal-Token` header**, per Platform Integration
-§Auth (`constitution.md:955-960`): *every* backend request carries `Authorization` + `X-Terminal-Token`,
-and `index.ts:121` names this exact header for "any future feature that reads the token." The read-down
-carries **no `Authorization` JWT** (it runs without an operator session — Constitution VIII background
-sync), so `X-Terminal-Token` is the sole auth credential on the request; the backend's token claims
-(`tenant_id, branch_id, terminal_id`) are what scope the returned snapshot (NFR-4 / P17). The token is
-read from `secretStore.get(DEVICE_TOKEN_KEY)` in the main process; it is a secret — attached to the
-outbound request only, **never** crossing the bridge to the renderer or entering a log (P7;
-forbidden-keys allowlist already lists `device_token`). Constitution `constitution.md:950-951` also
-PROHIBITS ad-hoc `fetch` outside the single generated-types client — reinforcing the codegen gate above.
-> **Correction (review finding, 2026-06-04):** an earlier draft claimed body-field attestation
-> (`device_token_attestation`) and "no `X-Terminal-Token` header exists." That was wrong — see the
-> As-built grounding correction note. `device_token_attestation` is 004's **sign-in-specific** signed
-> body field sent *with* a JWT; it is not the general per-request terminal-auth mechanism. The
-> constitution's `X-Terminal-Token` header is controlling.
+**Terminal-token attachment — `Authorization: Bearer <device_token>` (RESOLVED — backend-verified).** The
+read-down GET carries the device token in the **`Authorization: Bearer`** header, because the backend's
+`PosDeviceAuthGuard` (Data-Pulse-2 PR #490) reads a single opaque bearer there and resolves
+`(tenant_id, store_id)` from the `devices` row — there is **no `X-Terminal-Token` seam** on the backend
+(verified in `apps/api/src/auth/auth.guard.ts`). The read-down carries **no `Authorization` JWT operator
+session** (Constitution VIII background sync), so the device bearer is the sole credential; the backend's
+device-row scope is what bounds the returned snapshot (NFR-4 / P17). The token is read from
+`secretStore.get(DEVICE_TOKEN_KEY)` in the main process; it is a secret — attached to the outbound request
+only, **never** crossing the bridge to the renderer or entering a log (P7; forbidden-keys allowlist already
+lists `device_token`). Constitution `constitution.md:950-951` PROHIBITS ad-hoc `fetch` outside the single
+generated-types client — reinforcing the codegen gate above.
+> **Reversal (2026-06-04):** earlier drafts said the device token rides the constitution-mandated
+> **`X-Terminal-Token`** header. The POS constitution *assumes* the backend implements that header; the
+> **shipped backend does not** (guard reads `Authorization: Bearer` only). The read-down follows the
+> backend's actual contract — a **documented per-surface exception** to `constitution.md:955-960` (plan
+> AD-7 / R-RISK-2). Ground truth = the shipped guard.
 
-**Open for §A6 confirmation.** The backend confirms the exact endpoint/verb and that it accepts the
-`X-Terminal-Token` header without a JWT for this read-only snapshot (the constitution mandates the header;
-the JWT-absent case for a background terminal call is confirmed with the backend as part of §A6).
+**§A6 status.** Endpoint/verb + auth are CONFIRMED (`GET /api/pos/v1/catalog/snapshot` + `/deltas`,
+device-bearer; PR #490 merged). The **only** residual is the live re-pin of `api-types.ts` from the
+deployed contract — blocked on backend deploy (D-DEPLOY, issue #349); the backend isn't yet serving at the
+edge.
 
 **Alternatives rejected.** Hand-typing the response shape with no filed waiver → silent Constitution V
-violation; rejected. Body-field attestation (`device_token_attestation`) as the read-down's auth → that
-is 004's sign-in-with-JWT idiom, not the constitutional per-request header; rejected.
+violation; rejected (re-pin from the deployed OpenAPI instead). Hand-editing the pinned snapshot to fake
+the shape before deploy → manufactures contract drift; rejected (the §A6 lesson). `X-Terminal-Token` as the
+mechanism → the backend has no such seam; rejected in favour of the backend's actual `Authorization: Bearer`
+contract.
 
 > **Constitution V precedent note (review finding).** `src/main/operator/backend-client.ts` (004) uses
 > **hand-typed** request/response shapes by an owner decision, without a formally filed V-waiver — a

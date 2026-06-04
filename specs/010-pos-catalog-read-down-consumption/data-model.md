@@ -95,13 +95,17 @@ read path (R4).
    never as a bare timestamp that implies products exist. `is_empty` is derived at read time (not a stored
    column) so it always reflects the live table.
 
-## Entity: CatalogueSourceSnapshot  *(NEW — 010, external input — PROPOSED shape)*
+## Entity: CatalogueSourceSnapshot  *(NEW — 010, external input — SHIPPED backend shape)*
 
 The full per-tenant/branch sellable-catalogue snapshot the backend delivers (R3 / R6). **Its concrete
-shape is a PROPOSED backend contract — see [contracts/backend-catalogue-snapshot.md](./contracts/backend-catalogue-snapshot.md)** — and is **blocked on backend coordination + OpenAPI codegen** (Constitution V).
-The fetch authenticates with the constitution-mandated **`X-Terminal-Token` header** (no operator JWT —
-Constitution VIII background sync); the token's `(tenant_id, branch_id, terminal_id)` claims scope the
-returned snapshot (R6 — corrected from an earlier body-attestation claim).
+shape is the SHIPPED backend contract `SellableCatalogRow`** (`GET /api/pos/v1/catalog/snapshot`,
+Data-Pulse-2 PR #490): `product_id`, `sku`, `name`, `aliases[]`, `price{amount,currency_code}`,
+`tax_category`, `active`, `row_cursor`. Types MUST be **generated** into `api-types.ts` (Constitution V),
+pending the live re-pin (D-DEPLOY, issue #349). The fetch authenticates with
+**`Authorization: Bearer <device_token>`** (no operator JWT — Constitution VIII background sync; the backend
+has **no `X-Terminal-Token` seam** — D-AUTH-2 / plan AD-7); the backend's `PosDeviceAuthGuard` scopes the
+returned snapshot to the device row's `(tenant_id, store_id)` (R6, reversed from an earlier
+`X-Terminal-Token` claim).
 
 **Conceptual fields per product record** (must supply everything 009's read model requires — 009
 `data-model.md` "Entity: Product" + "Entity: ProductBarcode"): stable `product_id`; `sku`; `name_ar`

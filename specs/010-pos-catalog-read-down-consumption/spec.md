@@ -372,10 +372,11 @@ planning. (These map to the Constitution P16 future-domain list and the owner's 
   seam that 010's data flows into. 010 is the catalogue-sourcing feature 009 named (009 AD-2 / AD-3,
   R-RISK-2). 010 MUST NOT change 009's read paths.
 - **002-terminal-pairing** — supplies the per-terminal device identity (tenant + branch + terminal) that
-  (a) scopes which catalogue this terminal may read down (Constitution VIII / P17), (b) is the
-  `X-Terminal-Token` the read-down authenticates with, (c) is the `tenant_id`/`branch_id` source for the
-  writer's tenant-scoping (there is no operator session), and (d) is a read-down trigger (post-pairing,
-  FR-15). The `pairingStore` is the runtime source.
+  (a) scopes which catalogue this terminal may read down (Constitution VIII / P17), (b) is the device token
+  the read-down sends as **`Authorization: Bearer <device_token>`** (D-AUTH-2 — the backend has no
+  `X-Terminal-Token` seam; the backend resolves scope from the device row), (c) is the
+  `tenant_id`/`branch_id` source for the writer's tenant-scoping (there is no operator session), and (d) is
+  a read-down trigger (post-pairing, FR-15). The `pairingStore` is the runtime source.
 - **004-operator-session** — gates the cashier-facing surfaces 009 runs on. **The read-down itself is
   NOT operator-session-gated** (clarified): it runs on a paired terminal even when signed out
   (Constitution VIII background-sync allowance). 004 remains the gate for the lookup/search/confirm
