@@ -51,7 +51,7 @@ inputs:** stage-and-promote (FR-6), full-snapshot replace (FR-15a), separate `ca
 | Fold columns | Computed at write-time via 009's **`normalize()`** (`src/main/catalogue/normalize.ts`), idempotent; never trusted from the source. | research R1 / spec FR-3 |
 | Backend client | New main-process HTTP client following the as-built pattern (`operator/backend-client.ts`, voucher clients): factory `{ baseUrl, fetch, timeoutMs }`, injected `fetch`, `AbortSignal.timeout`, resolve-on-reachable / reject-on-transport, typed discriminated outcome. | research R6 / as-built |
 | Backend contract | **PROPOSED + externally dependent** — see [contracts/backend-catalogue-snapshot.md](./contracts/backend-catalogue-snapshot.md). Response types MUST be **generated** into `src/shared/api-types.ts` (Principle V). **NEEDS BACKEND COORDINATION.** | research R6 / constitution V |
-| Terminal auth | Device-token **body-attestation** field (004 `device_token_attestation` idiom, verified) read from `secretStore.get(DEVICE_TOKEN_KEY)`; a header is the alternative if the backend requires it. **No `X-Terminal-Token` header exists today.** Token never crosses the bridge / never logged (P7). | research R6 / as-built |
+| Terminal auth | **`X-Terminal-Token` header** (constitution-mandated: Platform Integration §Auth, `constitution.md:960`; named for "any future feature" at `index.ts:121`), device token read from `secretStore.get(DEVICE_TOKEN_KEY)` in the main process. The read-down carries **no operator JWT** (Constitution VIII background sync), so this header is its sole auth credential; the backend's token claims scope the snapshot (P17). Token never crosses the bridge / never logged (P7). **(Corrected 2026-06-04 — an earlier draft wrongly claimed body-attestation / no header.)** | constitution §Auth / research R6 |
 | Trigger / lifecycle | Main-process **read-down driver** modelled on `src/main/sales/finalize-listener.ts` (`{ runTickOnce, start, stop }`): app-start / post-pairing + periodic interval; `stop()` before `dbHandle.close()`. Runs on a **paired terminal**, **not** operator-session-gated (Principle VIII). | research R8 / spec FR-15 |
 | Bridge additions | `catalogue:refresh` (manual trigger) + `catalogue:freshness` (last-updated read), session-gated, data/secret-free. New preload surface → **P8 review**. | research R-bridge / contracts |
 | Freshness UI | Renderer reads `catalogue.freshness`; shows "catalogue last updated &lt;time&gt;" only. No stale-alarm/auto-refresh (MVP, owner-confirmed). Arabic-first/RTL, inherits 003/007 tokens. | spec FR-16 / SC-10 |
@@ -93,9 +93,9 @@ Walked across Core Principles I–IX and Cross-Feature POS Principles P1–P18 (
 | P2. No Fake Success States | **PASS** | `catalogue.refresh` returns `started`/`already_running`, never a fake "updated"; freshness shows a time only after a **committed** promote (timestamp written in the promote tx). |
 | P3. No Silent Data Loss | **PASS-load-bearing** | Stage-and-promote (FR-6) + failure preserves prior catalogue (FR-7) + skip-and-log with abort-threshold (FR-9). Interrupted promote rolls back. |
 | P4. Auditability / Non-Destructive | **N/A-read-model** | 010 writes a read model, not a money-bearing ledger; emits no audit events. The catalogue is intentionally *replaced* each snapshot — it is not an audit anchor (consistent with 009 §A2 §6). |
-| P5. Idempotency for Retried Operations | **PASS** | Full-snapshot replace is idempotent by construction (re-run → same state, FR-13); single-flight driver prevents interleave (FR-14). Manual refresh carries no money intent. |
+| P5. Idempotency for Retried Operations | **PASS** | See the explicit **Idempotency** subsection below (constitution P5 requires one). Full-snapshot replace is construction-idempotent (re-run → identical state, FR-13); single-flight driver prevents interleave (FR-14); no client-UUID key is needed because the operation commits no money and carries no per-intent identity. |
 | P6. No Raw Cardholder Data | **N/A** | No card data anywhere in the catalogue path. |
-| P7. Secrets Never Reach Renderer/Logs | **PASS-load-bearing** | Device token stays main-process; never crosses the bridge, never logged; `device_token`/`device_token_attestation` already on the forbidden-keys allowlist. Bridge additions return no secret. |
+| P7. Secrets Never Reach Renderer/Logs | **PASS-load-bearing** | Device token (the `X-Terminal-Token` value) stays main-process; never crosses the bridge, never logged; `device_token` already on the forbidden-keys allowlist. Bridge additions return no secret. |
 | P8. Electron Security Boundary | **PASS-with-justified-expansion** | 010 owns the `catalogue:refresh` + `catalogue:freshness` bridge expansion explicitly; reviewed line-by-line under a **P8 bridge-security review** (§A4). No renderer-exposed write handler. |
 | P9. Truthful Offline / Degraded / Sync States | **PASS-load-bearing** | The freshness indicator is the honest realisation of 009 FR-24a; it implies no live sync; null until a real success. Owner-confirmed timestamp-only MVP (no stale-price alarm). |
 | P10. Operator Accountability | **N/A-read-down** | No sensitive operator action; the read-down is a background terminal task, not an operator-attributable money action. |
@@ -146,9 +146,33 @@ R-bridge (`catalogue.*` additions). All in-app unknowns resolved; R6 is backend-
 - **AD-6. Money pass-through with a safe-integer guard at the staging boundary** (R5) — the read-down is
   in the same trust line as a sale total; the *integrity* of the carried `price_minor` is load-bearing
   even though no math is done.
-- **AD-7. Terminal-token body attestation (verified), generated response types** (R6) — no invented
-  header; Principle V honoured; implementation gated on the backend op.
-- **AD-8. Background driver on a paired terminal, not session-gated** (R8 / Principle VIII).
+- **AD-7. Terminal-token via the constitution-mandated `X-Terminal-Token` header; generated response
+  types** (R6) — the read-down (no operator JWT) authenticates with the device-token header per Platform
+  Integration §Auth (`constitution.md:960`); Principle V honoured (generated types, or a formally filed
+  time-boxed V-waiver — NOT the 004 hand-typed-without-waiver precedent); implementation gated on the
+  backend op (§A6). **(Corrected 2026-06-04 from an earlier "body-attestation" claim.)**
+- **AD-8. Background driver on a paired terminal, not session-gated** (R8 / Principle VIII). Tenant
+  identity comes from `pairingStore` (not an operator session — there is none); the writer's tenant-scoping
+  guard (FR-8 / P17) filters on it.
+
+## Idempotency (Constitution P5)
+
+> P5 requires a retryable operation to define its idempotency strategy in the plan **before**
+> implementation. The read-down is retryable (re-run on interval / manual refresh / after failure), so:
+
+- **Strategy: construction-idempotent full-snapshot replace.** Re-running a read-down against the same
+  backend snapshot converges to an **identical** local catalogue state (FR-13) — the promote is a
+  whole-table `DELETE` + `INSERT … SELECT` from staging, so there is no accumulation, no duplicate
+  products/barcodes, and no order-dependence. Running it N times == running it once.
+- **No client-generated UUID key is required** (unlike a sale or a pairing submission). P5's UUID-key rule
+  exists to deduplicate *money-bearing, state-accumulating* submissions; the read-down commits **no money**
+  and accumulates **no** per-intent record — it replaces a read model. There is nothing to double-apply.
+- **Interleave safety:** the driver is **single-flight** (a second tick while one is in progress is
+  refused/coalesced — `catalogue:refresh` returns `already_running`), so two read-downs never race the
+  promote (FR-14). Combined with the atomic promote (FR-6), a retry after a failed/interrupted run simply
+  re-replaces from the latest snapshot with no residue.
+- **Manual refresh** (`catalogue:refresh`) therefore needs no idempotency key in its request payload
+  (`{}`) — kicking the driver twice is safe by the above.
 
 ## Project Layout
 
@@ -214,7 +238,7 @@ Slices are small reviewable PRs; `/speckit-tasks` derives the task list. Indicat
 | **S0: Backend contract coordination** (non-code) | Finalize the catalogue-snapshot op with the backend; publish OpenAPI; regenerate `api-types.ts`. **Unblocks everything.** | §A6 (V/contract) |
 | **S1: Migrations** — `0031`–`0033` (staging ×2 + sync-state), ship empty | Schema + indexes; FK-safe single PR. | §A2-class migration review |
 | **S2: Read-down writer + validation** — validate → stage → promote (atomic); fold via `normalize()`; safe-integer guard; skip-and-log + threshold | The correctness core; ≥95% cov; atomicity + failure-preservation + fold-parity + tenant-isolation tests. | (S1) |
-| **S3: HTTP client + driver** — snapshot client (generated types); driver `{runTickOnce,start,stop}`; app-start/post-pairing + interval; token body-attestation; redaction | resolve-on-reachable mapping; no-outbound-write test; single-flight. | §A6 |
+| **S3: HTTP client + driver** — snapshot client (generated types); driver `{runTickOnce,start,stop}`; app-start/post-pairing + interval; `X-Terminal-Token` header auth; tenant from `pairingStore`; redaction | resolve-on-reachable mapping; no-outbound-write test; single-flight. | §A6 |
 | **S4: Bridge additions + freshness UI** — `catalogue:refresh` + `catalogue:freshness`; renderer "last updated" indicator + refresh affordance | P8 bridge-security review; a11y/RTL. | §A4 (P8) |
 | **S5: Production readiness** — runbook, rollback, failure-mode catalogue, perf bring-up | NFR-1 preserved; read-down/promote-window evidence. | §A5 |
 
@@ -258,8 +282,13 @@ Re-evaluated after Phase 1. No status regressed.
   hardware). Blocks the rollout PR.
 - **§A6 (backend contract + Constitution V) — REQUIRED, EXTERNAL, the implementation blocker.** The
   catalogue-snapshot OpenAPI operation must be published and `api-types.ts` regenerated (or a time-boxed
-  V-waiver filed for a temporary hand-typed shape). Blocks S2 onward (and any network code). **This is the
-  one gate 010 cannot clear alone — it needs the backend team.**
+  V-waiver formally filed per the Exception Procedure — NOT the 004 hand-typed-without-waiver precedent).
+  **Blocks only the live-fetch HTTP client (T020/T021) and the composition-root wiring (T039)** — i.e. the
+  tasks that touch the real backend. It does **NOT** block the correctness core: migrations (§A2-gated),
+  the writer/promote/atomicity, validation, fold-parity, and tenant-isolation are all fixture-buildable in
+  parallel with backend coordination (see tasks.md Implementation Strategy). **This is the one gate 010
+  cannot clear alone — it needs the backend team.** *(Corrected 2026-06-04 — earlier "Blocks S2 onward"
+  overstated the blocker; aligned to the `[BLOCKED:§A6]` task tags.)*
 
 ## Risks & Open Items
 
@@ -267,13 +296,19 @@ Re-evaluated after Phase 1. No status regressed.
   op is unpublished; `api-types.ts` has no `/products/*` operation. **Mitigation:** §A6 gate + the PROPOSED
   contract is the coordination artifact; planning/data-model/staging design proceed now, implementation
   waits. **This is the critical-path blocker.**
-- **R-RISK-2 — Terminal-auth mechanism unconfirmed (owner: backend + 010).** Body-attestation (verified
-  as-built) vs a header the backend may require. **Mitigation:** AD-7 commits to body-attestation as
-  default, names the header alternative; resolved with the §A6 contract.
-- **R-RISK-3 — Promote window at scale (owner: 010 S5).** The promote transaction holds a brief write lock
-  on the live tables; at ~50k rows this must stay within an acceptable lookup-blocking window (NFR-2).
-  **Mitigation:** §A5 perf bring-up; staging-write happens outside the tx; if the window is too long,
-  chunked promote or a shadow-rename strategy is revisited (R2 alternative).
+- **R-RISK-2 — Backend confirms the `X-Terminal-Token`-without-JWT case (owner: backend + 010).** The
+  auth *mechanism* is settled: the device token rides the constitution-mandated `X-Terminal-Token` header
+  (AD-7). The only open item is confirming the backend accepts that header **without** an `Authorization`
+  JWT for this read-only background snapshot (the read-down has no operator session). **Mitigation:**
+  resolved as part of the §A6 contract. *(Downgraded 2026-06-04 — the "body-attestation vs header"
+  ambiguity was a false-premise; the header is constitutional.)*
+- **R-RISK-3 — Promote latency budget at scale (owner: 010 S5).** Under WAL (`client.ts:42`) readers run
+  **concurrently** with the promote write-transaction, so the promote does **not** block lookups — this is
+  a *latency-budget validation*, not an open architecture question. **Mitigation:** §A5 perf bring-up must
+  include a **lookup-concurrent-with-an-in-flight-promote** measurement (not just promote duration) to
+  confirm NFR-1/NFR-2 hold *during* a promote at ~50k rows; if the commit stall is material, chunked
+  promote is the fallback (R2). *(Reframed 2026-06-04 — WAL closes the "promote blocks lookups" concern;
+  the residual risk is the concurrent-latency budget.)*
 - **R-RISK-4 — Rejection-threshold value (owner: 010 S2).** The skip-vs-abort threshold (FR-9) needs a
   concrete value. **Mitigation:** tuning item; tests cover both the skip-one and abort-on-many paths.
 - **R-RISK-5 — Branch-scoped catalogue (owner: product).** 009's model is tenant-scoped (optional

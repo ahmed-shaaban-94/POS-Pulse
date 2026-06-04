@@ -61,14 +61,23 @@ Returns the truthful last-successful-promote timestamp for the FR-16 indicator.
 **Response:**
 
 ```text
-| { kind: 'ok', last_success_at: string | null }   // ISO-8601 UTC, or null if never succeeded
+| { kind: 'ok', last_success_at: string | null, is_empty: boolean }   // ISO-8601 UTC; is_empty = live products table has 0 rows for tenant
 | { kind: 'refused', reason: 'no_session' | 'tenant_isolation' }
 ```
 
-**Effects:** none (pure read of `catalogue_sync_state.last_success_at`, tenant-scoped). `null` ⇒ the UI
-shows "never updated / catalogue unavailable" honestly (P9). A non-null value is guaranteed to reflect a
-**committed** promote (the timestamp is written inside the promote transaction — SC-10), so the indicator
-never claims freshness for a read-down that didn't land.
+**Effects:** none (pure read of `catalogue_sync_state.last_success_at` + a tenant-scoped
+`products`-has-rows check). `is_empty` closes the **empty-catalogue truthfulness hole** (SC-10): a
+*successful empty* promote sets a non-null `last_success_at` while 009 still reports the catalogue
+`unavailable`, so a bare timestamp would imply data exists when it doesn't. The renderer copy is honest in
+all three states (P9):
+- `last_success_at = null` → "catalogue not yet downloaded" (never synced).
+- non-null + `is_empty = false` → "catalogue last updated &lt;time&gt;".
+- non-null + `is_empty = true` → "catalogue updated &lt;time&gt; — no products available" (truthful
+  synced-but-empty, distinct from both above).
+
+A non-null `last_success_at` is guaranteed to reflect a **committed** promote (the timestamp is written
+inside the promote transaction — SC-10), so the indicator never claims freshness for a read-down that
+didn't land.
 
 > **Design choice (plan-level).** Addition 2 MAY instead be folded into an existing renderer read rather
 > than a dedicated channel; the dedicated channel is preferred (R-bridge) to keep 009's typed lookup

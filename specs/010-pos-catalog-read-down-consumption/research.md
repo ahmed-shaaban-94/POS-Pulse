@@ -37,11 +37,23 @@ Confirmed against the repo so the plan commits to reality, not assumption:
   outcome with a `no_connection` / `authority_unreachable` sentinel; `AbortSignal.timeout()`. The voucher
   clients consume **generated** `components['schemas']['…']` types from `src/shared/api-types.ts`
   (`reverse.ts:19,32-33`) — confirming Constitution V codegen is live and enforced.
-- **Device-token attachment (verified, corrects an exploration inference).** The voucher clients send
-  only `Content-Type` + `Idempotency-Key` headers — **no `X-Terminal-Token` header exists anywhere**.
-  004's `signIn` attaches the device token as a **request-body field** (`device_token_attestation`,
-  `backend-client.ts`), read from `secretStore.get(DEVICE_TOKEN_KEY)` at the composition root. So the
-  as-built terminal-auth idiom is **body-field attestation**, not a bespoke header (see R6).
+- **Device-token attachment — `X-Terminal-Token` header (CORRECTED).** The **constitution is the
+  controlling authority**: Platform Integration §Auth (`constitution.md:955-960`) mandates that *"every
+  backend request from POS-Pulse MUST carry both headers"* — `Authorization` (Clerk JWT) **and
+  `X-Terminal-Token`** (the device token from pairing); the pairing call is *"the only backend call where
+  `X-Terminal-Token` is absent"* (`constitution.md:978`). `src/main/index.ts:121` confirms the as-built
+  intent: `DEVICE_TOKEN_KEY` is "re-used by … any future feature that reads the token to set
+  **`X-Terminal-Token` on backend calls**" — i.e., this feature. The device token is read from
+  `secretStore.get(DEVICE_TOKEN_KEY)` in the main process.
+  > **Correction note (review finding, 2026-06-04):** an earlier draft of this file claimed *"no
+  > `X-Terminal-Token` header exists; the as-built idiom is body-field attestation."* That was **wrong** —
+  > it over-generalized from the *voucher* clients (which carry an operator JWT and no token header) and
+  > 004's `signIn` `device_token_attestation` **body field** (a sign-in-specific signed attestation, sent
+  > *alongside* a JWT — not the general per-request terminal-auth mechanism). The read-down runs with **no
+  > operator JWT** (Constitution VIII background-sync allowance), so the `X-Terminal-Token` header is
+  > exactly the mechanism it needs. Constitution §Auth + `index.ts:121` are the verified sources.
+  Also note (`constitution.md:950-951`): *"A single typed API client (generated from the OpenAPI spec) is
+  the only path to the backend; ad-hoc `fetch` … is PROHIBITED."* — reinforces R6's codegen requirement.
 - **Background-task pattern** — `src/main/sales/finalize-listener.ts`: a factory returning
   `{ runTickOnce, start, stop }`; `start()` installs a `setInterval`, single-flight per tick; `stop()`
   clears it; cleanup runs **before** `dbHandle.close()` at app quit (`index.ts` `closeDbHandle`). R8
@@ -57,15 +69,30 @@ Confirmed against the repo so the plan commits to reality, not assumption:
 
 ## R1. Fold-column population — reuse 009's `normalize()` verbatim
 
-**Decision.** At write-time, 010 computes `name_fold` / `alias_fold` (and `sku_norm` / `barcode_norm`)
-by calling **009's exported `normalize()`** (`src/main/catalogue/normalize.ts`) — the identical function
-009's repo folds queries with. No second normalization is authored.
+**Decision.** At write-time, 010 computes the fold columns with **009's exported `normalize()`**
+(`src/main/catalogue/normalize.ts`) — the identical function 009's repo folds queries with. No second
+normalization is authored.
+
+**Composition rule (CORRECTED — the load-bearing write-side contract, verified against
+`src/main/catalogue/search.ts`).** 009's `search.ts` matches a folded query against **two separate
+columns** — `name_fold` and `alias_fold` (each `LIKE`-matched; it does NOT concatenate them). Therefore
+the writer MUST populate, per product row:
+  - `name_fold` = `normalize( name_ar + ' ' + (name_en ?? '') )` — i.e. Arabic and English display names
+    space-joined into one string, then folded. (One column covers both scripts; matches 009 data-model
+    §A2-D2 "fold of `name_ar` (+ `name_en` folded into a searchable form)".) Trailing space when
+    `name_en` is null is harmless — `normalize()` trims/collapses whitespace.
+  - `alias_fold` = `normalize( aliases.join(' ') )` when `aliases_json` is present, else `NULL`.
+  - `sku_norm` = `normalize(sku)`; `barcode_norm` = `normalize(barcode)` (each per its raw value).
+The exact-lookup columns (`sku_norm`, `barcode_norm`) and the search columns (`name_fold`, `alias_fold`)
+are the only folded columns 009 queries; nothing else is folded.
 
 **Rationale.** FR-3 + 009 FR-12b: matching is a property of the *comparison*; query and stored text MUST
-be folded identically. 009's data-model already states the fold columns are "maintained at write-time by
-the sourcing feature using 009's published fold rules." `normalize()` is pure + idempotent, so calling it
-at write-time and read-time is correctness-equivalent by construction. Divergence would silently break
-search recall (SC-9).
+be folded identically *and* composed into the same columns 009 queries. 009's data-model states the fold
+columns are "maintained at write-time by the sourcing feature using 009's published fold rules";
+`search.ts` is the precise definition of those columns. `normalize()` is pure + idempotent, so write-time
+and read-time agree by construction. A wrong *composition* (e.g. folding `name_ar` alone, omitting
+`name_en`) would silently break English-name recall (SC-9) even though `normalize()` itself is reused —
+which is why the composition rule is pinned here, not left to the implementer.
 
 **Alternatives rejected.** (a) A 010-local re-implementation of folding → guaranteed drift the moment
 either copy changes; rejected. (b) Compute folds in SQL → SQLite lacks the Unicode NFD + Arabic
@@ -86,6 +113,17 @@ writes happen *outside* the promote transaction, so they never hold locks agains
 A `DROP/ALTER TABLE RENAME` shadow-swap was considered but rejected: renaming tables out from under
 009's prepared statements + indexes is riskier than an in-place transactional replace at ~50k rows,
 which is well within budget.
+
+**WAL is the load-bearing enabler for FR-12 / NFR-2 (verified).** The database is opened in
+**`journal_mode = WAL`** on every connection (`src/main/db/client.ts:42`, comment line 32: "concurrent
+reads while a writer is mid-transaction"; asserted by `client.test.ts:46`). Under WAL, 009's lookup
+readers proceed **concurrently** with the promote write-transaction — so the promote does not block
+lookups (FR-12), and the only contention is the brief commit. This makes the atomicity claim safe
+*because of* WAL, not in spite of journal mode; were the DB in the default rollback-journal mode, a
+50k-row promote would block readers and NFR-2 would be at risk. **Test obligation:** a
+lookup-concurrent-with-an-in-flight-promote test (added to the §A5 perf bring-up and/or the atomicity
+test) must confirm lookup latency stays within budget *during* a promote, not merely that the promote
+completes quickly.
 
 **Alternatives rejected.** (a) Row-by-row `INSERT OR REPLACE` into live tables (the exploration
 sketch) → exposes partially-applied state to lookups; violates FR-6; rejected. (b) `ATTACH` a second
@@ -160,18 +198,36 @@ sellable-catalogue snapshot. The HTTP client reuses the established pattern (fac
   scope — another reason implementation is gated), **or** an explicit Constitution V waiver is filed
   for a temporary hand-typed shape with an expiry condition.
 
-**Terminal-token attachment (verified options).** The as-built terminal-auth idiom is a **request-body
-attestation field** (004 `device_token_attestation`), read from `secretStore.get(DEVICE_TOKEN_KEY)` at
-the composition root — **not** a bespoke `X-Terminal-Token` header (that header does not exist in the
-repo; the earlier exploration inference was wrong). The plan proposes the body-attestation idiom as the
-default and names a header as the alternative the backend may instead require. The token is a secret:
-it is read in the main process, attached to the outbound request, and **never** crosses the bridge to
-the renderer or enters a log (P7 / forbidden-keys allowlist already lists `device_token` +
-`device_token_attestation`).
+**Terminal-token attachment — `X-Terminal-Token` header (CORRECTED — constitution-mandated).** The
+read-down GET MUST carry the device token in the **`X-Terminal-Token` header**, per Platform Integration
+§Auth (`constitution.md:955-960`): *every* backend request carries `Authorization` + `X-Terminal-Token`,
+and `index.ts:121` names this exact header for "any future feature that reads the token." The read-down
+carries **no `Authorization` JWT** (it runs without an operator session — Constitution VIII background
+sync), so `X-Terminal-Token` is the sole auth credential on the request; the backend's token claims
+(`tenant_id, branch_id, terminal_id`) are what scope the returned snapshot (NFR-4 / P17). The token is
+read from `secretStore.get(DEVICE_TOKEN_KEY)` in the main process; it is a secret — attached to the
+outbound request only, **never** crossing the bridge to the renderer or entering a log (P7;
+forbidden-keys allowlist already lists `device_token`). Constitution `constitution.md:950-951` also
+PROHIBITS ad-hoc `fetch` outside the single generated-types client — reinforcing the codegen gate above.
+> **Correction (review finding, 2026-06-04):** an earlier draft claimed body-field attestation
+> (`device_token_attestation`) and "no `X-Terminal-Token` header exists." That was wrong — see the
+> As-built grounding correction note. `device_token_attestation` is 004's **sign-in-specific** signed
+> body field sent *with* a JWT; it is not the general per-request terminal-auth mechanism. The
+> constitution's `X-Terminal-Token` header is controlling.
 
-**Alternatives rejected.** Hand-typing the response shape with no waiver → silent Constitution V
-violation; rejected. Inventing the `X-Terminal-Token` header → not the as-built pattern; rejected
-pending backend confirmation.
+**Open for §A6 confirmation.** The backend confirms the exact endpoint/verb and that it accepts the
+`X-Terminal-Token` header without a JWT for this read-only snapshot (the constitution mandates the header;
+the JWT-absent case for a background terminal call is confirmed with the backend as part of §A6).
+
+**Alternatives rejected.** Hand-typing the response shape with no filed waiver → silent Constitution V
+violation; rejected. Body-field attestation (`device_token_attestation`) as the read-down's auth → that
+is 004's sign-in-with-JWT idiom, not the constitutional per-request header; rejected.
+
+> **Constitution V precedent note (review finding).** `src/main/operator/backend-client.ts` (004) uses
+> **hand-typed** request/response shapes by an owner decision, without a formally filed V-waiver — a
+> waiver-in-practice. 010 does **not** follow that precedent: it either consumes generated
+> `api-types.ts` (preferred) or, if codegen can't land in time, files a **formal, time-boxed V-waiver**
+> per the constitution's Exception Procedure (with an expiry). The §A6 gate makes this explicit.
 
 ## R7. Read-down diagnostics — public fields only, redaction allowlist extended
 
@@ -196,8 +252,18 @@ background sync"). It never blocks selling (FR-12) — the fetch + staging happe
 the brief promote transaction touches the live tables. A **manual "refresh catalogue"** path (R-bridge,
 below) invokes `runTickOnce()` on demand.
 
-**Rationale.** Clarified decision (Q-RD-TRIGGER). The established background-task pattern already solves
-single-flight ticking + clean shutdown ordering; reusing it avoids a bespoke scheduler.
+**Tenant identity during pre-session (no-JWT) operation — `pairingStore` (CORRECTED, was unspecified).**
+Because the read-down runs with no operator session, the writer/driver get the terminal's
+`tenant_id` (and optional `branch_id`) from the **`pairingStore`** (`createPairingStore`, wired in the
+composition root at `src/main/index.ts`) — i.e. the paired-terminal identity, NOT
+`operatorSessionManager.getCurrent()`. The composition-root wiring (T039) injects this tenant/branch into
+`createReadDownWriter`/`createReadDownDriver`. This is the source the writer's tenant-scoping guard (FR-8
+/ P17) filters on, and what the §A2/§A4 reviewers confirm. If the terminal is not paired, no read-down
+runs (there is no tenant to scope to).
+
+**Rationale.** Clarified decision (Q-RD-TRIGGER) + Constitution VIII. The established background-task
+pattern already solves single-flight ticking + clean shutdown ordering; reusing it avoids a bespoke
+scheduler. Tenant identity must come from pairing (not a session) precisely because there is no session.
 
 **Open (planning detail).** The periodic interval value (e.g. hourly) and the precise app-start /
 post-pairing hook points are tuning details for the slice, not scope-changing.
@@ -207,8 +273,23 @@ post-pairing hook points are tuning details for the slice, not scope-changing.
 **Decision.** Two additive, read-safe bridge concerns:
 1. A **manual refresh** trigger — a new `catalogue:refresh` IPC channel that gates on session and calls
    the driver's `runTickOnce()`, returning a generic ok/refused/in-progress result (never raw data).
-2. A **freshness read** — either a new `catalogue:freshness` channel or a field surfaced through an
-   existing read, returning the last-successful-promote timestamp from `catalogue_sync_state` (no secrets).
+2. A **freshness read** — a new `catalogue:freshness` channel returning the last-successful-promote
+   timestamp from `catalogue_sync_state` **plus an `is_empty` flag** (no secrets).
+
+**Empty-catalogue truthfulness (CORRECTED — closes the SC-10 hole).** A *successful empty* promote
+(backend legitimately returns zero sellable products) writes a non-null `last_success_at` while 009's
+`catalogueHasRows()` (`product-repo.ts:127`) still reports the catalogue as `unavailable`. A bare
+"last updated &lt;time&gt;" would then **imply data exists when it doesn't** — violating SC-10 ("0 cases
+where it implies sync while the catalogue is actually empty/unavailable"). So `catalogue:freshness`
+returns **`{ kind:'ok', last_success_at: string|null, is_empty: boolean }`**, where `is_empty` reflects
+whether the live `products` table currently has zero rows for the tenant. The renderer copy is then
+honest in all three cases:
+  - `last_success_at = null` → "catalogue not yet downloaded" (never synced).
+  - `last_success_at` set, `is_empty = false` → "catalogue last updated &lt;time&gt;".
+  - `last_success_at` set, `is_empty = true` → "catalogue updated &lt;time&gt; — no products available"
+    (a real, truthful "synced but empty" state — distinct from both "never synced" and "has products").
+This distinction is the load-bearing realisation of SC-10 and 009 FR-24's "catalogue unavailable" vs the
+new freshness signal.
 
 **Rationale.** Both are new preload-bridge surface → Constitution P8 (Electron security boundary). 010
 **owns** this expansion explicitly and runs it under a **P8 bridge-security review** gate (mirrors 009's
@@ -228,7 +309,7 @@ response → muddies 009's typed lookup union; a dedicated read is cleaner.
 | Fold-column population | R1 — reuse 009's `normalize()` verbatim |
 | Sync-state location | R4 — separate `catalogue_sync_state` table |
 | Malformed-record threshold | R5 — validate-then-skip + batch-abort threshold (value = plan tuning) |
-| Backend contract + token attachment | R6 — **PROPOSED, backend-dependent**; generated types (V); body-attestation token (verified) |
+| Backend contract + token attachment | R6 — **PROPOSED, backend-dependent**; generated types (V); **`X-Terminal-Token` header** (constitution-mandated, corrected) |
 | Diagnostics redaction | R7 — public fields only; allowlist extended |
 | Trigger + lifecycle | R8 — paired-terminal background driver (finalize-listener pattern) + manual refresh |
 | New bridge surface | R-bridge — `catalogue:refresh` (+ freshness read); P8 review gate |

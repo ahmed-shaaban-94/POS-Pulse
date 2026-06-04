@@ -42,6 +42,17 @@ ratified `0029`/`0030` DDL), including the derived `name_fold` / `alias_fold` / 
 `barcode_norm` columns — all folded with **009's `normalize()`** at write-time (R1). The provenance
 columns `row_version`, `created_at`, `updated_at` are populated from the snapshot record.
 
+**Fold-column composition (the load-bearing write-side contract — R1, verified against 009
+`search.ts`).** 009 matches a query against `name_fold` and `alias_fold` as **two separate** `LIKE`
+columns (it does not concatenate them). The writer MUST therefore compose, per row:
+- `name_fold` = `normalize(name_ar + ' ' + (name_en ?? ''))` — both display names space-joined, then
+  folded (one column covers both scripts; matches 009 §A2-D2). Trailing space when `name_en` is null is
+  harmless (`normalize()` trims).
+- `alias_fold` = `normalize(aliases.join(' '))` when aliases present, else `NULL`.
+- `sku_norm` = `normalize(sku)`; `barcode_norm` = `normalize(barcode)`.
+A wrong composition (e.g. folding `name_ar` alone) silently breaks English-name recall (SC-9) even with
+the correct `normalize()` — which is why the rule is pinned, not left to the implementer.
+
 **Invariants:**
 
 1. **Staging is tenant-scoped** like the live tables; a read-down only ever stages the terminal's own
@@ -78,11 +89,19 @@ read path (R4).
 2. **No secrets.** This table holds no token, no credential, no PII — only timestamps + an opaque source
    id (P7).
 3. **Off the hot path.** Read only by the freshness surface (FR-16), never by lookup/search/resolve.
+4. **Empty-catalogue truthfulness (FR-16b / SC-10).** The freshness read pairs `last_success_at` with an
+   `is_empty` signal computed from a tenant-scoped `products`-has-rows check, so a *successful empty*
+   promote (non-null `last_success_at`, zero products) is surfaced as "updated — no products available",
+   never as a bare timestamp that implies products exist. `is_empty` is derived at read time (not a stored
+   column) so it always reflects the live table.
 
 ## Entity: CatalogueSourceSnapshot  *(NEW — 010, external input — PROPOSED shape)*
 
 The full per-tenant/branch sellable-catalogue snapshot the backend delivers (R3 / R6). **Its concrete
 shape is a PROPOSED backend contract — see [contracts/backend-catalogue-snapshot.md](./contracts/backend-catalogue-snapshot.md)** — and is **blocked on backend coordination + OpenAPI codegen** (Constitution V).
+The fetch authenticates with the constitution-mandated **`X-Terminal-Token` header** (no operator JWT —
+Constitution VIII background sync); the token's `(tenant_id, branch_id, terminal_id)` claims scope the
+returned snapshot (R6 — corrected from an earlier body-attestation claim).
 
 **Conceptual fields per product record** (must supply everything 009's read model requires — 009
 `data-model.md` "Entity: Product" + "Entity: ProductBarcode"): stable `product_id`; `sku`; `name_ar`

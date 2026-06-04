@@ -32,17 +32,23 @@ GET /api/pos/v1/products/catalogue            (or POST /api/pos/v1/products/snap
     tenant (and branch, where branch-scoped). Full-snapshot replace model (R3).
 ```
 
-**Terminal authentication (verified options — backend confirms which).** The as-built terminal-auth idiom
-is a **request-body attestation field** (`device_token_attestation`, as 004's `signIn` uses), read from
-`secretStore.get(DEVICE_TOKEN_KEY)` in the main process. The token is a secret: attached to the outbound
-request only, **never** crossing the bridge to the renderer or entering a log (P7;
-`device_token` / `device_token_attestation` are already on the forbidden-keys allowlist). A dedicated
-header is the alternative if the backend prefers it — but **no `X-Terminal-Token` header exists in the
-repo today**, so it is not assumed.
+**Terminal authentication — `X-Terminal-Token` header (constitution-mandated).** The device token rides
+the **`X-Terminal-Token`** request header, per Platform Integration §Auth (`constitution.md:955-960`):
+every backend request carries `Authorization` + `X-Terminal-Token`. `src/main/index.ts:121` names this
+exact header for "any future feature that reads the token." The token is read from
+`secretStore.get(DEVICE_TOKEN_KEY)` in the main process; it is a secret — attached to the outbound request
+only, **never** crossing the bridge to the renderer or entering a log (P7; `device_token` already on the
+forbidden-keys allowlist).
+> **Corrected 2026-06-04 (review finding):** an earlier draft proposed a request-body attestation field
+> and claimed "no `X-Terminal-Token` header exists." That was wrong — `device_token_attestation` is 004's
+> *sign-in-specific* signed body field (sent alongside a JWT), not the general per-request terminal-auth
+> mechanism. The constitutional `X-Terminal-Token` header is controlling.
 
 **Operator JWT.** Not required for the read-down — it runs on a paired terminal without an operator
-session (R8 / Constitution VIII background-sync allowance). The terminal device identity is the
-authenticating credential.
+session (R8 / Constitution VIII background-sync allowance), so `X-Terminal-Token` is the **sole** auth
+credential on the request. **Backend confirmation needed (§A6):** that the snapshot endpoint accepts
+`X-Terminal-Token` without an `Authorization` JWT for this read-only background call. The token's claims
+(`tenant_id, branch_id, terminal_id`) scope the returned snapshot.
 
 ## Proposed response shape (illustrative — for backend negotiation)
 
@@ -96,8 +102,9 @@ voucher-authority clients):
 
 1. Endpoint, verb, and whether snapshot is paginated/streamed for large catalogues (chunked staging is
    an implementation option if so).
-2. The terminal-auth mechanism (body attestation vs header) — backend decides; both are supported by the
-   verified pattern.
+2. Confirm the endpoint accepts the **`X-Terminal-Token` header without an `Authorization` JWT** for this
+   read-only background call (the auth *header* is constitution-fixed; only the JWT-absent acceptance for
+   a terminal-only call needs backend confirmation).
 3. Publishing the OpenAPI operation so `api-types.ts` regenerates (Constitution V).
 4. Tenant/branch scoping semantics of the snapshot.
 

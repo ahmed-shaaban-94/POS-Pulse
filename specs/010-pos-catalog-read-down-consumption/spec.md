@@ -116,9 +116,12 @@ Each scenario uses Given / When / Then phrasing and is testable without naming a
   the read-down records the failure for diagnostics and the cashier surface continues to show 009's
   generic "catalogue unavailable" state; no hard error, no crash.
 - **Backend returns an empty catalogue** — a successful read-down that legitimately contains zero
-  sellable products results in an empty-but-present catalogue; lookups behave per 009 (not-found per
-  query, or "catalogue unavailable" if the model is genuinely empty — the distinction is 009's, not
-  re-litigated here).
+  sellable products results in an empty-but-present catalogue; lookups behave per 009 ("catalogue
+  unavailable" when the model is empty). **Freshness truthfulness (SC-10):** because a successful *empty*
+  promote sets a real `last_success_at` while lookups still report "catalogue unavailable", the freshness
+  surface MUST distinguish "synced but empty" from both "never synced" and "synced with products" — a bare
+  "last updated" timestamp on an empty catalogue would falsely imply products exist (see FR-16, the
+  freshness response's `is_empty` discriminator).
 - **Malformed / incomplete product record from the backend** — a record missing a field the read model
   requires (e.g. no Arabic name, or a non-integer/unsafe price) MUST NOT corrupt the local catalogue;
   the record is rejected/skipped and the rejection is recorded for diagnostics, without aborting the
@@ -223,6 +226,12 @@ Each requirement is testable, unambiguous, and uses MUST/SHOULD/MAY.
   "synced" claim the code does not back (Constitution P9), and MUST NOT block any selling path. No
   stale-alarm, no auto-refresh promise, and no countdown are in scope for MVP — the timestamp only.
   (009 FR-24a explicitly deferred any freshness marker to this feature; this is that decision.)
+- **FR-16b.** The freshness surface MUST distinguish three truthful states (Constitution P9; SC-10): (a)
+  **never synced** (no successful promote) → "not yet downloaded"; (b) **synced with products** →
+  "last updated &lt;time&gt;"; (c) **synced but empty** (successful promote, zero sellable products) →
+  an explicit "updated &lt;time&gt; — no products available" — NOT a bare timestamp (which would imply
+  products exist). The freshness read therefore carries both the promote timestamp and an `is_empty`
+  signal (live-`products`-has-rows check).
 - **FR-16a.** Read-down sync state (at minimum the last-successful-promote timestamp and the
   source/snapshot identifier) MUST be persisted in a **separate read-down-state store**, kept out of
   009's hot lookup/search path so lookup performance (NFR-1) is unaffected. 009's existing `row_version`
@@ -274,7 +283,9 @@ Measurable, technology-agnostic outcomes. The feature is "done" when these are d
 - **SC-7.** **0** POS → backend writes occur from this feature — verified by inspection and test that
   010 issues no outbound write/sale/inventory traffic.
 - **SC-8.** 009's lookup/search performance budgets (NFR-1) still hold against a catalogue populated by a
-  real read-down at ~50,000 products on target hardware — **0** regressions versus 009's bring-up.
+  real read-down at ~50,000 products on target hardware — **0** regressions versus 009's bring-up —
+  **including lookups issued *concurrently with* an in-flight promote** (WAL permits concurrent readers;
+  this verifies the promote does not stall lookups beyond budget, not merely that it completes quickly).
 - **SC-9.** Folded search recall is preserved on read-down-populated data: **100 %** of 009's
   Arabic/English folded-variant corpus still returns its product after a read-down (the stored fold
   matches 009's query fold).
@@ -360,14 +371,15 @@ planning. (These map to the Constitution P16 future-domain list and the owner's 
   `product_barcodes`), the published fold rules, the `catalogue.*` read surface, and the R7 resolver
   seam that 010's data flows into. 010 is the catalogue-sourcing feature 009 named (009 AD-2 / AD-3,
   R-RISK-2). 010 MUST NOT change 009's read paths.
-- **002-terminal-pairing** — the per-terminal device identity (tenant + branch + terminal) that scopes
-  which catalogue this terminal is entitled to read down (Constitution VIII / P17).
+- **002-terminal-pairing** — supplies the per-terminal device identity (tenant + branch + terminal) that
+  (a) scopes which catalogue this terminal may read down (Constitution VIII / P17), (b) is the
+  `X-Terminal-Token` the read-down authenticates with, (c) is the `tenant_id`/`branch_id` source for the
+  writer's tenant-scoping (there is no operator session), and (d) is a read-down trigger (post-pairing,
+  FR-15). The `pairingStore` is the runtime source.
 - **004-operator-session** — gates the cashier-facing surfaces 009 runs on. **The read-down itself is
   NOT operator-session-gated** (clarified): it runs on a paired terminal even when signed out
   (Constitution VIII background-sync allowance). 004 remains the gate for the lookup/search/confirm
   surfaces that consume the data.
-- **002-terminal-pairing** — supplies the paired-terminal identity the read-down runs under and triggers
-  on (post-pairing trigger; FR-15).
 - **SmartDataPulse backend (api.smartdatapulse.tech)** — the source of the **full per-tenant/branch
   sellable-catalogue snapshot** (full-snapshot replace, clarified). Whether the snapshot endpoint already
   exists or must be defined (an OpenAPI/codegen contract dependency, Constitution V/P8) is resolved in
