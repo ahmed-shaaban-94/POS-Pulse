@@ -1,9 +1,24 @@
-# Contract (PROPOSED): Backend Catalogue Snapshot
+# Contract (SUPERSEDED): Backend Catalogue Snapshot
+
+> ## ⛔ SUPERSEDED 2026-06-04 — this PROPOSED draft is no longer the source of truth.
+> The real catalogue read-down contract is **SHIPPED** by the backend and is authoritative there:
+> - **Source of truth:** `Data-Pulse-2/packages/contracts/openapi/catalog/read-down.yaml` —
+>   `GET /api/pos/v1/catalog/snapshot` + `/deltas`, schema `SellableCatalogRow` (`product_id`, `sku`,
+>   `name`, `aliases[]`, `price{amount,currency_code}`, `tax_category`, `active`, `row_cursor`). Merged via
+>   **PR #490** / issue #488.
+> - **Auth (the load-bearing reversal):** `Authorization: Bearer <device_token>` — the backend has **NO
+>   `X-Terminal-Token` seam** (guard reads `Authorization` only). Anything below claiming `X-Terminal-Token`
+>   is STALE.
+> - **Gap analysis + decisions:** [../a6-reconciliation-findings.md](../a6-reconciliation-findings.md)
+>   (GAP-1 money, GAP-2 untyped barcode, GAP-3 single name, GAP-4 auth) + plan AD-7.
+> - **POS does NOT maintain a parallel prose contract** (Constitution V): it pins **generated types** from
+>   the backend yaml into `src/shared/api-types.ts`, via the live re-pin tracked in **issue #349** (D-DEPLOY,
+>   blocked on backend deploy). The prose below is retained only as the historical coordination request.
 
 **Feature ID:** 010-pos-catalog-read-down-consumption
 **Plan:** [../plan.md](../plan.md) (R3, R6)
-**Status:** 🚧 **PROPOSED — NOT a committed local contract.** This is a *request to the SmartDataPulse
-backend team* for a catalogue-snapshot operation. It is the **implementation blocker** for 010.
+**Status:** ⛔ **SUPERSEDED** by the shipped backend contract (above). Retained for provenance only — do NOT
+treat the prose below as the contract.
 **Created:** 2026-06-04
 **Constitution version pinned:** v1.5.1
 

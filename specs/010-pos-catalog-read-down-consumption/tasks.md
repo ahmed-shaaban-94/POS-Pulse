@@ -13,16 +13,19 @@ description: "Task list for 010-pos-catalog-read-down-consumption — slice/stor
 **Quickstart:** [./quickstart.md](./quickstart.md)
 **Constitution version pinned:** v1.5.1
 **Created:** 2026-06-04
-**Status:** Draft — held behind gates §A2 / §A4 / §A5 / §A6 (see Approval Gates in plan.md). `/speckit-plan` authored no code.
+**Status:** Draft (tasks v1.1, refreshed 2026-06-04 against plan v1.1). Gates §A2 / §A4 / §A5 remain; **§A6 is NARROWED to D-DEPLOY only** (see below). `/speckit-plan` authored no code.
 
 ---
 
-> ⛔ **IMPLEMENTATION BLOCKER (§A6, EXTERNAL).** No source/network/migration task below may start until
-> the backend publishes the catalogue-snapshot OpenAPI operation and `src/shared/api-types.ts` is
-> regenerated (or a time-boxed Constitution V waiver is filed). This is owned by the **backend team**, not
-> this repo — see `contracts/backend-catalogue-snapshot.md`. **Exception:** the migration tasks (Phase 2,
-> US-agnostic) use 009's known table shape and are gated only on the **§A2-class migration-safety review**,
-> not on §A6 — they MAY proceed in parallel with backend coordination.
+> ✅ **§A6 NARROWED (2026-06-04).** The backend catalogue contract + device-principal auth are **SHIPPED**
+> (Data-Pulse-2 PR #490 / issue #488). The **correctness core is UNBLOCKED and buildable now** — migrations
+> (Phase 2, §A2-gated) and the read-down writer/validation/promote (US1 non-network) are all fixture-built
+> against the known `SellableCatalogRow` shape, no backend needed.
+> **The ONLY remaining §A6 item is D-DEPLOY:** re-pinning `src/shared/api-types.ts` from the *deployed*
+> contract — blocked because the backend isn't yet serving at the edge (HTTP 521; tracked in **issue #349**).
+> So only the **live HTTP client + its wiring** (T020/T021/T039, tagged `[BLOCKED:D-DEPLOY #349]`) wait;
+> everything else proceeds. Auth on those tasks = **`Authorization: Bearer <device_token>`** (the backend has
+> no `X-Terminal-Token` seam — plan AD-7).
 >
 > **Test-first (Constitution VI, NON-NEGOTIABLE).** Every implementation task is preceded by its failing
 > test task (RED → GREEN). Test tasks are not optional for this feature.
@@ -38,7 +41,7 @@ description: "Task list for 010-pos-catalog-read-down-consumption — slice/stor
 - **`[P]`** = parallelizable (different files, no dependency on an incomplete task). Source-author hint;
   same-file pairs run sequentially regardless.
 - **`[USn]`** maps a task to a user story phase. Setup / Foundational / Polish carry no story label.
-- **`[BLOCKED:§A6]`** = task may not start until the backend-contract gate clears.
+- **`[BLOCKED:D-DEPLOY #349]`** = task may not start until `api-types.ts` is re-pinned from the deployed backend contract (blocked on backend deploy; issue #349). Only the live HTTP client + its wiring carry this.
 - File paths are repository-relative.
 
 ## User-story map (derived from spec scenarios + plan slice strategy)
@@ -56,8 +59,8 @@ enforced in Foundational + woven through every story's tests.
 
 ## Phase 1 — Setup
 
-- [ ] T001 Backend-contract coordination (non-code): finalize the catalogue-snapshot operation with the backend team against `specs/010-pos-catalog-read-down-consumption/contracts/backend-catalogue-snapshot.md`; obtain endpoint/verb, response shape, tenant/branch scoping, and confirm the endpoint accepts the **`X-Terminal-Token` header without an `Authorization` JWT** (constitution-fixed header; only the JWT-absent acceptance needs confirming). **Clears §A6 (part 1).**
-- [ ] T002 Publish the OpenAPI operation and run `npm run codegen:api` to regenerate `src/shared/api-types.ts`; confirm `npm run codegen:verify` is green. **Clears §A6 (part 2).** (If the backend cannot publish in time, instead file a time-boxed Constitution V waiver with an expiry condition and record it in plan.md.)
+- [x] T001 Backend-contract coordination (non-code): ✅ **DONE 2026-06-04.** Contract finalized + shipped by the backend — `GET /api/pos/v1/catalog/snapshot` + `/deltas`, `SellableCatalogRow`, device-principal auth via **`Authorization: Bearer <device_token>`** (NO `X-Terminal-Token` — backend has no such seam), scope from the `devices` row (Data-Pulse-2 PR #490 / issue #488). Endpoint/verb/shape/auth all CONFIRMED. **§A6 part 1 cleared.**
+- [ ] T002 [BLOCKED:D-DEPLOY #349] Re-pin `src/shared/api-types.ts` from the **deployed** contract: confirm D-DEPLOY (`/openapi.json` → 200 with `/api/pos/v1/catalog/snapshot`), then `tsx scripts/codegen-api.ts --source=live` (or a local backend URL) → commit the new `scripts/openapi-snapshot.json` + regenerated types; `npm run codegen:verify` green. **Blocked: backend not yet deployed to the edge (HTTP 521; issue #349). Do NOT hand-edit the snapshot.** **Clears §A6 (part 2 = the only residual).**
 - [ ] T003 Author the §A2-class migration-safety review package for the new tables + the promote transaction — `specs/010-pos-catalog-read-down-consumption/migration-review/s1-migration-review.md` (mirror 009's `migration-review/s2-migration-review.md`: proposed DDL, FK posture, append-only analysis, tenant-scoping, promote-atomicity argument). **Owner-ratified before any migration task (T010–T015) merges.**
 
 ## Phase 2 — Foundational (Blocking Prerequisites)
@@ -66,12 +69,14 @@ enforced in Foundational + woven through every story's tests.
 
 - [ ] T010 [P] RED: migration test — `0031`/`0032`/`0033` create `products_staging`, `product_barcodes_staging`, `catalogue_sync_state` with the expected columns + indexes; mirror the sql.js + `readFileSync('migrations/00NN_*.sql')` pattern used by 009's `0029`/cart durability tests — `src/main/migrations/__tests__/0031-catalogue-readdown.test.ts`
 - [ ] T011 [BLOCKED:§A2] GREEN: author `migrations/0031_create_products_staging.sql` (mirror `products` columns incl. fold columns; money `INTEGER CHECK(>=0)`; booleans 0/1; logical FK only; no append-only trigger; `CREATE … IF NOT EXISTS`; ships empty)
-- [ ] T012 [BLOCKED:§A2] GREEN: author `migrations/0032_create_product_barcodes_staging.sql` (mirror `product_barcodes`; `(tenant_id, barcode_norm)` index; logical FK only; ships empty)
+- [ ] T012 [BLOCKED:§A2] GREEN: author `migrations/0032_create_product_barcodes_staging.sql` (mirror `product_barcodes`; `(tenant_id, barcode_norm)` index; logical FK only; ships empty). NOTE: `barcode_kind` stays nullable — D-BARCODE populates it NULL from the untyped backend `aliases[]` (the writer synthesizes `barcode_id`; lossy, owner-accepted v1)
 - [ ] T013 [BLOCKED:§A2] GREEN: author `migrations/0033_create_catalogue_sync_state.sql` (one row per tenant: `tenant_id` PK, `branch_id?`, `last_success_at?`, `source_snapshot_id?`, `last_attempt_at?`, `last_outcome?`; ships empty)
 - [ ] T014 RED: `catalogue_sync_state` repo test — read returns null before first success; write inside a transaction; tenant-scoped — `src/main/catalogue/__tests__/catalogue-sync-state-repo.test.ts`
 - [ ] T015 GREEN: `createCatalogueSyncStateRepo(db)` — read/write `catalogue_sync_state`, tenant-scoped, write callable inside the promote transaction — `src/main/catalogue/catalogue-sync-state-repo.ts`
-- [ ] T016 [P] RED: per-record validation test — required fields present; `price_minor` rejected unless `Number.isSafeInteger` and ≥ 0; empty `name_ar` rejected; valid record passes — `src/main/catalogue/read-down/__tests__/validate-record.test.ts`
-- [ ] T017 [P] GREEN: `validateRecord(raw)` → `{ ok, value } | { ok:false, reason }`; safe-integer money guard (P1); no arithmetic — `src/main/catalogue/read-down/validate-record.ts`
+- [ ] T015a [P] RED: backend-row mapping test — `mapSellableRow(SellableCatalogRow)` → internal record. Asserts the three resolved GAP mappings (fixture-built; no backend): **GAP-1 money** decimal string + `currency_code` → integer `price_minor` via exact string→int (×10^exponent; **v1 is single-currency-per-store = EGP, exponent 2** per the backend spec — the exponent is keyed off `currency_code` for forward-compat, NOT a multi-currency feature in v1), **never a float**, rejects non-representable; **D-NAME** single `name` → `name_ar := name`, `name_en := null`; **D-BARCODE** untyped `aliases[]` → one `product_barcodes` record per entry with `barcode_kind := null` (lossy, owner-accepted) + the `sku` typed field kept distinct — `src/main/catalogue/read-down/__tests__/map-sellable-row.test.ts`
+- [ ] T015b [P] GREEN: `mapSellableRow(row)` → `{ product, barcodes[] }` internal shape implementing the GAP-1/D-NAME/D-BARCODE mappings above; pure (no I/O), no arithmetic beyond the exact decimal→minor parse — `src/main/catalogue/read-down/map-sellable-row.ts`
+- [ ] T016 [P] RED: per-record validation test — required fields present; `price_minor` rejected unless `Number.isSafeInteger` and ≥ 0; empty `name_ar` rejected (post-mapping `name_ar` is the backend `name`, so empty ⇒ a bad source row); valid record passes — `src/main/catalogue/read-down/__tests__/validate-record.test.ts`
+- [ ] T017 [P] GREEN: `validateRecord(mapped)` → `{ ok, value } | { ok:false, reason }`; safe-integer money guard (P1); validates the mapped internal record (runs after T015b); no arithmetic — `src/main/catalogue/read-down/validate-record.ts`
 - [ ] T018 [P] Extend the cross-process redaction allowlist + Sentry scrubber for any read-down secret-shaped field (append-only) and add a read-down redaction-smoke fixture — `src/shared/audit/forbidden-keys.ts` + `src/main/catalogue/read-down/__tests__/redaction.smoke.test.ts`
 
 ---
@@ -83,8 +88,8 @@ enforced in Foundational + woven through every story's tests.
 `products`/`product_barcodes` hold the set, fold columns match 009's query fold, and 009's
 `product-repo` lookup/search resolve real products — with the network then disconnected (SC-1, SC-2).
 
-- [ ] T020 [BLOCKED:§A6] RED [US1] read-down HTTP client test — resolve-on-reachable / reject-on-transport → typed outcome (`ok` / `no_connection` / `failed`); `AbortSignal.timeout`; raw body never logged; consumes generated `api-types.ts` snapshot type — `src/main/catalogue/read-down/__tests__/read-down-client.test.ts`
-- [ ] T021 [BLOCKED:§A6] GREEN [US1] `createReadDownClient({ baseUrl, fetch, timeoutMs })` — GET the snapshot, attach the device token via the **`X-Terminal-Token` header** (constitution §Auth; read from `secretStore.get(DEVICE_TOKEN_KEY)`; no operator JWT — Constitution VIII), map to typed outcome; token never bridged/logged — `src/main/catalogue/read-down/read-down-client.ts`
+- [ ] T020 [BLOCKED:D-DEPLOY #349] RED [US1] read-down HTTP client test — resolve-on-reachable / reject-on-transport → typed outcome (`ok` / `no_connection` / `failed`); `AbortSignal.timeout`; raw body never logged; consumes generated `api-types.ts` snapshot type — `src/main/catalogue/read-down/__tests__/read-down-client.test.ts`
+- [ ] T021 [BLOCKED:D-DEPLOY #349] GREEN [US1] `createReadDownClient({ baseUrl, fetch, timeoutMs })` — GET `/api/pos/v1/catalog/snapshot`, attach the device token via the **`Authorization: Bearer <device_token>` header** (D-AUTH-2 / plan AD-7 — the backend has no `X-Terminal-Token` seam; read from `secretStore.get(DEVICE_TOKEN_KEY)`; no operator JWT — Constitution VIII), map to typed outcome; token never bridged/logged — `src/main/catalogue/read-down/read-down-client.ts`
 - [ ] T022 [P] [US1] RED: fold-parity test — rows written via the writer are found by 009's `product-repo.search` across the Arabic/English folded-variant corpus (proves write-time `normalize()` == read-time) (SC-9) — `src/main/catalogue/read-down/__tests__/fold-parity.test.ts`
 - [ ] T023 [US1] RED: writer happy-path test — validated snapshot → staging populated (fold columns via `normalize()`) → promote → live `products`/`product_barcodes` hold the set; `catalogue_sync_state.last_success_at` set inside the promote tx (SC-1) — `src/main/catalogue/read-down/__tests__/read-down-writer.happy.test.ts`
 - [ ] T024 [US1] GREEN: `createReadDownWriter({ db, syncStateRepo })` — stage validated rows computing the fold columns per the **R1 composition rule** (`name_fold = normalize(name_ar + ' ' + (name_en ?? ''))`, `alias_fold = normalize(aliases.join(' '))`, `sku_norm`/`barcode_norm` per raw value — verified against 009 `search.ts`), promote in one transaction (`DELETE` live + `INSERT … SELECT` from staging), write `last_success_at` in the same tx — `src/main/catalogue/read-down/read-down-writer.ts`
@@ -110,7 +115,7 @@ over-threshold failure → prior catalogue intact, `last_success_at` unchanged (
 - [ ] T036 [P] [US2] RED: no-outbound-write test — across the full read-down lifecycle the client issues only the snapshot GET; assert 0 other backend calls / 0 POS→backend writes (SC-7, FR-10) — `src/main/catalogue/read-down/__tests__/no-outbound-write.test.ts`
 - [ ] T037 [US2] RED: driver test — `runTickOnce` runs one read-down; single-flight (`already_running` while in progress); `start`/`stop` install/clear the interval; stop before db close — `src/main/catalogue/read-down/__tests__/read-down-driver.test.ts`
 - [ ] T038 [US2] GREEN: `createReadDownDriver({ client, writer, logger, tickIntervalMs })` → `{ runTickOnce, start, stop }`; single-flight; structured redacted diagnostics (R7) — `src/main/catalogue/read-down/read-down-driver.ts`
-- [ ] T039 [BLOCKED:§A6] [US2] Wire the driver into the composition root: instantiate `createReadDownClient` + `createReadDownWriter` + `createReadDownDriver`, injecting `tenant_id`/`branch_id` from **`pairingStore`** (not a session); run once on app-start / post-pairing; `start()` the interval; call `stop()` in `closeDbHandle()` **before** `dbHandle.close()` (mirror `finalize-listener` wiring) — `src/main/index.ts`
+- [ ] T039 [BLOCKED:D-DEPLOY #349] [US2] Wire the driver into the composition root: instantiate `createReadDownClient` + `createReadDownWriter` + `createReadDownDriver`, injecting `tenant_id`/`branch_id` from **`pairingStore`** (not a session); run once on app-start / post-pairing; `start()` the interval; call `stop()` in `closeDbHandle()` **before** `dbHandle.close()` (mirror `finalize-listener` wiring) — `src/main/index.ts`
 
 ## Phase 5 — US3: Cashier freshness surface + manual refresh (P3)
 
@@ -148,9 +153,10 @@ the renderer shows the timestamp + a refresh affordance, keyboard-operable + axe
 §A6 (backend contract, EXTERNAL) ──blocks──> T020/T021 (client), T039 (driver wiring), all network code
 §A2 (migration review, T003) ───────────────blocks──> T011/T012/T013 (migrations)
 
-Setup:        T001 → T002 (§A6) ; T003 (§A2)
-Foundational: T010→[T011,T012,T013] ; T014→T015 ; T016→T017 ; T018
-US1 (P1):     [T020→T021] ; T022,T023 → T024 → T027 ; T025,T026   (writer needs migrations + validate + syncStateRepo + normalize)
+Setup:        T001 ✅done ; T002 (§A6=D-DEPLOY #349, blocked) ; T003 (§A2)
+Foundational: T010→[T011,T012,T013] ; T014→T015 ; T015a→T015b→[T016→T017] ; T018
+US1 (P1):     [T020→T021] ; T022,T023 → T024 → T027 ; T025,T026   (writer needs migrations + map(T015b) + validate + syncStateRepo + normalize)
+              ⮑ BUILDABLE NOW (fixture): T015a/b mapping, T016/T017 validate, T022–T027 writer/fold/promote/isolation, all of US2 (T030–T038). ONLY T020/T021/T039 wait on D-DEPLOY (#349).
 US2 (P2):     depends on US1 writer — T030,T031→T032 ; T033,T034→T035 ; T036 ; T037→T038→T039
 US3 (P3):     depends on US2 driver — T040→[T041,T042,T043,T044] ; T045→T046
 Polish:       T050 (after US3 bridge) ; T051,T052,T053 [P] ; T054 (after US1/US2) ; T055,T056 ; T057

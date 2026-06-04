@@ -2,10 +2,18 @@
 
 **Feature ID:** 010-pos-catalog-read-down-consumption
 **Spec:** [./spec.md](./spec.md)
-**Plan Version:** 1.0
+**Plan Version:** 1.1 (refreshed 2026-06-04 against the resolved cross-repo decisions — see the refresh note below)
 **Created:** 2026-06-04
-**Last Updated:** 2026-06-04
+**Last Updated:** 2026-06-04 (v1.1)
 **Constitution version pinned:** v1.5.1
+
+> **v1.1 refresh (2026-06-04)** — amended after the backend decisions landed (Data-Pulse-2 PR #490 / issue
+> #488; POS §A6 findings 3rd-pass addendum). Material changes: **AD-7 auth REVERSED** to
+> `Authorization: Bearer <device_token>` (no `X-Terminal-Token` seam on the backend — per-surface
+> exception); backend contract **RESOLVED + SHIPPED** (`SellableCatalogRow`); money = **decimal→minor
+> convert at ingest** (GAP-1); `name`→`name_ar` + name_en NULL (D-NAME); untyped `aliases[]`→`product_barcodes`
+> (D-BARCODE); **§A6 narrowed to D-DEPLOY only** (live re-pin, issue #349); §A2 narrowed to `branch_id`.
+> The correctness core (S1+S2) is **buildable now**; only S3 (live client) waits on the re-pin.
 
 > ⚠️ **Planning artifact only.** `/speckit-plan` writes NO source, NO migrations, NO codegen, NO package
 > installs, and does NOT update `CLAUDE.md`. Phase 0 ([research.md](./research.md)) and Phase 1
@@ -50,12 +58,12 @@ inputs:** stage-and-promote (FR-6), full-snapshot replace (FR-15a), separate `ca
 | Sync model | **Full-snapshot replace** — no delta/cursor/ordering. | research R3 / spec FR-15a |
 | Fold columns | Computed at write-time via 009's **`normalize()`** (`src/main/catalogue/normalize.ts`), idempotent; never trusted from the source. | research R1 / spec FR-3 |
 | Backend client | New main-process HTTP client following the as-built pattern (`operator/backend-client.ts`, voucher clients): factory `{ baseUrl, fetch, timeoutMs }`, injected `fetch`, `AbortSignal.timeout`, resolve-on-reachable / reject-on-transport, typed discriminated outcome. | research R6 / as-built |
-| Backend contract | **PROPOSED + externally dependent** — see [contracts/backend-catalogue-snapshot.md](./contracts/backend-catalogue-snapshot.md). Response types MUST be **generated** into `src/shared/api-types.ts` (Principle V). **NEEDS BACKEND COORDINATION.** | research R6 / constitution V |
-| Terminal auth | **`X-Terminal-Token` header** (constitution-mandated: Platform Integration §Auth, `constitution.md:960`; named for "any future feature" at `index.ts:121`), device token read from `secretStore.get(DEVICE_TOKEN_KEY)` in the main process. The read-down carries **no operator JWT** (Constitution VIII background sync), so this header is its sole auth credential; the backend's token claims scope the snapshot (P17). Token never crosses the bridge / never logged (P7). **(Corrected 2026-06-04 — an earlier draft wrongly claimed body-attestation / no header.)** | constitution §Auth / research R6 |
+| Backend contract | **RESOLVED + SHIPPED (backend)** — `GET /api/pos/v1/catalog/snapshot` (+ `/deltas`), schema `SellableCatalogRow` (`product_id`, `sku`, `name`, `aliases[]`, `price{amount,currency_code}`, `tax_category`, `active`, `row_cursor`). Backend Data-Pulse-2 PR #490 / issue #488 MERGED. Response types MUST be **generated** into `src/shared/api-types.ts` (Principle V) — pending the **live re-pin** (D-DEPLOY, issue #349; backend not yet deployed to the edge). The stale pinned `/api/v1/pos/catalog/products` shape is NOT the contract. | findings 3rd-pass / constitution V |
+| Terminal auth | **`Authorization: Bearer <device_token>`** (D-AUTH-2, settled via backend PR #490). The backend has **NO `X-Terminal-Token` seam** (verified firsthand in `Data-Pulse-2/apps/api/src/auth/auth.guard.ts` — it reads a single opaque bearer in the `Authorization` header). The device token (from `secretStore.get(DEVICE_TOKEN_KEY)`, main process) rides `Authorization: Bearer`; the backend's `PosDeviceAuthGuard` resolves `(tenant_id, store_id)` from the store-bound device row (P17). **This is a documented per-surface EXCEPTION to `constitution.md:955-960`** (which mandates `X-Terminal-Token` on backend calls) — read-down follows the backend's actual contract. No operator JWT (Constitution VIII background sync). Token never crosses the bridge / never logged (P7). **(REVERSED 2026-06-04 — earlier drafts said `X-Terminal-Token`; the backend implements `Authorization: Bearer`. See AD-7 + R-RISK-2.)** | findings 3rd-pass / AD-7 |
 | Trigger / lifecycle | Main-process **read-down driver** modelled on `src/main/sales/finalize-listener.ts` (`{ runTickOnce, start, stop }`): app-start / post-pairing + periodic interval; `stop()` before `dbHandle.close()`. Runs on a **paired terminal**, **not** operator-session-gated (Principle VIII). | research R8 / spec FR-15 |
 | Bridge additions | `catalogue:refresh` (manual trigger) + `catalogue:freshness` (last-updated read), session-gated, data/secret-free. New preload surface → **P8 review**. | research R-bridge / contracts |
 | Freshness UI | Renderer reads `catalogue.freshness`; shows "catalogue last updated &lt;time&gt;" only. No stale-alarm/auto-refresh (MVP, owner-confirmed). Arabic-first/RTL, inherits 003/007 tokens. | spec FR-16 / SC-10 |
-| Money | **Conduit only.** `price_minor` carried as integer minor units, `Number.isSafeInteger`-guarded at the staging-validation boundary; **zero** arithmetic. | constitution II/P1 / research R5 |
+| Money | **Convert-at-ingest, then conduit.** Backend sends `price { amount: decimal-string, currency_code }` (GAP-1). The staging-validation boundary converts decimal → **integer minor units** (×10^exponent per currency: EGP/USD 2, JPY 0, KWD/BHD 3) via exact string→int parse — **never a float** — then `Number.isSafeInteger`-guards `price_minor`. Downstream: zero arithmetic, conduit only. | constitution II/P1 / research R5 |
 | Observability | New pino sites: read-down outcome / counts / latency / status-class — public fields only; raw snapshot body + token never logged; redaction allowlist extended. | constitution VII / spec NFR-3 / research R7 |
 | Tests | Vitest only (`happy-dom`, `@testing-library/react`, `expectNoAxeViolations`). Coverage gates per module below. | constitution VI |
 | CI | No workflow changes; existing `codegen:verify → typecheck → lint → test → package:dir`. `codegen:verify` becomes load-bearing once the backend op publishes (regenerated `api-types.ts`). | 001 |
@@ -95,7 +103,7 @@ Walked across Core Principles I–IX and Cross-Feature POS Principles P1–P18 (
 | P4. Auditability / Non-Destructive | **N/A-read-model** | 010 writes a read model, not a money-bearing ledger; emits no audit events. The catalogue is intentionally *replaced* each snapshot — it is not an audit anchor (consistent with 009 §A2 §6). |
 | P5. Idempotency for Retried Operations | **PASS** | See the explicit **Idempotency** subsection below (constitution P5 requires one). Full-snapshot replace is construction-idempotent (re-run → identical state, FR-13); single-flight driver prevents interleave (FR-14); no client-UUID key is needed because the operation commits no money and carries no per-intent identity. |
 | P6. No Raw Cardholder Data | **N/A** | No card data anywhere in the catalogue path. |
-| P7. Secrets Never Reach Renderer/Logs | **PASS-load-bearing** | Device token (the `X-Terminal-Token` value) stays main-process; never crosses the bridge, never logged; `device_token` already on the forbidden-keys allowlist. Bridge additions return no secret. |
+| P7. Secrets Never Reach Renderer/Logs | **PASS-load-bearing** | Device token (the `Authorization: Bearer` value) stays main-process; never crosses the bridge, never logged; `device_token` already on the forbidden-keys allowlist. Bridge additions return no secret. |
 | P8. Electron Security Boundary | **PASS-with-justified-expansion** | 010 owns the `catalogue:refresh` + `catalogue:freshness` bridge expansion explicitly; reviewed line-by-line under a **P8 bridge-security review** (§A4). No renderer-exposed write handler. |
 | P9. Truthful Offline / Degraded / Sync States | **PASS-load-bearing** | The freshness indicator is the honest realisation of 009 FR-24a; it implies no live sync; null until a real success. Owner-confirmed timestamp-only MVP (no stale-price alarm). |
 | P10. Operator Accountability | **N/A-read-down** | No sensitive operator action; the read-down is a background terminal task, not an operator-attributable money action. |
@@ -146,11 +154,15 @@ R-bridge (`catalogue.*` additions). All in-app unknowns resolved; R6 is backend-
 - **AD-6. Money pass-through with a safe-integer guard at the staging boundary** (R5) — the read-down is
   in the same trust line as a sale total; the *integrity* of the carried `price_minor` is load-bearing
   even though no math is done.
-- **AD-7. Terminal-token via the constitution-mandated `X-Terminal-Token` header; generated response
-  types** (R6) — the read-down (no operator JWT) authenticates with the device-token header per Platform
-  Integration §Auth (`constitution.md:960`); Principle V honoured (generated types, or a formally filed
-  time-boxed V-waiver — NOT the 004 hand-typed-without-waiver precedent); implementation gated on the
-  backend op (§A6). **(Corrected 2026-06-04 from an earlier "body-attestation" claim.)**
+- **AD-7. Terminal-token via `Authorization: Bearer <device_token>` (per-surface exception); generated
+  response types** (R6 / D-AUTH-2) — the read-down (no operator JWT) sends the device token in the
+  `Authorization: Bearer` header, because the backend's `PosDeviceAuthGuard` (Data-Pulse-2 PR #490) reads a
+  single opaque bearer there and has **no `X-Terminal-Token` seam**. This is a **documented per-surface
+  exception** to the `X-Terminal-Token` mandate (`constitution.md:955-960`) — the read-down follows the
+  backend's actual, shipped contract. Principle V honoured (generated types from the pinned contract, or a
+  formally filed time-boxed V-waiver — NOT the 004 hand-typed-without-waiver precedent); the live-client
+  slice is gated only on the re-pin (D-DEPLOY, issue #349). **(REVERSED 2026-06-04 from an earlier
+  `X-Terminal-Token` claim — verified firsthand in `Data-Pulse-2/apps/api/src/auth/auth.guard.ts`.)**
 - **AD-8. Background driver on a paired terminal, not session-gated** (R8 / Principle VIII). Tenant
   identity comes from `pairingStore` (not an operator session — there is none); the writer's tenant-scoping
   guard (FR-8 / P17) filters on it.
@@ -235,10 +247,10 @@ Slices are small reviewable PRs; `/speckit-tasks` derives the task list. Indicat
 
 | Slice | Deliverable | Gates |
 |:--|:--|:--|
-| **S0: Backend contract coordination** (non-code) | Finalize the catalogue-snapshot op with the backend; publish OpenAPI; regenerate `api-types.ts`. **Unblocks everything.** | §A6 (V/contract) |
-| **S1: Migrations** — `0031`–`0033` (staging ×2 + sync-state), ship empty | Schema + indexes; FK-safe single PR. | §A2-class migration review |
-| **S2: Read-down writer + validation** — validate → stage → promote (atomic); fold via `normalize()`; safe-integer guard; skip-and-log + threshold | The correctness core; ≥95% cov; atomicity + failure-preservation + fold-parity + tenant-isolation tests. | (S1) |
-| **S3: HTTP client + driver** — snapshot client (generated types); driver `{runTickOnce,start,stop}`; app-start/post-pairing + interval; `X-Terminal-Token` header auth; tenant from `pairingStore`; redaction | resolve-on-reachable mapping; no-outbound-write test; single-flight. | §A6 |
+| **S0: Re-pin `api-types.ts`** (non-code) | Backend contract is SHIPPED (PR #490); confirm D-DEPLOY (`/openapi.json` 200) then `codegen-api.ts --source=live` → commit snapshot + types. **DEFERRED — blocked on backend deploy (issue #349); work local meanwhile.** Only S3 truly waits on this. | §A6 (D-DEPLOY only) |
+| **S1: Migrations** — `0031`–`0033` (staging ×2 + sync-state), ship empty | Schema + indexes; FK-safe single PR. **BUILDABLE NOW** (contract shape known; §A2 narrowed to `branch_id`, resolvable — device scope = `(tenant_id, store_id)`). | §A2-class migration review |
+| **S2: Read-down writer + validation** — validate → decimal→minor convert → stage → promote (atomic); `name`→`name_ar` (name_en NULL); explode untyped `aliases[]` → `product_barcodes` (barcode_kind NULL); fold via `normalize()`; safe-integer guard; skip-and-log + threshold | The correctness core; ≥95% cov; atomicity + failure-preservation + fold-parity + tenant-isolation tests, **all fixture-built** (no backend). **BUILDABLE NOW.** | (S1) |
+| **S3: HTTP client + driver** — snapshot client (generated types); driver `{runTickOnce,start,stop}`; app-start/post-pairing + interval; **`Authorization: Bearer <device_token>`** auth; tenant from `pairingStore`; redaction | resolve-on-reachable mapping; no-outbound-write test; single-flight. | §A6 (D-DEPLOY / re-pin) |
 | **S4: Bridge additions + freshness UI** — `catalogue:refresh` + `catalogue:freshness`; renderer "last updated" indicator + refresh affordance | P8 bridge-security review; a11y/RTL. | §A4 (P8) |
 | **S5: Production readiness** — runbook, rollback, failure-mode catalogue, perf bring-up | NFR-1 preserved; read-down/promote-window evidence. | §A5 |
 
@@ -280,28 +292,29 @@ Re-evaluated after Phase 1. No status regressed.
 - **§A5 (production readiness) — REQUIRED at rollout.** Test plan, rollback, support runbook, failure-mode
   catalogue, perf bring-up (read-down completion + promote-window + NFR-1 preservation on target
   hardware). Blocks the rollout PR.
-- **§A6 (backend contract + Constitution V) — REQUIRED, EXTERNAL, the implementation blocker.** The
-  catalogue-snapshot OpenAPI operation must be published and `api-types.ts` regenerated (or a time-boxed
-  V-waiver formally filed per the Exception Procedure — NOT the 004 hand-typed-without-waiver precedent).
-  **Blocks only the live-fetch HTTP client (T020/T021) and the composition-root wiring (T039)** — i.e. the
-  tasks that touch the real backend. It does **NOT** block the correctness core: migrations (§A2-gated),
-  the writer/promote/atomicity, validation, fold-parity, and tenant-isolation are all fixture-buildable in
-  parallel with backend coordination (see tasks.md Implementation Strategy). **This is the one gate 010
-  cannot clear alone — it needs the backend team.** *(Corrected 2026-06-04 — earlier "Blocks S2 onward"
-  overstated the blocker; aligned to the `[BLOCKED:§A6]` task tags.)*
+- **§A6 (backend contract + Constitution V) — PARTIALLY CLEARED; only D-DEPLOY remains.** The
+  catalogue-snapshot OpenAPI operation is **published + shipped on the backend** (Data-Pulse-2 PR #490 /
+  issue #488 — `GET /api/pos/v1/catalog/snapshot` + `/deltas`, `SellableCatalogRow`, device-principal auth).
+  The contract *shape* is therefore known and the correctness core can build against it now. **The ONLY
+  open item is D-DEPLOY: re-pinning `api-types.ts` from the deployed contract** — and that is blocked
+  because the backend is not yet deployed to `api.smartdatapulse.tech` (HTTP 521; tracked in issue #349).
+  **Blocks only the live-fetch HTTP client (T020/T021) and the composition-root wiring (T039).** It does
+  **NOT** block the correctness core: migrations (§A2-gated), the writer/promote/atomicity, validation,
+  fold-parity, and tenant-isolation are all fixture-buildable now. *(Updated 2026-06-04 — the contract +
+  auth decisions are resolved/shipped; what was "the external blocker" is now narrowed to the live re-pin,
+  which is backend-ops, not a design dependency.)*
 
 ## Risks & Open Items
 
-- **R-RISK-1 — Backend contract does not exist yet (owner: backend team + 010).** The catalogue-snapshot
-  op is unpublished; `api-types.ts` has no `/products/*` operation. **Mitigation:** §A6 gate + the PROPOSED
-  contract is the coordination artifact; planning/data-model/staging design proceed now, implementation
-  waits. **This is the critical-path blocker.**
-- **R-RISK-2 — Backend confirms the `X-Terminal-Token`-without-JWT case (owner: backend + 010).** The
-  auth *mechanism* is settled: the device token rides the constitution-mandated `X-Terminal-Token` header
-  (AD-7). The only open item is confirming the backend accepts that header **without** an `Authorization`
-  JWT for this read-only background snapshot (the read-down has no operator session). **Mitigation:**
-  resolved as part of the §A6 contract. *(Downgraded 2026-06-04 — the "body-attestation vs header"
-  ambiguity was a false-premise; the header is constitutional.)*
+- **R-RISK-1 — RESOLVED 2026-06-04. Backend contract shipped.** The catalogue-snapshot op is published +
+  merged (Data-Pulse-2 PR #490 / issue #488). The only residual is the **live re-pin** of `api-types.ts`,
+  blocked on backend deploy (issue #349) — the stale pinned `/api/v1/pos/catalog/products` shape must be
+  replaced by `/api/pos/v1/catalog/snapshot`. **No longer a design blocker; it is backend-ops.**
+- **R-RISK-2 — RESOLVED 2026-06-04. Auth = `Authorization: Bearer <device_token>`, no JWT.** The backend's
+  `PosDeviceAuthGuard` (PR #490) accepts the device pairing token alone in the `Authorization` header (no
+  operator session, no `X-Terminal-Token`) and resolves `(tenant_id, store_id)` from the device row.
+  Recorded as a per-surface exception to `constitution.md:955-960` (AD-7). *(Earlier `X-Terminal-Token`
+  framing was REVERSED — verified firsthand against `Data-Pulse-2/apps/api/src/auth/auth.guard.ts`.)*
 - **R-RISK-3 — Promote latency budget at scale (owner: 010 S5).** Under WAL (`client.ts:42`) readers run
   **concurrently** with the promote write-transaction, so the promote does **not** block lookups — this is
   a *latency-budget validation*, not an open architecture question. **Mitigation:** §A5 perf bring-up must
