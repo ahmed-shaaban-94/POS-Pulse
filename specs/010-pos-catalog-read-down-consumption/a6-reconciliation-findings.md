@@ -192,3 +192,127 @@ re-pinning to a draft that isn't deployed would re-introduce drift in the other 
 
 **End of §A6 reconciliation findings.** Prepared from firsthand reads of `Data-Pulse-2` + POS pinned
 types + the constitution; not self-cleared. The gates remain open pending the decision round.
+
+---
+
+## ADDENDUM — 2026-06-04 (second pass): backend has its OWN spec 010, and the auth gap is WORSE, not resolved
+
+A deeper read of the backend repo found that Data-Pulse-2 carries a **full sibling feature**
+`specs/010-pos-catalog-read-down-sync/` (spec + plan + tasks + research + contracts + wave-status +
+execution-map). It is the platform half of this exact contract — `Consumed by: POS-Pulse
+010-terminal-catalogue-read-sync (separate repository)` (`backend spec.md:10`). This is the
+authoritative resolution of the four gaps. It **confirms three gaps and CORRECTS the fourth — in the
+unfavourable direction.** The earlier-recorded "may unwind the owner-ratified no-session trigger" was
+right to flag GAP-4; this pass proves it.
+
+### GAP-1 (money) — CONFIRMED CLEAR
+Backend `read-down.yaml:245-271` + spec FR-051 + `tenant_products.ts:51,69-76`: `numeric(19,4)`
+exact-decimal string + ISO-4217 `currency_code`, **single currency per `(tenant,store)` for v1** (EGP),
+emitted at natural minor precision, never float. **POS action:** convert decimal→integer minor units at
+ingest (×10^exponent). No backend dependency. Unchanged from §3 above.
+
+### GAP-3 (name ar/en) — CONFIRMED DEFERRED (owner MVP call)
+Backend spec **Clarification 2026-06-03** is explicit and *intentional*: FR-050 was revised **down to the
+real schema** — `name_ar`/`name_en` (and `controlled_substance`/`prescription_required`/`unit_pack_label`)
+are **removed from the v1 payload** because they have no backing 003 column. Single
+`tenant_products.name`. *"Re-adding any of these is a future spec that first adds the column to the Tenant
+Catalog (003)."* There is **no tracked issue** to add it — it is gated behind a future 003 schema spec.
+**Owner decision:** accept v1 with a single `name` mapped into both 009 `name_ar`/`name_en` fold inputs
+(009 search still works; Arabic-specific display is simply unavailable until the future spec). This is an
+acceptable MVP cut, but it is the owner's to ratify.
+
+### GAP-2 (barcode typing) — CONFIRMED ABSENT and DELIBERATE → the clean hard blocker
+Backend **FR-052**: *"The platform MUST supply raw name/alias fields; it MUST NOT compute search
+folding/normalization (the consumer owns that)."* `SellableCatalogRow.aliases` is a bare `string[]` with
+**no type discriminator** (`read-down.yaml:297-303`) — barcode/plu/supplier_code/external_pos_id are
+lumped opaque; only `sku` is typed (its own top-level field). The backend HAS the type internally
+(`product_aliases.identifier_type`, indexed `:84`) and even accepts it typed on the capture-UP path
+(`unknown-items.yaml`), but **deliberately does not re-emit it** on read-down. There is **no backend plan,
+issue, or decision** to expose alias type to POS.
+**Impact:** 009's **primary modality is barcode scan**. With untyped aliases, POS cannot distinguish a
+barcode from a supplier code — it can only match a scanned code against the *whole* `aliases[]` bag. For
+exact barcode lookup that is functionally adequate (a scan either matches an alias value or it doesn't),
+but it is **lossy** vs 009's typed `product_barcodes` model, and it precludes any barcode-specific
+behaviour (validation, barcode-vs-SKU disambiguation, barcode-type display).
+**This is the firmest gap — backend won't budge without a contract revision.** Decision is **POS-side**:
+accept "match scanned code against the untyped alias bag" for v1 (recommended — unblocks barcode scan
+now), OR file a backend contract-revision request to add a typed-alias projection (`{type,value}` objects)
+and wait. Recommend the former for v1, with the revision request filed as a known limitation.
+
+### GAP-4 (terminal auth) — CORRECTED: the no-operator-session background trigger is REJECTED by the backend as-built. LOAD-BEARING BLOCKER.
+
+The previous record said GAP-4 was "the biggest open gap" and *"may unwind"* the owner-ratified no-session
+trigger. **Firsthand guard reads now confirm it does — this is not a wire-format detail, it is an
+architectural conflict.** Three layers of evidence, ground-truth last:
+
+1. **Backend contract prose is internally CONTRADICTORY** (do not trust it alone):
+   - Published `read-down.yaml:91,174-185` → `clerkJwt` security scheme, *"Clerk JWT … **paired with** the
+     platform device-token header."* (reads as JWT **required**)
+   - Backend `contracts/README.md:28` → *"device-principal … **NOT** the manager Clerk-JWT scheme. A
+     dedicated `posDeviceAuth` security scheme."* + `quickstart.md:9` → `Authorization: <device token>`
+     (reads as device-token **only**)
+   - These do not reconcile. Picking the device-only branch because it clears our blocker is exactly the
+     confirmation-bias trap that bit this feature three times (body-attestation → X-Terminal-Token →
+     JWT). So we read the implementation.
+
+2. **The guard is the discriminator** (`wave-status.md:18`: read-down *"reuses unchanged the POS
+   device-principal auth seam `PosOperatorAuthGuard`"*):
+   - `apps/api/src/auth/auth.guard.ts:127-144,162-171` — authentication is a **single opaque bearer token
+     in `Authorization: Bearer <raw-token>`**, looked up in `auth_tokens`. **There is NO Clerk-JWT
+     verification, NO `X-Terminal-Token` header, NO `X-Device-Token` header anywhere in the guard.** The
+     YAML's "Clerk JWT" prose is inherited/aspirational; the as-built credential is an opaque DB token.
+   - `apps/api/src/auth/pos-operator-auth.guard.ts:42` — requires `principal.scope === "pos_operator"`,
+     and **explicitly rejects the plain `"pos"` (device/service) scope** (`:13`).
+   - The `pos_operator` scope row is created **only at operator sign-in** — decision-log
+     `0001-…wave1.md:134-161` (D8): it is *"derived from a verified Clerk JWT, the mapped local user, the
+     validated device token, and the resolved tenant + store."*
+
+3. **Therefore:** a request bearing the **device token alone, with no live operator session**, is
+   **rejected** by `PosOperatorAuthGuard`. POS-Pulse 010's entire trigger model — *paired-terminal
+   background read-down, NOT operator-session-gated* (Constitution VIII, owner-ratified Q-RD-TRIGGER) —
+   **cannot authenticate against the backend as it is built today.**
+
+   This also collides with **POS constitution `constitution.md:955-960`** which mandates an
+   **`X-Terminal-Token` header** on every backend call (the device token), separate from `Authorization`.
+   The backend implements neither that header nor a device-only scope on POS routes.
+
+   **This is the load-bearing §A6 blocker.** It is NOT a "header-name detail." Two distinct decisions,
+   both for the BACKEND TEAM (with owner ratification on the POS trigger model):
+   - **D-AUTH-1 (required):** Will the backend expose the read-down snapshot/delta to a **device-principal
+     token (no operator session)** — i.e. accept the `"pos"`-scope (or a new `posDeviceAuth`) on these two
+     routes, as the backend's own spec FR-001/README/quickstart say it should — and **align the published
+     `read-down.yaml` away from `clerkJwt` to match**? If **no**, POS's background read-down must run
+     **inside an operator session** (re-opening owner-ratified Q-RD-TRIGGER + Constitution VIII) — a real
+     scope change.
+   - **D-AUTH-2 (required):** The credential **transport** — backend reads `Authorization: Bearer <token>`;
+     POS constitution mandates `X-Terminal-Token`. One side must move. Cheapest: POS sends the device token
+     as `Authorization: Bearer <device_token>` for this surface (a documented per-surface exception), OR the
+     backend guard also reads `X-Terminal-Token`. Backend+owner call.
+
+   **POS must NOT build device-token-only auth (either header) until D-AUTH-1 is confirmed** — the deployed
+   endpoint would reject it. (Re-pinning the contract and regen-ing types is downstream of this.)
+
+### Net effect on the gates
+- **§A6 still NOT cleared** — and GAP-4 is now a *confirmed* blocker, not a "may." The decision round is
+  the same owner+backend round, but the auth item is sharper and more load-bearing than recorded.
+- **§A2 still held source-mapping-pending** — GAP-3's single-`name` mapping and GAP-2's untyped-alias bag
+  both change the staging-table column shape (e.g. whether `product_barcodes_staging` is typed), so the
+  table-safety package still can't finalize column definitions until D-NAME / D-BARCODE land.
+- **Backend deployment question (§6) unchanged** — still must confirm what is live at
+  `api.smartdatapulse.tech` before re-pinning.
+
+### Decision round — concise hand-off
+| ID | Gap | Owner | Decision | Recommendation |
+|:--|:--|:--|:--|:--|
+| D-AUTH-1 | GAP-4 | **Backend** (+owner ratify) | Device-principal (no-session) token accepted on read-down routes? Align YAML off `clerkJwt`? | **Yes** — matches backend's own spec FR-001; unblocks POS's ratified background trigger |
+| D-AUTH-2 | GAP-4 | **Backend**+owner | Credential transport: `Authorization: Bearer` vs `X-Terminal-Token` | POS sends device token as `Authorization: Bearer` on this surface (documented exception) |
+| D-BARCODE | GAP-2 | **POS**/owner | Accept untyped `aliases[]` bag for barcode match, or request typed-alias contract revision | Accept bag for v1; file revision request as known limitation |
+| D-NAME | GAP-3 | **Owner** | Accept single `name` (no Arabic split) for v1 | Accept; map `name` into both 009 fold inputs |
+| D-DEPLOY | §6 | **Backend** | Confirm deployed contract version at `api.smartdatapulse.tech` | Confirm before re-pinning `api-types.ts` |
+
+Once D-AUTH-1/2 + D-DEPLOY land: re-pin OpenAPI → `npm run codegen:api` → re-run `/speckit-plan` against
+the confirmed contract → lift §A2 hold with finalized column shapes → implement.
+
+**End of 2026-06-04 second-pass addendum.** All claims above are firsthand reads of `Data-Pulse-2` source
+(guard implementation = ground truth, not contract prose). GAP-4 corrected against my own earlier
+optimistic draft per advisor review; not self-cleared.
