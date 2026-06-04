@@ -348,3 +348,44 @@ NOT in that issue.
 **End of 2026-06-04 second-pass addendum.** All claims above are firsthand reads of `Data-Pulse-2` source
 (guard implementation = ground truth, not contract prose). GAP-4 corrected against my own earlier
 optimistic draft per advisor review; not self-cleared.
+
+---
+
+## ADDENDUM — 2026-06-04 (third pass): D-AUTH RESOLVED + SHIPPED; D-DEPLOY/re-pin DEFERRED (site down)
+
+**Decision round — final state. 4 of 5 closed; the last is a backend-ops dependency, not a decision.**
+
+- ✅ **D-AUTH-1 + D-AUTH-2 — RESOLVED + MERGED.** Data-Pulse-2 **PR #490** (issue **#488 CLOSED**) shipped
+  **Option B-prime**: a new `PosDeviceAuthGuard` on the read-down routes authenticates the **`devices`
+  pairing token directly** (no operator session) — resolving `(tenant_id, store_id)` from the store-bound
+  device row. No `auth_tokens` migration, no new token mint, no sign-in change. The contract's `clerkJwt`
+  scheme **key** was kept (POS-wide convention) but the false `bearerFormat: JWT` was dropped and the
+  description corrected to device-principal. CI `db-integration` GREEN (the real-guard integration test runs
+  there; two test-setup bugs — a malformed-hex fixture UUID and a FORCE-RLS device lookup needing the
+  privileged pool — were found and fixed before merge).
+  - **D-AUTH-2 transport is settled: `Authorization: Bearer <device_token>` — NOT `X-Terminal-Token`.** The
+    backend has no `X-Terminal-Token` seam. So POS-Pulse 010 sends the device token in `Authorization` for
+    read-down — a **per-surface exception** to the constitution.md §Auth `X-Terminal-Token` mandate. Reflect
+    this when `/speckit-plan` re-runs.
+- ✅ **D-NAME + D-BARCODE — owner-ratified for v1** (single `name` → both 009 fold inputs; untyped
+  `aliases[]` bag on scan, lossy, known limitation).
+- ⏸️ **D-DEPLOY + re-pin — DEFERRED (NOT blocked-on-us; backend-ops).** As of 2026-06-04,
+  `https://api.smartdatapulse.tech/openapi.json` returns **HTTP 521 (origin down)** across all paths — the
+  backend is not serving at the edge, so the deployed contract **cannot be confirmed** and the pinned
+  snapshot **cannot be refreshed** (`scripts/openapi-snapshot.json` is the *assembled full-platform* doc;
+  `codegen-api.ts --source=live` needs a live edge). The currently-pinned catalogue surface is still the
+  **stale** `/api/v1/pos/catalog/products` shape — NOT #490's `/api/pos/v1/catalog/snapshot` + `/deltas`.
+  **Owner decision (2026-06-04): keep this deferred until the site redeploys; work locally meanwhile.** No
+  re-pin performed; no snapshot hand-edited (that would manufacture the exact drift this doc exists to kill).
+
+**Unblock sequence (when the site redeploys, OR against a local backend serving the assembled doc):**
+1. Confirm D-DEPLOY: `/openapi.json` returns 200 with the `/api/pos/v1/catalog/snapshot` surface.
+2. Re-pin on a **fresh branch off `main`**: `tsx scripts/codegen-api.ts --source=live` (or a local URL) →
+   commit the new `scripts/openapi-snapshot.json` + regenerated `src/shared/api-types.ts`.
+3. Re-run `/speckit-plan` (auth = device-`Authorization: Bearer`, single `name`, untyped alias bag).
+4. Lift the §A2 hold (already narrowed to `branch_id`/GAP-4 — now resolvable: device scope = `(tenant_id,
+   store_id)` from the device row).
+5. Implement.
+
+**End of 2026-06-04 third-pass addendum.** Backend auth blocker is gone (#490 shipped); only the
+deployment-dependent re-pin remains, deferred by owner decision while the live site is down.
