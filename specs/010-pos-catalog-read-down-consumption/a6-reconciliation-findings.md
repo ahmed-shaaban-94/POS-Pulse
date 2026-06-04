@@ -313,6 +313,15 @@ architectural conflict.** Three layers of evidence, ground-truth last:
 Once D-AUTH-1/2 + D-DEPLOY land: re-pin OpenAPI → `npm run codegen:api` → re-run `/speckit-plan` against
 the confirmed contract → lift §A2 hold with finalized column shapes → implement.
 
+### Filed with the backend team
+The auth gap (**D-AUTH-1 / D-AUTH-2**, + the **D-DEPLOY** context question) is filed as a decision
+request on the backend repo: **Data-Pulse-2 issue
+[#488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)** — *"Spec 010 read-down auth: guard
+rejects device-principal (no-session) requests — contradicts FR-001; blocks POS-Pulse 010"* (filed
+2026-06-04). It carries the same firsthand `Data-Pulse-2` file:line evidence as §GAP-4 above and requests
+the decisions, not a specific implementation. **D-BARCODE / D-NAME remain POS/owner decisions** and are
+NOT in that issue.
+
 **End of 2026-06-04 second-pass addendum.** All claims above are firsthand reads of `Data-Pulse-2` source
 (guard implementation = ground truth, not contract prose). GAP-4 corrected against my own earlier
 optimistic draft per advisor review; not self-cleared.
