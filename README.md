@@ -36,6 +36,25 @@
 
 ---
 
+## 🔗 Synchronization with Retail Tower OS
+
+POS-Pulse is the **edge** of the platform — it speaks only to `Data-Pulse-2`'s contracts, never
+to ERPNext. Catalogue flows **down** for offline lookup; finalized sales are captured locally in
+the outbox, destined for the backend.
+
+<p align="center">
+  <img src="docs/assets/architecture/pos-pulse-architecture.svg" alt="Animated POS-Pulse synchronization diagram" width="100%"/>
+</p>
+
+```text
+POS-Pulse ──▶ Data-Pulse-2 ──▶ ERPNext Connector ──▶ ERPNext / Frappe
+```
+
+Full detail: [docs/architecture/synchronization.md](docs/architecture/synchronization.md) ·
+Program control plane: [Retail-Tower-Orchestrator](https://github.com/ahmed-shaaban-94/Retail-Tower-Orchestrator).
+
+---
+
 ## Live terminal control map
 
 [![POS Pulse live terminal map preview](docs/assets/pos-pulse-live-map-preview.svg)](docs/architecture/pos-pulse-live-map.html)
