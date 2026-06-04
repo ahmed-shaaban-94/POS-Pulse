@@ -296,8 +296,11 @@ architectural conflict.** Three layers of evidence, ground-truth last:
 - **§A6 still NOT cleared** — and GAP-4 is now a *confirmed* blocker, not a "may." The decision round is
   the same owner+backend round, but the auth item is sharper and more load-bearing than recorded.
 - **§A2 still held source-mapping-pending** — GAP-3's single-`name` mapping and GAP-2's untyped-alias bag
-  both change the staging-table column shape (e.g. whether `product_barcodes_staging` is typed), so the
-  table-safety package still can't finalize column definitions until D-NAME / D-BARCODE land.
+  both change the staging-table column shape (e.g. whether `product_barcodes_staging` is typed). **D-NAME
+  and D-BARCODE are now RESOLVED (owner-ratified 2026-06-04 — see the table + ratification note below), so
+  those two column-shape dimensions are now decidable**; the §A2 package still cannot fully finalize
+  because the **auth/contract shape (D-AUTH-1/2)** and the **deployed-contract confirmation (D-DEPLOY)**
+  remain open — but the staging-table definitions can now be drafted against the resolved name/alias shape.
 - **Backend deployment question (§6) unchanged** — still must confirm what is live at
   `api.smartdatapulse.tech` before re-pinning.
 
@@ -306,12 +309,32 @@ architectural conflict.** Three layers of evidence, ground-truth last:
 |:--|:--|:--|:--|:--|
 | D-AUTH-1 | GAP-4 | **Backend** (+owner ratify) | Device-principal (no-session) token accepted on read-down routes? Align YAML off `clerkJwt`? | **Yes** — matches backend's own spec FR-001; unblocks POS's ratified background trigger |
 | D-AUTH-2 | GAP-4 | **Backend**+owner | Credential transport: `Authorization: Bearer` vs `X-Terminal-Token` | POS sends device token as `Authorization: Bearer` on this surface (documented exception) |
-| D-BARCODE | GAP-2 | **POS**/owner | Accept untyped `aliases[]` bag for barcode match, or request typed-alias contract revision | Accept bag for v1; file revision request as known limitation |
-| D-NAME | GAP-3 | **Owner** | Accept single `name` (no Arabic split) for v1 | Accept; map `name` into both 009 fold inputs |
+| D-BARCODE | GAP-2 | **POS**/owner | Accept untyped `aliases[]` bag for barcode match, or request typed-alias contract revision | ✅ **RESOLVED 2026-06-04 — ACCEPT bag for v1** |
+| D-NAME | GAP-3 | **Owner** | Accept single `name` (no Arabic split) for v1 | ✅ **RESOLVED 2026-06-04 — ACCEPT single `name` for v1** |
 | D-DEPLOY | §6 | **Backend** | Confirm deployed contract version at `api.smartdatapulse.tech` | Confirm before re-pinning `api-types.ts` |
 
+### Owner ratification — 2026-06-04 (D-NAME + D-BARCODE)
+The owner accepted **both** POS-side v1 cuts:
+
+- **D-NAME (GAP-3) — ACCEPTED.** v1 consumes the backend's single `tenant_products.name`. POS maps that one
+  `name` into **both** of 009's fold inputs — i.e. `name_fold = normalize(name + ' ' + name)` collapses to
+  `normalize(name)` (the 009 composition rule with `name_en` absent → `name_ar := name_en := name`). Search
+  works; there is **no Arabic-specific display** until a future spec adds the backing column to 003
+  (backend FR-050 deferral). Known v1 limitation, owner-accepted.
+- **D-BARCODE (GAP-2) — ACCEPTED.** v1 matches a scanned code against the **untyped `aliases[]` bag**
+  (exact-value match across all non-`sku` alias terms). Functionally adequate for barcode scan (a scan
+  either matches an alias value or it doesn't); **lossy** vs 009's typed `product_barcodes` model — no
+  barcode-vs-supplier-code disambiguation, no barcode-type display. A typed-alias contract revision is a
+  **known-limitation follow-up**, not a v1 blocker. (No backend issue filed for it yet — D-BARCODE was
+  decided POS-side; if a typed projection is later wanted it becomes a new backend request.)
+
+**Remaining open after this ratification:** D-AUTH-1, D-AUTH-2, D-DEPLOY — all on the backend
+([Data-Pulse-2 #488](https://github.com/ahmed-shaaban-94/Data-Pulse-2/issues/488)). 3 of 5 decisions still
+gate implementation; the 2 POS/owner cuts are closed.
+
 Once D-AUTH-1/2 + D-DEPLOY land: re-pin OpenAPI → `npm run codegen:api` → re-run `/speckit-plan` against
-the confirmed contract → lift §A2 hold with finalized column shapes → implement.
+the confirmed contract (now also reflecting the resolved D-NAME/D-BARCODE shapes) → lift §A2 hold with
+finalized column shapes → implement.
 
 ### Filed with the backend team
 The auth gap (**D-AUTH-1 / D-AUTH-2**, + the **D-DEPLOY** context question) is filed as a decision
