@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/brand/pos-pulse-logo.svg" alt="POS-Pulse logo" width="120" height="120"/>
+
 # POS Pulse
 
 **The Windows desktop POS terminal for the SmartDataPulse pharmacy platform.**
