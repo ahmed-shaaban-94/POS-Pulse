@@ -194,3 +194,57 @@ upward write path — returns here.
 **End of §A4 bridge-security review.** Prepared 2026-06-05 at base `a7bf216`; pre-implementation gate
 for S4 (T043/T044 + freshness UI). Mirrors 009's `security-review/s2-review.md` in intent, adapted to a
 pre-implementation gate per Constitution P9.
+
+---
+
+## 10. Post-implementation walk — 2026-06-07
+
+The `catalogue:refresh` / `catalogue:freshness` surface is now implemented (the bridge factory + channel
+constants + bridge-api types + preload exposure; the §4 matrix re-run against the actual diff below). Code
+under review:
+- `src/main/catalogue/catalogue-bridge.ts` — the `refresh` / `freshness` handlers.
+- `src/shared/bridge-api.ts` — `CatalogueRefreshResponse` / `CatalogueFreshnessResponse` + the `{}` request types.
+- `src/shared/catalogue/channels.ts` — `REFRESH` / `FRESHNESS` constants.
+- `src/preload/catalogue.ts` — the two `ipcRenderer.invoke` exposures.
+- `src/renderer/ui/catalogue/CatalogueFreshness.tsx` — the FR-16 indicator (P9-1 renderer copy).
+
+### §4 matrix re-run (control → as-built evidence)
+
+| ID | As-built | Verdict |
+| :--- | :--- | :--- |
+| AD-1 | Both handlers' FIRST statement is `requireCatalogueSession(getCurrentSession())`; a `refused` short-circuits before any driver call / freshness read. The `refresh` no-session test asserts `driver.calls() === 0`. | ✅ PASS |
+| AD-2 | Refusals are `{ kind:'refused', reason:'no_session'|'tenant_isolation' }` from the shared gate; the reason is never widened. The renderer (`CatalogueFreshness`) maps a refusal to a generic `unavailable` state and the test asserts the reason string is NOT in the DOM. | ✅ PASS |
+| WR-1 | `refresh` only calls `readDownDriver.runTickOnce()` — it accepts no payload and exposes no INSERT/UPDATE/DELETE. The writer is main-process-only; the bridge dep is narrowed to `Pick<ReadDownDriver,'runTickOnce'>` (it cannot even reach the writer). | ✅ PASS |
+| WR-2 | `refresh` returns a status union only (`started`|`already_running`|`refused`); `admission.completed` is explicitly dropped. No catalogue data crosses. | ✅ PASS |
+| RD-1 | `freshness` reads only `freshness.readSyncState(tenantId)` (timestamps + opaque id) + `freshness.countProducts(tenantId)`; returns `last_success_at` + `is_empty` only. | ✅ PASS |
+| P17-1 | Both freshness reads take `gate.session.tenant_id`; the tenant-isolation test injects a foreign-tenant row and asserts it returns never-synced (the foreign row never leaks). | ✅ PASS |
+| INP-1 | Both request types are `Record<string,never>` (`{}`); the handlers read NOTHING from the request — identity comes from the session. | ✅ PASS |
+| IPC-1 | Handlers never throw: no-driver / no-freshness-source degrade to a typed `refused`, asserted by the "not wired" tests. The renderer wraps the bridge calls and renders an `unavailable` state on refusal. | ✅ PASS |
+| SEC-1 | Neither response carries the device token or any secret; the bridge dep surface (`runTickOnce`, `readSyncState`, `countProducts`) cannot reach the token (it stays in the driver/client, main-process). | ✅ PASS |
+| RED-1 | **Satisfied vacuously + pinned.** The bridge/driver/handlers wire NO logger (verified: zero `console`/logger calls in `read-down/*.ts` and the new handlers). The read-down redaction smoke (T018, `read-down/__tests__/redaction.smoke.test.ts`) pins that `device_token`/forbidden keys are scrubbed and the `TickOutcome` carries no row content, so a leak is caught WHEN logging is later wired. **Deferral recorded** (R-REDACTION-SITE). | ✅ PASS (deferred-vacuous) |
+| P9-1 | `CatalogueFreshness` renders the three states from `data-state` (`never-synced`/`updated`/`synced-empty`) with distinct Arabic copy + an icon (never colour-only); the synced-but-empty state shows "تم التحديث، لكن لا توجد منتجات" with the timestamp, never a bare time. Tested per state. | ✅ PASS |
+| P9-2 | `refresh` returns `started` immediately after `runTickOnce()` admission (the driver's async single-flight resolves the read-down on `completed`, which the bridge ignores); the renderer shows "جارٍ التحديث…" / "جارٍ التحديث بالفعل" and the test asserts no "completed/success" copy appears. | ✅ PASS |
+| FR-12 | Non-blocking: `refresh` does not await the read-down (admission is synchronous in the driver); single-flight (`already_running`) is the driver's, surfaced verbatim. | ✅ PASS |
+| FR-10 | No upward write on this surface. The `no-outbound-write` test (T036) proves the full tick invokes ONLY `client.fetchSnapshot` (a Proxy spy asserts the invocation set is exactly `{fetchSnapshot}`); the bridge sends nothing upward. | ✅ PASS |
+
+### Residuals (all LOW, carried to §A5 / wiring)
+
+- **T043 ipcMain registration deferred.** The two channels are NOT yet registered with `ipcMain.handle` in
+  the composition root — 009 never wired the catalogue bridge to `ipcMain` either, and the driver wiring
+  (T039) needs `pairingStore` scope + the #349-blocked live client. The bridge factory + preload are
+  complete and unit-tested; the registration lands with T039/T043 when #349 clears. **A post-wiring
+  re-check of AD-1/SEC-1 against the live `ipcMain` handler is required before the rollout PR.**
+- **R-REDACTION-SITE (RED-1):** redaction is satisfied vacuously (no logger wired). When diagnostic logging
+  is added, extend the redaction smoke to the actual log sites.
+- **R-FRESHNESS-WIRING / R-SINGLEFLIGHT:** the renderer copy maps each state correctly (tested) and
+  single-flight is the driver's, tested in `read-down-driver.test.ts`.
+
+### Verdict (post-implementation)
+
+**§A4 CLEARED for the implemented bridge factory + preload + freshness UI** under the §4 matrix (all 13
+controls PASS; RED-1 deferred-vacuous with the invariant pinned). The clearance is **scoped to the code
+that exists**: it does NOT cover the `ipcMain.handle` registration (T043, deferred with T039 on #349) —
+that registration re-opens AD-1/SEC-1 for a short post-wiring re-check before the rollout PR. No upward
+write path was introduced (FR-10 proven by T036).
+
+**End of post-implementation walk.** Prepared 2026-06-07 against the S4 diff on `feat/010-driver-bridge-ui`.
