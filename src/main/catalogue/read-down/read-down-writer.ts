@@ -81,8 +81,24 @@ export interface CreateReadDownWriterDeps {
   syncStateRepo: CatalogueSyncStateRepo;
 }
 
+/** Inputs for recording a transport-failed fetch (the driver's responsibility). */
+export interface RecordFetchFailureInput {
+  tenantId: string;
+  branchId: string;
+  /** ISO-8601 UTC timestamp of the failed attempt. */
+  now: string;
+}
+
 export interface ReadDownWriter {
   run(input: ReadDownRunInput): ReadDownRunResult;
+  /**
+   * Record a FAILED fetch attempt (transport failure before any write). The
+   * driver calls this when the client returns `no_connection` / `failed`: the
+   * writer never runs, so the driver still needs the freshness clock to show a
+   * failed attempt while `last_success_at` stays put (SC-10). Delegates to the
+   * same diagnostics write `run()` uses for writer-side failures.
+   */
+  recordFetchFailure(input: RecordFetchFailureInput): void;
 }
 
 interface PrepareRun {
@@ -337,5 +353,21 @@ export function createReadDownWriter(deps: CreateReadDownWriterDeps): ReadDownWr
     }
   }
 
-  return { run };
+  function recordFetchFailure(input: RecordFetchFailureInput): void {
+    // Transport failure recorded by the driver (the writer's `run()` never saw
+    // these rows). Same semantics as a writer-side failure: advance the attempt
+    // clock + outcome, leave `last_success_at` untouched (SC-10). Best-effort.
+    try {
+      syncStateRepo.recordAttempt({
+        tenantId: input.tenantId,
+        branchId: input.branchId,
+        lastAttemptAt: input.now,
+        outcome: 'failed',
+      });
+    } catch {
+      // swallow — the fetch already failed; do not mask its cause.
+    }
+  }
+
+  return { run, recordFetchFailure };
 }
