@@ -553,6 +553,31 @@ export interface PreloadBridgeAPI {
    * (handlers return `catalogue_unavailable` until the read model lands in S2).
    */
   catalogue?: CatalogueBridgeAPI;
+
+  /**
+   * 011-sale-sync-capture-up: READ-ONLY sale-sync status namespace. A single
+   * channel (`sales:syncStatus`) exposing pending / dead-letter counts + the
+   * last-success timestamp. The renderer can OBSERVE sync health but can never
+   * trigger or mutate the drain (the engine runs in the main process; §A4 / P8 /
+   * WR-1). Optional for the same staged-wiring reason as the namespaces above.
+   */
+  salesSync?: SalesSyncBridgeAPI;
+}
+
+/**
+ * 011-sale-sync-capture-up: typed read-only `salesSync.*` namespace. No write
+ * channel exists. The response carries counts + one timestamp only — no token,
+ * PII, or raw error (P7).
+ */
+export interface SalesSyncBridgeAPI {
+  syncStatus(): Promise<SaleSyncStatusResponse>;
+}
+
+/** The read-only sync-status payload (mirrors main `SaleSyncStatusCounts`). */
+export interface SaleSyncStatusResponse {
+  pending: number;
+  deadLetter: number;
+  lastSuccessAt: string | null;
 }
 
 /**
