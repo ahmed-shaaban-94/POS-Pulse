@@ -36,10 +36,7 @@ export interface ReadDownFetchFailed {
   kind: 'failed';
 }
 
-export type ReadDownFetchResult =
-  | ReadDownFetchOk
-  | ReadDownFetchNoConnection
-  | ReadDownFetchFailed;
+export type ReadDownFetchResult = ReadDownFetchOk | ReadDownFetchNoConnection | ReadDownFetchFailed;
 
 export interface ReadDownClient {
   /**

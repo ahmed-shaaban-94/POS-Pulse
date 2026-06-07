@@ -107,7 +107,10 @@ describe('T045 — CatalogueFreshness: three truthful states', () => {
     });
     render(<CatalogueFreshness bridge={bridge} />);
     await waitFor(() =>
-      expect(screen.getByTestId('catalogue-freshness')).toHaveAttribute('data-state', 'unavailable'),
+      expect(screen.getByTestId('catalogue-freshness')).toHaveAttribute(
+        'data-state',
+        'unavailable',
+      ),
     );
     // The refusal reason is never echoed to the cashier.
     expect(screen.queryByText(/tenant_isolation/)).not.toBeInTheDocument();
@@ -163,7 +166,11 @@ describe('T045 — CatalogueFreshness: accessibility', () => {
   it('announces politely via role=status and does not steal focus', async () => {
     const bridge = freshnessBridge({
       freshness: () =>
-        Promise.resolve({ kind: 'ok', last_success_at: '2026-06-07T10:42:00.000Z', is_empty: false }),
+        Promise.resolve({
+          kind: 'ok',
+          last_success_at: '2026-06-07T10:42:00.000Z',
+          is_empty: false,
+        }),
     });
     render(<CatalogueFreshness bridge={bridge} />);
     const region = await screen.findByTestId('catalogue-freshness');
@@ -174,7 +181,11 @@ describe('T045 — CatalogueFreshness: accessibility', () => {
   it('is axe-clean in the updated state', async () => {
     const bridge = freshnessBridge({
       freshness: () =>
-        Promise.resolve({ kind: 'ok', last_success_at: '2026-06-07T10:42:00.000Z', is_empty: false }),
+        Promise.resolve({
+          kind: 'ok',
+          last_success_at: '2026-06-07T10:42:00.000Z',
+          is_empty: false,
+        }),
     });
     const { container } = render(<CatalogueFreshness bridge={bridge} />);
     await screen.findByTestId('catalogue-freshness-time');

@@ -175,9 +175,7 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
       // Map admission → status. `completed` is intentionally dropped: the outcome
       // surfaces later via `freshness` + 009 lookups, never blocks this call.
       return await Promise.resolve(
-        admission.kind === 'already_running'
-          ? { kind: 'already_running' }
-          : { kind: 'started' },
+        admission.kind === 'already_running' ? { kind: 'already_running' } : { kind: 'started' },
       );
     },
 
