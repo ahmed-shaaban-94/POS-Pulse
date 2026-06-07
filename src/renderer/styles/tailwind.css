@@ -2891,4 +2891,60 @@ body {
     opacity: 0.45;
     cursor: not-allowed;
   }
+
+  /* ─── 010 catalogue freshness (FR-16) ──────────────────────────────────
+   * A compact INLINE status line, not a card (DESIGN.md bans metric/hero
+   * cards). Muted body text + a small status DOT (icon + text, never
+   * colour-only). The dot colour is driven by `data-state`; the text always
+   * carries the meaning so the state survives a greyscale render. No
+   * side-stripe border (DESIGN.md absolute ban). */
+  .catalogue-freshness {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-block-size: 44px;
+    padding-inline: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .catalogue-freshness__icon {
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+  }
+
+  .catalogue-freshness[data-state='updated'] .catalogue-freshness__icon {
+    color: var(--color-success);
+  }
+
+  .catalogue-freshness[data-state='synced-empty'] .catalogue-freshness__icon {
+    color: var(--color-warning);
+  }
+
+  .catalogue-freshness[data-state='unavailable'] .catalogue-freshness__icon {
+    color: var(--color-danger);
+  }
+
+  .catalogue-freshness__label {
+    color: var(--color-text);
+  }
+
+  .catalogue-freshness[data-state='loading'] .catalogue-freshness__label,
+  .catalogue-freshness[data-state='unavailable'] .catalogue-freshness__label {
+    color: var(--color-text-muted);
+  }
+
+  .catalogue-freshness__label time {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .catalogue-freshness__feedback {
+    color: var(--color-info);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .catalogue-freshness__refresh {
+    margin-inline-start: auto;
+  }
 }

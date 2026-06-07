@@ -194,3 +194,106 @@ upward write path — returns here.
 **End of §A4 bridge-security review.** Prepared 2026-06-05 at base `a7bf216`; pre-implementation gate
 for S4 (T043/T044 + freshness UI). Mirrors 009's `security-review/s2-review.md` in intent, adapted to a
 pre-implementation gate per Constitution P9.
+
+---
+
+## 10. Post-implementation walk — 2026-06-07
+
+The `catalogue:refresh` / `catalogue:freshness` surface is now implemented (the bridge factory + channel
+constants + bridge-api types + preload exposure; the §4 matrix re-run against the actual diff below). Code
+under review:
+- `src/main/catalogue/catalogue-bridge.ts` — the `refresh` / `freshness` handlers.
+- `src/shared/bridge-api.ts` — `CatalogueRefreshResponse` / `CatalogueFreshnessResponse` + the `{}` request types.
+- `src/shared/catalogue/channels.ts` — `REFRESH` / `FRESHNESS` constants.
+- `src/preload/catalogue.ts` — the two `ipcRenderer.invoke` exposures.
+- `src/renderer/ui/catalogue/CatalogueFreshness.tsx` — the FR-16 indicator (P9-1 renderer copy).
+
+### §4 matrix re-run (control → as-built evidence)
+
+| ID | As-built | Verdict |
+| :--- | :--- | :--- |
+| AD-1 | Both handlers' FIRST statement is `requireCatalogueSession(getCurrentSession())`; a `refused` short-circuits before any driver call / freshness read. The `refresh` no-session test asserts `driver.calls() === 0`. | ✅ PASS |
+| AD-2 | Refusals are `{ kind:'refused', reason:'no_session'|'tenant_isolation' }` from the shared gate; the reason is never widened. The renderer (`CatalogueFreshness`) maps a refusal to a generic `unavailable` state and the test asserts the reason string is NOT in the DOM. | ✅ PASS |
+| WR-1 | `refresh` only calls `readDownDriver.runTickOnce()` — it accepts no payload and exposes no INSERT/UPDATE/DELETE. The writer is main-process-only; the bridge dep is narrowed to `Pick<ReadDownDriver,'runTickOnce'>` (it cannot even reach the writer). | ✅ PASS |
+| WR-2 | `refresh` returns a status union only (`started`|`already_running`|`refused`); `admission.completed` is explicitly dropped. No catalogue data crosses. | ✅ PASS |
+| RD-1 | `freshness` reads only `freshness.readSyncState(tenantId)` (timestamps + opaque id) + `freshness.countProducts(tenantId)`; returns `last_success_at` + `is_empty` only. | ✅ PASS |
+| P17-1 | Both freshness reads take `gate.session.tenant_id`; the tenant-isolation test injects a foreign-tenant row and asserts it returns never-synced (the foreign row never leaks). | ✅ PASS |
+| INP-1 | Both request types are `Record<string,never>` (`{}`); the handlers read NOTHING from the request — identity comes from the session. | ✅ PASS |
+| IPC-1 | Handlers never throw: no-driver / no-freshness-source degrade to a typed `refused`, asserted by the "not wired" tests. The renderer wraps the bridge calls and renders an `unavailable` state on refusal. | ✅ PASS |
+| SEC-1 | Neither response carries the device token or any secret; the bridge dep surface (`runTickOnce`, `readSyncState`, `countProducts`) cannot reach the token (it stays in the driver/client, main-process). | ✅ PASS |
+| RED-1 | **Satisfied vacuously + pinned.** The bridge/driver/handlers wire NO logger (verified: zero `console`/logger calls in `read-down/*.ts` and the new handlers). The read-down redaction smoke (T018, `read-down/__tests__/redaction.smoke.test.ts`) pins that `device_token`/forbidden keys are scrubbed and the `TickOutcome` carries no row content, so a leak is caught WHEN logging is later wired. **Deferral recorded** (R-REDACTION-SITE). | ✅ PASS (deferred-vacuous) |
+| P9-1 | `CatalogueFreshness` renders the three states from `data-state` (`never-synced`/`updated`/`synced-empty`) with distinct Arabic copy + an icon (never colour-only); the synced-but-empty state shows "تم التحديث، لكن لا توجد منتجات" with the timestamp, never a bare time. Tested per state. | ✅ PASS |
+| P9-2 | `refresh` returns `started` immediately after `runTickOnce()` admission (the driver's async single-flight resolves the read-down on `completed`, which the bridge ignores); the renderer shows "جارٍ التحديث…" / "جارٍ التحديث بالفعل" and the test asserts no "completed/success" copy appears. | ✅ PASS |
+| FR-12 | Non-blocking: `refresh` does not await the read-down (admission is synchronous in the driver); single-flight (`already_running`) is the driver's, surfaced verbatim. | ✅ PASS |
+| FR-10 | No upward write on this surface. The `no-outbound-write` test (T036) proves the full tick invokes ONLY `client.fetchSnapshot` (a Proxy spy asserts the invocation set is exactly `{fetchSnapshot}`); the bridge sends nothing upward. | ✅ PASS |
+
+### Residuals (all LOW, carried to §A5 / wiring)
+
+- **The entire catalogue surface is INERT at runtime (load-bearing — state plainly).** Verified firsthand
+  2026-06-07: there is NO `ipcMain.handle` for any `catalogue:*` channel anywhere in `src/main/` — no
+  registrar, no registration loop. 009's four read handlers AND 010's `refresh`/`freshness` are all
+  unreachable from the renderer until a registration lands. The bridge factory + preload + freshness UI are
+  complete and unit-tested but not wired. This §A4 clearance covers the *code that exists*, not a reachable
+  runtime path.
+- **T043 registration is split by dependency (corrected).** `catalogue:freshness` is **NOT #349-blocked** —
+  it needs only the shipped `catalogue-sync-state-repo` + a tenant-scoped product count (a small
+  `CatalogueFreshnessSource` adapter; `productRepo` has no count today, so that query is the missing piece).
+  That is in-scope-now work. Only `catalogue:refresh` (driver → live client + `pairingStore` scope, T039) is
+  #349-blocked. **A post-wiring re-check of AD-1/SEC-1 against the live `ipcMain` handler is required before
+  the rollout PR.**
+- **R-REDACTION-SITE (RED-1):** redaction is satisfied vacuously (no logger wired). When diagnostic logging
+  is added, extend the redaction smoke to the actual log sites.
+- **R-FRESHNESS-WIRING / R-SINGLEFLIGHT:** the renderer copy maps each state correctly (tested) and
+  single-flight is the driver's, tested in `read-down-driver.test.ts`.
+
+### Verdict (post-implementation)
+
+**§A4 CLEARED for the implemented bridge factory + preload + freshness UI** under the §4 matrix (all 13
+controls PASS; RED-1 deferred-vacuous with the invariant pinned). The clearance is **scoped to the code
+that exists**: it does NOT cover the `ipcMain.handle` registration (T043, deferred with T039 on #349) —
+that registration re-opens AD-1/SEC-1 for a short post-wiring re-check before the rollout PR. No upward
+write path was introduced (FR-10 proven by T036).
+
+**End of post-implementation walk.** Prepared 2026-06-07 against the S4 diff on `feat/010-driver-bridge-ui`.
+
+---
+
+## 11. Post-WIRING re-check — 2026-06-07 (freshness leg now live)
+
+The freshness leg is now **wired to `ipcMain`** (it was inert at §10). The registrar
+`src/main/ipc/catalogue.ts` (`registerCatalogueHandlers`) registers all six `catalogue:*` channels, and
+`src/main/index.ts` constructs the bridge with a `freshness` source + an operator-session adapter and calls
+the registrar. This re-runs the two controls the §10 residual flagged for re-check against the **live
+handler path**.
+
+**Scope now live:** 009's four read handlers + `catalogue:freshness` are reachable from the renderer.
+`catalogue:refresh` is registered but the bridge is constructed with **no `readDownDriver`** (T039/#349), so
+it returns a generic refusal — never a fake `started`. The read-down writer/driver remain main-process-only
+and unreachable via the bridge.
+
+| Control | Re-check against the live wiring | Verdict |
+| :--- | :--- | :--- |
+| **AD-1 (gate-first)** | The registrar delegates straight to `bridge.<method>` with no pre-bridge logic; the bridge's `freshness`/`refresh` run `requireCatalogueSession(getCurrentSession())` as their first statement. `getCurrentSession` is the `index.ts` adapter over `operatorSessionManager.getCurrent()` — returns `null` when signed out, so the gate refuses with no session. Registrar test asserts delegation; bridge tests assert gate-first. | ✅ PASS |
+| **SEC-1 (no secret crosses)** | The bridge is constructed with `productRepo` + a `freshness` source (`readSyncState` + `countProducts`) only — NO device token, NO HTTP client, NO `readDownDriver`. `catalogue_sync_state` holds timestamps + an opaque snapshot id (§A2 §8). The freshness response carries `last_success_at` + `is_empty`; the registrar forwards it verbatim. No secret is reachable through the wired surface. | ✅ PASS |
+| **INP-1 (no renderer-supplied identity)** | `refresh`/`freshness` handlers take no request validator and pass `{}` to the bridge; the tenant comes from the session adapter (`operatorSessionManager`), never the renderer. The lookup handlers validate shape and refuse malformed payloads generically (no leaked field). | ✅ PASS |
+| **P17-1 (tenant scoping, live)** | The `freshness` source closures pass the **session** tenant (`gate.session.tenant_id`) into `catalogueSyncStateRepo.read` + `productRepo.countByTenant`, both tenant-scoped in SQL. The renderer cannot supply a tenant. | ✅ PASS |
+
+**Registration choice:** the handlers are registered **unconditionally** (matching `registerCartHandlers`),
+not behind the `productSearch` flag. Safe because every handler is session-gated and an unmounted renderer
+never invokes them; the flag gates the renderer *surface*, not the IPC handler. No `BrowserWindow` added;
+`contextIsolation`/`sandbox` unchanged.
+
+### Verdict (post-wiring)
+
+**§A4 CLEARED for the live freshness leg.** AD-1 / SEC-1 / INP-1 / P17-1 re-verified against the actual
+`ipcMain` handler + composition-root wiring. `catalogue:refresh` is registered but driver-less (refuses) —
+**when the driver is wired (T039/#349), a final re-check of `refresh` is required**: confirm the device
+token reaches only the driver/client (never the bridge response), and that `refresh` returns
+`started`/`already_running` honestly. **Fold in the Codex-flagged freshness-staleness item (PR #358):** after
+a `started` tick, the renderer's immediate `loadFreshness()` reads the PRE-commit timestamp (the bridge
+drops `completed` by contract); the owner shape brief scoped OUT a polling clock, so the post-commit refresh
+mechanism (bounded poll vs a one-shot re-read on tick completion vs leave-as-incomplete) is a T039 design
+decision against the driver's real async timing — not buildable now (the path is inert) and must respect the
+no-poll constraint. Not a lie today (the in-flight feedback is honest); latent until the driver lands. That is the one remaining §A4 item, gated on #349.
+
+**End of post-wiring re-check.** Prepared 2026-06-07 against `src/main/ipc/catalogue.ts` + `src/main/index.ts`.

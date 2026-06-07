@@ -27,18 +27,35 @@ import type {
   CatalogueSearchRequest,
   CatalogueSearchResponse,
   CatalogueResolveResponse,
+  CatalogueRefreshResponse,
+  CatalogueFreshnessResponse,
 } from '../../shared/bridge-api.js';
 import {
   requireCatalogueSession,
   type OperatorSessionForCatalogue,
 } from './require-catalogue-session.js';
 import type { ProductLookupResult, ProductRepo, ProductSearchResult } from './product-repo.js';
+import type { ReadDownDriver } from './read-down/read-down-driver.js';
+import type { CatalogueSyncStateRow } from './catalogue-sync-state-repo.js';
 import { normalize } from './normalize.js';
 
 export type CatalogueBridge = CatalogueBridgeAPI;
 
 /** Minimum NORMALIZED query length for a name search (FR-16). */
 const MIN_SEARCH_LENGTH = 2;
+
+/**
+ * 010 — the tenant-scoped freshness read source for `catalogue.freshness`
+ * (§A4 RD-1 / P17-1). A pure read of secret-free state: the sync-state row
+ * (timestamps + opaque snapshot id only — §A2 §8) and a tenant-scoped live
+ * `products`-has-rows check (`is_empty`). Both MUST filter the session tenant.
+ */
+export interface CatalogueFreshnessSource {
+  /** The session tenant's sync-state row, or null if no read-down ever ran. */
+  readSyncState(tenantId: string): CatalogueSyncStateRow | null;
+  /** The session tenant's live product count (for the `is_empty` discriminator). */
+  countProducts(tenantId: string): number;
+}
 
 export interface CatalogueBridgeDependencies {
   /** The current operator session, or null when none is active (NFR-6a gate). */
@@ -51,6 +68,21 @@ export interface CatalogueBridgeDependencies {
    * `search` / `resolve` remain stubs until S3 / S4.
    */
   productRepo?: ProductRepo;
+  /**
+   * 010 — the read-down driver behind `catalogue.refresh`. The bridge only ever
+   * ADMITS a tick (`runTickOnce`) — it never starts/stops the interval (that is
+   * the composition root's job, T039) — so it depends on just that method, not
+   * the full driver (minimal-coupling). Optional: when absent (e.g. the
+   * live-client wiring is deferred on #349), `refresh` refuses rather than claim
+   * a tick it cannot start (P9-2 — no fake "done").
+   */
+  readDownDriver?: Pick<ReadDownDriver, 'runTickOnce'>;
+  /**
+   * 010 — the tenant-scoped freshness source behind `catalogue.freshness`.
+   * Optional: when absent, `freshness` refuses (it cannot read truthfully) — it
+   * never throws or leaks (IPC-1).
+   */
+  freshness?: CatalogueFreshnessSource;
 }
 
 /** Map the repo's discriminated result to the bridge lookup response. */
@@ -80,7 +112,7 @@ function searchResultToResponse(result: ProductSearchResult): CatalogueSearchRes
 }
 
 export function createCatalogueBridge(deps: CatalogueBridgeDependencies): CatalogueBridge {
-  const { getCurrentSession, productRepo } = deps;
+  const { getCurrentSession, productRepo, readDownDriver, freshness } = deps;
 
   // S2: `lookupBarcode` / `lookupSku` gate first (NFR-6a), then query the
   // tenant-scoped repo (the session's `tenant_id` is the only tenant the repo
@@ -125,6 +157,57 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
       const gate = requireCatalogueSession(getCurrentSession());
       if (gate.kind === 'refused') return gate;
       return await Promise.resolve({ kind: 'catalogue_unavailable' });
+    },
+
+    // 010 §A4 Addition 1 — manual read-down trigger. Session gate FIRST (AD-1);
+    // only AFTER the gate passes does it touch the driver. Returns a STATUS only
+    // (WR-2) and does NOT await the read-down (P9-2 / FR-12 — the tick runs on
+    // the driver's `completed` promise, which the bridge deliberately ignores).
+    // No catalogue payload is accepted (the request is `{}`, INP-1) or returned.
+    async refresh(): Promise<CatalogueRefreshResponse> {
+      const gate = requireCatalogueSession(getCurrentSession());
+      if (gate.kind === 'refused') return gate;
+      // No driver wired (e.g. live-client deferred on #349): refuse rather than
+      // claim a tick we cannot start. Generic refusal, never a fake `started`.
+      // NOTE: the `no_session` reason here is a CONVENIENCE reuse of the generic
+      // refusal union, NOT literally true (the gate above already passed). It is
+      // unreachable once the driver is wired (T039), and the reason is never
+      // surfaced to the cashier (the renderer maps any refusal to a generic
+      // `unavailable`). Do not trust this reason code as a session signal.
+      if (readDownDriver === undefined)
+        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      const admission = readDownDriver.runTickOnce();
+      // Map admission → status. `completed` is intentionally dropped: the outcome
+      // surfaces later via `freshness` + 009 lookups, never blocks this call.
+      return await Promise.resolve(
+        admission.kind === 'already_running' ? { kind: 'already_running' } : { kind: 'started' },
+      );
+    },
+
+    // 010 §A4 Addition 2 — truthful last-updated read. Session gate FIRST (AD-1).
+    // Pure tenant-scoped read of secret-free state (RD-1/P17-1): the session
+    // tenant's sync-state row + a tenant-scoped live-products count. Three
+    // truthful states (P9-1): null → never-synced; non-null + rows → updated;
+    // non-null + 0 rows → synced-but-empty (SC-10). Never throws/leaks (IPC-1):
+    // no freshness source wired → generic refusal.
+    async freshness(): Promise<CatalogueFreshnessResponse> {
+      const gate = requireCatalogueSession(getCurrentSession());
+      if (gate.kind === 'refused') return gate;
+      // No freshness source wired: refuse (cannot read truthfully) rather than
+      // throw/leak. As with `refresh`, the `no_session` reason is a convenience
+      // reuse of the generic union, not literally true; unreachable once wired,
+      // never surfaced verbatim. Do not trust this reason code as a session signal.
+      if (freshness === undefined)
+        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      const tenantId = gate.session.tenant_id;
+      const row = freshness.readSyncState(tenantId);
+      const lastSuccessAt = row?.last_success_at ?? null;
+      const isEmpty = freshness.countProducts(tenantId) === 0;
+      return await Promise.resolve({
+        kind: 'ok',
+        last_success_at: lastSuccessAt,
+        is_empty: isEmpty,
+      });
     },
   };
 }

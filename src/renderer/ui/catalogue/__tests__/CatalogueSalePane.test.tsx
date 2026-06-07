@@ -23,6 +23,12 @@ function catalogueBridge(over: Partial<CatalogueBridgeAPI> = {}): CatalogueBridg
     lookupSku: vi.fn(),
     search: vi.fn(),
     resolve: vi.fn(),
+    refresh: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, reason: 'no_session' as const }),
+    ),
+    freshness: vi.fn(() =>
+      Promise.resolve({ kind: 'ok' as const, last_success_at: null, is_empty: true }),
+    ),
     ...over,
   };
 }

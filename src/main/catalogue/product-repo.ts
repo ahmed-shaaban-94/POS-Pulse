@@ -107,6 +107,12 @@ export interface ProductRepo {
    * empty / missing / unreadable read model.
    */
   resolveForSeam(tenantId: string, productId: string): ProductResolveResult;
+  /**
+   * 010 — tenant-scoped live product count (P17), for the freshness surface's
+   * `is_empty` discriminator (FR-16b / SC-10). Returns 0 on a missing/unreadable
+   * read model (never throws across the boundary, mirroring the lookup discipline).
+   */
+  countByTenant(tenantId: string): number;
 }
 
 // Qualified with the `p.` alias: in the barcode JOIN, `products` and
@@ -233,7 +239,20 @@ export function createProductRepo(db: DatabaseHandle): ProductRepo {
     }
   }
 
-  return { lookupByBarcode, lookupBySku, search, resolveForSeam };
+  function countByTenant(tenantId: string): number {
+    try {
+      const stmt = db.prepare(
+        'SELECT COUNT(*) AS n FROM products WHERE tenant_id = ?',
+      ) as PrepareGet<{ n: number }>;
+      return stmt.get(tenantId)?.n ?? 0;
+    } catch {
+      // Missing table / unreadable handle → treat as empty (is_empty=true), never
+      // throw across the freshness read (FR-24 discipline).
+      return 0;
+    }
+  }
+
+  return { lookupByBarcode, lookupBySku, search, resolveForSeam, countByTenant };
 }
 
 /**
