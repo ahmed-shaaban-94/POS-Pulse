@@ -1170,12 +1170,47 @@ export type CatalogueResolveResponse =
     }
   | { kind: 'catalogue_unavailable' };
 
+// ───────────────────────────────────────────────────────────────────────────
+// 010-pos-catalog-read-down-consumption (T041) — `catalogue.refresh` /
+// `catalogue.freshness` additions (§A4 bridge-security review). Both requests
+// are `{}` (INP-1 — the terminal identity + tenant come from session/pairing,
+// NEVER the renderer payload). Both gate on the session FIRST (AD-1) and refuse
+// generically (AD-2). Neither returns catalogue data or any secret (WR-2/SEC-1).
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Empty request — no renderer-supplied identity/scope/cursor (INP-1 / FR-15a). */
+export type CatalogueRefreshRequest = Record<string, never>;
+export type CatalogueFreshnessRequest = Record<string, never>;
+
 /**
- * 009 read-only `catalogue.*` bridge surface. Gated server-side on an active
- * operator session (NFR-6a); renderer-side checks are never load-bearing.
- * Tenant scoping is derived from the session at the repo layer (S2). Optional
- * for the same staged-wiring reason as `sales`/`receipts` above — the preload
- * (`src/preload/index.ts`) wires it in S1 (T016).
+ * `catalogue.refresh` response (contract Addition 1). Status ONLY — no catalogue
+ * data, no per-record content (WR-2). Returns immediately after kicking off the
+ * tick, NOT after the promote commits (P9-2 / FR-12 — no fake "done").
+ */
+export type CatalogueRefreshResponse =
+  | { kind: 'started' } // a read-down tick was kicked off
+  | { kind: 'already_running' } // single-flight: a tick is in progress (FR-14)
+  | { kind: 'refused'; reason: CatalogueRefusalReason };
+
+/**
+ * `catalogue.freshness` response (contract Addition 2). A truthful last-updated
+ * read for the FR-16 indicator. `is_empty` closes the empty-catalogue
+ * truthfulness hole (SC-10): a successful EMPTY promote sets a non-null
+ * `last_success_at` while the live products table has 0 rows, so the indicator
+ * must distinguish three states (P9-1) — never a bare timestamp implying data
+ * when there is none.
+ */
+export type CatalogueFreshnessResponse =
+  | { kind: 'ok'; last_success_at: string | null; is_empty: boolean }
+  | { kind: 'refused'; reason: CatalogueRefusalReason };
+
+/**
+ * 009 read-only `catalogue.*` bridge surface, EXTENDED by 010 with the read-down
+ * `refresh` / `freshness` additions. Gated server-side on an active operator
+ * session (NFR-6a); renderer-side checks are never load-bearing. Tenant scoping
+ * is derived from the session at the repo layer (S2). Optional for the same
+ * staged-wiring reason as `sales`/`receipts` above — the preload
+ * (`src/preload/index.ts`) wires it in S1 (T016); 010 adds `refresh`/`freshness`.
  */
 export interface CatalogueBridgeAPI {
   /** Exact barcode lookup (FR-4). */
@@ -1186,4 +1221,8 @@ export interface CatalogueBridgeAPI {
   search(req: CatalogueSearchRequest): Promise<CatalogueSearchResponse>;
   /** Resolve a chosen product to the confirm-and-add snapshot (FR-19). */
   resolve(req: CatalogueResolveRequest): Promise<CatalogueResolveResponse>;
+  /** 010 — kick off one manual read-down tick (status only; §A4 Addition 1). */
+  refresh(req: CatalogueRefreshRequest): Promise<CatalogueRefreshResponse>;
+  /** 010 — truthful last-updated read for the FR-16 indicator (§A4 Addition 2). */
+  freshness(req: CatalogueFreshnessRequest): Promise<CatalogueFreshnessResponse>;
 }

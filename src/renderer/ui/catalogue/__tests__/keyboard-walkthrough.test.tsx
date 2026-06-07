@@ -62,6 +62,8 @@ function catalogueBridge(over: Partial<CatalogueBridgeAPI> = {}): CatalogueBridg
     lookupSku: vi.fn(),
     search: vi.fn(),
     resolve: vi.fn(),
+    refresh: vi.fn(),
+    freshness: vi.fn(),
     ...over,
   };
 }

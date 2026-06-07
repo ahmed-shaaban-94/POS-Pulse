@@ -9,6 +9,10 @@ import type {
   CatalogueLookupResponse,
   CatalogueSearchResponse,
   CatalogueResolveResponse,
+  CatalogueRefreshRequest,
+  CatalogueFreshnessRequest,
+  CatalogueRefreshResponse,
+  CatalogueFreshnessResponse,
 } from '../shared/bridge-api.js';
 import { CATALOGUE_IPC_CHANNELS } from '../shared/catalogue/channels.js';
 
@@ -20,8 +24,11 @@ import { CATALOGUE_IPC_CHANNELS } from '../shared/catalogue/channels.js';
  * `ipcRenderer.invoke` with a typed channel constant. Main-process
  * `requireCatalogueSession` gating (NFR-6a) is the load-bearing security
  * boundary; renderer-side type checks are secondary UX defence only. The
- * namespace is READ-ONLY (no insert/update/delete; AD-2) and carries no
- * idempotency_key (every handler is a pure read).
+ * namespace is READ-ONLY for 009's four handlers (no insert/update/delete;
+ * AD-2). 010 adds `refresh` (a status-only trigger that requests a main-process
+ * read-down tick — it exposes NO catalogue-write handler, WR-1) and `freshness`
+ * (a pure secret-free read). Both requests are `{}` (INP-1) and carry no
+ * idempotency_key (no money-bearing action).
  */
 export const catalogue: CatalogueBridgeAPI = {
   lookupBarcode: (req: CatalogueLookupBarcodeRequest) =>
@@ -35,4 +42,13 @@ export const catalogue: CatalogueBridgeAPI = {
     ipcRenderer.invoke(CATALOGUE_IPC_CHANNELS.SEARCH, req) as Promise<CatalogueSearchResponse>,
   resolve: (req: CatalogueResolveRequest) =>
     ipcRenderer.invoke(CATALOGUE_IPC_CHANNELS.RESOLVE, req) as Promise<CatalogueResolveResponse>,
+  // 010 (T044) — read-down additions. `refresh` only REQUESTS a main-process
+  // tick (no payload to persist, WR-1); `freshness` is a pure read.
+  refresh: (req: CatalogueRefreshRequest) =>
+    ipcRenderer.invoke(CATALOGUE_IPC_CHANNELS.REFRESH, req) as Promise<CatalogueRefreshResponse>,
+  freshness: (req: CatalogueFreshnessRequest) =>
+    ipcRenderer.invoke(
+      CATALOGUE_IPC_CHANNELS.FRESHNESS,
+      req,
+    ) as Promise<CatalogueFreshnessResponse>,
 };

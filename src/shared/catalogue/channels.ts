@@ -15,6 +15,11 @@ export const CATALOGUE_IPC_CHANNELS = {
   LOOKUP_SKU: 'catalogue:lookupSku',
   SEARCH: 'catalogue:search',
   RESOLVE: 'catalogue:resolve',
+  // 010-pos-catalog-read-down-consumption (T041) — read-down additions (§A4).
+  // `REFRESH`: cashier-invokable manual read-down trigger (status only).
+  // `FRESHNESS`: truthful last-updated read for the FR-16 indicator.
+  REFRESH: 'catalogue:refresh',
+  FRESHNESS: 'catalogue:freshness',
 } as const;
 
 export type CatalogueIpcChannel =
