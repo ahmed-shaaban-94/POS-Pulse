@@ -4,6 +4,7 @@ import { payments, tender, vouchers } from './payments.js';
 import { sales } from './sales.js';
 import { receipts } from './receipts.js';
 import { catalogue } from './catalogue.js';
+import { salesSync } from './sales-sync.js';
 import type {
   CancelTakeoverRequest,
   CancelTakeoverResponse,
@@ -143,6 +144,9 @@ const api: PreloadBridgeAPI = {
   // 009 Slice S1 — read-only catalogue.* namespace (session-gated skeleton;
   // handlers return catalogue_unavailable until the read model lands in S2).
   catalogue,
+  // 011-sale-sync-capture-up — read-only salesSync.* namespace (single
+  // sales:syncStatus channel; the renderer can never trigger the drain — §A4).
+  salesSync,
 };
 
 contextBridge.exposeInMainWorld('api', api);

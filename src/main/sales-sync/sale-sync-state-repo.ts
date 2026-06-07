@@ -73,10 +73,19 @@ export interface RecordTransientInput extends TenantScope {
   errorCategory: SaleSyncErrorCategory;
 }
 
+/** Read-only counts for the renderer's sync-status surface (P7: no secrets). */
+export interface SaleSyncStatusCounts {
+  pending: number;
+  deadLetter: number;
+  lastSuccessAt: string | null;
+}
+
 export interface SaleSyncStateRepo {
   read(saleId: string): SaleSyncStateRow | null;
   /** Sales due for a send now: outbox rows with no terminal state and (if pending) a due retry. */
   eligible(scope: TenantScope, now: string): EligibleSale[];
+  /** Tenant-scoped counts for the read-only status surface. */
+  readSyncStatus(scope: TenantScope): SaleSyncStatusCounts;
   markSynced(input: MarkSyncedInput): void;
   markDeadLetter(input: MarkDeadLetterInput): void;
   recordTransient(input: RecordTransientInput): void;
@@ -190,6 +199,29 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     });
   }
 
+  function readSyncStatus(scope: TenantScope): SaleSyncStatusCounts {
+    // pending = outbox rows that are not yet terminal (no state row, or state pending).
+    const pendingStmt = db.prepare(
+      `SELECT COUNT(*) AS n
+       FROM sale_sync_outbox o
+       LEFT JOIN sale_sync_state s ON s.sale_id = o.sale_id
+       WHERE o.tenant_id = ? AND o.branch_id = ?
+         AND (s.sale_id IS NULL OR s.sync_status = 'pending')`,
+    ) as PrepareGet<{ n: number }>;
+    const deadStmt = db.prepare(
+      `SELECT COUNT(*) AS n FROM sale_sync_state
+       WHERE tenant_id = ? AND branch_id = ? AND sync_status = 'dead_letter'`,
+    ) as PrepareGet<{ n: number }>;
+    const lastStmt = db.prepare(
+      `SELECT MAX(synced_at) AS t FROM sale_sync_state
+       WHERE tenant_id = ? AND branch_id = ? AND sync_status = 'synced'`,
+    ) as PrepareGet<{ t: string | null }>;
+    const pending = pendingStmt.get(scope.tenantId, scope.branchId)?.n ?? 0;
+    const deadLetter = deadStmt.get(scope.tenantId, scope.branchId)?.n ?? 0;
+    const lastSuccessAt = lastStmt.get(scope.tenantId, scope.branchId)?.t ?? null;
+    return { pending, deadLetter, lastSuccessAt };
+  }
+
   function recordTransient(input: RecordTransientInput): void {
     upsert({
       tenantId: input.tenantId,
@@ -204,5 +236,5 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
     });
   }
 
-  return { read, eligible, markSynced, markDeadLetter, recordTransient };
+  return { read, eligible, readSyncStatus, markSynced, markDeadLetter, recordTransient };
 }

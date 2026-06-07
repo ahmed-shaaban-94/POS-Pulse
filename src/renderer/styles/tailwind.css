@@ -2947,4 +2947,55 @@ body {
   .catalogue-freshness__refresh {
     margin-inline-start: auto;
   }
+
+  /* 011-sale-sync-capture-up — read-only ambient sync-status indicator. Mirrors
+   * .catalogue-freshness: icon + text (never colour-only; the label always
+   * carries the meaning so it survives a greyscale render). No button (read-only),
+   * no side-stripe border (DESIGN.md absolute ban). The icon colour is driven by
+   * data-state, deliberately QUIET: pending = info (in motion, normal offline),
+   * attention = warning (accountability, NOT danger-red panic), all-synced = success. */
+  .sale-sync-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-block-size: 44px;
+    padding-inline: var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+  }
+
+  .sale-sync-status__icon {
+    font-size: 0.75rem;
+    line-height: 1;
+    color: var(--color-text-muted);
+  }
+
+  .sale-sync-status[data-state='all-synced'] .sale-sync-status__icon {
+    color: var(--color-success);
+  }
+
+  .sale-sync-status[data-state='pending'] .sale-sync-status__icon {
+    color: var(--color-info);
+  }
+
+  .sale-sync-status[data-state='attention'] .sale-sync-status__icon {
+    color: var(--color-warning);
+  }
+
+  .sale-sync-status[data-state='unavailable'] .sale-sync-status__icon {
+    color: var(--color-danger);
+  }
+
+  .sale-sync-status__label {
+    color: var(--color-text);
+  }
+
+  .sale-sync-status[data-state='loading'] .sale-sync-status__label,
+  .sale-sync-status[data-state='unavailable'] .sale-sync-status__label {
+    color: var(--color-text-muted);
+  }
+
+  .sale-sync-status__label time {
+    font-variant-numeric: tabular-nums;
+  }
 }
