@@ -142,6 +142,16 @@ export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Ele
       if (res.kind === 'already_running') setFeedback('already-running');
       else if (res.kind === 'started') setFeedback('started');
       else setFeedback('idle'); // refused — stay silent (no leaked reason)
+      // KNOWN-LIMITATION (deferred to T039 / #349): `started` means the tick was
+      // ADMITTED, not committed (the bridge drops `completed`, WR-2/P9-2), so this
+      // immediate re-read sees the PRE-tick timestamp. There is no later poll —
+      // the owner shape brief scoped OUT a polling clock (absolute-time decision).
+      // This is not a lie (the in-flight "جارٍ التحديث…" feedback is the honest
+      // surface; the timestamp is accurate to *now*, just not yet advanced), and
+      // it is UNREACHABLE today (`refresh` refuses with no driver wired). When the
+      // driver lands (T039), decide the post-commit refresh mechanism then, against
+      // the driver's real async timing and the owner's no-poll constraint — and
+      // re-check under §A4 (s4-review §11). Flagged by Codex review on PR #358.
       await loadFreshness();
     } finally {
       setRefreshing(false);

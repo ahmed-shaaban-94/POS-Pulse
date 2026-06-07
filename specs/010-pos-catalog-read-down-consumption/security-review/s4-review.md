@@ -289,6 +289,11 @@ never invokes them; the flag gates the renderer *surface*, not the IPC handler. 
 `ipcMain` handler + composition-root wiring. `catalogue:refresh` is registered but driver-less (refuses) —
 **when the driver is wired (T039/#349), a final re-check of `refresh` is required**: confirm the device
 token reaches only the driver/client (never the bridge response), and that `refresh` returns
-`started`/`already_running` honestly. That is the one remaining §A4 item, gated on #349.
+`started`/`already_running` honestly. **Fold in the Codex-flagged freshness-staleness item (PR #358):** after
+a `started` tick, the renderer's immediate `loadFreshness()` reads the PRE-commit timestamp (the bridge
+drops `completed` by contract); the owner shape brief scoped OUT a polling clock, so the post-commit refresh
+mechanism (bounded poll vs a one-shot re-read on tick completion vs leave-as-incomplete) is a T039 design
+decision against the driver's real async timing — not buildable now (the path is inert) and must respect the
+no-poll constraint. Not a lie today (the in-flight feedback is honest); latent until the driver lands. That is the one remaining §A4 item, gated on #349.
 
 **End of post-wiring re-check.** Prepared 2026-06-07 against `src/main/ipc/catalogue.ts` + `src/main/index.ts`.
