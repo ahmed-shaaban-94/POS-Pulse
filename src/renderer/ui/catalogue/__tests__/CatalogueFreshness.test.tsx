@@ -101,6 +101,21 @@ describe('T045 — CatalogueFreshness: three truthful states', () => {
     expect(screen.getByTestId('catalogue-freshness-time')).toBeInTheDocument();
   });
 
+  it('a malformed/undefined bridge response degrades to unavailable, never crashes', async () => {
+    // Defensive at the trust boundary: if the bridge ever returns a non-conforming
+    // value, the indicator must not white-screen — it shows the unavailable state.
+    const bridge = freshnessBridge({
+      freshness: () => Promise.resolve(undefined as unknown as CatalogueFreshnessResponse),
+    });
+    render(<CatalogueFreshness bridge={bridge} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('catalogue-freshness')).toHaveAttribute(
+        'data-state',
+        'unavailable',
+      ),
+    );
+  });
+
   it('refused → a generic unavailable state, no crash, no leaked reason', async () => {
     const bridge = freshnessBridge({
       freshness: () => Promise.resolve({ kind: 'refused', reason: 'tenant_isolation' }),

@@ -68,6 +68,14 @@ function toState(res: CatalogueFreshnessResponse): {
   state: FreshnessState;
   lastSuccessAt: string | null;
 } {
+  // Defensive at the renderer↔main trust boundary: a malformed/undefined response
+  // (a non-conforming bridge result) must degrade to `unavailable`, never crash
+  // the pane (PRODUCT.md: failures are loud-but-handled, never a white screen).
+  // `res` is statically typed as conforming, but the IPC boundary can lie, so we
+  // re-check at runtime through `unknown`.
+  const raw = res as unknown;
+  if (raw === null || typeof raw !== 'object' || !('kind' in raw))
+    return { state: 'unavailable', lastSuccessAt: null };
   if (res.kind === 'refused') return { state: 'unavailable', lastSuccessAt: null };
   if (res.last_success_at === null) return { state: 'never-synced', lastSuccessAt: null };
   return {
@@ -108,10 +116,17 @@ export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Ele
   }, [bridge]);
 
   const loadFreshness = useCallback(async (): Promise<void> => {
-    const res = await resolveBridge().freshness({});
-    const next = toState(res);
-    setState(next.state);
-    setLastSuccessAt(next.lastSuccessAt);
+    try {
+      const res = await resolveBridge().freshness({});
+      const next = toState(res);
+      setState(next.state);
+      setLastSuccessAt(next.lastSuccessAt);
+    } catch {
+      // A rejected freshness invoke (IPC transport edge) degrades to the
+      // unavailable state — never leaves the indicator stuck on `loading`.
+      setState('unavailable');
+      setLastSuccessAt(null);
+    }
   }, [resolveBridge]);
 
   useEffect(() => {

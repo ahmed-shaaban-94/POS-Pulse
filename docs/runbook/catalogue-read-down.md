@@ -7,12 +7,15 @@ report. **Read direction only** (backend → local); there is no POS→backend w
 on this surface.
 
 > **Status (2026-06-07):** the offline correctness core (migrations, writer,
-> driver, bridge, freshness UI) is implemented and tested. The **live HTTP
-> client + composition-root wiring are deferred on D-DEPLOY (issue #349)** — until
-> the backend serves the deployed contract and `api-types.ts` is re-pinned, the
-> read-down driver has no live client and the catalogue stays empty in
-> production. This runbook describes the system as designed; the live-fetch legs
-> activate when #349 clears.
+> driver, bridge, freshness UI) is implemented and tested. **The `catalogue.*` IPC
+> surface is now WIRED:** 009's lookups + 010's `catalogue:freshness` are reachable
+> from the renderer (the freshness indicator reads real per-tenant sync-state +
+> live product count). **Still deferred on D-DEPLOY (issue #349):** the live HTTP
+> client + the read-down **driver** wiring — so `catalogue:refresh` is registered
+> but refuses (no driver), and no automatic/manual read-down actually fetches yet.
+> Until the backend serves the deployed contract and `api-types.ts` is re-pinned,
+> the catalogue stays empty in production and freshness reads "not yet downloaded".
+> The live-fetch + refresh legs activate when #349 clears.
 
 ## What it does
 

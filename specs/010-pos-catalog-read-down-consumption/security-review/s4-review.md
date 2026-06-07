@@ -255,3 +255,40 @@ that registration re-opens AD-1/SEC-1 for a short post-wiring re-check before th
 write path was introduced (FR-10 proven by T036).
 
 **End of post-implementation walk.** Prepared 2026-06-07 against the S4 diff on `feat/010-driver-bridge-ui`.
+
+---
+
+## 11. Post-WIRING re-check — 2026-06-07 (freshness leg now live)
+
+The freshness leg is now **wired to `ipcMain`** (it was inert at §10). The registrar
+`src/main/ipc/catalogue.ts` (`registerCatalogueHandlers`) registers all six `catalogue:*` channels, and
+`src/main/index.ts` constructs the bridge with a `freshness` source + an operator-session adapter and calls
+the registrar. This re-runs the two controls the §10 residual flagged for re-check against the **live
+handler path**.
+
+**Scope now live:** 009's four read handlers + `catalogue:freshness` are reachable from the renderer.
+`catalogue:refresh` is registered but the bridge is constructed with **no `readDownDriver`** (T039/#349), so
+it returns a generic refusal — never a fake `started`. The read-down writer/driver remain main-process-only
+and unreachable via the bridge.
+
+| Control | Re-check against the live wiring | Verdict |
+| :--- | :--- | :--- |
+| **AD-1 (gate-first)** | The registrar delegates straight to `bridge.<method>` with no pre-bridge logic; the bridge's `freshness`/`refresh` run `requireCatalogueSession(getCurrentSession())` as their first statement. `getCurrentSession` is the `index.ts` adapter over `operatorSessionManager.getCurrent()` — returns `null` when signed out, so the gate refuses with no session. Registrar test asserts delegation; bridge tests assert gate-first. | ✅ PASS |
+| **SEC-1 (no secret crosses)** | The bridge is constructed with `productRepo` + a `freshness` source (`readSyncState` + `countProducts`) only — NO device token, NO HTTP client, NO `readDownDriver`. `catalogue_sync_state` holds timestamps + an opaque snapshot id (§A2 §8). The freshness response carries `last_success_at` + `is_empty`; the registrar forwards it verbatim. No secret is reachable through the wired surface. | ✅ PASS |
+| **INP-1 (no renderer-supplied identity)** | `refresh`/`freshness` handlers take no request validator and pass `{}` to the bridge; the tenant comes from the session adapter (`operatorSessionManager`), never the renderer. The lookup handlers validate shape and refuse malformed payloads generically (no leaked field). | ✅ PASS |
+| **P17-1 (tenant scoping, live)** | The `freshness` source closures pass the **session** tenant (`gate.session.tenant_id`) into `catalogueSyncStateRepo.read` + `productRepo.countByTenant`, both tenant-scoped in SQL. The renderer cannot supply a tenant. | ✅ PASS |
+
+**Registration choice:** the handlers are registered **unconditionally** (matching `registerCartHandlers`),
+not behind the `productSearch` flag. Safe because every handler is session-gated and an unmounted renderer
+never invokes them; the flag gates the renderer *surface*, not the IPC handler. No `BrowserWindow` added;
+`contextIsolation`/`sandbox` unchanged.
+
+### Verdict (post-wiring)
+
+**§A4 CLEARED for the live freshness leg.** AD-1 / SEC-1 / INP-1 / P17-1 re-verified against the actual
+`ipcMain` handler + composition-root wiring. `catalogue:refresh` is registered but driver-less (refuses) —
+**when the driver is wired (T039/#349), a final re-check of `refresh` is required**: confirm the device
+token reaches only the driver/client (never the bridge response), and that `refresh` returns
+`started`/`already_running` honestly. That is the one remaining §A4 item, gated on #349.
+
+**End of post-wiring re-check.** Prepared 2026-06-07 against `src/main/ipc/catalogue.ts` + `src/main/index.ts`.

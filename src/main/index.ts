@@ -14,6 +14,10 @@ import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
 import { applyDevSeedCatalogueIfRequested } from './catalogue/dev-seed-catalogue.js';
+// 010 read-down — catalogue bridge + freshness wiring (refresh/driver deferred on #349).
+import { createCatalogueBridge } from './catalogue/catalogue-bridge.js';
+import { createCatalogueSyncStateRepo } from './catalogue/catalogue-sync-state-repo.js';
+import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import { bindPaymentAttemptsRepository } from './payments/repositories/payment-attempts.repository.js';
 import { bindPaymentTenderLinesRepository } from './payments/repositories/payment-tender-lines.repository.js';
@@ -620,6 +624,43 @@ app
       productionResolver: catalogueResolver,
     });
     registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
+
+    // 009 + 010 — wire the `catalogue.*` IPC surface. Registered unconditionally
+    // (same as cart): the handlers are session-gated and refuse with no session,
+    // and an unmounted renderer (productSearch flag off) never invokes them, so
+    // there is nothing to gate. 009 shipped the bridge factory + preload but
+    // never registered the channels with ipcMain, so the whole surface was inert
+    // until now; this makes 009's read handlers + 010's `freshness` reachable.
+    // `refresh`'s read-down driver is NOT wired here (T039 needs the live HTTP
+    // client + pairing scope, blocked on D-DEPLOY #349), so `refresh` refuses
+    // until then — never a fake "started".
+    const catalogueRepo = createProductRepo(dbHandle);
+    const catalogueSyncStateRepo = createCatalogueSyncStateRepo(dbHandle);
+    const catalogueBridge = createCatalogueBridge({
+      // Adapt the operator session to the catalogue projection: the gate needs
+      // `operator_session_id`, which the record carries as `id`.
+      getCurrentSession: () => {
+        const sess = operatorSessionManager.getCurrent();
+        if (sess === null) return null;
+        return {
+          role: sess.role,
+          operator_id: sess.operator_id,
+          operator_session_id: sess.id,
+          tenant_id: sess.tenant_id,
+          branch_id: sess.branch_id,
+        };
+      },
+      productRepo: catalogueRepo,
+      // 010 freshness source: the per-tenant sync-state row + a tenant-scoped
+      // live-product count (is_empty). Both reads are tenant-scoped (P17) and
+      // secret-free. NOT #349-blocked — neither touches the HTTP client.
+      freshness: {
+        readSyncState: (tenantId) => catalogueSyncStateRepo.read(tenantId),
+        countProducts: (tenantId) => catalogueRepo.countByTenant(tenantId),
+      },
+      // readDownDriver intentionally omitted — `refresh` refuses until T039 (#349).
+    });
+    registerCatalogueHandlers(ipcMain, { bridge: catalogueBridge });
 
     // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
     // payments.* + tender.* bridge surface. The 8 handler factories share

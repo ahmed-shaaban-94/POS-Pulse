@@ -15,6 +15,7 @@ import { CatalogueAddController } from './CatalogueAddController.js';
 import { NotFoundState } from './NotFoundState.js';
 import { AmbiguousBarcodeState } from './AmbiguousBarcodeState.js';
 import { CatalogueUnavailableState } from './CatalogueUnavailableState.js';
+import { CatalogueFreshness } from './CatalogueFreshness.js';
 
 /**
  * 009 Slice S5 (T049a) — the live catalogue sale surface.
@@ -178,6 +179,11 @@ export function CatalogueSalePane({
 
   return (
     <div className="catalogue-sale-pane" data-testid="catalogue-sale-pane">
+      {/* 010 — catalogue freshness header (FR-16): the truthful last-updated
+          line + manual refresh. Reads window.api.catalogue itself; in tests a
+          `catalogueBridge` is injected, so honour the same seam to avoid hitting
+          window.api under jsdom. */}
+      <CatalogueFreshness {...(catalogueBridge !== undefined ? { bridge: catalogueBridge } : {})} />
       <ProductSearchInput ref={searchInputRef} onSearch={runTypedSearch} />
       <ScanCaptureField onScan={runScan} />
       {/* In-flight surface (T050 F2 / Surface 2): the bridge call is pending.
