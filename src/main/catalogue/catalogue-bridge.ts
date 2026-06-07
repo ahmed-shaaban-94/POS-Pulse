@@ -169,6 +169,11 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
       if (gate.kind === 'refused') return gate;
       // No driver wired (e.g. live-client deferred on #349): refuse rather than
       // claim a tick we cannot start. Generic refusal, never a fake `started`.
+      // NOTE: the `no_session` reason here is a CONVENIENCE reuse of the generic
+      // refusal union, NOT literally true (the gate above already passed). It is
+      // unreachable once the driver is wired (T039), and the reason is never
+      // surfaced to the cashier (the renderer maps any refusal to a generic
+      // `unavailable`). Do not trust this reason code as a session signal.
       if (readDownDriver === undefined)
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
       const admission = readDownDriver.runTickOnce();
@@ -188,6 +193,10 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
     async freshness(): Promise<CatalogueFreshnessResponse> {
       const gate = requireCatalogueSession(getCurrentSession());
       if (gate.kind === 'refused') return gate;
+      // No freshness source wired: refuse (cannot read truthfully) rather than
+      // throw/leak. As with `refresh`, the `no_session` reason is a convenience
+      // reuse of the generic union, not literally true; unreachable once wired,
+      // never surfaced verbatim. Do not trust this reason code as a session signal.
       if (freshness === undefined)
         return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
       const tenantId = gate.session.tenant_id;

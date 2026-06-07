@@ -229,11 +229,18 @@ under review:
 
 ### Residuals (all LOW, carried to §A5 / wiring)
 
-- **T043 ipcMain registration deferred.** The two channels are NOT yet registered with `ipcMain.handle` in
-  the composition root — 009 never wired the catalogue bridge to `ipcMain` either, and the driver wiring
-  (T039) needs `pairingStore` scope + the #349-blocked live client. The bridge factory + preload are
-  complete and unit-tested; the registration lands with T039/T043 when #349 clears. **A post-wiring
-  re-check of AD-1/SEC-1 against the live `ipcMain` handler is required before the rollout PR.**
+- **The entire catalogue surface is INERT at runtime (load-bearing — state plainly).** Verified firsthand
+  2026-06-07: there is NO `ipcMain.handle` for any `catalogue:*` channel anywhere in `src/main/` — no
+  registrar, no registration loop. 009's four read handlers AND 010's `refresh`/`freshness` are all
+  unreachable from the renderer until a registration lands. The bridge factory + preload + freshness UI are
+  complete and unit-tested but not wired. This §A4 clearance covers the *code that exists*, not a reachable
+  runtime path.
+- **T043 registration is split by dependency (corrected).** `catalogue:freshness` is **NOT #349-blocked** —
+  it needs only the shipped `catalogue-sync-state-repo` + a tenant-scoped product count (a small
+  `CatalogueFreshnessSource` adapter; `productRepo` has no count today, so that query is the missing piece).
+  That is in-scope-now work. Only `catalogue:refresh` (driver → live client + `pairingStore` scope, T039) is
+  #349-blocked. **A post-wiring re-check of AD-1/SEC-1 against the live `ipcMain` handler is required before
+  the rollout PR.**
 - **R-REDACTION-SITE (RED-1):** redaction is satisfied vacuously (no logger wired). When diagnostic logging
   is added, extend the redaction smoke to the actual log sites.
 - **R-FRESHNESS-WIRING / R-SINGLEFLIGHT:** the renderer copy maps each state correctly (tested) and
