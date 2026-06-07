@@ -149,7 +149,7 @@ the renderer shows the timestamp + a refresh affordance, keyboard-operable + axe
 - [ ] T054 §A5 performance bring-up on target Windows hardware: read-down completion + promote-window at ~50k products; confirm 009's lookup budgets (NFR-1) hold against a read-down-populated catalogue **AND that lookups issued concurrently with an in-flight promote stay within budget** (WAL concurrent-reader check — SC-8; not just promote duration) — `specs/010-pos-catalog-read-down-consumption/perf-bringup.md`
 - [x] T055 Coverage gate (for the modules that exist; `read-down-client.ts` deferred on #349): `read-down-driver.ts` 95% lines / 100% funcs; `catalogue-bridge.ts` 100% lines (full bridge suite). Writer/repo already ≥95% from `5895eba`. Verified 2026-06-07. Original: ≥95% on `read-down-writer.ts` + `read-down-client.ts`; ≥90% on `read-down-driver.ts` + `catalogue-sync-state-repo.ts` — verify via `npx vitest run <paths> --coverage --coverage.include=<paths>`
 - [x] T056 Final-green: `npm run codegen:verify && npm run typecheck && npm run lint && npx vitest run` all exit 0. **Verified 2026-06-07: codegen:verify ✅ (api-types.ts up to date — not touched, #349 re-pin separate) · typecheck ✅ · lint ✅ · vitest 5002 passed / 3 skipped / 0 failed.**
-- [ ] T057 Update `CLAUDE.md` `<!-- SPECKIT START -->` slice status for 010 (**owner-performed or explicitly authorized — CLAUDE.md is otherwise out of scope**)
+- [x] T057 Update `CLAUDE.md` `<!-- SPECKIT START -->` slice status for 010 — **DONE 2026-06-07 (explicitly authorized by owner).** Headline + §A4 gate line (CLEARED) + slice-status updated to reflect S1/S2/S4 + driver merged (`5895eba`, `946a013`) and the catalogue IPC surface wired live; remaining = T002/T020/T021/T039 (#349) + T054 (hardware).
 
 ---
 
