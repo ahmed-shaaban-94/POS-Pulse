@@ -15,7 +15,7 @@
 read-only, enqueue-only `sale_sync_outbox`, reconstructs each sale's capture payload from the
 durable Sale record (keyed by `sale_id`), and POSTs it to DP2 `captureSale`
 (`POST /api/pos/v1/sales`) with an `Idempotency-Key`. All mutable sync/retry/dead-letter state
-lives in a **new 011-owned `sale_sync_state` table** (008's table is never mutated — AD-11
+lives in a **new 011-owned `sale_sync_state` table** (008's table is never mutated — AD-3
 preserved). The renderer gets a **read-only** sync-status surface via the typed preload bridge; it
 never triggers the drain. The live HTTP client + composition-root wiring are gated on the backend
 deploy (#349, HTTP 521); everything else is buildable + testable now behind a DI fake client.
@@ -72,7 +72,7 @@ No VIOLATIONs. One expansion (P8) is gated by §A4.
 
 - **AD-1 — Companion sync-state table (not mutating 008's outbox).** `sale_sync_state` (011-owned)
   holds `sync_status`/`attempt_count`/`next_retry_at`/`last_error_category`/`synced_at`, joined on
-  `sale_id`. 008's `sale_sync_outbox` stays enqueue-only (CHECK + UPDATE-refusing trigger, AD-11).
+  `sale_id`. 008's `sale_sync_outbox` stays enqueue-only (CHECK + UPDATE-refusing trigger, AD-3).
   Mirrors 010's `catalogue_sync_state` precedent. (Clarify Q3.)
 - **AD-2 — Operator-authed capture, token in-process.** The engine reads the operator session token
   from 004's main-process store in-process; it is never copied to the renderer / never crosses the

@@ -41,7 +41,7 @@ deploy lands. All live-fetch wiring is gated on this deploy.
 
 - Q: How does the main-process sync engine acquire and refresh the operator session token for `PosOperatorAuthGuard`? → A: The engine reads the operator token from feature 004's **main-process session store in-process** (no IPC copy, no renderer exposure); the drain pauses when no valid operator session is present and auto-resumes on the next successful operator sign-in / token rotation.
 - Q: Do DP2 and downstream ERPNext (via the Connector) tolerate a captured sale with a non-zero total but no tender breakdown in v1? → A: **Assumed tolerated** — the sale fact carries totals and line items but no tender and no placeholder tender line. This rests on the `captureSale` contract having no tender fields; it is recorded as a **hard pre-implementation verification gate**: DP2 owners MUST confirm the no-tender sale is accepted end-to-end (capture + ERPNext outstanding-AR posting) before the live-fetch leg is wired.
-- Q: Where does mutable sync/retry/dead-letter state live, given 008's `sale_sync_outbox` is enqueue-only (CHECK + UPDATE-refusing trigger, AD-11)? → A: 011 introduces a **companion `sale_sync_state` table** (owned by 011, joined on `sale_id`) for all mutable sync state; 008's `sale_sync_outbox` is read-only to 011 and its enqueue-only invariant is left intact (mirrors 010's `catalogue_sync_state` precedent).
+- Q: Where does mutable sync/retry/dead-letter state live, given 008's `sale_sync_outbox` is enqueue-only (CHECK + UPDATE-refusing trigger, AD-3)? → A: 011 introduces a **companion `sale_sync_state` table** (owned by 011, joined on `sale_id`) for all mutable sync state; 008's `sale_sync_outbox` is read-only to 011 and its enqueue-only invariant is left intact (mirrors 010's `catalogue_sync_state` precedent).
 
 ---
 
@@ -157,7 +157,7 @@ resumes automatically once a fresh operator session is acquired (next operator s
 
 | Entity | Description |
 |:--|:--|
-| `sale_sync_outbox` | Append-only SQLite table (owner: 008, migration 0024). One row per finalized sale (`UNIQUE(sale_id)`, FR-060). Real columns: `outbox_row_id`, `sale_id`, `envelope_handoff_action_id`, `tenant_id`, `branch_id`, `terminal_id`, `state`, `enqueued_at`. **It is ENQUEUE-ONLY (AD-11):** `state` has a `CHECK(state = 'pending')` constraint and a SQL trigger (migration 0024) that REFUSES any `UPDATE`. 011 therefore CANNOT write `synced`/`dead_letter`/`attempt_count` onto this table directly — see Open Question 3. The full sale payload is NOT stored here; 011 reconstructs the capture payload from the durable Sale record keyed by `sale_id`. |
+| `sale_sync_outbox` | Append-only SQLite table (owner: 008, migration 0024). One row per finalized sale (`UNIQUE(sale_id)`, FR-060). Real columns: `outbox_row_id`, `sale_id`, `envelope_handoff_action_id`, `tenant_id`, `branch_id`, `terminal_id`, `state`, `enqueued_at`. **It is ENQUEUE-ONLY (AD-3):** `state` has a `CHECK(state = 'pending')` constraint and a SQL trigger (migration 0024) that REFUSES any `UPDATE`. 011 therefore CANNOT write `synced`/`dead_letter`/`attempt_count` onto this table directly — see Open Question 3. The full sale payload is NOT stored here; 011 reconstructs the capture payload from the durable Sale record keyed by `sale_id`. |
 | `SaleSyncEngine` | Main-process service responsible for draining the outbox. Injectable HTTP client for testing. |
 | `CaptureSalePayload` | Typed DTO for the `POST /api/pos/v1/sales` request body. No tender fields in v1. Money fields are integer minor units. |
 | `CaptureSaleResponse` | Typed DTO for the 200/201 response from DP2. |
@@ -168,14 +168,14 @@ resumes automatically once a fresh operator session is acquired (next operator s
 
 ## Assumptions
 
-1. Feature 008's `sale_sync_outbox` is stable, migration-safe, and **enqueue-only** (AD-11: `CHECK(state='pending')` + UPDATE-refusing trigger in migration 0024). 011 reads it but does NOT own and CANNOT mutate it; all mutable sync state lives in an 011-owned store (Open Question 3) via a new 011-owned migration.
+1. Feature 008's `sale_sync_outbox` is stable, migration-safe, and **enqueue-only** (AD-3: `CHECK(state='pending')` + UPDATE-refusing trigger in migration 0024). 011 reads it but does NOT own and CANNOT mutate it; all mutable sync state lives in an 011-owned store (Open Question 3) via a new 011-owned migration.
 2. The operator session token (feature 004) is accessible to the main process without crossing the bridge — it is held in main-process state, not renderer state.
 3. DP2's `captureSale` deduplication on `(tenant, sourceSystem, externalId)` is reliable and consistent on the backend; the terminal can treat HTTP 409 as a success without re-reading the sale.
 4. `sourceSystem` in the DP2 payload is a fixed constant identifying POS-Pulse (e.g., `"pos-pulse"`); it does not require dynamic configuration.
 5. The WAL-mode SQLite instance is shared with 009 and 010; 011 must not acquire exclusive locks that block catalogue lookups.
 6. The terminal has only one active operator session at a time (feature 004 constraint); multi-session concurrency is out of scope.
 7. **(Clarified 2026-06-07)** The operator token is read in-process from 004's main-process session store; it is never copied to the renderer or sent across the bridge. The drain pauses without a valid session and resumes on next sign-in.
-8. **(Clarified 2026-06-07)** All mutable sync/retry/dead-letter state lives in an 011-owned `sale_sync_state` table joined on `sale_id`; 008's `sale_sync_outbox` is read-only to 011 and its enqueue-only invariant (AD-11) is preserved.
+8. **(Clarified 2026-06-07)** All mutable sync/retry/dead-letter state lives in an 011-owned `sale_sync_state` table joined on `sale_id`; 008's `sale_sync_outbox` is read-only to 011 and its enqueue-only invariant (AD-3) is preserved.
 9. **(Clarified 2026-06-07)** A no-tender sale is assumed accepted by DP2 + the Connector (outstanding-AR). This is a pre-implementation verification gate, not a settled backend fact — confirmation from DP2 owners is owed before the live leg is wired (see §Open Questions).
 
 ---

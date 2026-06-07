@@ -29,10 +29,13 @@ No NEEDS CLARIFICATION items remain.
 - **Decision:** New 011-owned `sale_sync_state` table joined on `sale_id` holds all mutable
   sync/retry/dead-letter state. 008's `sale_sync_outbox` stays enqueue-only.
 - **Rationale:** 008's table has `CHECK(state='pending')` + an UPDATE-refusing trigger (migration
-  0024, AD-11). Relaxing that reopens a deliberately-closed invariant (migration-safety + security
+  0024, AD-3). Relaxing that reopens a deliberately-closed invariant (migration-safety + security
   risk). Companion table is precedented by 010's `catalogue_sync_state`.
-- **Alternatives:** relax 008's CHECK/trigger to allow a state machine on the original table
-  (rejected for v1 — higher §A2 risk, breaks an explicit 008 invariant).
+- **Alternatives:** relax 008's CHECK/trigger to allow a state machine on the original table. This is
+  a **sanctioned path, not a violation** — `migrations/0024_create_sale_sync_outbox.sql` explicitly
+  comments *"the future sync engine MAY relax these via additive migration"*. It is deferred for v1
+  (not rejected): the companion table is lower-churn and keeps 008's table single-purpose, but if a
+  later need favours one table, relaxing the triggers via additive migration is pre-blessed by 008.
 
 ## R4 — Idempotency derivation
 

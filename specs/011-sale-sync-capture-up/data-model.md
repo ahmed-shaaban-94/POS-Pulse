@@ -5,7 +5,9 @@ Reviewed under an **011 §A2-class migration review** (migration `0034-sale-sync
 ## New table: `sale_sync_state` (011-owned)
 
 One row per sale that needs syncing, joined to 008's `sale_sync_outbox` on `sale_id`. Holds **all
-mutable** sync state — 008's outbox is never mutated (enqueue-only, AD-11).
+mutable** sync state — 008's outbox is never mutated (enqueue-only; the append-only triggers in
+`migrations/0024_create_sale_sync_outbox.sql` are attributed to **008 AD-3** — note the 008 repository
+docstring labels the same invariant "AD-11"; the migration's AD-3 is authoritative).
 
 | Column | Type | Notes |
 |:--|:--|:--|

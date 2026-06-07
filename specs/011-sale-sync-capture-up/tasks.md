@@ -32,7 +32,7 @@ description: "Task list for 011-sale-sync-capture-up — slice/story-organised, 
 >
 > **Invariants threaded through every task:** money = integer minor units (`Number.isSafeInteger`);
 > NO tender fields in v1; tenant-scoped (P17); no operator token / PII / card data across the bridge
-> or in logs (P7/P8); 008's `sale_sync_outbox` is read-only (never mutated — AD-11).
+> or in logs (P7/P8); 008's `sale_sync_outbox` is read-only (never mutated — AD-3).
 
 ---
 

@@ -41,7 +41,7 @@
   1. Operator-token acquisition/refresh flow for the main-process sync engine.
   2. Whether DP2/ERPNext tolerate a no-tender sale (or require a placeholder).
   3. Outbox sync-state ownership — companion `sale_sync_state` table vs. relaxing 008's
-     enqueue-only `sale_sync_outbox` (AD-11 CHECK + UPDATE-refusing trigger).
+     enqueue-only `sale_sync_outbox` (AD-3 CHECK + UPDATE-refusing trigger).
 - Spec was formalized from the seed; corrected against real code: `sale_sync_outbox` schema
   (8 real columns, enqueue-only), idempotency keyed on `sale_id`→`externalId`, sale-sync bridge
   channel (not the 010 catalogue channel).
