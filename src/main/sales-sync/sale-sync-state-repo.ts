@@ -133,6 +133,9 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
       syncedAt: string | null;
     },
   ): void {
+    // PK is sale_id (globally unique per sale); tenant_id is fixed for a given
+    // sale, so no tenant guard is needed on the conflict path. Tenant scoping is
+    // enforced on the READ side (eligible()).
     const stmt = db.prepare(
       `INSERT INTO sale_sync_state
          (sale_id, tenant_id, branch_id, sync_status, attempt_count, next_retry_at,
@@ -140,13 +143,12 @@ export function createSaleSyncStateRepo(db: DatabaseHandle): SaleSyncStateRepo {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(sale_id) DO UPDATE SET
          sync_status         = excluded.sync_status,
-         attempt_count       = attempt_count + ?,
+         attempt_count       = sale_sync_state.attempt_count + ?,
          next_retry_at       = excluded.next_retry_at,
          last_error_category = excluded.last_error_category,
          last_attempt_at     = excluded.last_attempt_at,
-         synced_at           = COALESCE(excluded.synced_at, synced_at),
-         updated_at          = excluded.updated_at
-       WHERE tenant_id = excluded.tenant_id`,
+         synced_at           = COALESCE(excluded.synced_at, sale_sync_state.synced_at),
+         updated_at          = excluded.updated_at`,
     ) as PrepareRun;
     const initialAttempt = input.bumpAttempt ? 1 : 0;
     const conflictBump = input.bumpAttempt ? 1 : 0;
