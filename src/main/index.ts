@@ -14,9 +14,13 @@ import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
 import { applyDevSeedCatalogueIfRequested } from './catalogue/dev-seed-catalogue.js';
-// 010 read-down — catalogue bridge + freshness wiring (refresh/driver deferred on #349).
+// 010 read-down — catalogue bridge + freshness + live driver wiring (#349 cleared:
+// live DP-2 preprod edge deployed; T021 client + T039 driver now wired).
 import { createCatalogueBridge } from './catalogue/catalogue-bridge.js';
 import { createCatalogueSyncStateRepo } from './catalogue/catalogue-sync-state-repo.js';
+import { createReadDownClient } from './catalogue/read-down/read-down-client.js';
+import { createReadDownWriter } from './catalogue/read-down/read-down-writer.js';
+import { createReadDownDriver } from './catalogue/read-down/read-down-driver.js';
 import { registerCatalogueHandlers } from './ipc/catalogue.js';
 import { registerPaymentsHandlers } from './ipc/payments.js';
 import { bindPaymentAttemptsRepository } from './payments/repositories/payment-attempts.repository.js';
@@ -49,6 +53,11 @@ import { bindSalesRepository } from './sales/repositories/sales.repository.js';
 import { bindPrintEventsRepository } from './sales/repositories/print-events.repository.js';
 import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.repository.js';
 import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
+// 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
+import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
+import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
+import { createSaleSyncClient } from './sales-sync/create-sale-sync-client.js';
+import { registerSalesSyncHandlers } from './ipc/sales-sync.js';
 import { bindSaleNumberAllocator } from './sales/sale-number-allocator.js';
 import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitter.js';
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
@@ -108,9 +117,15 @@ import type { AppConfig } from '../shared/app-config.js';
  * 002-terminal-pairing US2: API base URL for the pair endpoint. Reads
  * `VITE_API_BASE_URL` from `process.env` (Vite does NOT prefix-filter
  * the main bundle — main is built with tsc, not Vite). Falls back to
- * the constitution-blessed production host when unset.
+ * the active deployed edge when unset.
+ *
+ * P-0 preprod (#349, 2026-06-09): the default targets the LIVE preprod edge
+ * `api-preprod.smartdatapulse.tech` (the deployed DP-2 backend — verified serving
+ * HTTPS over Let's Encrypt). The prior default `api.smartdatapulse.tech` never
+ * deployed (does not resolve) and is retired as the active target. Override per
+ * environment via `VITE_API_BASE_URL` (e.g. a future production host).
  */
-const DEFAULT_API_BASE_URL = 'https://api.smartdatapulse.tech';
+const DEFAULT_API_BASE_URL = 'https://api-preprod.smartdatapulse.tech';
 
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env['VITE_API_BASE_URL'];
@@ -283,6 +298,15 @@ let dbHandle: DatabaseHandle | null = null;
  * is off or before bootstrap.
  */
 let finalizeListenerStop: (() => void) | null = null;
+
+/**
+ * 010 read-down driver (T039) + 011 sale-sync engine interval — process-lifetime
+ * background workers started in `app.whenReady()` inside the paired branch, stopped
+ * on quit so their setInterval drivers never outlive the process. `null` when
+ * unpaired or before bootstrap.
+ */
+let readDownDriverStop: (() => void) | null = null;
+let saleSyncIntervalStop: (() => void) | null = null;
 
 app
   .whenReady()
@@ -631,11 +655,41 @@ app
     // there is nothing to gate. 009 shipped the bridge factory + preload but
     // never registered the channels with ipcMain, so the whole surface was inert
     // until now; this makes 009's read handlers + 010's `freshness` reachable.
-    // `refresh`'s read-down driver is NOT wired here (T039 needs the live HTTP
-    // client + pairing scope, blocked on D-DEPLOY #349), so `refresh` refuses
-    // until then — never a fake "started".
+    // 010 T021/T039 (#349 cleared) — the live read-down HTTP client + driver are
+    // now wired when the terminal is paired. The driver carries the device-principal
+    // scope (tenant/branch) from `pairingStore` (Constitution VIII — NOT the operator
+    // session), authenticates with the device token (`Authorization: Bearer`), and
+    // runs a background snapshot pull on an interval. When paired, `refresh` admits
+    // a real tick; when unpaired, the driver is omitted and `refresh` still refuses
+    // (never a fake "started"). The freshness reads below are independent of all this.
     const catalogueRepo = createProductRepo(dbHandle);
     const catalogueSyncStateRepo = createCatalogueSyncStateRepo(dbHandle);
+
+    const catalogueApiBaseUrl = resolveApiBaseUrl();
+    const cataloguePairingStatus = await pairingStore.getStatus();
+    let readDownDriver: ReturnType<typeof createReadDownDriver> | undefined;
+    if (cataloguePairingStatus.kind === 'paired') {
+      const readDownClient = createReadDownClient({
+        baseUrl: catalogueApiBaseUrl,
+        fetch: globalThis.fetch.bind(globalThis),
+        // Device token (the paired-terminal credential) read in-process; never
+        // logged, never bridged. Sole credential for the non-session-gated driver.
+        getDeviceToken: async () => {
+          const token = await secretStore.get(DEVICE_TOKEN_KEY);
+          return token ?? null;
+        },
+      });
+      readDownDriver = createReadDownDriver({
+        client: readDownClient,
+        writer: createReadDownWriter({ db: dbHandle, syncStateRepo: catalogueSyncStateRepo }),
+        tenantId: cataloguePairingStatus.tenant_id,
+        branchId: cataloguePairingStatus.branch_id,
+        now: () => new Date().toISOString(),
+        // Background pull cadence: hourly. Bounded [1s, 24h] by the driver.
+        tickIntervalMs: 60 * 60 * 1_000,
+      });
+    }
+
     const catalogueBridge = createCatalogueBridge({
       // Adapt the operator session to the catalogue projection: the gate needs
       // `operator_session_id`, which the record carries as `id`.
@@ -658,9 +712,33 @@ app
         readSyncState: (tenantId) => catalogueSyncStateRepo.read(tenantId),
         countProducts: (tenantId) => catalogueRepo.countByTenant(tenantId),
       },
-      // readDownDriver intentionally omitted — `refresh` refuses until T039 (#349).
+      // 010 T039 — the live read-down driver (paired terminals only). Omitted
+      // when unpaired (exactOptionalPropertyTypes — spread the key only when
+      // present), so `refresh` still refuses cleanly. The bridge only ever calls
+      // `runTickOnce` (admit); start/stop are owned here at the root.
+      ...(readDownDriver !== undefined ? { readDownDriver } : {}),
     });
     registerCatalogueHandlers(ipcMain, { bridge: catalogueBridge });
+
+    // Start the background snapshot pull (paired terminals only). The driver's
+    // setInterval is stopped on quit via `closeDbHandle()` so it never outlives
+    // the process or runs against a closed DB handle.
+    if (readDownDriver !== undefined) {
+      const driver = readDownDriver;
+      driver.start();
+      readDownDriverStop = () => {
+        driver.stop();
+      };
+      mainLogger.info(
+        {
+          tenant_id:
+            cataloguePairingStatus.kind === 'paired' ? cataloguePairingStatus.tenant_id : null,
+        },
+        'read_down_driver:started',
+      );
+    } else {
+      mainLogger.info('read_down_driver:skipped_unpaired');
+    }
 
     // 006-payments-tender Slice 3 (T142 + F-002/F-003/F-004) — wire the
     // payments.* + tender.* bridge surface. The 8 handler factories share
@@ -1163,6 +1241,66 @@ app
           finalizeListener.stop();
         };
         mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'finalize_listener:started');
+
+        // 011 S5 (T061/T062, #349 cleared) — wire the live sale-sync engine. It
+        // drains the (008-owned) outbox UP to DP2 captureSale on an interval,
+        // authenticating per-POST with the operator session JWT (read in-process;
+        // never bridged). The engine pauses when no operator session is present and
+        // resumes on the next tick once a session returns. Idempotency, retry/
+        // backoff, and dead-letter are owned by the engine + state repo (unchanged);
+        // the live client only transforms the payload + maps HTTP outcomes.
+        const saleSyncStateRepo = createSaleSyncStateRepo(dbHandle);
+        const saleSyncClient = createSaleSyncClient({
+          baseUrl: resolveApiBaseUrl(),
+          fetch: globalThis.fetch.bind(globalThis),
+          getOperatorToken: () => {
+            const sess = operatorSessionManager.getCurrent();
+            return sess === null ? null : operatorJwtHolder.get(sess.backend_session_id);
+          },
+        });
+        const saleSyncEngine = createSaleSyncEngine({
+          client: saleSyncClient,
+          stateRepo: saleSyncStateRepo,
+          salesRepo,
+          tenantId: pairingStatus.tenant_id,
+          branchId: pairingStatus.branch_id,
+          getOperatorToken: () => {
+            const sess = operatorSessionManager.getCurrent();
+            return sess === null ? null : operatorJwtHolder.get(sess.backend_session_id);
+          },
+          now: () => new Date().toISOString(),
+          // Exponential backoff: 1s base, capped at 5 min.
+          backoff: { baseMs: 1_000, maxMs: 5 * 60 * 1_000 },
+          onDeadLetter: (saleId: string) => {
+            mainLogger.warn({ sale_id: saleId }, 'sale_sync:dead_letter');
+          },
+        });
+
+        // Read-only status surface for the renderer (counts + last-success only;
+        // no token/PII/raw body crosses the bridge). No write/trigger handler.
+        registerSalesSyncHandlers(ipcMain, {
+          readStatus: () =>
+            saleSyncStateRepo.readSyncStatus({
+              tenantId: pairingStatus.tenant_id,
+              branchId: pairingStatus.branch_id,
+            }),
+        });
+
+        // Background drain on an interval. Single-flight in the engine coalesces
+        // overlapping ticks; the interval is cleared on quit (closeDbHandle).
+        const SALE_SYNC_INTERVAL_MS = 5_000;
+        const saleSyncInterval = setInterval(() => {
+          const admission = saleSyncEngine.runTickOnce();
+          if (admission.kind === 'started') {
+            admission.completed.catch((err: unknown) => {
+              mainLogger.error({ err }, 'sale_sync:tick_unexpected');
+            });
+          }
+        }, SALE_SYNC_INTERVAL_MS);
+        saleSyncIntervalStop = () => {
+          clearInterval(saleSyncInterval);
+        };
+        mainLogger.info({ terminal_id: pairingStatus.terminal_id }, 'sale_sync_engine:started');
       } else {
         mainLogger.info('finalize_listener:skipped_unpaired');
       }
@@ -1194,6 +1332,24 @@ function closeDbHandle(): void {
       console.error('[pos-pulse] failed to stop finalize listener:', err);
     }
     finalizeListenerStop = null;
+  }
+  // 010 read-down driver + 011 sale-sync interval — stop BEFORE closing the DB so
+  // a mid-flight background tick cannot run against a closed handle.
+  if (readDownDriverStop !== null) {
+    try {
+      readDownDriverStop();
+    } catch (err) {
+      console.error('[pos-pulse] failed to stop read-down driver:', err);
+    }
+    readDownDriverStop = null;
+  }
+  if (saleSyncIntervalStop !== null) {
+    try {
+      saleSyncIntervalStop();
+    } catch (err) {
+      console.error('[pos-pulse] failed to stop sale-sync interval:', err);
+    }
+    saleSyncIntervalStop = null;
   }
   if (dbHandle !== null) {
     try {
