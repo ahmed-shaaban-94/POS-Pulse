@@ -38,13 +38,21 @@ function readSalesSyncBridge(): SaleSyncStatusBridge {
     | (PreloadBridgeAPI & { salesSync?: SaleSyncStatusBridge })
     | undefined;
   if (!api || api.salesSync === undefined) {
-    throw new Error('SaleSyncStatus: window.api.salesSync missing — preload bridge not initialised.');
+    throw new Error(
+      'SaleSyncStatus: window.api.salesSync missing — preload bridge not initialised.',
+    );
   }
   return api.salesSync;
 }
 /* v8 ignore stop */
 
-type SyncState = 'loading' | 'never-synced' | 'all-synced' | 'pending' | 'attention' | 'unavailable';
+type SyncState =
+  | 'loading'
+  | 'never-synced'
+  | 'all-synced'
+  | 'pending'
+  | 'attention'
+  | 'unavailable';
 
 export interface SaleSyncStatusProps {
   /** Test-only bridge injection (mirrors 009/010). MUST NOT be used in production. */
