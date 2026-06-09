@@ -24,17 +24,25 @@
  * returned union (P7 / NFR-3). The read-down driver is non-session-gated
  * (Constitution VIII), so the device token is the SOLE credential — no operator JWT.
  *
- * Contract note: the response shape is the backend's `SellableCatalogRow` (mirrored
- * locally in `map-sellable-row.ts`); `api-types.ts` is NOT yet re-pinned from the
- * deployed contract (#349) and MUST NOT be hand-edited, so the response is validated
- * structurally here. When the re-pin lands, the local shape is replaced by the
- * generated type and this validation can defer to it.
+ * Contract note: the response shape is the binding DP2 `CatalogSnapshotPage`
+ * (deployed ref 6975f67, `catalog/read-down.yaml`): a cursor-paginated page with
+ * `items` (the `SellableCatalogRow[]`, mirrored locally in `map-sellable-row.ts`),
+ * `cursor` (the snapshot's opaque server cursor — the same value across every
+ * page; carried into `sourceSnapshotId`), and `next_page_token` (opaque
+ * continuation token; null on the last page). The snapshot is cursor-paginated
+ * (≤1000 rows/page): this client walks every page via the `page_token` query
+ * parameter, accumulating `items` into one rows array. A full-snapshot-replace
+ * (FR-7 / R3) needs the COMPLETE set, so ANY non-2xx / malformed page mid-loop
+ * fails the whole fetch (`failed`), and a transport fault maps to `no_connection`
+ * — never a partial snapshot. `api-types.ts` is NOT yet re-pinned (#349) and MUST
+ * NOT be hand-edited, so the page is validated structurally here.
  */
 
 import type { SellableCatalogRow } from './map-sellable-row.js';
 import type { ReadDownClient, ReadDownFetchResult } from './read-down-client-types.js';
 
 const SNAPSHOT_PATH = '/api/pos/v1/catalog/snapshot';
+const PAGE_TOKEN_PARAM = 'page_token';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface CreateReadDownClientDeps {
@@ -52,10 +60,11 @@ export interface CreateReadDownClientDeps {
   timeoutMs?: number;
 }
 
-/** The reachable snapshot envelope. Shape mirrors the backend contract (see header). */
-interface SnapshotEnvelope {
-  snapshot_id?: string | null;
-  rows?: unknown;
+/** One reachable `CatalogSnapshotPage`. Shape mirrors the binding contract (see header). */
+interface CatalogSnapshotPage {
+  items?: unknown;
+  cursor?: unknown;
+  next_page_token?: unknown;
 }
 
 /** Narrow an unknown value to a `SellableCatalogRow` (structural; never throws). */
@@ -77,10 +86,86 @@ function isSellableCatalogRow(value: unknown): value is SellableCatalogRow {
   );
 }
 
+/** A successfully fetched + structurally-valid single page. */
+interface ValidPage {
+  rows: SellableCatalogRow[];
+  /** The snapshot's opaque server cursor (same across every page). */
+  cursor: string;
+  /** Opaque continuation token; `null` on the last page. */
+  nextPageToken: string | null;
+}
+
+/** Per-page fetch outcome — mirrors the transport union plus the parsed page. */
+type PageResult = { kind: 'ok'; page: ValidPage } | { kind: 'no_connection' } | { kind: 'failed' };
+
 export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownClient {
   const { fetch: fetchImpl, baseUrl, getDeviceToken } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const root = baseUrl.replace(/\/$/, '');
+
+  /** Fetch + structurally validate ONE page. `pageToken` advances pagination. */
+  async function fetchPage(deviceToken: string, pageToken: string | null): Promise<PageResult> {
+    const url = new URL(`${root}${SNAPSHOT_PATH}`);
+    if (pageToken !== null) {
+      url.searchParams.set(PAGE_TOKEN_PARAM, pageToken);
+    }
+
+    let response: Response;
+    try {
+      response = await fetchImpl(url.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${deviceToken}`,
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      // Transport fault (DNS / TLS / refused / timeout) — backend unreachable.
+      return { kind: 'no_connection' };
+    }
+
+    if (!response.ok) {
+      // Reached but non-2xx (401/403/404/5xx). Collapse to `failed` — the raw
+      // body is never surfaced (P7); the driver preserves the prior catalogue.
+      return { kind: 'failed' };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = (await response.json()) as unknown;
+    } catch {
+      return { kind: 'failed' };
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { kind: 'failed' };
+    }
+    const page = parsed as CatalogSnapshotPage;
+
+    // `cursor` is contract-required + minLength 1: an absent/empty cursor is a
+    // malformed page (R3 needs a real snapshot cursor for freshness/provenance).
+    if (typeof page.cursor !== 'string' || page.cursor.length === 0) {
+      return { kind: 'failed' };
+    }
+    if (!Array.isArray(page.items)) {
+      return { kind: 'failed' };
+    }
+    // A single malformed row poisons the snapshot: the full-snapshot-replace
+    // model (R3) requires a complete, trustworthy set, so reject the whole
+    // page rather than silently dropping rows. Per-row money/shape mapping
+    // (mapSellableRow) still guards downstream in the writer.
+    if (!page.items.every(isSellableCatalogRow)) {
+      return { kind: 'failed' };
+    }
+    // `next_page_token` is `[string, "null"]`; anything else is malformed.
+    const rawToken = page.next_page_token;
+    if (rawToken !== null && rawToken !== undefined && typeof rawToken !== 'string') {
+      return { kind: 'failed' };
+    }
+    const nextPageToken = typeof rawToken === 'string' && rawToken.length > 0 ? rawToken : null;
+
+    return { kind: 'ok', page: { rows: page.items, cursor: page.cursor, nextPageToken } };
+  }
 
   return {
     async fetchSnapshot(): Promise<ReadDownFetchResult> {
@@ -97,52 +182,40 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
         return { kind: 'failed' };
       }
 
-      let response: Response;
-      try {
-        response = await fetchImpl(`${root}${SNAPSHOT_PATH}`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${deviceToken}`,
-          },
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch {
-        // Transport fault (DNS / TLS / refused / timeout) — backend unreachable.
-        return { kind: 'no_connection' };
+      // Walk every page, accumulating `items`. All pages share one `cursor`
+      // (the snapshot's consistent point); `next_page_token` advances. ANY
+      // mid-loop non-2xx / malformed page → `failed` (no partial snapshot); a
+      // transport fault → `no_connection`. Both preserve the prior catalogue.
+      const rows: SellableCatalogRow[] = [];
+      let cursor: string | null = null;
+      let pageToken: string | null = null;
+
+      // The token alone cannot bound the loop (the server issues it); bound on
+      // the contract's max-pages-at-1000-rows scale to fail closed on a bad
+      // server that never returns a null token.
+      for (let guard = 0; guard < 100_000; guard += 1) {
+        const result = await fetchPage(deviceToken, pageToken);
+        if (result.kind !== 'ok') {
+          return result.kind === 'no_connection' ? { kind: 'no_connection' } : { kind: 'failed' };
+        }
+        rows.push(...result.page.rows);
+        cursor = result.page.cursor;
+        if (result.page.nextPageToken === null) {
+          break;
+        }
+        pageToken = result.page.nextPageToken;
       }
 
-      if (!response.ok) {
-        // Reached but non-2xx (401/403/404/5xx). Collapse to `failed` — the raw
-        // body is never surfaced (P7); the driver preserves the prior catalogue.
-        return { kind: 'failed' };
-      }
-
-      let parsed: unknown;
-      try {
-        parsed = (await response.json()) as unknown;
-      } catch {
-        return { kind: 'failed' };
-      }
-
-      if (typeof parsed !== 'object' || parsed === null) {
-        return { kind: 'failed' };
-      }
-      const envelope = parsed as SnapshotEnvelope;
-      if (!Array.isArray(envelope.rows)) {
-        return { kind: 'failed' };
-      }
-      // A single malformed row poisons the snapshot: the full-snapshot-replace
-      // model (R3) requires a complete, trustworthy set, so reject the whole
-      // fetch rather than silently dropping rows. Per-row money/shape mapping
-      // (mapSellableRow) still guards downstream in the writer.
-      if (!envelope.rows.every(isSellableCatalogRow)) {
+      // `cursor` is set on every successful page; guard defensively for the
+      // type-narrower (an empty result set still carries a real cursor).
+      if (cursor === null) {
         return { kind: 'failed' };
       }
 
       return {
         kind: 'ok',
-        sourceSnapshotId: typeof envelope.snapshot_id === 'string' ? envelope.snapshot_id : null,
-        rows: envelope.rows,
+        sourceSnapshotId: cursor,
+        rows,
       };
     },
   };

@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSaleSyncClient, toWireBody, classifyStatus } from '../create-sale-sync-client.js';
+import {
+  createSaleSyncClient,
+  toWireBody,
+  classifyStatus,
+  minorUnitsToDecimalString,
+} from '../create-sale-sync-client.js';
 import type { CaptureSalePayload } from '../capture-payload.js';
 
 /**
  * 011-sale-sync-capture-up T061 — live `SaleSyncClient` tests.
  *
- * Locks down (a) the internal→wire transform shape (the closest guard we have on
- * the consumed DP2 captureSale contract before the live smoke / api-types re-pin):
- * nested `total:{amountMinor,currencyCode}`, top-level `currencyCode`, STRING
- * `quantity`; (b) the HTTP→outcome union mapping; (c) the per-POST operator-token
- * Authorization header + the deterministic `Idempotency-Key`; (d) no-token and
- * transport-fault paths. The token is attached to the request and never surfaced.
+ * Locks down (a) the internal→wire transform against the binding DP2
+ * `CaptureSaleRequest` (deployed ref 6975f67, `additionalProperties: false`):
+ * flat top-level `posTotal` as an exact-decimal STRING, top-level `currencyCode`,
+ * per-line `CaptureSaleLine` (lineName / unitPrice-str / currencyCode / quantity-str
+ * / lineAmount-str / unit), STRING `quantity`, and NO tenant/store/actor keys
+ * (server-resolved); (b) the HTTP→outcome union mapping; (c) the per-POST
+ * operator-token Authorization header + the deterministic `Idempotency-Key`;
+ * (d) no-token and transport-fault paths. The token is attached to the request
+ * and never surfaced.
  */
 
 const BASE = 'https://api-preprod.smartdatapulse.tech';
@@ -28,8 +36,22 @@ const PAYLOAD: CaptureSalePayload = {
   occurredAt: '2026-06-09T10:00:00.000Z',
   totalMinor: 2550,
   lines: [
-    { lineRef: 'l1', productRef: 'p1', quantity: 2, unitPriceMinor: 1000, lineAmountMinor: 2000 },
-    { lineRef: 'l2', productRef: 'p2', quantity: 1, unitPriceMinor: 550, lineAmountMinor: 550 },
+    {
+      lineRef: 'l1',
+      productRef: 'p1',
+      lineName: 'Panadol',
+      quantity: 2,
+      unitPriceMinor: 1000,
+      lineAmountMinor: 2000,
+    },
+    {
+      lineRef: 'l2',
+      productRef: 'p2',
+      lineName: 'Brufen',
+      quantity: 1,
+      unitPriceMinor: 550,
+      lineAmountMinor: 550,
+    },
   ],
 };
 
@@ -62,22 +84,61 @@ function headerValue(init: RequestInit, name: string): string | null {
   return headers?.[name] ?? null;
 }
 
-describe('toWireBody — internal → DP2 wire shape', () => {
-  it('nests total, adds top-level currencyCode, and stringifies quantity', () => {
+describe('minorUnitsToDecimalString — integer minor → exact-decimal string', () => {
+  it('formats exponent-2 amounts with two fractional digits', () => {
+    expect(minorUnitsToDecimalString(2550, 2)).toBe('25.50');
+    expect(minorUnitsToDecimalString(5, 2)).toBe('0.05');
+    expect(minorUnitsToDecimalString(0, 2)).toBe('0.00');
+    expect(minorUnitsToDecimalString(100000, 2)).toBe('1000.00');
+  });
+  it('emits NO decimal point for an exponent-0 currency (DecimalAmount grammar)', () => {
+    expect(minorUnitsToDecimalString(100, 0)).toBe('100');
+    expect(minorUnitsToDecimalString(0, 0)).toBe('0');
+  });
+  it('formats exponent-3 amounts with three fractional digits', () => {
+    expect(minorUnitsToDecimalString(1234, 3)).toBe('1.234');
+    expect(minorUnitsToDecimalString(5, 3)).toBe('0.005');
+  });
+});
+
+describe('toWireBody — internal → DP2 CaptureSaleRequest wire shape', () => {
+  it('renames total→posTotal as a decimal string, adds top-level currencyCode, stringifies quantity', () => {
     const wire = toWireBody(PAYLOAD, 'EGP');
 
     expect(wire.currencyCode).toBe('EGP');
-    expect(wire.total).toEqual({ amountMinor: 2550, currencyCode: 'EGP' });
-    expect(wire.lines[0]?.quantity).toBe('2'); // STRING on the wire
-    expect(wire.lines[1]?.quantity).toBe('1');
-    // Money stays integer minor units; identity fields pass through verbatim.
-    expect(wire.lines[0]?.unitPriceMinor).toBe(1000);
-    expect(wire.lines[0]?.lineAmountMinor).toBe(2000);
-    expect(wire.externalId).toBe('pos-pulse:handoff-1');
+    expect(wire.posTotal).toBe('25.50'); // DecimalAmount STRING, not minor units
     expect(wire.sourceSystem).toBe('pos-pulse');
-    expect(wire.tenantId).toBe('t1');
-    expect(wire.operatorId).toBe('op-1');
+    expect(wire.externalId).toBe('pos-pulse:handoff-1');
     expect(wire.occurredAt).toBe('2026-06-09T10:00:00.000Z');
+
+    // Each line carries the binding CaptureSaleLine fields.
+    expect(wire.lines[0]).toEqual({
+      lineName: 'Panadol',
+      unitPrice: '10.00',
+      currencyCode: 'EGP',
+      quantity: '2', // STRING on the wire
+      lineAmount: '20.00',
+      unit: 'unit',
+    });
+    expect(wire.lines[1]).toEqual({
+      lineName: 'Brufen',
+      unitPrice: '5.50',
+      currencyCode: 'EGP',
+      quantity: '1',
+      lineAmount: '5.50',
+      unit: 'unit',
+    });
+  });
+
+  it('omits server-resolved tenant/store/actor and non-contract keys (additionalProperties:false)', () => {
+    const wire = toWireBody(PAYLOAD, 'EGP') as unknown as Record<string, unknown>;
+    for (const forbidden of ['tenantId', 'branchId', 'terminalId', 'operatorId', 'total']) {
+      expect(forbidden in wire).toBe(false);
+    }
+    const line0 = wire['lines'] as Array<Record<string, unknown>>;
+    for (const forbidden of ['lineRef', 'productRef', 'unitPriceMinor', 'lineAmountMinor']) {
+      expect(forbidden in (line0[0] ?? {})).toBe(false);
+    }
   });
 });
 
@@ -123,8 +184,16 @@ describe('createSaleSyncClient — request shape', () => {
     expect(headerValue(req.init, 'Idempotency-Key')).toBe(PAYLOAD.externalId);
     expect(headerValue(req.init, 'Content-Type')).toBe('application/json');
 
-    const body = JSON.parse(req.init.body as string) as { total: unknown; lines: unknown[] };
-    expect(body.total).toEqual({ amountMinor: 2550, currencyCode: 'EGP' });
+    const body = JSON.parse(req.init.body as string) as {
+      posTotal: unknown;
+      currencyCode: unknown;
+      lines: Array<Record<string, unknown>>;
+    };
+    expect(body.posTotal).toBe('25.50');
+    expect(body.currencyCode).toBe('EGP');
+    expect(body.lines[0]?.['lineName']).toBe('Panadol');
+    expect(body.lines[0]?.['unitPrice']).toBe('10.00');
+    expect(body.lines[0]?.['unit']).toBe('unit');
   });
 
   it('normalizes a trailing slash on the base URL', async () => {
@@ -204,9 +273,9 @@ describe('createSaleSyncClient — operator-token gating', () => {
     if (req === undefined) throw new Error('test: no request captured');
     const body = JSON.parse(req.init.body as string) as {
       currencyCode: string;
-      total: { currencyCode: string };
+      lines: Array<{ currencyCode: string }>;
     };
     expect(body.currencyCode).toBe('USD');
-    expect(body.total.currencyCode).toBe('USD');
+    expect(body.lines[0]?.currencyCode).toBe('USD');
   });
 });

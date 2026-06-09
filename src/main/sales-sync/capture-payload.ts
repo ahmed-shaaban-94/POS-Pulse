@@ -22,6 +22,8 @@ import type { SaleRow } from '../sales/repositories/sales.repository.js';
 export interface CaptureSaleLine {
   lineRef: string;
   productRef: string;
+  /** Human-readable line label, frozen from the cart snapshot's `display_name`. */
+  lineName: string;
   quantity: number;
   unitPriceMinor: number;
   lineAmountMinor: number;
@@ -46,6 +48,7 @@ const SOURCE_SYSTEM = 'pos-pulse' as const;
 interface PersistedLineSnapshot {
   line_id: string;
   item_ref: string;
+  display_name: string;
   quantity: number;
   unit_price_minor: number;
   line_subtotal_minor: number;
@@ -65,6 +68,7 @@ export function buildCapturePayload(sale: SaleRow): CaptureSalePayload {
   const lines: CaptureSaleLine[] = snapshots.map((s) => ({
     lineRef: s.line_id,
     productRef: s.item_ref,
+    lineName: s.display_name,
     quantity: s.quantity,
     unitPriceMinor: s.unit_price_minor,
     lineAmountMinor: s.line_subtotal_minor,

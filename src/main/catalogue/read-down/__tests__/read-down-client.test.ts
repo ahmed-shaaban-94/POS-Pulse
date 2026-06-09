@@ -6,12 +6,15 @@ import type { SellableCatalogRow } from '../map-sellable-row.js';
 /**
  * 010-pos-catalog-read-down-consumption T021 — live `ReadDownClient` tests.
  *
- * Verifies the request shape (path, device-token Authorization header) and the
- * transport-result union mapping (ok / no_connection / failed). The device token
- * is the sole credential; it is attached to the outbound request and never
- * surfaced on the returned union (P7). Resolve-on-reachable / reject-only-on-
- * transport: every reachable response resolves to a typed result; only a transport
- * fault maps to `no_connection`.
+ * Verifies the request shape (path, device-token Authorization header), the
+ * binding `CatalogSnapshotPage` envelope parse (`items` + `cursor`), the
+ * cursor-pagination loop over `next_page_token` (accumulate `items`, carry the
+ * shared `cursor` into `sourceSnapshotId`), and the transport-result union
+ * mapping (ok / no_connection / failed). The device token is the sole credential;
+ * it is attached to the outbound request and never surfaced on the returned union
+ * (P7). Resolve-on-reachable / reject-only-on-transport: every reachable response
+ * resolves to a typed result; only a transport fault maps to `no_connection`. A
+ * mid-loop failure NEVER yields a partial snapshot (R3 full-replace).
  */
 
 const BASE = 'https://api-preprod.smartdatapulse.tech';
@@ -62,9 +65,35 @@ function okResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
 }
 
+/** A `CatalogSnapshotPage` body. `next_page_token` defaults to null (last page). */
+function page(items: unknown[], cursor: string, nextPageToken: string | null = null): unknown {
+  return { items, cursor, next_page_token: nextPageToken };
+}
+
+/**
+ * A fetch that returns a SCRIPTED sequence of responses (one per call), to drive
+ * the pagination loop. A `() => never` entry rejects (transport fault) on that call.
+ */
+function scriptedFetch(responses: Array<Response | (() => never)>): {
+  fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  captured: CapturedRequest[];
+} {
+  const captured: CapturedRequest[] = [];
+  let idx = 0;
+  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    captured.push({ url: stringifyInput(input), init: init ?? {} });
+    const next = responses[idx];
+    idx += 1;
+    if (next === undefined) return Promise.reject(new Error('scriptedFetch: out of responses'));
+    if (typeof next === 'function') return Promise.reject(new Error('network down'));
+    return Promise.resolve(next.clone());
+  };
+  return { fetchImpl, captured };
+}
+
 describe('createReadDownClient — request shape', () => {
   it('GETs the snapshot path with the device token as a Bearer Authorization header', async () => {
-    const { fetchImpl, captured } = captureFetch(okResponse({ snapshot_id: 's1', rows: [ROW] }));
+    const { fetchImpl, captured } = captureFetch(okResponse(page([ROW], 's1')));
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,
@@ -82,7 +111,7 @@ describe('createReadDownClient — request shape', () => {
   });
 
   it('normalizes a trailing slash on the base URL', async () => {
-    const { fetchImpl, captured } = captureFetch(okResponse({ snapshot_id: null, rows: [] }));
+    const { fetchImpl, captured } = captureFetch(okResponse(page([], 's0')));
     const client = createReadDownClient({
       baseUrl: `${BASE}/`,
       fetch: fetchImpl,
@@ -96,8 +125,8 @@ describe('createReadDownClient — request shape', () => {
 });
 
 describe('createReadDownClient — outcome mapping', () => {
-  it('maps a reachable valid snapshot to ok with rows + snapshot id', async () => {
-    const { fetchImpl } = captureFetch(okResponse({ snapshot_id: 's9', rows: [ROW] }));
+  it('maps a reachable valid single-page snapshot to ok with items + cursor', async () => {
+    const { fetchImpl } = captureFetch(okResponse(page([ROW], 's9')));
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,
@@ -108,13 +137,13 @@ describe('createReadDownClient — outcome mapping', () => {
 
     expect(result.kind).toBe('ok');
     if (result.kind === 'ok') {
-      expect(result.sourceSnapshotId).toBe('s9');
+      expect(result.sourceSnapshotId).toBe('s9'); // the page `cursor`
       expect(result.rows).toEqual([ROW]);
     }
   });
 
-  it('treats a missing snapshot_id as a null source id (still ok)', async () => {
-    const { fetchImpl } = captureFetch(okResponse({ rows: [ROW] }));
+  it('treats an absent/empty cursor as a malformed page → failed', async () => {
+    const { fetchImpl } = captureFetch(okResponse({ items: [ROW], next_page_token: null }));
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,
@@ -122,9 +151,7 @@ describe('createReadDownClient — outcome mapping', () => {
     });
 
     const result = await client.fetchSnapshot();
-
-    expect(result.kind).toBe('ok');
-    if (result.kind === 'ok') expect(result.sourceSnapshotId).toBeNull();
+    expect(result.kind).toBe('failed');
   });
 
   it('maps a transport fault (fetch rejects) to no_connection', async () => {
@@ -153,8 +180,10 @@ describe('createReadDownClient — outcome mapping', () => {
     expect(result.kind).toBe('failed');
   });
 
-  it('maps a malformed (non-array rows) body to failed', async () => {
-    const { fetchImpl } = captureFetch(okResponse({ snapshot_id: 's1', rows: 'not-an-array' }));
+  it('maps a malformed (non-array items) body to failed', async () => {
+    const { fetchImpl } = captureFetch(
+      okResponse({ items: 'not-an-array', cursor: 's1', next_page_token: null }),
+    );
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,
@@ -166,7 +195,7 @@ describe('createReadDownClient — outcome mapping', () => {
   });
 
   it('rejects the whole snapshot (failed) when any row is structurally invalid', async () => {
-    const { fetchImpl } = captureFetch(okResponse({ rows: [ROW, { product_id: 'bad' }] }));
+    const { fetchImpl } = captureFetch(okResponse(page([ROW, { product_id: 'bad' }], 's1')));
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,
@@ -190,9 +219,92 @@ describe('createReadDownClient — outcome mapping', () => {
   });
 });
 
+describe('createReadDownClient — cursor pagination', () => {
+  const ROW2: SellableCatalogRow = {
+    product_id: 'p2',
+    sku: 'SKU-2',
+    name: 'Aspirin 100mg',
+    aliases: ['6223000000002'],
+    price: { amount: '8.00', currency_code: 'EGP' },
+    tax_category: 'standard',
+    active: true,
+    row_cursor: 'rc-2',
+  };
+
+  it('walks next_page_token, accumulating items across pages under one cursor', async () => {
+    const { fetchImpl, captured } = scriptedFetch([
+      okResponse(page([ROW], 'snap-1', 'tok-2')),
+      okResponse(page([ROW2], 'snap-1', null)),
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+
+    expect(result.kind).toBe('ok');
+    if (result.kind === 'ok') {
+      expect(result.rows).toEqual([ROW, ROW2]); // accumulated in page order
+      expect(result.sourceSnapshotId).toBe('snap-1'); // shared cursor
+    }
+    // Page 1 has no page_token; page 2 carries the prior next_page_token.
+    expect(captured).toHaveLength(2);
+    expect(captured[0]?.url).toBe(`${BASE}${SNAPSHOT_PATH}`);
+    expect(captured[1]?.url).toBe(`${BASE}${SNAPSHOT_PATH}?page_token=tok-2`);
+  });
+
+  it('treats an empty-string next_page_token as the last page', async () => {
+    const { fetchImpl, captured } = scriptedFetch([okResponse(page([ROW], 'snap-1', ''))]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+    expect(result.kind).toBe('ok');
+    expect(captured).toHaveLength(1); // did NOT request another page
+  });
+
+  it('fails the whole fetch (no partial snapshot) when a later page is non-2xx', async () => {
+    const { fetchImpl, captured } = scriptedFetch([
+      okResponse(page([ROW], 'snap-1', 'tok-2')),
+      new Response('boom', { status: 500 }),
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+    expect(result.kind).toBe('failed'); // NOT a partial ok with only page 1
+    expect(captured).toHaveLength(2);
+  });
+
+  it('maps a mid-loop transport fault to no_connection', async () => {
+    const { fetchImpl } = scriptedFetch([
+      okResponse(page([ROW], 'snap-1', 'tok-2')),
+      () => {
+        throw new Error('unused');
+      },
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+    expect(result.kind).toBe('no_connection');
+  });
+});
+
 describe('createReadDownClient — device token gating', () => {
   it('does not POST and returns failed when the device token is null (unpaired)', async () => {
-    const { fetchImpl, captured } = captureFetch(okResponse({ rows: [] }));
+    const { fetchImpl, captured } = captureFetch(okResponse(page([], 's0')));
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,
@@ -205,7 +317,7 @@ describe('createReadDownClient — device token gating', () => {
   });
 
   it('returns failed (no request) when the token read throws', async () => {
-    const { fetchImpl, captured } = captureFetch(okResponse({ rows: [] }));
+    const { fetchImpl, captured } = captureFetch(okResponse(page([], 's0')));
     const client = createReadDownClient({
       baseUrl: BASE,
       fetch: fetchImpl,

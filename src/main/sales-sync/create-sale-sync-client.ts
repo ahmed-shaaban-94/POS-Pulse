@@ -26,16 +26,20 @@
  * deterministic `payload.externalId` (REQUIRED on the write); the backend dedups on
  * `(tenant, sourceSystem, externalId)` so retries collapse to one record.
  *
- * Wire-shape boundary: the internal `CaptureSalePayload` is flat (`totalMinor`,
- * numeric `quantity`); the DP2 wire body is nested (`total:{amountMinor,
- * currencyCode}`, top-level `currencyCode`, string `quantity`). This client is the
- * conversion boundary. NOTE (#349 reconcile): the wire shape is implemented against
- * the 011 contract README, which marks its body ILLUSTRATIVE — the binding truth is
- * the generated `api-types.ts` once re-pinned from the deployed DP2 contract (not
- * yet done; the live snapshot at api-preprod serves no /openapi.json). The live
- * smoke test is the validation gate: a correct POST returns 200/201/409; a shape
- * mismatch returns 400/422 (→ dead-letter, observable). Currency is single-store
- * EGP in v1 (assumption matching the read-down mapper).
+ * Wire-shape boundary: the internal `CaptureSalePayload` carries INTEGER MINOR
+ * UNITS (`totalMinor`, `unitPriceMinor`, `lineAmountMinor`) and a numeric
+ * `quantity`; the binding DP2 `CaptureSaleRequest` (deployed ref 6975f67,
+ * `pos-sales/sales.yaml`) is strict (`additionalProperties: false`) and uses
+ * exact-decimal STRING money (`DecimalAmount`, `numeric(19,4)`), a flat top-level
+ * `posTotal`, a 3-letter `currencyCode`, and string `quantity`. This client is the
+ * conversion boundary: it renames `totalMinor → posTotal`, converts every minor
+ * amount to an exact decimal string via the currency minor-unit exponent (pure
+ * string/integer math — NEVER a float), and emits ONLY the contract's allowed keys
+ * (server-resolved tenant / store / actor fields are DROPPED — they would be
+ * rejected by the strict boundary). Each `CaptureSaleLine` carries its own
+ * `currencyCode` per the contract. The validation gate is the live smoke test:
+ * a correct POST returns 200/201/409; a shape mismatch returns 400/422
+ * (→ dead-letter, observable). Currency is single-store EGP in v1.
  */
 
 import type { CaptureSalePayload } from './capture-payload.js';
@@ -44,6 +48,52 @@ import type { SaleSyncClient, SaleSyncResult } from './sale-sync-client-types.js
 const SALES_PATH = '/api/pos/v1/sales';
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_CURRENCY_CODE = 'EGP';
+
+/**
+ * Unit-of-measure token sent on every `CaptureSaleLine.unit` (contract-required,
+ * 1–50 chars). The internal cart/sale line snapshot carries NO unit of measure
+ * (`LineSnapshot` has display_name / quantity / prices only), so a safe constant
+ * is supplied at this wire boundary. `'unit'` is a neutral each/piece token.
+ * OWNER-CONFIRM: if the platform expects a specific UoM vocabulary, surface it
+ * through the snapshot and map it here instead of this default.
+ */
+const DEFAULT_LINE_UNIT = 'unit';
+
+/** Minor-unit exponent by ISO-4217 currency (v1 single-currency-per-store = EGP). */
+const CURRENCY_MINOR_UNIT_EXPONENT: Readonly<Record<string, number>> = {
+  EGP: 2,
+  USD: 2,
+  JPY: 0,
+  KWD: 3,
+  BHD: 3,
+};
+const DEFAULT_MINOR_UNIT_EXPONENT = 2;
+
+function exponentFor(currencyCode: string): number {
+  return CURRENCY_MINOR_UNIT_EXPONENT[currencyCode] ?? DEFAULT_MINOR_UNIT_EXPONENT;
+}
+
+/**
+ * Integer minor units → exact-decimal string (the inverse of
+ * `decimalStringToMinorUnits` in the read-down mapper). Pure string/integer math;
+ * NEVER touches a JS float. Matches the DP2 `DecimalAmount` grammar
+ * (`^-?[0-9]{1,15}(\.[0-9]{1,4})?$`): for exponent 0 it emits NO decimal point
+ * (e.g. 100 → "100", never "100."); for exponent > 0 it emits exactly that many
+ * fractional digits (e.g. 2550/exp2 → "25.50", 5/exp2 → "0.05", 0/exp2 → "0.00").
+ */
+export function minorUnitsToDecimalString(minor: number, exponent: number): string {
+  const sign = minor < 0 ? '-' : '';
+  const digits = String(Math.abs(minor));
+  if (exponent === 0) {
+    return `${sign}${digits}`;
+  }
+  // Left-pad so there are at least `exponent + 1` digits (one for the integer part).
+  const padded = digits.padStart(exponent + 1, '0');
+  const cut = padded.length - exponent;
+  const intPart = padded.slice(0, cut);
+  const fracPart = padded.slice(cut);
+  return `${sign}${intPart}.${fracPart}`;
+}
 
 export interface CreateSaleSyncClientDeps {
   /** Data-Pulse-2 base URL, e.g. `https://api-preprod.smartdatapulse.tech`. */
@@ -62,44 +112,52 @@ export interface CreateSaleSyncClientDeps {
   timeoutMs?: number;
 }
 
-/** The DP2 `captureSale` wire body (nested totals, string quantity, currencyCode). */
-interface CaptureSaleWireBody {
-  externalId: string;
-  sourceSystem: 'pos-pulse';
-  tenantId: string;
-  branchId: string;
-  terminalId: string;
-  operatorId: string;
-  occurredAt: string;
+/**
+ * The binding DP2 `CaptureSaleLine` wire shape (deployed ref 6975f67). Required:
+ * lineName, unitPrice, currencyCode, quantity, lineAmount, unit. Optional
+ * taxAmount / tenantProductRef are OMITTED — the internal model carries no
+ * per-line tax (tax is header-level) and no uuid product ref, and the strict
+ * `additionalProperties: false` boundary rejects unknown keys.
+ */
+interface CaptureSaleLineWire {
+  lineName: string;
+  unitPrice: string;
   currencyCode: string;
-  total: { amountMinor: number; currencyCode: string };
-  lines: Array<{
-    lineRef: string;
-    productRef: string;
-    quantity: string;
-    unitPriceMinor: number;
-    lineAmountMinor: number;
-  }>;
+  quantity: string;
+  lineAmount: string;
+  unit: string;
 }
 
-/** Pure transform: internal payload → DP2 wire body (the conversion boundary). */
+/**
+ * The binding DP2 `CaptureSaleRequest` wire body (deployed ref 6975f67,
+ * `additionalProperties: false`). Only the contract's allowed keys appear:
+ * tenant / store / actor are resolved server-side from auth and MUST NOT be sent.
+ */
+interface CaptureSaleWireBody {
+  sourceSystem: 'pos-pulse';
+  externalId: string;
+  currencyCode: string;
+  posTotal: string;
+  occurredAt: string;
+  lines: CaptureSaleLineWire[];
+}
+
+/** Pure transform: internal payload (integer minor units) → DP2 wire body. */
 export function toWireBody(payload: CaptureSalePayload, currencyCode: string): CaptureSaleWireBody {
+  const exponent = exponentFor(currencyCode);
   return {
-    externalId: payload.externalId,
     sourceSystem: payload.sourceSystem,
-    tenantId: payload.tenantId,
-    branchId: payload.branchId,
-    terminalId: payload.terminalId,
-    operatorId: payload.operatorId,
-    occurredAt: payload.occurredAt,
+    externalId: payload.externalId,
     currencyCode,
-    total: { amountMinor: payload.totalMinor, currencyCode },
+    posTotal: minorUnitsToDecimalString(payload.totalMinor, exponent),
+    occurredAt: payload.occurredAt,
     lines: payload.lines.map((line) => ({
-      lineRef: line.lineRef,
-      productRef: line.productRef,
+      lineName: line.lineName,
+      unitPrice: minorUnitsToDecimalString(line.unitPriceMinor, exponent),
+      currencyCode,
       quantity: String(line.quantity),
-      unitPriceMinor: line.unitPriceMinor,
-      lineAmountMinor: line.lineAmountMinor,
+      lineAmount: minorUnitsToDecimalString(line.lineAmountMinor, exponent),
+      unit: DEFAULT_LINE_UNIT,
     })),
   };
 }
