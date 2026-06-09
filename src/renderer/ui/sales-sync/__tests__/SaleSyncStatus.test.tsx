@@ -27,10 +27,14 @@ afterEach(() => {
 describe('T053 — SaleSyncStatus', () => {
   it('shows the never-synced state when nothing has synced and nothing is pending', async () => {
     render(
-      <SaleSyncStatus bridge={bridgeReturning({ pending: 0, deadLetter: 0, lastSuccessAt: null })} />,
+      <SaleSyncStatus
+        bridge={bridgeReturning({ pending: 0, deadLetter: 0, lastSuccessAt: null })}
+      />,
     );
     const el = await screen.findByTestId('sale-sync-status');
-    await waitFor(() => { expect(el.getAttribute('data-state')).toBe('never-synced'); });
+    await waitFor(() => {
+      expect(el.getAttribute('data-state')).toBe('never-synced');
+    });
     expect(el.textContent).toContain('لم تتم المزامنة بعد');
   });
 
@@ -44,9 +48,9 @@ describe('T053 — SaleSyncStatus', () => {
         })}
       />,
     );
-    await waitFor(() =>
-      { expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('all-synced'); },
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('all-synced');
+    });
     const time = screen.getByTestId('sale-sync-status-time');
     expect(time.getAttribute('dateTime')).toBe('2026-06-07T10:00:00.000Z');
   });
@@ -57,9 +61,9 @@ describe('T053 — SaleSyncStatus', () => {
         bridge={bridgeReturning({ pending: 3, deadLetter: 0, lastSuccessAt: null })}
       />,
     );
-    await waitFor(() =>
-      { expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('pending'); },
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('pending');
+    });
     expect(screen.getByTestId('sale-sync-status').textContent).toContain('٣');
   });
 
@@ -69,15 +73,17 @@ describe('T053 — SaleSyncStatus', () => {
         bridge={bridgeReturning({ pending: 0, deadLetter: 2, lastSuccessAt: 'x' })}
       />,
     );
-    await waitFor(() =>
-      { expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention'); },
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('attention');
+    });
     expect(screen.getByTestId('sale-sync-status').textContent).toContain('مراجعة');
   });
 
   it('is a polite status region and exposes NO button (read-only)', async () => {
     const { container } = render(
-      <SaleSyncStatus bridge={bridgeReturning({ pending: 1, deadLetter: 0, lastSuccessAt: null })} />,
+      <SaleSyncStatus
+        bridge={bridgeReturning({ pending: 1, deadLetter: 0, lastSuccessAt: null })}
+      />,
     );
     const el = await screen.findByTestId('sale-sync-status');
     expect(el.getAttribute('role')).toBe('status');
@@ -88,8 +94,8 @@ describe('T053 — SaleSyncStatus', () => {
   it('degrades to unavailable (never crashes) if the bridge rejects', async () => {
     const bridge: SaleSyncStatusBridge = { syncStatus: () => Promise.reject(new Error('ipc')) };
     render(<SaleSyncStatus bridge={bridge} />);
-    await waitFor(() =>
-      { expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('unavailable'); },
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId('sale-sync-status').getAttribute('data-state')).toBe('unavailable');
+    });
   });
 });
