@@ -13,7 +13,7 @@ permissions:
 jobs:
   update-loc-badge:
     name: Count LOC and update badge
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
