@@ -53,6 +53,12 @@ export default defineConfig({
         // typing (compile-time) + the main-side gating test + the manual
         // Electron smoke when the main handlers wire up (S2).
         'src/preload/catalogue.ts',
+        // 011 S5: sale-sync preload entry — same posture as the preload entries
+        // above (thin ipcRenderer.invoke wire-up, single read-only syncStatus
+        // channel, no branchable logic). Added in PR #365 but omitted from this
+        // list; correctness is proven by the SalesSyncBridgeAPI typing + the
+        // main-side IPC handler test + the manual Electron smoke.
+        'src/preload/sales-sync.ts',
         // T055 generated file: pure types, no runtime — coverage of it
         // is meaningless and would always show 0/0.
         'src/shared/api-types.ts',

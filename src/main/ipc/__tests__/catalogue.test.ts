@@ -112,4 +112,54 @@ describe('registerCatalogueHandlers', () => {
     expect(r).toEqual({ kind: 'refused', reason: 'no_session' });
     expect(lookupBarcode).toHaveBeenCalledOnce(); // not called for the malformed payload
   });
+
+  it('lookupBarcode refuses a non-object payload (null) generically', async () => {
+    const lookupBarcode = vi.fn(() => Promise.resolve({ kind: 'not_found' as const }));
+    const { ipcMain, invoke } = fakeIpcMain();
+    registerCatalogueHandlers(ipcMain, { bridge: fakeBridge({ lookupBarcode }) });
+
+    const r = await invoke(CATALOGUE_IPC_CHANNELS.LOOKUP_BARCODE, null);
+    expect(r).toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(lookupBarcode).not.toHaveBeenCalled();
+  });
+
+  it('lookupSku forwards a valid request and refuses a malformed one generically', async () => {
+    const lookupSku = vi.fn(() => Promise.resolve({ kind: 'not_found' as const }));
+    const { ipcMain, invoke } = fakeIpcMain();
+    registerCatalogueHandlers(ipcMain, { bridge: fakeBridge({ lookupSku }) });
+
+    await invoke(CATALOGUE_IPC_CHANNELS.LOOKUP_SKU, { sku: 'SKU-1' });
+    expect(lookupSku).toHaveBeenCalledWith({ sku: 'SKU-1' });
+
+    const r = await invoke(CATALOGUE_IPC_CHANNELS.LOOKUP_SKU, { nope: 1 });
+    expect(r).toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(lookupSku).toHaveBeenCalledOnce();
+  });
+
+  it('search forwards a valid request and refuses a malformed one generically', async () => {
+    const search = vi.fn(() => Promise.resolve({ kind: 'not_found' as const }));
+    const { ipcMain, invoke } = fakeIpcMain();
+    registerCatalogueHandlers(ipcMain, { bridge: fakeBridge({ search }) });
+
+    await invoke(CATALOGUE_IPC_CHANNELS.SEARCH, { query: 'para' });
+    expect(search).toHaveBeenCalledWith({ query: 'para' });
+
+    const r = await invoke(CATALOGUE_IPC_CHANNELS.SEARCH, { nope: 1 });
+    expect(r).toEqual({ kind: 'refused', reason: 'no_session' });
+    expect(search).toHaveBeenCalledOnce();
+  });
+
+  it('resolve forwards a valid request and refuses a malformed one with the generic reason', async () => {
+    const resolve = vi.fn(() => Promise.resolve({ kind: 'catalogue_unavailable' as const }));
+    const { ipcMain, invoke } = fakeIpcMain();
+    registerCatalogueHandlers(ipcMain, { bridge: fakeBridge({ resolve }) });
+
+    await invoke(CATALOGUE_IPC_CHANNELS.RESOLVE, { product_id: 'p1' });
+    expect(resolve).toHaveBeenCalledWith({ product_id: 'p1' });
+
+    // Resolve's malformed refusal uses reason 'generic' (distinct from lookups).
+    const r = await invoke(CATALOGUE_IPC_CHANNELS.RESOLVE, { nope: 1 });
+    expect(r).toEqual({ kind: 'refused', reason: 'generic' });
+    expect(resolve).toHaveBeenCalledOnce();
+  });
 });
