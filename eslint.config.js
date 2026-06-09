@@ -35,6 +35,13 @@ export default tsEslint.config(
       // not production source — the project-service parser fails it with "was
       // not found by the project service". Same rationale as `.claude/**` above.
       '.tmp/**',
+      // Spec-Kit project-local automation scratch scripts (e.g.
+      // `.specify/scratch/pos-011-015-seed-workflow.js` from PR #363 — a one-off
+      // spec-seeding workflow). These run outside any tsconfig project and the
+      // project-service parser fails them with "was not found by the project
+      // service" on CI. Tooling, not production source. Same rationale as
+      // `.claude/**` / `scripts/**/*.mjs` / `.tmp/**` above.
+      '.specify/scratch/**',
     ],
   },
   tsEslint.configs.strictTypeChecked,
