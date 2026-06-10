@@ -107,3 +107,23 @@ export const FEAT_008_T094A_BRANCH_PREFIX = 'feat/008-t094a-' as const;
 export const FEAT_008_T094A_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `fix/pos-pairing-path` corrects the pairing client's request path from the
+ * non-existent `/api/v1/terminals/pair` to the canonical contract path
+ * `/api/pos/v1/terminals/pair` (matching the sibling `/api/pos/v1/sales` +
+ * `/api/pos/v1/catalog/snapshot` clients). The old path 404s against the
+ * deployed DP-2 backend, whose `posPairTerminal` consume endpoint shipped at
+ * `/api/pos/v1/terminals/pair` (Data-Pulse-2 PR #541). The fix necessarily
+ * touches `src/main/pairing/` (network.ts + its test).
+ *
+ * Exemption is narrow: ONLY `src/main/pairing/`. All other forbidden prefixes
+ * (`src/main/secrets/`, `src/shared/api-types.ts` — the #349 api-types re-pin is
+ * a SEPARATE task and is intentionally NOT touched here, `scripts/codegen-api.ts`,
+ * `scripts/openapi-snapshot.json`, `.github/workflows/`) remain blocked on this
+ * branch.
+ */
+export const FIX_POS_PAIRING_PATH_BRANCH_PREFIX = 'fix/pos-pairing-path' as const;
+export const FIX_POS_PAIRING_PATH_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];
