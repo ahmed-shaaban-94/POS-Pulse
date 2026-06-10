@@ -82,6 +82,16 @@ function exponentFor(currencyCode: string): number {
  * fractional digits (e.g. 2550/exp2 → "25.50", 5/exp2 → "0.05", 0/exp2 → "0.00").
  */
 export function minorUnitsToDecimalString(minor: number, exponent: number): string {
+  // Money is integer minor units only. A non-safe integer (float, NaN, or a value
+  // past Number.MAX_SAFE_INTEGER) would format to a wrong decimal string and put a
+  // wrong amount on the wire — reject it at the source. The boundary (`toWireBody`,
+  // and ultimately `postSale`) maps the throw to a `permanent` dead-letter.
+  if (!Number.isSafeInteger(minor)) {
+    throw new Error(`minor units must be a safe integer; got ${String(minor)}`);
+  }
+  if (!Number.isInteger(exponent) || exponent < 0) {
+    throw new Error(`exponent must be a non-negative integer; got ${String(exponent)}`);
+  }
   const sign = minor < 0 ? '-' : '';
   const digits = String(Math.abs(minor));
   if (exponent === 0) {
@@ -142,9 +152,27 @@ interface CaptureSaleWireBody {
   lines: CaptureSaleLineWire[];
 }
 
-/** Pure transform: internal payload (integer minor units) → DP2 wire body. */
+/**
+ * Pure transform: internal payload (integer minor units) → DP2 wire body.
+ *
+ * Validates every numeric money/quantity field is a safe integer at this boundary
+ * before conversion — a corrupted upstream value (overflowing minor units, a float,
+ * NaN) must never be silently rendered into a wrong decimal string and POSTed.
+ * Throws on an invalid value; the only caller (`postSale`) catches it and maps to
+ * `permanent` (a defect that will never succeed on retry → dead-letter), preserving
+ * the client's "never throws" contract.
+ */
 export function toWireBody(payload: CaptureSalePayload, currencyCode: string): CaptureSaleWireBody {
   const exponent = exponentFor(currencyCode);
+  // `quantity` is rendered via String(), not the money converter, so it needs its
+  // own guard here; the *Minor fields are re-checked inside minorUnitsToDecimalString.
+  for (const line of payload.lines) {
+    if (!Number.isSafeInteger(line.quantity)) {
+      throw new Error(
+        `line ${line.lineRef} quantity must be a safe integer; got ${String(line.quantity)}`,
+      );
+    }
+  }
   return {
     sourceSystem: payload.sourceSystem,
     externalId: payload.externalId,
@@ -189,7 +217,16 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
         return { kind: 'no_connection' };
       }
 
-      const body = toWireBody(payload, currencyCode);
+      // The wire transform validates money/quantity are safe integers and throws on
+      // a corrupted value. `postSale` must NEVER reject (sale-sync-client-types.ts),
+      // and such a value will never succeed on retry, so map it to `permanent` —
+      // the engine dead-letters it observably rather than the drain crashing.
+      let body: CaptureSaleWireBody;
+      try {
+        body = toWireBody(payload, currencyCode);
+      } catch {
+        return { kind: 'permanent' };
+      }
 
       let response: Response;
       try {

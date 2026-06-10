@@ -99,6 +99,15 @@ describe('minorUnitsToDecimalString — integer minor → exact-decimal string',
     expect(minorUnitsToDecimalString(1234, 3)).toBe('1.234');
     expect(minorUnitsToDecimalString(5, 3)).toBe('0.005');
   });
+  it('throws on a non-safe-integer minor amount (float / NaN / overflow)', () => {
+    expect(() => minorUnitsToDecimalString(10.5, 2)).toThrow();
+    expect(() => minorUnitsToDecimalString(Number.NaN, 2)).toThrow();
+    expect(() => minorUnitsToDecimalString(Number.MAX_SAFE_INTEGER + 1, 2)).toThrow();
+  });
+  it('throws on a negative or non-integer exponent', () => {
+    expect(() => minorUnitsToDecimalString(100, -1)).toThrow();
+    expect(() => minorUnitsToDecimalString(100, 1.5)).toThrow();
+  });
 });
 
 describe('toWireBody — internal → DP2 CaptureSaleRequest wire shape', () => {
@@ -139,6 +148,21 @@ describe('toWireBody — internal → DP2 CaptureSaleRequest wire shape', () => 
     for (const forbidden of ['lineRef', 'productRef', 'unitPriceMinor', 'lineAmountMinor']) {
       expect(forbidden in (line0[0] ?? {})).toBe(false);
     }
+  });
+
+  it('throws when a money field is not a safe integer (corrupted upstream value)', () => {
+    const bad: CaptureSalePayload = { ...PAYLOAD, totalMinor: Number.MAX_SAFE_INTEGER + 1 };
+    expect(() => toWireBody(bad, 'EGP')).toThrow();
+  });
+
+  it('throws when a line quantity is not a safe integer', () => {
+    const firstLine = PAYLOAD.lines[0];
+    if (firstLine === undefined) throw new Error('test: fixture has no lines');
+    const bad: CaptureSalePayload = {
+      ...PAYLOAD,
+      lines: [{ ...firstLine, quantity: 1.5 }],
+    };
+    expect(() => toWireBody(bad, 'EGP')).toThrow();
   });
 });
 
@@ -242,6 +266,22 @@ describe('createSaleSyncClient — outcome mapping', () => {
 
     const result = await client.postSale(PAYLOAD);
     expect(result.kind).toBe('no_connection');
+  });
+
+  it('maps a corrupted money value to permanent without throwing (never-rejects contract)', async () => {
+    // A non-safe-integer amount makes the wire transform throw; postSale must NOT
+    // reject (sale-sync-client-types.ts) — it dead-letters via `permanent` instead.
+    const { fetchImpl, captured } = captureFetch(200);
+    const client = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => TOKEN,
+    });
+    const bad: CaptureSalePayload = { ...PAYLOAD, totalMinor: Number.MAX_SAFE_INTEGER + 1 };
+
+    const result = await client.postSale(bad);
+    expect(result.kind).toBe('permanent');
+    expect(captured).toHaveLength(0); // never reached the network
   });
 });
 

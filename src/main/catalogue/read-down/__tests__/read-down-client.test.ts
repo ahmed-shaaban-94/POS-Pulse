@@ -300,6 +300,41 @@ describe('createReadDownClient — cursor pagination', () => {
     const result = await client.fetchSnapshot();
     expect(result.kind).toBe('no_connection');
   });
+
+  it('fails (no mixed snapshot) when a later page reports a different cursor', async () => {
+    const { fetchImpl, captured } = scriptedFetch([
+      okResponse(page([ROW], 'snap-1', 'tok-2')),
+      okResponse(page([ROW2], 'snap-2', null)), // cursor drifted from snap-1
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+    });
+
+    const result = await client.fetchSnapshot();
+    expect(result.kind).toBe('failed'); // NOT an ok stitched from two server states
+    expect(captured).toHaveLength(2);
+  });
+
+  it('fails closed when the page cap is exhausted (server never sends a null token)', async () => {
+    // Every page advertises a further page; with maxPages=2 the cap is hit before
+    // any page signals the last one → failed (never a partial accumulated prefix).
+    const { fetchImpl, captured } = scriptedFetch([
+      okResponse(page([ROW], 'snap-1', 'tok-2')),
+      okResponse(page([ROW2], 'snap-1', 'tok-3')),
+    ]);
+    const client = createReadDownClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getDeviceToken: () => Promise.resolve(TOKEN),
+      maxPages: 2,
+    });
+
+    const result = await client.fetchSnapshot();
+    expect(result.kind).toBe('failed');
+    expect(captured).toHaveLength(2); // walked exactly maxPages, then failed closed
+  });
 });
 
 describe('createReadDownClient — device token gating', () => {

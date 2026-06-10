@@ -44,6 +44,12 @@ import type { ReadDownClient, ReadDownFetchResult } from './read-down-client-typ
 const SNAPSHOT_PATH = '/api/pos/v1/catalog/snapshot';
 const PAGE_TOKEN_PARAM = 'page_token';
 const DEFAULT_TIMEOUT_MS = 30_000;
+/**
+ * Default page-walk cap. The contract is ≤1000 rows/page; this bounds the loop
+ * at the max-pages scale so a server that never emits a null `next_page_token`
+ * fails closed instead of looping forever. See `CreateReadDownClientDeps.maxPages`.
+ */
+const DEFAULT_MAX_PAGES = 100_000;
 
 export interface CreateReadDownClientDeps {
   /** Data-Pulse-2 base URL, e.g. `https://api-preprod.smartdatapulse.tech`. */
@@ -58,6 +64,14 @@ export interface CreateReadDownClientDeps {
   getDeviceToken: () => Promise<string | null>;
   /** Override the request timeout in tests. */
   timeoutMs?: number;
+  /**
+   * Hard cap on pages walked before failing closed (default `DEFAULT_MAX_PAGES`).
+   * The continuation token alone cannot bound the loop (the server issues it), so
+   * this caps the walk at the contract's max-pages-at-1000-rows scale. A bad
+   * server that never returns a null token exhausts the cap → `failed` (never a
+   * partial snapshot). Overridable in tests to exercise the exhaustion branch.
+   */
+  maxPages?: number;
 }
 
 /** One reachable `CatalogSnapshotPage`. Shape mirrors the binding contract (see header). */
@@ -101,6 +115,7 @@ type PageResult = { kind: 'ok'; page: ValidPage } | { kind: 'no_connection' } | 
 export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownClient {
   const { fetch: fetchImpl, baseUrl, getDeviceToken } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxPages = deps.maxPages ?? DEFAULT_MAX_PAGES;
   const root = baseUrl.replace(/\/$/, '');
 
   /** Fetch + structurally validate ONE page. `pageToken` advances pagination. */
@@ -182,28 +197,46 @@ export function createReadDownClient(deps: CreateReadDownClientDeps): ReadDownCl
         return { kind: 'failed' };
       }
 
-      // Walk every page, accumulating `items`. All pages share one `cursor`
-      // (the snapshot's consistent point); `next_page_token` advances. ANY
-      // mid-loop non-2xx / malformed page → `failed` (no partial snapshot); a
-      // transport fault → `no_connection`. Both preserve the prior catalogue.
+      // Walk every page, accumulating `items`. All pages MUST share one `cursor`
+      // (the snapshot's consistent point — header lines 30-31); `next_page_token`
+      // advances. ANY mid-loop non-2xx / malformed page → `failed` (no partial
+      // snapshot); a transport fault → `no_connection`. Both preserve the prior
+      // catalogue.
       const rows: SellableCatalogRow[] = [];
       let cursor: string | null = null;
       let pageToken: string | null = null;
+      // The page-walk completes ONLY when a page reports `nextPageToken === null`.
+      // If the cap is exhausted first, the server never signalled the last page —
+      // fail closed (no partial snapshot) rather than promoting an accumulated prefix.
+      let reachedLastPage = false;
 
       // The token alone cannot bound the loop (the server issues it); bound on
-      // the contract's max-pages-at-1000-rows scale to fail closed on a bad
-      // server that never returns a null token.
-      for (let guard = 0; guard < 100_000; guard += 1) {
+      // `maxPages` to fail closed on a bad server that never returns a null token.
+      for (let guard = 0; guard < maxPages; guard += 1) {
         const result = await fetchPage(deviceToken, pageToken);
         if (result.kind !== 'ok') {
           return result.kind === 'no_connection' ? { kind: 'no_connection' } : { kind: 'failed' };
         }
+        // The cursor is pinned on the first page and MUST be identical on every
+        // subsequent page. A drift (contract bug / cache mismatch) would yield a
+        // snapshot stitched from two server states tagged with only the last
+        // cursor — reject it rather than promote a mixed snapshot.
+        if (cursor === null) {
+          cursor = result.page.cursor;
+        } else if (result.page.cursor !== cursor) {
+          return { kind: 'failed' };
+        }
         rows.push(...result.page.rows);
-        cursor = result.page.cursor;
         if (result.page.nextPageToken === null) {
+          reachedLastPage = true;
           break;
         }
         pageToken = result.page.nextPageToken;
+      }
+
+      // Cap exhausted without ever seeing the last page → fail closed.
+      if (!reachedLastPage) {
+        return { kind: 'failed' };
       }
 
       // `cursor` is set on every successful page; guard defensively for the
