@@ -7,6 +7,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   root: 'src/renderer',
+  // Relative base so built asset URLs are `./assets/...` not `/assets/...`.
+  // The packaged app loads the renderer via `file://` (win.loadFile); an
+  // absolute `/assets/` path resolves to the FILESYSTEM ROOT under file://
+  // (e.g. C:\assets\), 404s, and the window renders blank white. Relative
+  // base resolves correctly against index.html. Dev is unaffected — it loads
+  // from the Vite server (loadURL http://localhost:5173), not the built files.
+  base: './',
   build: {
     outDir: path.resolve(__dirname, 'dist/renderer'),
     emptyOutDir: true,

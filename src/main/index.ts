@@ -276,12 +276,15 @@ async function getCurrentPrinters(): Promise<PrinterInfoLike[]> {
 /**
  * Resolve the directory where migration *.sql files live.
  *   - Dev (`npm run dev`): repo-root `./migrations` (cwd is the repo root).
- *   - Packaged: electron-builder ships them via `extraResources` (wiring
- *     deferred — see PR description). For 001 the dev path is the gating
- *     surface for T041's manual smoke.
+ *   - Packaged: bundled into the app via electron-builder `files: [migrations/**]`,
+ *     so they sit at `<app.getAppPath()>/migrations` (inside `app.asar`; the
+ *     builder-patched `fs` reads them transparently). Using cwd here crashes the
+ *     packaged exe (cwd is wherever the user launched it, not the repo).
  */
 function resolveMigrationsDir(): string {
-  return path.join(process.cwd(), 'migrations');
+  return app.isPackaged
+    ? path.join(app.getAppPath(), 'migrations')
+    : path.join(process.cwd(), 'migrations');
 }
 
 /**

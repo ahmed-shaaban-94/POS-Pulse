@@ -9,3 +9,7 @@ files:
   - dist/**
   - package.json
   - node_modules/**
+  # Migration *.sql live at repo-root migrations/ and are read at startup via
+  # resolveMigrationsDir -> app.getAppPath()/migrations in the packaged app.
+  # Without this the packaged exe crashes ENOENT on startup.
+  - migrations/**
