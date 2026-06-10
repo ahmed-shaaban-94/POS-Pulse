@@ -89,6 +89,7 @@ describe('T022 — buildCapturePayload', () => {
     if (line === undefined) throw new Error('expected one line');
     expect(line.lineRef).toBe('l-1');
     expect(line.productRef).toBe('p-1');
+    expect(line.lineName).toBe('Panadol');
     expect(line.quantity).toBe(2);
     expect(line.unitPriceMinor).toBe(750);
     expect(line.lineAmountMinor).toBe(1500);
