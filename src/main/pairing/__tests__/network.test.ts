@@ -24,7 +24,7 @@ import { createNetwork, TransportError, type NetworkDeps } from '../network.js';
  */
 
 const BASE_URL = 'https://api.example.test';
-const PAIR_PATH = '/api/v1/terminals/pair';
+const PAIR_PATH = '/api/pos/v1/terminals/pair';
 
 interface ObservedCall {
   url: string;
@@ -103,7 +103,7 @@ afterEach(() => {
 });
 
 describe('network.pair() — success path (T019)', () => {
-  it('POSTs to ${baseUrl}/api/v1/terminals/pair with the right method, headers, and body', async () => {
+  it('POSTs to ${baseUrl}/api/pos/v1/terminals/pair with the right method, headers, and body', async () => {
     const { fetch, observed } = makeFakeFetch({
       response: makeJsonResponse({
         device_token: 'opaque-token',

@@ -10,6 +10,8 @@ import {
   FEAT_006_PAYMENTS_EXEMPT_PREFIXES,
   FEAT_008_T094A_BRANCH_PREFIX,
   FEAT_008_T094A_EXEMPT_PREFIXES,
+  FIX_POS_PAIRING_PATH_BRANCH_PREFIX,
+  FIX_POS_PAIRING_PATH_EXEMPT_PREFIXES,
 } from './source-scope-guard.const';
 
 /**
@@ -138,7 +140,11 @@ describe('source-scope guard (T006)', () => {
             ? FORBIDDEN_PATH_PREFIXES.filter(
                 (p) => !(FEAT_008_T094A_EXEMPT_PREFIXES as readonly string[]).includes(p),
               )
-            : FORBIDDEN_PATH_PREFIXES;
+            : currentBranch.startsWith(FIX_POS_PAIRING_PATH_BRANCH_PREFIX)
+              ? FORBIDDEN_PATH_PREFIXES.filter(
+                  (p) => !(FIX_POS_PAIRING_PATH_EXEMPT_PREFIXES as readonly string[]).includes(p),
+                )
+              : FORBIDDEN_PATH_PREFIXES;
 
     const violations = changedFiles.filter((file) =>
       effectiveForbidden.some((prefix) => file === prefix || file.startsWith(prefix)),
