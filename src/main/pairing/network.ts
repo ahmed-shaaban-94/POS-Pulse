@@ -52,7 +52,7 @@ import type { components } from '../../shared/api-types.js';
  *     a public timer value, not a secret.
  */
 
-const PAIR_PATH = '/api/v1/terminals/pair';
+const PAIR_PATH = '/api/pos/v1/terminals/pair';
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
@@ -150,7 +150,7 @@ export interface NetworkDeps {
    * Fetch API but accept either Request or string for input.
    */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  /** Base URL — `${baseUrl}/api/v1/terminals/pair`. */
+  /** Base URL — `${baseUrl}/api/pos/v1/terminals/pair`. */
   baseUrl: string;
   /**
    * Override the timeout window in tests. Defaults to 30_000 ms per
