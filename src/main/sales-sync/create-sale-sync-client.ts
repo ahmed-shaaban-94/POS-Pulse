@@ -116,6 +116,15 @@ export interface CreateSaleSyncClientDeps {
    * (treated as retryable — the sale stays pending) rather than a POST without auth.
    */
   getOperatorToken: () => string | null;
+  /**
+   * In-process read of the paired-terminal device attestation. DP-2 captureSale
+   * (Option-Y) REQUIRES it alongside the Clerk JWT (`X-Device-Attestation`
+   * header) — a JWT-only POST 401s. Null/empty when the terminal is not paired;
+   * a null here maps to `no_connection` (retryable, sale stays pending) rather
+   * than a credential-incomplete POST that would 401. Read main-process-side;
+   * NEVER logged, NEVER placed in the body.
+   */
+  getDeviceAttestation: () => string | null;
   /** ISO-4217 currency for the store (v1 single-currency). Defaults to EGP. */
   currencyCode?: string;
   /** Override the request timeout in tests. */
@@ -208,7 +217,7 @@ export function classifyStatus(status: number): SaleSyncResult {
 }
 
 export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncClient {
-  const { fetch: fetchImpl, baseUrl, getOperatorToken } = deps;
+  const { fetch: fetchImpl, baseUrl, getOperatorToken, getDeviceAttestation } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const currencyCode = deps.currencyCode ?? DEFAULT_CURRENCY_CODE;
   const root = baseUrl.replace(/\/$/, '');
@@ -219,6 +228,14 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
       if (token === null || token.length === 0) {
         // No session token: do not POST unauthenticated. The engine gate should
         // have paused already; map to no_connection so the sale stays pending.
+        return { kind: 'no_connection' };
+      }
+
+      const attestation = getDeviceAttestation();
+      if (attestation === null || attestation.length === 0) {
+        // Option-Y requires the paired-terminal attestation alongside the JWT.
+        // Without it captureSale 401s — do not send a credential-incomplete POST;
+        // retryable (the sale stays pending until the terminal is paired).
         return { kind: 'no_connection' };
       }
 
@@ -240,6 +257,9 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
+            // Option-Y: paired-terminal proof, in a header (NOT the body — the
+            // body is hashed into payload_hash + the idempotency fingerprint).
+            'X-Device-Attestation': attestation,
             'Idempotency-Key': payload.externalId,
           },
           body: JSON.stringify(body),

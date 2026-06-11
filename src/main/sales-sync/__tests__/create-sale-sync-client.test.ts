@@ -25,6 +25,7 @@ import type { CaptureSalePayload } from '../capture-payload.js';
 const BASE = 'https://api-preprod.smartdatapulse.tech';
 const SALES_PATH = '/api/pos/v1/sales';
 const TOKEN = 'operator-jwt-abc';
+const ATTESTATION = 'device-attestation-xyz';
 
 const PAYLOAD: CaptureSalePayload = {
   externalId: 'pos-pulse:handoff-1',
@@ -196,12 +197,13 @@ describe('classifyStatus — HTTP → outcome union', () => {
 });
 
 describe('createSaleSyncClient — request shape', () => {
-  it('POSTs the sales path with operator Bearer auth + deterministic Idempotency-Key + wire body', async () => {
+  it('POSTs with operator Bearer auth + X-Device-Attestation + deterministic Idempotency-Key + wire body', async () => {
     const { fetchImpl, captured } = captureFetch(200);
     const client = createSaleSyncClient({
       baseUrl: BASE,
       fetch: fetchImpl,
       getOperatorToken: () => TOKEN,
+      getDeviceAttestation: () => ATTESTATION,
     });
 
     await client.postSale(PAYLOAD);
@@ -212,8 +214,14 @@ describe('createSaleSyncClient — request shape', () => {
     expect(req.url).toBe(`${BASE}${SALES_PATH}`);
     expect(req.init.method).toBe('POST');
     expect(headerValue(req.init, 'Authorization')).toBe(`Bearer ${TOKEN}`);
+    // Option-Y: DP-2 captureSale REQUIRES the paired-terminal attestation header
+    // alongside the Clerk JWT. Without it the request 401s and never syncs.
+    expect(headerValue(req.init, 'X-Device-Attestation')).toBe(ATTESTATION);
     expect(headerValue(req.init, 'Idempotency-Key')).toBe(PAYLOAD.externalId);
     expect(headerValue(req.init, 'Content-Type')).toBe('application/json');
+    // The attestation rides in the HEADER, never the body (the body is hashed
+    // into payload_hash + idempotency on the server).
+    expect(req.init.body as string).not.toContain(ATTESTATION);
 
     const body = JSON.parse(req.init.body as string) as {
       posTotal: unknown;
@@ -227,12 +235,27 @@ describe('createSaleSyncClient — request shape', () => {
     expect(body.lines[0]?.['unit']).toBe('unit');
   });
 
+  it('does NOT POST when the device attestation is unavailable (returns no_connection, sale stays pending)', async () => {
+    const { fetchImpl, captured } = captureFetch(200);
+    const client = createSaleSyncClient({
+      baseUrl: BASE,
+      fetch: fetchImpl,
+      getOperatorToken: () => TOKEN,
+      getDeviceAttestation: () => null,
+    });
+
+    const result = await client.postSale(PAYLOAD);
+    expect(result).toEqual({ kind: 'no_connection' });
+    expect(captured).toHaveLength(0); // never attempted a credential-incomplete POST
+  });
+
   it('normalizes a trailing slash on the base URL', async () => {
     const { fetchImpl, captured } = captureFetch(200);
     const client = createSaleSyncClient({
       baseUrl: `${BASE}/`,
       fetch: fetchImpl,
       getOperatorToken: () => TOKEN,
+      getDeviceAttestation: () => ATTESTATION,
     });
 
     await client.postSale(PAYLOAD);
@@ -258,6 +281,7 @@ describe('createSaleSyncClient — outcome mapping', () => {
         baseUrl: BASE,
         fetch: fetchImpl,
         getOperatorToken: () => TOKEN,
+        getDeviceAttestation: () => ATTESTATION,
       });
 
       const result = await client.postSale(PAYLOAD);
@@ -271,6 +295,7 @@ describe('createSaleSyncClient — outcome mapping', () => {
       baseUrl: BASE,
       fetch: fetchImpl,
       getOperatorToken: () => TOKEN,
+      getDeviceAttestation: () => ATTESTATION,
     });
 
     const result = await client.postSale(PAYLOAD);
@@ -285,6 +310,7 @@ describe('createSaleSyncClient — outcome mapping', () => {
       baseUrl: BASE,
       fetch: fetchImpl,
       getOperatorToken: () => TOKEN,
+      getDeviceAttestation: () => ATTESTATION,
     });
     const bad: CaptureSalePayload = { ...PAYLOAD, totalMinor: Number.MAX_SAFE_INTEGER + 1 };
 
@@ -301,6 +327,7 @@ describe('createSaleSyncClient — operator-token gating', () => {
       baseUrl: BASE,
       fetch: fetchImpl,
       getOperatorToken: () => null,
+      getDeviceAttestation: () => ATTESTATION,
     });
 
     const result = await client.postSale(PAYLOAD);
@@ -314,6 +341,7 @@ describe('createSaleSyncClient — operator-token gating', () => {
       baseUrl: BASE,
       fetch: fetchImpl,
       getOperatorToken: () => TOKEN,
+      getDeviceAttestation: () => ATTESTATION,
       currencyCode: 'USD',
     });
 

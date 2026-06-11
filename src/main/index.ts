@@ -1253,6 +1253,13 @@ app
         // backoff, and dead-letter are owned by the engine + state repo (unchanged);
         // the live client only transforms the payload + maps HTTP outcomes.
         const saleSyncStateRepo = createSaleSyncStateRepo(dbHandle);
+        // Option-Y: captureSale needs the paired-terminal attestation alongside
+        // the operator JWT. We are inside the `paired` branch, so resolve the
+        // device token once at engine construction (it is stable for the paired
+        // session; a re-pair reconstructs the engine on next launch). Captured
+        // sync so the client's getDeviceAttestation stays synchronous, matching
+        // getOperatorToken + how tenant/branch are captured from pairingStatus.
+        const pairedDeviceAttestation = await deviceTokenAttestation();
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
           fetch: globalThis.fetch.bind(globalThis),
@@ -1260,6 +1267,8 @@ app
             const sess = operatorSessionManager.getCurrent();
             return sess === null ? null : operatorJwtHolder.get(sess.backend_session_id);
           },
+          getDeviceAttestation: () =>
+            pairedDeviceAttestation.length > 0 ? pairedDeviceAttestation : null,
         });
         const saleSyncEngine = createSaleSyncEngine({
           client: saleSyncClient,
