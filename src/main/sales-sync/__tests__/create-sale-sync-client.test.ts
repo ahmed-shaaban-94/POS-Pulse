@@ -178,9 +178,16 @@ describe('classifyStatus — HTTP → outcome union', () => {
     expect(classifyStatus(500)).toEqual({ kind: 'transient' });
     expect(classifyStatus(503)).toEqual({ kind: 'transient' });
   });
-  it('maps other 4xx → permanent', () => {
+  it('maps auth 401/403 → transient (NOT permanent — never lose a sale to an expired JWT)', () => {
+    // The Clerk operator JWT lives ~60s; a flush attempted with a stale token
+    // 401s. That is a RETRYABLE auth-refresh case, not a permanent defect — a
+    // fresh sign-in re-drains the row. Dead-lettering it loses the sale.
+    expect(classifyStatus(401)).toEqual({ kind: 'transient' });
+    expect(classifyStatus(403)).toEqual({ kind: 'transient' });
+  });
+  it('maps genuine validation 4xx (400/404/422) → permanent (dead-letter)', () => {
     expect(classifyStatus(400)).toEqual({ kind: 'permanent' });
-    expect(classifyStatus(401)).toEqual({ kind: 'permanent' });
+    expect(classifyStatus(404)).toEqual({ kind: 'permanent' });
     expect(classifyStatus(422)).toEqual({ kind: 'permanent' });
   });
   it('maps an unexpected 3xx → transient (never lose the sale)', () => {
@@ -239,6 +246,8 @@ describe('createSaleSyncClient — outcome mapping', () => {
     [201, 'ok'],
     [409, 'duplicate'],
     [500, 'transient'],
+    [401, 'transient'], // expired operator JWT — retryable, not dead-lettered
+    [403, 'transient'],
     [400, 'permanent'],
     [422, 'permanent'],
   ];
