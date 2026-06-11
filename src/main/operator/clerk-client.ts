@@ -286,13 +286,21 @@ function extractMintedJwt(parsed: unknown): string | null {
  * authoritative here — DP-2 resolves the operator's role from its own DB at
  * `/operators/sign-in` (the JWT verifier reads only `sub`). Real operators
  * have empty `public_metadata`, so this MUST NOT gate the exchange. When the
- * metadata role is absent or outside the closed set, default to `cashier` (the
- * least-privileged Role); the authoritative role comes from the DP-2 sign-in
- * response, and `exchange.role` is only consumed by the takeover proto-store,
- * which the confirm step re-resolves from the backend.
+ * metadata role is absent or outside the closed set, default to `manager`.
+ *
+ * The default MUST NOT be `cashier`: this exchanger serves ONLY the Clerk
+ * `manager_admin` sign-in surface (cashiers authenticate by local PIN and never
+ * reach Clerk). `exchange.role` flows into the takeover proto-store, and
+ * `TakeoverHandler.confirmTakeover` dispatches `proto.role === 'cashier'` into
+ * the local-only cashier path — which SKIPS `backend.confirmTakeover` and
+ * creates a malformed local session with blank tenant/branch. Defaulting a
+ * manager/admin operator to `cashier` would therefore downgrade a real
+ * manager's takeover into a broken local session. `manager` keeps takeover on
+ * the authoritative backend path; the truly-authoritative role still comes
+ * from the DP-2 sign-in / takeover-confirm response.
  */
 function mapRole(role: string | undefined): Role {
-  return isRole(role) ? role : 'cashier';
+  return isRole(role) ? role : 'manager';
 }
 
 function deriveDisplayName(user: ClerkUser): string {
