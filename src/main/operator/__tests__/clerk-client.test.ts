@@ -232,6 +232,19 @@ describe('createClerkExchanger — happy path', () => {
     expect(result.kind).toBe('ok');
   });
 
+  it('defaults a missing/unknown role to `manager`, NEVER `cashier` (takeover-path safety)', async () => {
+    // This exchanger serves ONLY the manager_admin Clerk surface. Defaulting to
+    // `cashier` would make TakeoverHandler.confirmTakeover take the local-only
+    // cashier branch (skipping backend.confirmTakeover) → malformed session.
+    for (const meta of [{}, { role: 'owner' }, { role: 'not-a-role' }]) {
+      const { fetchImpl } = happySequence('j', { user: { id: 'u', public_metadata: meta } });
+      const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
+      const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
+      expect(result.kind).toBe('ok');
+      if (result.kind === 'ok') expect(result.role).toBe('manager');
+    }
+  });
+
   it('falls back from first/last name to username, then email, then id', async () => {
     const cases: Array<{ user: Record<string, unknown>; expected: string }> = [
       { user: { id: 'u1', username: 'sara' }, expected: 'sara' },
