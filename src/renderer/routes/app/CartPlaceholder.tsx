@@ -11,6 +11,7 @@
  * placeholder remains the default surface until §A5 sign-off.
  */
 import { useCallback, useRef, type JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
 import { CartPane, type AddedLineResult } from '../../ui/cart/CartPane';
@@ -69,6 +70,7 @@ export function CartPlaceholder(): JSX.Element {
  * line list — the single write path (FR-20). No parallel cart mutation.
  */
 function CartWorkspace({ showCatalogue }: { showCatalogue: boolean }): JSX.Element {
+  const navigate = useNavigate();
   const addLineRef = useRef<((res: AddedLineResult) => void) | null>(null);
   const registerAddLine = useCallback((addLine: (res: AddedLineResult) => void): void => {
     addLineRef.current = addLine;
@@ -77,10 +79,19 @@ function CartWorkspace({ showCatalogue }: { showCatalogue: boolean }): JSX.Eleme
     addLineRef.current?.(res);
   }, []);
 
+  // 006 wiring: after a confirmed handoff, "Continue to payment" mounts the
+  // envelope into the payment store (inside CartPane) and navigates to the
+  // checkout route, which renders PaymentSurface off that envelope. Routing
+  // lives here (the route owner, always under the router) so CartPane stays
+  // Router-agnostic — see its 109 bare-render unit tests.
+  const handlePaymentContinue = useCallback((): void => {
+    void navigate('/app/checkout');
+  }, [navigate]);
+
   return (
     <Workspace title="Cart">
       {showCatalogue && <CatalogueSalePane onLineAdded={forwardAddLine} />}
-      <CartPane onLineAdded={registerAddLine} />
+      <CartPane onLineAdded={registerAddLine} onPaymentContinue={handlePaymentContinue} />
     </Workspace>
   );
 }

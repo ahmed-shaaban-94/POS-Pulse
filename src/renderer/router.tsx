@@ -15,7 +15,7 @@ import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
 import { CartPlaceholder } from './routes/app/CartPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
-import { CheckoutPlaceholder } from './routes/app/checkout/CheckoutPlaceholder';
+import { CheckoutRoute } from './routes/app/checkout/CheckoutRoute';
 import { CashierManagement } from './routes/app/manager/CashierManagement';
 import { StuckShiftSurface } from './ui/operator/ForcedCloseSurface';
 import { SignInRoute } from './routes/sign-in';
@@ -173,7 +173,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         { path: 'dashboard', element: <DashboardRoute /> },
         { path: 'sales', element: <SalesPlaceholder /> },
         { path: 'cart', element: <CartPlaceholder /> },
-        { path: 'checkout', element: <CheckoutPlaceholder /> },
+        { path: 'checkout', element: <CheckoutRoute /> },
         { path: 'inventory', element: <InventoryPlaceholder /> },
         { path: 'settings', element: <SettingsHelpPlaceholder /> },
         {
