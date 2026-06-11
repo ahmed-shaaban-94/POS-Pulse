@@ -86,98 +86,142 @@ export function decodeFrontendApiBaseUrl(publishableKey: string): string | null 
       : null;
   if (prefix === null) return null;
   const encoded = publishableKey.slice(prefix.length);
-  // Strip Clerk's terminating `$` if present.
-  const stripped = encoded.endsWith('$') ? encoded.slice(0, -1) : encoded;
-  if (stripped.length === 0) return null;
+  // Some keys carry a literal `$` AFTER the base64 (older Clerk form); tolerate
+  // that by stripping a trailing `$` on the encoded value too.
+  const encodedStripped = encoded.endsWith('$') ? encoded.slice(0, -1) : encoded;
+  if (encodedStripped.length === 0) return null;
   let decoded: string;
   try {
     // Buffer is available in the Electron main process (Node context).
-    decoded = Buffer.from(stripped, 'base64').toString('utf-8').trim();
+    decoded = Buffer.from(encodedStripped, 'base64').toString('utf-8').trim();
   } catch {
     return null;
   }
-  // The decoded value is a hostname like `clerk.acme.com`. Validate
-  // shape defensively — refuse anything containing whitespace, slash,
-  // or scheme markers (no protocol-confusion attacks via env-var
-  // tampering).
-  if (!/^[a-z0-9.-]+$/i.test(decoded)) return null;
-  return `https://${decoded}`;
+  // Clerk's CURRENT format encodes the delimiter INSIDE the base64: the decoded
+  // value is `<frontend-api-host>$` (e.g. `clerk.acme.com$`). Strip the trailing
+  // `$` from the DECODED string — the earlier encoded-level strip does not catch
+  // it because the `$` is part of the base64 payload, not appended to the key.
+  const host = decoded.endsWith('$') ? decoded.slice(0, -1) : decoded;
+  // The host is a hostname like `clerk.acme.com`. Validate shape defensively —
+  // refuse anything containing whitespace, slash, or scheme markers (no
+  // protocol-confusion attacks via env-var tampering).
+  if (!/^[a-z0-9.-]+$/i.test(host)) return null;
+  return `https://${host}`;
 }
 
 /**
  * Production `ClerkExchanger` backed by Clerk's public Frontend API.
  *
- * Two-step exchange:
+ * Clerk does NOT return the session JWT inline on sign-in — the token is
+ * minted by a SEPARATE call. The real two-call flow:
  *
  *   1. POST {fapi}/v1/client/sign_ins
  *      body: identifier=<email>&strategy=password&password=<pw>
  *      Content-Type: application/x-www-form-urlencoded
- *      Returns a `client` object with the active sign-in attempt,
- *      its created session, and a `last_active_token.jwt` field.
- *      A failed attempt (wrong password, unknown identifier, etc.)
- *      surfaces as 4xx — collapsed to `{ kind: 'refused' }` per
- *      NFR-003.
+ *      On success (200) returns a `client` object whose `sessions[0]` carries
+ *      the created session `id` + `user` (but NO inline `jwt`). The CLIENT
+ *      identity needed by the mint call is returned in the `Authorization`
+ *      RESPONSE header — a rotating client token (Clerk sets
+ *      `access-control-expose-headers: Authorization` precisely so this can be
+ *      replayed; it is NOT a `__client` cookie — Clerk does not set one here).
+ *      A failed attempt (wrong password, unknown identifier, bot challenge, …)
+ *      surfaces as 4xx — collapsed to `{ kind: 'refused' }`.
  *
- *   2. The session JWT lives in `response.client.sessions[0].
- *      last_active_token.jwt` for the standard happy path. Clerk's
- *      JWT shape is JWS with the user id in the `sub` claim and
- *      role in `public_metadata.role` (per Wave 1 alignment).
+ *   2. POST {fapi}/v1/client/sessions/{sessionId}/tokens
+ *      with `Authorization: Bearer <client-token>` carried from step 1's
+ *      response header. Returns `{ jwt }` — the session JWT (JWS, `sub` = Clerk
+ *      user id). Without this client token the mint returns `signed_out`.
+ *      DP-2 verifies this JWT via JWKS and reads ONLY `sub`; the operator's
+ *      role/tenant/store are resolved server-side from the DB, so this client
+ *      does NOT require any Clerk `public_metadata.role`.
  *
- * Network failures resolve to `{ kind: 'no_connection' }`. Any thrown
- * error path is swallowed and mapped to `refused` so the renderer
+ * Network failures (either call) resolve to `{ kind: 'no_connection' }`. Any
+ * non-2xx or malformed body resolves to `{ kind: 'refused' }` so the renderer
  * cannot distinguish among factor-level causes (PR-2).
  *
- * The password input is consumed by `URLSearchParams.set(...)` and
- * `JSON.stringify` is NEVER called on the request body, so the
- * password cannot be enumerated through error.cause. The function
- * returns no field that contains the password.
+ * The password is consumed by `URLSearchParams.set(...)`; `JSON.stringify` is
+ * NEVER called on a body containing it, so it cannot be enumerated through
+ * `error.cause`. No returned field contains the password.
  */
 export function createClerkExchanger(deps: CreateClerkExchangerDeps): ClerkExchanger {
   const { fetch: fetchImpl, frontendApiBaseUrl } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const fapi = frontendApiBaseUrl.replace(/\/$/, '');
 
   return {
     async exchange(req: ClerkExchangeRequest): Promise<ClerkExchangeResult> {
-      const url = `${frontendApiBaseUrl.replace(/\/$/, '')}/v1/client/sign_ins`;
+      // ── Call 1: sign in ──────────────────────────────────────────────────
       const body = new URLSearchParams();
       body.set('identifier', req.identifier);
       body.set('strategy', 'password');
       body.set('password', req.password);
 
-      let response: Response;
+      let signInRes: Response;
       try {
-        response = await fetchImpl(url, {
+        signInRes = await fetchImpl(`${fapi}/v1/client/sign_ins`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: body.toString(),
           signal: AbortSignal.timeout(timeoutMs),
         });
       } catch {
-        // Transport failure (DNS/TLS/refused/timeout). The thrown error
-        // MUST NOT propagate — it can carry the URL with the body
-        // visible in `cause`. Map to no_connection.
+        // Transport failure. The thrown error can carry the URL + body in
+        // `cause`; it MUST NOT propagate. Map to no_connection.
         return { kind: 'no_connection' };
       }
+      if (!signInRes.ok) return { kind: 'refused' };
 
-      if (!response.ok) {
-        // Any 4xx/5xx — collapse to generic refusal. PR-2 forbids
-        // distinguishing among credential-shape, account-disabled,
-        // unknown-identifier, etc.
-        return { kind: 'refused' };
-      }
+      // Capture the client token from the `Authorization` RESPONSE header
+      // BEFORE consuming the body — it carries the client/session identity the
+      // mint call needs (the missing piece that otherwise makes /tokens return
+      // `signed_out`). Clerk does NOT set a `__client` cookie here.
+      const clientToken = signInRes.headers.get('authorization');
 
-      // Parse defensively. A malformed body becomes `refused`, never
-      // an exception.
-      let parsed: unknown;
+      let signInParsed: unknown;
       try {
-        parsed = (await response.json()) as unknown;
+        signInParsed = (await signInRes.json()) as unknown;
       } catch {
         return { kind: 'refused' };
       }
 
-      const extracted = extractSession(parsed);
-      if (extracted === null) return { kind: 'refused' };
-      return extracted;
+      const session = extractActiveSession(signInParsed);
+      if (session === null) return { kind: 'refused' };
+
+      // ── Call 2: mint the session JWT ─────────────────────────────────────
+      const mintHeaders: Record<string, string> = {};
+      if (clientToken !== null && clientToken.length > 0) {
+        mintHeaders['Authorization'] = `Bearer ${clientToken}`;
+      }
+
+      let mintRes: Response;
+      try {
+        mintRes = await fetchImpl(`${fapi}/v1/client/sessions/${session.id}/tokens`, {
+          method: 'POST',
+          headers: mintHeaders,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch {
+        return { kind: 'no_connection' };
+      }
+      if (!mintRes.ok) return { kind: 'refused' };
+
+      let mintParsed: unknown;
+      try {
+        mintParsed = (await mintRes.json()) as unknown;
+      } catch {
+        return { kind: 'refused' };
+      }
+
+      const jwt = extractMintedJwt(mintParsed);
+      if (jwt === null) return { kind: 'refused' };
+
+      return {
+        kind: 'ok',
+        jwt,
+        operator_id: session.user.id,
+        display_name: deriveDisplayName(session.user),
+        role: mapRole(session.user.public_metadata?.role),
+      };
     },
   };
 }
@@ -194,8 +238,8 @@ interface ClerkClient {
 }
 
 interface ClerkSession {
+  id?: string;
   status?: string;
-  last_active_token?: { jwt?: string };
   user?: ClerkUser;
 }
 
@@ -208,29 +252,47 @@ interface ClerkUser {
   public_metadata?: { role?: string };
 }
 
-function extractSession(parsed: unknown): ClerkExchangeSuccess | null {
+/** A validated active session with a non-empty id and a user carrying an id. */
+interface ResolvedSession {
+  id: string;
+  user: ClerkUser & { id: string };
+}
+
+/** Resolve + validate the active session (id + user.id) from a sign_ins body. */
+function extractActiveSession(parsed: unknown): ResolvedSession | null {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const root = parsed as ClerkSignInResponse;
-  // Clerk wraps client in `response.client` for some endpoints and
-  // `client` for others. Read both defensively.
+  // Clerk wraps client in `response.client` for some endpoints and `client`
+  // for others. Read both defensively.
   const client = root.response?.client ?? root.client;
   const session = client?.sessions?.[0];
   if (session === undefined) return null;
   if (session.status !== undefined && session.status !== 'active') return null;
-  const jwt = session.last_active_token?.jwt;
+  if (typeof session.id !== 'string' || session.id.length === 0) return null;
   const user = session.user;
-  if (typeof jwt !== 'string' || jwt.length === 0) return null;
-  if (user === undefined) return null;
-  if (typeof user.id !== 'string' || user.id.length === 0) return null;
-  const role = user.public_metadata?.role;
-  if (!isRole(role)) return null;
-  return {
-    kind: 'ok',
-    jwt,
-    operator_id: user.id,
-    display_name: deriveDisplayName(user),
-    role,
-  };
+  if (user === undefined || typeof user.id !== 'string' || user.id.length === 0) return null;
+  return { id: session.id, user: { ...user, id: user.id } };
+}
+
+/** Pull the minted JWT from the /tokens response. Returns null if absent/empty. */
+function extractMintedJwt(parsed: unknown): string | null {
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const jwt = (parsed as { jwt?: unknown }).jwt;
+  return typeof jwt === 'string' && jwt.length > 0 ? jwt : null;
+}
+
+/**
+ * Map Clerk `public_metadata.role` to the closed Role set. The role is NOT
+ * authoritative here — DP-2 resolves the operator's role from its own DB at
+ * `/operators/sign-in` (the JWT verifier reads only `sub`). Real operators
+ * have empty `public_metadata`, so this MUST NOT gate the exchange. When the
+ * metadata role is absent or outside the closed set, default to `cashier` (the
+ * least-privileged Role); the authoritative role comes from the DP-2 sign-in
+ * response, and `exchange.role` is only consumed by the takeover proto-store,
+ * which the confirm step re-resolves from the backend.
+ */
+function mapRole(role: string | undefined): Role {
+  return isRole(role) ? role : 'cashier';
 }
 
 function deriveDisplayName(user: ClerkUser): string {
