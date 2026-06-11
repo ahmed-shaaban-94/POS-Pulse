@@ -7,8 +7,9 @@
  * Security invariants (FR-035):
  *   - No sensitive IDs (cart_id, operator_session_id, etc.) are rendered.
  *   - Discount placeholders are opaque: "Discount applied" only — no magnitude.
- *   - "Continue to payment" button is permanently disabled. 005 owns the
- *     handoff; the future payments feature owns everything downstream.
+ *   - "Continue to payment" is disabled UNTIL the payments feature wires it:
+ *     enabled iff an `onContinue` handler is supplied (006-payments). 005 owns
+ *     the handoff; the payments feature owns everything downstream.
  *   - No success/paid/complete copy — the cart is sent, not paid.
  */
 

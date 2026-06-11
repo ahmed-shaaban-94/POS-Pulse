@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { SignInRoute } from '../routes/sign-in.js';
 import type { OperatorBridgeAPI, SignInResponse } from '../../shared/bridge-api.js';
@@ -63,6 +64,18 @@ function makeBridge(overrides?: Partial<OperatorBridgeAPI>): OperatorBridgeAPI {
   };
 }
 
+// SignInRoute uses useNavigate() (the /sign-in → /app redirect on
+// signedIn), which requires a Router ancestor. These walling tests stay
+// signedOut so they never navigate; the router is only there to satisfy
+// the hook's context requirement.
+function renderSignIn(operator: OperatorBridgeAPI) {
+  return render(
+    <MemoryRouter>
+      <SignInRoute operator={operator} />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   useOperatorSessionStore.getState().reset();
   useOperatorSessionStore.setState({ state: { kind: 'signedOut' } });
@@ -75,7 +88,7 @@ afterEach(() => {
 
 describe('Cashier-Forbidden Information walling (T079)', () => {
   it('sign-in route does not render shift totals or sales figures', async () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     await screen.findByTestId('roster-list');
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     const body = document.body.textContent ?? '';
@@ -86,7 +99,7 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
   });
 
   it('sign-in route does not render KPI labels', async () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     await screen.findByTestId('roster-list');
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     const body = document.body.textContent ?? '';
@@ -98,7 +111,7 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
   });
 
   it('sign-in route does not render drawer cash or float values', async () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     await screen.findByTestId('roster-list');
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     const body = document.body.textContent ?? '';
@@ -109,7 +122,7 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
   });
 
   it('sign-in route does not render operator IDs or session tokens', async () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     await screen.findByTestId('roster-list');
     const html = document.body.innerHTML;
     expect(html).not.toMatch(/operator_id/i);
@@ -121,7 +134,7 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
   it('cashier PIN surface does not expose forbidden data after selection', async () => {
     const user = userEvent.setup();
     const bridge = makeBridge();
-    render(<SignInRoute operator={bridge} />);
+    renderSignIn(bridge);
     // Wait for roster to populate
     await screen.findByTestId('roster-item-0');
     await user.click(screen.getByTestId('roster-item-0'));
@@ -136,7 +149,7 @@ describe('Cashier-Forbidden Information walling (T079)', () => {
   });
 
   it('cashier name is shown but no email, phone, or audit info is exposed', async () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     await screen.findByTestId('roster-item-0');
     // Display name is allowed
     expect(screen.getByText('Alice Smith')).toBeInTheDocument();

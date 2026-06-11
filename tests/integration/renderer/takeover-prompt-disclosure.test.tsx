@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { SignInRoute } from '../../../src/renderer/routes/sign-in.js';
 import type {
@@ -77,6 +78,17 @@ function makeBridge(overrides?: Partial<OperatorBridgeAPI>): OperatorBridgeAPI {
   };
 }
 
+// SignInRoute uses useNavigate() (the /sign-in → /app redirect on signedIn),
+// which requires a Router ancestor. These disclosure tests stay in the
+// takeover/roster states (never signedIn), so the router only satisfies the hook.
+function renderSignIn(operator: OperatorBridgeAPI) {
+  return render(
+    <MemoryRouter>
+      <SignInRoute operator={operator} />
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   useOperatorSessionStore.getState().reset();
 });
@@ -96,26 +108,26 @@ describe('T058 — FR-013 canonical copy at route level (store-seeded)', () => {
   });
 
   it('heading is exactly the canonical FR-013 string', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('takeover-prompt-title').textContent).toBe(
       'You are already signed in on another POS terminal in this branch.',
     );
   });
 
   it('body is exactly the canonical FR-013 string', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('takeover-prompt-body').textContent).toBe(
       'Continue here and sign out there?',
     );
   });
 
   it('primary button label is exactly "Continue here"', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('takeover-prompt-confirm').textContent).toBe('Continue here');
   });
 
   it('ghost button label is exactly "Cancel"', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('takeover-prompt-cancel').textContent).toBe('Cancel');
   });
 });
@@ -128,52 +140,52 @@ describe('T058 — FR-013 forbidden strings at route level (store-seeded)', () =
   });
 
   it('route-sign-in does NOT contain any POS-<id> terminal identifier', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/POS-\w/);
   });
 
   it('route-sign-in does NOT contain "ago" (time-relative string)', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/\bago\b/);
   });
 
   it('route-sign-in does NOT contain "Cashier " (role label)', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/Cashier /);
   });
 
   it('route-sign-in does NOT contain "Manager" (role label)', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/Manager/);
   });
 
   it('route-sign-in does NOT contain "Admin" (role label)', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/Admin/);
   });
 
   it('route-sign-in does NOT contain HH:MM timestamp pattern', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/\d{2}:\d{2}/);
   });
 
   it('route-sign-in does NOT contain "View details"', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/View details/i);
   });
 
   it('route-sign-in does NOT contain "Show details"', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/Show details/i);
   });
 
   it('route-sign-in does NOT contain "Why am I seeing this"', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toMatch(/Why am I seeing this/i);
   });
 
   it('route-sign-in does NOT expose the pending_takeover_id in rendered text', () => {
-    render(<SignInRoute operator={makeBridge()} />);
+    renderSignIn(makeBridge());
     expect(screen.getByTestId('route-sign-in').textContent).not.toContain(PENDING_ID);
   });
 });
@@ -191,7 +203,7 @@ describe('T058 — FR-013 forbidden strings after live cashier takeover flow', (
         }),
       ),
     });
-    render(<SignInRoute operator={bridge} />);
+    renderSignIn(bridge);
     await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
     await user.click(screen.getByTestId('roster-item-0'));
     for (const d of ['1', '2', '3', '4']) {
@@ -212,7 +224,7 @@ describe('T058 — FR-013 forbidden strings after live cashier takeover flow', (
         }),
       ),
     });
-    render(<SignInRoute operator={bridge} />);
+    renderSignIn(bridge);
     await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
     await user.click(screen.getByTestId('roster-item-0'));
     for (const d of ['1', '2', '3', '4']) {

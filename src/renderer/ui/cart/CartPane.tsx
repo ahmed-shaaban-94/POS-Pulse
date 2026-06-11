@@ -116,6 +116,15 @@ export interface CartPaneProps {
    * in the caller to avoid re-registration churn; omitting it is safe but wasteful.
    */
   onLineAdded?: (addLine: (res: AddedLineResult) => void) => void;
+  /**
+   * Invoked when the operator clicks "Continue to payment" on the frozen
+   * handoff summary, AFTER the envelope is mounted into the payment store.
+   * The route owner (CartWorkspace) wires this to navigate to /app/checkout,
+   * where PaymentSurface picks the envelope up from the store. Optional so
+   * CartPane stays Router-agnostic — bare-render tests omit it (the call is
+   * guarded), keeping CartPane testable without a Router ancestor.
+   */
+  onPaymentContinue?: () => void;
 }
 
 function formatMinorUnits(minor: number): string {
@@ -141,6 +150,7 @@ export function CartPane({
   _testDiscountPlaceholders,
   _testInitialEnvelope,
   onLineAdded,
+  onPaymentContinue,
 }: CartPaneProps = {}): JSX.Element | null {
   const sessionState = useOperatorSessionStore((s) => s.state);
   const sessionKind = sessionState.kind;
@@ -161,6 +171,15 @@ export function CartPane({
   const [handoffError, setHandoffError] = useState<string | null>(null);
 
   const handleAddLine = useCallback((res: AddedLineResult): void => {
+    // Advance the cart FSM on every confirmed add (005 owns this transition;
+    // 009's add controller never writes cart state). The FIRST line moves the
+    // cart empty → editing; subsequent adds just refresh lastLineId while
+    // already editing. CartPane gates its line list, subtotal, and handoff
+    // button on activeCart.state (showEmpty / canHandoff), so without this the
+    // confirmed line lands in `lines` but stays invisible. Read the action via
+    // getState() so the callback closes over nothing render-time and its []
+    // deps stay valid.
+    useCartStore.getState().applyLineAdded(res.line_id);
     setLines((prev) => {
       if (res.merged) {
         return prev.map((l) =>
@@ -187,7 +206,7 @@ export function CartPane({
         },
       ];
     });
-  }, []); // stable: only closes over setLines (React-guaranteed identity-stable)
+  }, []); // stable: closes only over setLines + useCartStore.getState (both identity-stable)
 
   useEffect(() => {
     if (onLineAdded === undefined) return;
@@ -437,7 +456,12 @@ export function CartPane({
               {...(paymentsFlag
                 ? {
                     onContinue: () => {
+                      // Store-write here (envelope → payment store); routing is
+                      // delegated to the route owner via onPaymentContinue so
+                      // CartPane stays Router-agnostic. The guard makes
+                      // bare-render tests (no callback) a clean no-op.
                       usePaymentStore.getState().mount(envelope);
+                      onPaymentContinue?.();
                     },
                   }
                 : {})}
@@ -448,7 +472,12 @@ export function CartPane({
               {...(paymentsFlag
                 ? {
                     onContinue: () => {
+                      // Store-write here (envelope → payment store); routing is
+                      // delegated to the route owner via onPaymentContinue so
+                      // CartPane stays Router-agnostic. The guard makes
+                      // bare-render tests (no callback) a clean no-op.
                       usePaymentStore.getState().mount(envelope);
+                      onPaymentContinue?.();
                     },
                   }
                 : {})}

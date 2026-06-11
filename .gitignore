@@ -24,6 +24,11 @@ release/
 .env.*
 !.env.example
 *.local
+# Also ignore *.local.* — files that carry a suffix after `.local` (e.g.
+# run-pos-smoke.local.ps1, foo.local.json). The bare `*.local` glob only
+# matches names ENDING in `.local`, so these would otherwise slip through.
+# Some of these carry dev-only secrets (publishable keys, test setup).
+*.local.*
 # Block any literal secrets dir at the repo root, but NOT the SecretStore
 # source directory at src/main/secrets/.
 /secrets/

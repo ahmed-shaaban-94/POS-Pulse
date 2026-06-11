@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
+import { MemoryRouter } from 'react-router-dom';
 
 import { SignInRoute } from '../../../src/renderer/routes/sign-in.js';
 import type {
@@ -79,7 +80,14 @@ async function reachTakeoverPrompt(
   bridge: OperatorBridgeAPI,
 ): Promise<ReturnType<typeof userEvent.setup>> {
   const user = userEvent.setup();
-  render(<SignInRoute operator={bridge} />);
+  // SignInRoute uses useNavigate() (the /sign-in → /app redirect on signedIn),
+  // which requires a Router ancestor. This flow stays in the takeover/roster
+  // states (never signedIn), so the router is only here to satisfy the hook.
+  render(
+    <MemoryRouter>
+      <SignInRoute operator={bridge} />
+    </MemoryRouter>,
+  );
   await waitFor(() => expect(screen.getByTestId('roster-item-0')).toBeInTheDocument());
   await user.click(screen.getByTestId('roster-item-0'));
   for (const d of ['1', '2', '3', '4']) {

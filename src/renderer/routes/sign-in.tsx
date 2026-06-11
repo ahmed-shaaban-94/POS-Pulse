@@ -1,4 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import type { OperatorBridgeAPI, BranchRosterCashier } from '../../shared/bridge-api.js';
 import { useOperatorSessionStore } from '../stores/operator-session-store.js';
@@ -33,6 +34,21 @@ export interface SignInRouteProps {
 export function SignInRoute(props: SignInRouteProps): JSX.Element {
   const { operator } = props;
   const fsm = useOperatorSessionStore((s) => s.state);
+  const navigate = useNavigate();
+
+  // Once the FSM reaches `signedIn` — via the manager/admin form, the
+  // cashier PIN path, a confirmed takeover, or boot-time hydration — the
+  // operator is authenticated but the router is still parked on
+  // `/sign-in`. The path-based router only pulls a signed-out user OUT of
+  // `/app` (OperatorRouteGuard); nothing pushes a signed-in user IN. This
+  // effect is that missing seam — the sign-in counterpart to the pairing
+  // flow's `navigate('/paired')`. `replace` mirrors the `<Navigate replace>`
+  // convention so Back does not return to the sign-in screen.
+  useEffect(() => {
+    if (fsm.kind === 'signedIn') {
+      void navigate('/app', { replace: true });
+    }
+  }, [fsm.kind, navigate]);
 
   const [cashiers, setCashiers] = useState<ReadonlyArray<BranchRosterCashier>>([]);
   const [rosterError, setRosterError] = useState<string | undefined>(undefined);
