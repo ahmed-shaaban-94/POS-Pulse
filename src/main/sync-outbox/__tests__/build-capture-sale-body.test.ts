@@ -139,6 +139,46 @@ describe('buildCaptureSaleBody', () => {
     expect(() => buildCaptureSaleBody(makeSaleRow({ lines_json: 'not-json' }), EGP)).toThrow();
   });
 
+  it('throws when lines_json is valid JSON but not an array', () => {
+    expect(() => buildCaptureSaleBody(makeSaleRow({ lines_json: '{"x":1}' }), EGP)).toThrow(
+      /lines_json/,
+    );
+  });
+
+  it('throws on a negative/non-integer header amount (defensive integer guard)', () => {
+    expect(() => buildCaptureSaleBody(makeSaleRow({ subtotal_minor: -1 }), EGP)).toThrow(
+      /non-negative integer/,
+    );
+    expect(() => buildCaptureSaleBody(makeSaleRow({ total_tax_minor: 1.5 }), EGP)).toThrow(
+      /non-negative integer/,
+    );
+  });
+
+  it('throws on a line with a negative/missing money or quantity field', () => {
+    const badLine = JSON.stringify([
+      { display_name: 'X', quantity: 1, unit_price_minor: -5, line_subtotal_minor: 0 },
+    ]);
+    expect(() => buildCaptureSaleBody(makeSaleRow({ lines_json: badLine }), EGP)).toThrow(
+      /non-negative integer/,
+    );
+  });
+
+  it('defaults a missing line display_name to "Item"', () => {
+    const line = JSON.stringify([
+      { quantity: 1, unit_price_minor: 1250, line_subtotal_minor: 1250 },
+    ]);
+    const body = buildCaptureSaleBody(makeSaleRow({ lines_json: line }), EGP);
+    expect(body.lines[0]?.lineName).toBe('Item');
+  });
+
+  it('minorToDecimal at 0 minor digits + the 0-amount edge', () => {
+    const body = buildCaptureSaleBody(makeSaleRow({ subtotal_minor: 0, total_tax_minor: 0 }), {
+      currencyCode: 'XYZ',
+      minorDigits: 0,
+    });
+    expect(body.posTotal).toBe('0.0000');
+  });
+
   it('never emits a float for any money field (all strings matching the decimal pattern)', () => {
     const body = buildCaptureSaleBody(makeSaleRow(), EGP);
     const decimal = /^[0-9]+\.[0-9]{4}$/;

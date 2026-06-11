@@ -239,6 +239,14 @@ describe('createSaleSyncFlushWorker.flushPending — option c', () => {
     expect(m.bumpAttempt).toHaveBeenCalledWith('a');
   });
 
+  it('a missing sale row (loadSale returns null) → markFailed, does not attempt a flush', async () => {
+    const { worker, m } = build({ pending: [outboxRow({ sale_id: 'gone' })], flushResults: [] });
+    const summary = await worker.flushPendingWith({ loadSale: () => null });
+    expect(m.flush).not.toHaveBeenCalled();
+    expect(m.markFailed).toHaveBeenCalledWith('gone', expect.stringContaining('not found'));
+    expect(summary).toMatchObject({ failed: 1 });
+  });
+
   it('a sale row that fails to build (malformed) → markFailed, continues', async () => {
     const { worker, m } = build({
       pending: [outboxRow({ sale_id: 'bad' })],
