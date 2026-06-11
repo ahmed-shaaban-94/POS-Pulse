@@ -1,6 +1,9 @@
-import type { JSX } from 'react';
+import { useCallback, type JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useFeatureFlagsStore } from '../../../stores/feature-flags-store';
+import { usePaymentStore } from '../../../stores/payment-store';
+import { useCartStore } from '../../../stores/cart-store';
 import { Workspace } from '../../../shell/regions/Workspace';
 import { PaymentSurface } from '../../../ui/payments/PaymentSurface';
 import { CheckoutPlaceholder } from './CheckoutPlaceholder';
@@ -19,11 +22,26 @@ import { CheckoutPlaceholder } from './CheckoutPlaceholder';
  * 003-era `CheckoutPlaceholder` — the visual tender-slot reservation — so the
  * route is never blank and pre-006 behaviour is preserved.
  *
- * PaymentSurface reads its own payments + tender bridge from `window.api`; no
- * props are threaded here.
+ * PaymentSurface reads its own payments + tender + sales bridge from
+ * `window.api`. The one prop threaded here is `onNewSale`: after payment
+ * settles, PaymentSurface shows a "New sale" button but is Router-agnostic, so
+ * the route owner supplies the post-sale reset+navigate. Resetting the payment
+ * and cart stores then returning to /app/cart starts the next sale clean and
+ * is what unsticks the cashier from the settled surface (the prior dead-end).
  */
 export function CheckoutRoute(): JSX.Element {
   const paymentsFlag = useFeatureFlagsStore((s) => s.payments);
+  const navigate = useNavigate();
+
+  const handleNewSale = useCallback((): void => {
+    // Clear the just-completed sale's payment envelope + attempt, and the cart,
+    // so the next sale starts from empty. (The finalized Sale is already
+    // durable in the main process; these stores are renderer-only working
+    // state.) Then return to the cart to begin ringing the next sale.
+    usePaymentStore.getState().reset();
+    useCartStore.getState().reset();
+    void navigate('/app/cart');
+  }, [navigate]);
 
   if (!paymentsFlag) {
     return <CheckoutPlaceholder />;
@@ -31,7 +49,7 @@ export function CheckoutRoute(): JSX.Element {
 
   return (
     <Workspace title="Checkout">
-      <PaymentSurface />
+      <PaymentSurface onNewSale={handleNewSale} />
     </Workspace>
   );
 }

@@ -228,6 +228,156 @@ describe('cart → checkout wiring (006 mount)', () => {
     expect(window.location.pathname).toBe('/app/checkout');
   });
 
+  it('drives the full single-tender path: scan → add → handoff → tender → confirm → settled → New sale → /app/cart', async () => {
+    // P0 smoke chain as an integration test (the one path the ticket is about),
+    // driven through the REAL AppRouter so every seam is exercised wired, not
+    // stubbed. The recent-sale poll returns a STALE prior sale on the first
+    // call (finalized BEFORE this settled_at) to prove the surface ignores it
+    // and waits for THIS sale — the timing bug that a unit mock can't catch.
+    const user = userEvent.setup();
+    useFeatureFlagsStore.getState().hydrate({ cart: true, payments: true, productSearch: true });
+    useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);
+
+    const envelope = makeEnvelope();
+    const settledAt = '2026-06-11T09:06:00.000Z';
+    const api = (window as unknown as { api: Record<string, unknown> }).api;
+    (api.catalogue as { lookupBarcode: ReturnType<typeof vi.fn> }).lookupBarcode = vi
+      .fn()
+      .mockResolvedValue({
+        kind: 'one',
+        product: {
+          product_id: 'p-1',
+          display_name_ar: 'Paracetamol 500mg Tablets',
+          price_minor: 1250,
+          active: true,
+          controlled_substance: false,
+          prescription_required: false,
+        },
+      });
+    const cartApi = api.cart as {
+      lines: { add: ReturnType<typeof vi.fn> };
+      handoff: ReturnType<typeof vi.fn>;
+    };
+    cartApi.lines.add = vi.fn().mockResolvedValue({
+      kind: 'ok',
+      line_id: 'line-1',
+      display_name: 'Paracetamol 500mg Tablets',
+      unit_price_minor: 1250,
+      line_subtotal_minor: 1250,
+      quantity: 1,
+      version: 1,
+      merged: false,
+    });
+    cartApi.handoff = vi.fn().mockResolvedValue({ kind: 'ok', envelope });
+
+    // The payments + tender + sales bridge for the bridged PaymentSurface path.
+    api.payments = {
+      start: vi.fn(() => Promise.resolve({ kind: 'ok', payment_attempt_id: 'pa-1' })),
+      confirm: vi.fn(() => Promise.resolve({ kind: 'ok', settled_at: settledAt })),
+      cancel: vi.fn(),
+      subscribe: vi.fn(),
+      read: vi.fn(() =>
+        Promise.resolve({
+          kind: 'ok',
+          payment_attempt: {
+            payment_attempt_id: 'pa-1',
+            state: 'started',
+            envelope_subtotal_minor: envelope.subtotal_minor,
+            started_at: '2026-06-11T09:05:30.000Z',
+            tender_lines: [
+              {
+                tender_line_id: 'tl-1',
+                tender_type: 'cash',
+                amount_applied_minor: envelope.subtotal_minor,
+                state: 'applied',
+                apply_order: 1,
+                applied_at: '2026-06-11T09:05:45.000Z',
+              },
+            ],
+          },
+        }),
+      ),
+    };
+    api.tender = {
+      apply: vi.fn(() =>
+        Promise.resolve({
+          kind: 'ok',
+          tender_line_id: 'tl-1',
+          amount_applied_minor: envelope.subtotal_minor,
+          change_due_minor: 0,
+        }),
+      ),
+      reverse: vi.fn(),
+      read: vi.fn(),
+    };
+    api.sales = {
+      read: vi.fn(),
+      findByNumber: vi.fn(),
+      // First poll = stale prior sale (finalized before settledAt) → ignored.
+      // Subsequent polls = THIS sale.
+      subscribe: vi
+        .fn()
+        .mockResolvedValueOnce({
+          kind: 'ok',
+          subscription_token: 's',
+          recent: {
+            sale_id: 'sale-prev',
+            sale_number: 'C1-0006',
+            finalized_at: '2026-06-11T09:05:59.000Z',
+          },
+        })
+        .mockResolvedValue({
+          kind: 'ok',
+          subscription_token: 's',
+          recent: {
+            sale_id: 'sale-this',
+            sale_number: 'C1-0007',
+            finalized_at: '2026-06-11T09:06:00.500Z',
+          },
+        }),
+      unsubscribe: vi.fn(),
+    };
+
+    render(
+      <AppRouter pairing={pairedBridge()} operator={operatorBridge()} initialEntry="/app/cart" />,
+    );
+
+    await waitFor(() => {
+      expect((api.cart as { create: ReturnType<typeof vi.fn> }).create).toHaveBeenCalled();
+    });
+
+    // Scan → Add → handoff → Continue → checkout.
+    const scan = await screen.findByTestId('scan-capture-field');
+    await user.type(scan, '6221000000001');
+    fireEvent.keyDown(scan, { key: 'Enter' });
+    await user.click(await screen.findByRole('button', { name: /Add/ }));
+    const handoffBtn = await screen.findByTestId('cart-handoff-button');
+    await waitFor(() => expect(handoffBtn).toBeEnabled());
+    await user.click(handoffBtn);
+    await user.click(await screen.findByTestId('handoff-continue-button'));
+
+    // Tender → enter exact cash → confirm cash line → confirm payment.
+    await waitFor(() => expect(screen.getByTestId('payment-surface')).toBeInTheDocument());
+    await user.click(await screen.findByTestId('tender-cash'));
+    const amountInput = await screen.findByTestId('cash-entry-amount-input');
+    await user.type(amountInput, String(envelope.subtotal_minor));
+    await user.click(await screen.findByTestId('cash-entry-confirm'));
+    await user.click(await screen.findByTestId('payment-surface-confirm'));
+
+    // Settled → completed state + the correct (not stale) sale number.
+    await waitFor(() => expect(screen.getByTestId('payment-surface-settled')).toBeInTheDocument());
+    const saleNumber = await screen.findByTestId('payment-surface-sale-number');
+    expect(saleNumber).toHaveTextContent('C1-0007');
+    expect(saleNumber).not.toHaveTextContent('C1-0006');
+
+    // New sale → cashier is unstuck → back on a usable cart route.
+    await user.click(screen.getByTestId('payment-surface-new-sale'));
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/app/cart');
+    });
+    expect(usePaymentStore.getState().envelope).toBeNull();
+  });
+
   it('checkout route falls back to the reserved placeholder when payments flag is off', async () => {
     useFeatureFlagsStore.getState().hydrate({ cart: true, payments: false });
     useOperatorSessionStore.getState().hydrateSignedIn(MANAGER_SESSION);
