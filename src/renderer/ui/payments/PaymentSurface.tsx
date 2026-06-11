@@ -11,6 +11,7 @@ import { VoucherEntry } from './VoucherEntry.js';
 import type {
   PaymentsBridgeAPI,
   PreloadBridgeAPI,
+  SalesBridgeAPI,
   TenderBridgeAPI,
 } from '../../../shared/bridge-api.js';
 
@@ -42,45 +43,73 @@ import type {
 
 export interface PaymentSurfaceProps {
   /**
-   * Test seam: injects payments + tender bridge in place of `window.api`.
-   * Mirrors the `_testBridge` pattern from CartPane (cart-pane-live-lines).
-   * When omitted in production, the surface reads from `window.api.payments`
-   * + `window.api.tender` (the typed preload bridge from S3c).
+   * Test seam: injects payments + tender (+ optional sales) bridge in place of
+   * `window.api`. Mirrors the `_testBridge` pattern from CartPane
+   * (cart-pane-live-lines). When omitted in production, the surface reads from
+   * `window.api.payments` + `window.api.tender` (+ `window.api.sales`) — the
+   * typed preload bridge.
    */
   _testBridge?: {
     payments: PaymentsBridgeAPI;
     tender: TenderBridgeAPI;
+    sales?: SalesBridgeAPI;
   };
+  /**
+   * Invoked when the cashier clicks "New sale" on the settled/completed
+   * surface. The route owner (CheckoutRoute) wires this to reset the payment +
+   * cart stores and navigate back to /app/cart — keeping PaymentSurface
+   * Router-agnostic (mirrors CartPane's onPaymentContinue seam, so the
+   * bare-render unit tests need no Router ancestor). Optional + guarded: when
+   * omitted (tests / Slice-1), the button still renders and is a safe no-op.
+   */
+  onNewSale?: () => void;
 }
 
 type Phase = 'tender_selection' | 'entry' | 'settled';
 
-interface PaymentsAndTenderBridge {
+interface ResolvedBridge {
   payments: PaymentsBridgeAPI;
   tender: TenderBridgeAPI;
+  /**
+   * The read-only sales bridge, used after settlement to poll the terminal's
+   * most-recently-finalized sale (`subscribe({ topic: 'recent' })`) so the
+   * completed surface can show the cashier-quotable sale number. Optional: the
+   * surface degrades gracefully (completed state + New sale, no sale number)
+   * when sales is absent — `payments.confirm` carries no sale id/number, and
+   * the sale finalizes asynchronously in the main process.
+   */
+  sales?: SalesBridgeAPI;
 }
 
 /**
- * Resolve the payments + tender bridge. In tests the bridge is supplied via
- * the `_testBridge` prop; in production we read it from the typed preload
- * `window.api`. Returns null only when both are absent (e.g. happy-dom with
- * no prop injection — Slice-1 fall-back) so the surface can degrade gracefully.
+ * Resolve the payments + tender (+ sales) bridge. In tests the bridge is
+ * supplied via the `_testBridge` prop; in production we read it from the typed
+ * preload `window.api`. Returns null only when payments OR tender is absent
+ * (e.g. happy-dom with no prop injection — Slice-1 fall-back) so the surface
+ * can degrade gracefully. `sales` is optional and never gates resolution.
  */
-function resolveBridge(
-  testBridge: PaymentsAndTenderBridge | undefined,
-): PaymentsAndTenderBridge | null {
+function resolveBridge(testBridge: ResolvedBridge | undefined): ResolvedBridge | null {
   if (testBridge !== undefined) {
     return testBridge;
   }
-  /* v8 ignore next 8 — only reachable in Electron; jsdom never sets window.api */
+  /* v8 ignore next 9 — only reachable in Electron; jsdom never sets window.api */
   const api = (window as unknown as { api?: PreloadBridgeAPI }).api;
   if (api === undefined || api.payments === undefined || api.tender === undefined) {
     return null;
   }
-  return { payments: api.payments, tender: api.tender };
+  // Spread `sales` only when present — `exactOptionalPropertyTypes` forbids
+  // assigning an explicit `undefined` to the optional `sales?` property.
+  return {
+    payments: api.payments,
+    tender: api.tender,
+    ...(api.sales !== undefined ? { sales: api.sales } : {}),
+  };
 }
 
-export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.Element | null {
+export function PaymentSurface({
+  _testBridge,
+  onNewSale,
+}: PaymentSurfaceProps = {}): JSX.Element | null {
   const sessionState = useOperatorSessionStore((s) => s.state);
   const envelope = usePaymentStore((s) => s.envelope);
   const paymentSlice = usePaymentStore((s) => s.paymentSlice);
@@ -92,6 +121,15 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [reversalPending, setReversalPending] = useState<boolean>(false);
+  // The cashier-quotable number of the just-finalized sale. Null until the
+  // recent-sale poll resolves (or forever, if sales is absent / the worker is
+  // slow — the completed state + New sale never depend on it).
+  const [settledSaleNumber, setSettledSaleNumber] = useState<string | null>(null);
+  // `settled_at` from payments.confirm, used to discriminate THIS sale's
+  // `recent` snapshot from a prior sale's. The AD-2 worker finalizes THIS sale
+  // AFTER confirm returns, so a `recent` whose finalized_at predates this
+  // settled_at is a stale prior sale and must be ignored.
+  const [settledAt, setSettledAt] = useState<string | null>(null);
 
   const bridge = resolveBridge(_testBridge);
 
@@ -112,8 +150,68 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
     setIsCancelling(false);
     setIsStarting(false);
     setReversalPending(false);
+    setSettledSaleNumber(null);
+    setSettledAt(null);
     usePaymentStore.getState().clearAttempt();
   }, [sessionState.kind, envelopeHandoffId]);
+
+  // On entering the settled phase, poll the terminal's most-recently-finalized
+  // sale to surface the cashier-quotable sale number. The sale finalizes
+  // asynchronously in the main process (~200ms after confirm via the AD-2
+  // worker); `payments.confirm` returns only `settled_at`. We poll
+  // `sales.subscribe({ topic: 'recent' })` (a snapshot poll, no push) a few
+  // times to ride out that gap, then stop. Graceful: any refusal / absent
+  // sales bridge / unmount simply leaves the number unset — the completed
+  // surface + New sale do not depend on it (invariant 14 holds regardless).
+  const salesBridge = bridge?.sales;
+  useEffect(() => {
+    if (
+      phase !== 'settled' ||
+      salesBridge === undefined ||
+      settledAt === null ||
+      settledSaleNumber !== null
+    ) {
+      return;
+    }
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 10;
+    const POLL_INTERVAL_MS = 200;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async (): Promise<void> => {
+      attempts += 1;
+      try {
+        const response = await salesBridge.subscribe({ topic: 'recent' });
+        if (cancelled) return;
+        if (
+          response.kind === 'ok' &&
+          'recent' in response &&
+          response.recent !== null &&
+          // Discriminate THIS sale from a stale prior one: the AD-2 worker
+          // finalizes THIS sale AFTER confirm, so only a recent whose
+          // finalized_at is at/after our settled_at is ours. A prior sale's
+          // snapshot (finalized before settled_at) is ignored — keep polling.
+          response.recent.finalized_at >= settledAt
+        ) {
+          setSettledSaleNumber(response.recent.sale_number);
+          return;
+        }
+      } catch {
+        // Bridge rejection — treat as "not yet available"; keep polling until
+        // the attempt cap, then give up silently (no DOM error surfaced).
+      }
+      if (!cancelled && attempts < MAX_ATTEMPTS) {
+        timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
+      }
+    };
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [phase, salesBridge, settledAt, settledSaleNumber]);
 
   if (sessionState.kind !== 'signedIn' || envelope === null) {
     return null;
@@ -259,6 +357,10 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
         idempotency_key: crypto.randomUUID(),
       });
       if (response.kind === 'ok') {
+        // Capture settled_at so the recent-sale poll can tell THIS sale's
+        // finalized snapshot from a stale prior one (the worker finalizes
+        // after this returns).
+        setSettledAt(response.settled_at);
         setPhase('settled');
       } else {
         setBridgeRefusalCopy('This payment could not be settled. Please try again.');
@@ -302,6 +404,29 @@ export function PaymentSurface({ _testBridge }: PaymentSurfaceProps = {}): JSX.E
         >
           Payment settled.
         </div>
+        {settledSaleNumber !== null && (
+          <div
+            className="payment-surface__sale-number"
+            data-testid="payment-surface-sale-number"
+            role="status"
+            aria-live="polite"
+          >
+            Sale {settledSaleNumber}
+          </div>
+        )}
+        <button
+          type="button"
+          className="payment-surface__new-sale"
+          data-testid="payment-surface-new-sale"
+          onClick={() => {
+            // Routing + store reset is delegated to the route owner so this
+            // component stays Router-agnostic. Guarded — a missing handler is
+            // a safe no-op (Slice-1 / bare-render tests).
+            onNewSale?.();
+          }}
+        >
+          New sale
+        </button>
       </main>
     );
   }
