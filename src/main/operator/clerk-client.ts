@@ -119,14 +119,18 @@ export function decodeFrontendApiBaseUrl(publishableKey: string): string | null 
  *      body: identifier=<email>&strategy=password&password=<pw>
  *      Content-Type: application/x-www-form-urlencoded
  *      On success (200) returns a `client` object whose `sessions[0]` carries
- *      the created session `id` + `user` (but NO inline `jwt`). The response's
- *      `Set-Cookie: __client=…` carries the client/session state needed by the
- *      mint call. A failed attempt (wrong password, unknown identifier, bot
- *      challenge, …) surfaces as 4xx — collapsed to `{ kind: 'refused' }`.
+ *      the created session `id` + `user` (but NO inline `jwt`). The CLIENT
+ *      identity needed by the mint call is returned in the `Authorization`
+ *      RESPONSE header — a rotating client token (Clerk sets
+ *      `access-control-expose-headers: Authorization` precisely so this can be
+ *      replayed; it is NOT a `__client` cookie — Clerk does not set one here).
+ *      A failed attempt (wrong password, unknown identifier, bot challenge, …)
+ *      surfaces as 4xx — collapsed to `{ kind: 'refused' }`.
  *
  *   2. POST {fapi}/v1/client/sessions/{sessionId}/tokens
- *      with the `Cookie: __client=…` carried from step 1.
- *      Returns `{ jwt }` — the session JWT (JWS, `sub` = Clerk user id).
+ *      with `Authorization: Bearer <client-token>` carried from step 1's
+ *      response header. Returns `{ jwt }` — the session JWT (JWS, `sub` = Clerk
+ *      user id). Without this client token the mint returns `signed_out`.
  *      DP-2 verifies this JWT via JWKS and reads ONLY `sub`; the operator's
  *      role/tenant/store are resolved server-side from the DB, so this client
  *      does NOT require any Clerk `public_metadata.role`.
@@ -167,10 +171,11 @@ export function createClerkExchanger(deps: CreateClerkExchangerDeps): ClerkExcha
       }
       if (!signInRes.ok) return { kind: 'refused' };
 
-      // Capture the client cookie BEFORE consuming the body, so the mint call
-      // can carry the client/session state (the missing piece that otherwise
-      // makes /tokens return `signed_out`).
-      const clientCookie = extractClientCookie(signInRes);
+      // Capture the client token from the `Authorization` RESPONSE header
+      // BEFORE consuming the body — it carries the client/session identity the
+      // mint call needs (the missing piece that otherwise makes /tokens return
+      // `signed_out`). Clerk does NOT set a `__client` cookie here.
+      const clientToken = signInRes.headers.get('authorization');
 
       let signInParsed: unknown;
       try {
@@ -184,7 +189,9 @@ export function createClerkExchanger(deps: CreateClerkExchangerDeps): ClerkExcha
 
       // ── Call 2: mint the session JWT ─────────────────────────────────────
       const mintHeaders: Record<string, string> = {};
-      if (clientCookie !== null) mintHeaders['Cookie'] = clientCookie;
+      if (clientToken !== null && clientToken.length > 0) {
+        mintHeaders['Authorization'] = `Bearer ${clientToken}`;
+      }
 
       let mintRes: Response;
       try {
@@ -249,30 +256,6 @@ interface ClerkUser {
 interface ResolvedSession {
   id: string;
   user: ClerkUser & { id: string };
-}
-
-/**
- * Read the `__client` cookie from the sign_ins `Set-Cookie` so it can be
- * replayed on the token-mint call. Returns the minimal `name=value` pair
- * (attributes like `Path`/`HttpOnly` stripped) or null if absent.
- *
- * Prefers `Headers.getSetCookie()` (the spec method, an array) because the
- * Fetch spec forbids `Set-Cookie` from `Headers.get()` — happy-dom (the test
- * env) honours that and returns null from `.get('set-cookie')`, while undici
- * (the Electron main-process runtime) tolerates `.get()`. Reading both ways
- * keeps the cookie carry-over working in tests AND production.
- */
-function extractClientCookie(res: Response): string | null {
-  const headers = res.headers as Headers & { getSetCookie?: () => string[] };
-  const candidates: string[] =
-    typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [];
-  const fallback = headers.get('set-cookie');
-  if (fallback !== null) candidates.push(fallback);
-  for (const raw of candidates) {
-    const match = /(^|[,;\s])(__client=[^;,\s]+)/.exec(raw);
-    if (match?.[2] !== undefined) return match[2];
-  }
-  return null;
 }
 
 /** Resolve + validate the active session (id + user.id) from a sign_ins body. */

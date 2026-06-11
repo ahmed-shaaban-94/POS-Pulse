@@ -69,9 +69,10 @@ function sequenceFetch(responses: Array<Response | (() => never)>): {
 
 /**
  * REAL Clerk sign_ins 200 shape: a created session with id + user, but NO
- * inline `last_active_token.jwt` (Clerk does not return the session JWT inline;
- * it is minted by a separate POST /v1/client/sessions/{sid}/tokens call). The
- * `Set-Cookie: __client=...` carries client state to the token-mint call.
+ * inline jwt (Clerk mints the session JWT via a separate POST
+ * /v1/client/sessions/{sid}/tokens call). The client identity that the mint
+ * call needs is returned in the `Authorization` RESPONSE header (a rotating
+ * client token), NOT a cookie — verified against live preprod Clerk.
  */
 function signInsBody(opts: { sessionId?: string; user?: Record<string, unknown> } = {}): unknown {
   return {
@@ -100,24 +101,14 @@ function tokenMintBody(jwt: string): unknown {
   return { jwt };
 }
 
-function signInsResponse(
-  body: unknown,
-  setCookie = '__client=clienttoken123; Path=/; HttpOnly',
-): Response {
-  const res = new Response(JSON.stringify(body), {
+/** The rotating client token Clerk returns in the sign_ins `Authorization` header. */
+const CLIENT_TOKEN = 'client.token.abc123';
+
+function signInsResponse(body: unknown, clientToken: string = CLIENT_TOKEN): Response {
+  return new Response(JSON.stringify(body), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: clientToken },
   });
-  // happy-dom (the vitest env) drops Set-Cookie from a Response entirely
-  // (get('set-cookie')→null, getSetCookie()→[]). Real Clerk + the Electron
-  // main-process runtime (undici) DO expose it. So the fixture installs a
-  // working getSetCookie() that returns the cookie the code reads — modelling
-  // the production behaviour the env cannot.
-  Object.defineProperty(res.headers, 'getSetCookie', {
-    configurable: true,
-    value: () => [setCookie],
-  });
-  return res;
 }
 
 /** Full happy 2-call sequence: sign_ins (no inline jwt) then /tokens (jwt). */
@@ -190,7 +181,7 @@ describe('createClerkExchanger — request shape', () => {
     expect(parsed.get('password')).toBe('p455');
   });
 
-  it('mints the session JWT via POST /v1/client/sessions/{sid}/tokens, carrying the __client cookie', async () => {
+  it('mints the session JWT via POST /v1/client/sessions/{sid}/tokens, carrying the client token', async () => {
     const { fetchImpl, captured } = happySequence('minted.jwt', { sessionId: 'sess_xyz789' });
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     await exchanger.exchange({ identifier: 'i', password: 'p' });
@@ -199,9 +190,11 @@ describe('createClerkExchanger — request shape', () => {
     const mint = captured[1];
     expect(mint?.url).toBe(`${FAPI}/v1/client/sessions/sess_xyz789/tokens`);
     expect(mint?.init.method).toBe('POST');
-    // The client state from sign_ins' Set-Cookie must travel to the mint call.
-    const cookie = (mint?.init.headers as Record<string, string>)['Cookie'];
-    expect(cookie).toContain('__client=');
+    // The client token from sign_ins' Authorization RESPONSE header must travel
+    // to the mint call as `Authorization: Bearer <client-token>` — without it
+    // Clerk's mint returns `signed_out` (verified against live preprod Clerk).
+    const auth = (mint?.init.headers as Record<string, string>)['Authorization'];
+    expect(auth).toBe(`Bearer ${CLIENT_TOKEN}`);
   });
 
   it('strips trailing slash from frontendApiBaseUrl when constructing the URL', async () => {
