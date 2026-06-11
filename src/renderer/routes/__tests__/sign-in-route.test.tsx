@@ -161,6 +161,53 @@ describe('AppRouter + /sign-in (T022)', () => {
     });
   });
 
+  it('successful manager sign-in navigates from /sign-in into the dashboard', async () => {
+    // Regression: the store flipping to signedIn is NOT enough — the
+    // renderer must navigate /sign-in → /app or the operator is stranded
+    // on the sign-in screen. Assert the dashboard actually mounts.
+    const user = userEvent.setup();
+    render(
+      <AppRouter pairing={pairedBridge()} operator={operatorBridge({})} initialEntry="/sign-in" />,
+    );
+    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
+    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.click(screen.getByTestId('sign-in-submit'));
+    await waitFor(() => expect(screen.getByText(/welcome to pos pulse/i)).toBeInTheDocument());
+    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+  });
+
+  it('takeover-confirm sign-in navigates from /sign-in into the dashboard', async () => {
+    // The takeover path resolves to the SAME signedIn state as a normal
+    // sign-in (store.resolveSignedIn from TakeoverPrompt). It must drive
+    // the same /sign-in → /app navigation — otherwise a manager who
+    // confirms a takeover is left stuck on the sign-in screen.
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      signIn: () =>
+        Promise.resolve({
+          kind: 'takeover_required' as const,
+          pending_takeover_id: 'takeover-mgr',
+        }),
+    });
+    // confirmTakeover → signed_in (the path the user's main log proved live).
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    vi.mocked(bridge.confirmTakeover).mockResolvedValue({
+      kind: 'signed_in' as const,
+      session: SESSION,
+    });
+    render(<AppRouter pairing={pairedBridge()} operator={bridge} initialEntry="/sign-in" />);
+    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
+    await user.type(screen.getByLabelText(/^password$/i), 'p');
+    await user.click(screen.getByTestId('sign-in-submit'));
+    // Takeover prompt appears; confirm it.
+    await waitFor(() => expect(screen.getByTestId('takeover-prompt-confirm')).toBeInTheDocument());
+    await user.click(screen.getByTestId('takeover-prompt-confirm'));
+    await waitFor(() => expect(screen.getByText(/welcome to pos pulse/i)).toBeInTheDocument());
+    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+  });
+
   it('cashier deep-link to /app/dashboard renders a generic unavailable surface', async () => {
     useOperatorSessionStore.getState().beginSignIn();
     useOperatorSessionStore.getState().resolveSignedIn(CASHIER_SESSION);
@@ -251,7 +298,14 @@ describe('AppRouter + sign-out (T024)', () => {
 // the full AppRouter + pairing overhead.
 
 function renderSignInRoute(bridge: OperatorBridgeAPI) {
-  return render(<SignInRoute operator={bridge} />);
+  // SignInRoute uses useNavigate() (the /sign-in → /app redirect on
+  // signedIn), which requires a Router ancestor. These direct-render
+  // tests isolate cashier-flow branches, so a MemoryRouter is enough.
+  return render(
+    <MemoryRouter>
+      <SignInRoute operator={bridge} />
+    </MemoryRouter>,
+  );
 }
 
 describe('SignInRoute — roster fetch', () => {
