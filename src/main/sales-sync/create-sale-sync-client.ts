@@ -195,8 +195,13 @@ export function classifyStatus(status: number): SaleSyncResult {
   if (status === 200 || status === 201) return { kind: 'ok' };
   if (status === 409) return { kind: 'duplicate' };
   if (status >= 500) return { kind: 'transient' };
-  // Any other 4xx (400/401/403/422/…) is permanent — the request will not
-  // succeed on retry without intervention; dead-letter it.
+  // 401/403 — auth refusal. The operator's Clerk session JWT lives ~60s, so a
+  // flush attempted with a stale token legitimately 401s. This is RETRYABLE
+  // (a fresh sign-in re-mints the JWT and the row re-drains), NOT a permanent
+  // defect — dead-lettering it would silently lose the sale. Treat as transient.
+  if (status === 401 || status === 403) return { kind: 'transient' };
+  // Other 4xx (400/404/422/…) is a genuine validation/contract defect — the
+  // request will not succeed on retry without intervention; dead-letter it.
   if (status >= 400) return { kind: 'permanent' };
   // Unexpected 2xx/3xx — treat as transient (don't lose the sale).
   return { kind: 'transient' };
