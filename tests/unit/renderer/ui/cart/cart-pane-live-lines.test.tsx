@@ -371,6 +371,107 @@ describe('T052 — CartPane onLineAdded callback (cart.lines.add wiring)', () =>
   });
 });
 
+describe('T052 — CartPane add-to-cart advances FSM empty → editing (regression)', () => {
+  // Regression for the production bug: clicking "Add" in the catalogue did
+  // nothing visible. The bridge add succeeded and onLineAdded populated the
+  // local `lines` array, but the cart FSM stayed `empty` because nothing
+  // called applyLineAdded(). CartPane gates its render on activeCart.state
+  // (showEmpty / canHandoff), NOT on lines.length — so the line list,
+  // subtotal, and handoff button were all suppressed.
+  //
+  // These tests start from a freshly CREATED cart (state = empty), exactly as
+  // CatalogueSalePane leaves it after cart.create — and DO NOT pre-seed the
+  // FSM with applyLineAdded(). That is the difference from the tests above,
+  // which masked the bug by advancing the FSM manually in setup.
+  function makeAddedLine(over: Partial<Record<string, unknown>> = {}) {
+    return {
+      line_id: 'line-1',
+      display_name: 'Paracetamol 500mg Tablets',
+      unit_price_minor: 1250,
+      line_subtotal_minor: 1250,
+      quantity: 1,
+      version: 1,
+      merged: false,
+      ...over,
+    } as {
+      line_id: string;
+      display_name: string;
+      unit_price_minor: number;
+      line_subtotal_minor: number;
+      quantity: number;
+      version: number;
+      merged: boolean;
+    };
+  }
+
+  it('shows the added line row after onLineAdded on a freshly-created (empty) cart', () => {
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1'); // state = empty (NOT editing)
+
+    let addLine!: (res: ReturnType<typeof makeAddedLine>) => void;
+    render(<CartPane onLineAdded={(fn) => (addLine = fn)} />);
+
+    // Precondition: empty cart shows the placeholder, hides the line list.
+    expect(screen.getByTestId('cart-empty-placeholder')).toBeInTheDocument();
+
+    act(() => {
+      addLine(makeAddedLine());
+    });
+
+    expect(screen.queryByTestId('cart-empty-placeholder')).not.toBeInTheDocument();
+    expect(screen.getByTestId('line-item-row')).toBeInTheDocument();
+    expect(screen.getByText('Paracetamol 500mg Tablets')).toBeInTheDocument();
+    expect(screen.getByTestId('qty-display')).toHaveTextContent('1');
+  });
+
+  it('shows the computed subtotal (12.50) after the first add on an empty cart', () => {
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1');
+
+    let addLine!: (res: ReturnType<typeof makeAddedLine>) => void;
+    render(<CartPane onLineAdded={(fn) => (addLine = fn)} />);
+
+    act(() => {
+      addLine(makeAddedLine());
+    });
+
+    expect(screen.getByTestId('cart-subtotal-value')).toHaveTextContent('¤12.50');
+  });
+
+  it('enables the handoff button after the first add on an empty cart', () => {
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1');
+
+    let addLine!: (res: ReturnType<typeof makeAddedLine>) => void;
+    render(<CartPane onLineAdded={(fn) => (addLine = fn)} />);
+
+    // Precondition: handoff disabled while empty.
+    expect(screen.getByTestId('cart-handoff-button')).toBeDisabled();
+
+    act(() => {
+      addLine(makeAddedLine());
+    });
+
+    expect(screen.getByTestId('cart-handoff-button')).toBeEnabled();
+  });
+
+  it('advances the cart FSM from empty to editing on the first add', () => {
+    setSignedIn();
+    useCartStore.getState().applyCartCreated('cart-1');
+    expect(useCartStore.getState().activeCart?.state).toBe('empty');
+
+    let addLine!: (res: ReturnType<typeof makeAddedLine>) => void;
+    render(<CartPane onLineAdded={(fn) => (addLine = fn)} />);
+
+    act(() => {
+      addLine(makeAddedLine());
+    });
+
+    expect(useCartStore.getState().activeCart?.state).toBe('editing');
+    expect(useCartStore.getState().activeCart?.lastLineId).toBe('line-1');
+  });
+});
+
 // ── Bridge handler tests (use _testBridge to avoid window.api) ──────────────
 
 const INITIAL_LINE = {

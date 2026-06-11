@@ -161,6 +161,15 @@ export function CartPane({
   const [handoffError, setHandoffError] = useState<string | null>(null);
 
   const handleAddLine = useCallback((res: AddedLineResult): void => {
+    // Advance the cart FSM on every confirmed add (005 owns this transition;
+    // 009's add controller never writes cart state). The FIRST line moves the
+    // cart empty → editing; subsequent adds just refresh lastLineId while
+    // already editing. CartPane gates its line list, subtotal, and handoff
+    // button on activeCart.state (showEmpty / canHandoff), so without this the
+    // confirmed line lands in `lines` but stays invisible. Read the action via
+    // getState() so the callback closes over nothing render-time and its []
+    // deps stay valid.
+    useCartStore.getState().applyLineAdded(res.line_id);
     setLines((prev) => {
       if (res.merged) {
         return prev.map((l) =>
@@ -187,7 +196,7 @@ export function CartPane({
         },
       ];
     });
-  }, []); // stable: only closes over setLines (React-guaranteed identity-stable)
+  }, []); // stable: closes only over setLines + useCartStore.getState (both identity-stable)
 
   useEffect(() => {
     if (onLineAdded === undefined) return;
