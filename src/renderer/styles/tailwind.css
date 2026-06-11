@@ -2243,6 +2243,14 @@ body {
   }
 
   /* "Continue to payment" — permanently disabled; owned by future payments feature */
+  /*
+   * Enabled by default (primary affordance) — mirrors `.cart-pane__handoff`.
+   * The disabled appearance (muted, faded, not-allowed) is scoped to the
+   * `:disabled` / `[aria-disabled='true']` states below. Pre-006 this class
+   * was unconditionally styled disabled (the button was permanently disabled);
+   * 006 added `onContinue` to enable it, but the CSS still painted it gray —
+   * so an enabled button looked dead. This restores the enabled appearance.
+   */
   .handoff-summary__continue {
     display: inline-flex;
     align-items: center;
@@ -2251,12 +2259,34 @@ body {
     min-block-size: 44px;
     padding-inline: var(--space-4);
     border-radius: var(--radius-control);
-    background-color: var(--color-surface-elevated);
-    border: 1px solid var(--color-border);
-    color: var(--color-text-muted);
+    background-color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary-on);
     font-family: var(--font-family-sans);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-2) var(--ease-out),
+      border-color var(--duration-2) var(--ease-out),
+      opacity var(--duration-2) var(--ease-out);
+  }
+
+  .handoff-summary__continue:hover:not(:disabled):not([aria-disabled='true']) {
+    background-color: var(--color-primary-emphasis);
+    border-color: var(--color-primary-emphasis);
+  }
+
+  .handoff-summary__continue:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  .handoff-summary__continue:disabled,
+  .handoff-summary__continue[aria-disabled='true'] {
+    background-color: var(--color-surface-elevated);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
     opacity: 0.55;
     cursor: not-allowed;
   }
