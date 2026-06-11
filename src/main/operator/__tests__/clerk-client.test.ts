@@ -28,21 +28,6 @@ interface CapturedRequest {
   init: RequestInit;
 }
 
-function captureFetch(response: Response | (() => never)): {
-  fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-  captured: CapturedRequest[];
-} {
-  const captured: CapturedRequest[] = [];
-  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    captured.push({ url: stringifyInput(input), init: init ?? {} });
-    if (typeof response === 'function') {
-      return Promise.resolve().then(() => response());
-    }
-    return Promise.resolve(response.clone());
-  };
-  return { fetchImpl, captured };
-}
-
 function stringifyInput(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.toString();
@@ -55,26 +40,92 @@ function bodyAsString(body: BodyInit | null | undefined): string {
   throw new Error('test fixture: body was not a string');
 }
 
-function happyClerkBody(jwt: string): unknown {
+/**
+ * Fake fetch that returns a queued sequence of responses in call order — the
+ * exchange is a TWO-call flow (sign_ins → /tokens), so a single canned response
+ * can't model it. Each call shifts the next response off the queue.
+ */
+function sequenceFetch(responses: Array<Response | (() => never)>): {
+  fetchImpl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  captured: CapturedRequest[];
+} {
+  const captured: CapturedRequest[] = [];
+  let i = 0;
+  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    captured.push({ url: stringifyInput(input), init: init ?? {} });
+    const next = responses[i++];
+    if (next === undefined) {
+      throw new Error(
+        `test fixture: no queued response for call #${String(i)} to ${stringifyInput(input)}`,
+      );
+    }
+    if (typeof next === 'function') return Promise.resolve().then(() => next());
+    // Return the response as-is (no .clone()): each queued response is consumed
+    // exactly once, and clone() would drop the fixture's getSetCookie override.
+    return Promise.resolve(next);
+  };
+  return { fetchImpl, captured };
+}
+
+/**
+ * REAL Clerk sign_ins 200 shape: a created session with id + user, but NO
+ * inline `last_active_token.jwt` (Clerk does not return the session JWT inline;
+ * it is minted by a separate POST /v1/client/sessions/{sid}/tokens call). The
+ * `Set-Cookie: __client=...` carries client state to the token-mint call.
+ */
+function signInsBody(opts: { sessionId?: string; user?: Record<string, unknown> } = {}): unknown {
   return {
     response: {
       client: {
         sessions: [
           {
+            id: opts.sessionId ?? 'sess_abc123',
             status: 'active',
-            last_active_token: { jwt },
-            user: {
+            user: opts.user ?? {
               id: 'user_abc123',
               first_name: 'Sara',
               last_name: 'K.',
               email_addresses: [{ email_address: 'sara@x.test' }],
-              public_metadata: { role: 'manager' },
+              public_metadata: {}, // REAL operators have EMPTY metadata — no role.
             },
           },
         ],
       },
     },
   };
+}
+
+/** REAL Clerk token-mint response: POST /v1/client/sessions/{sid}/tokens → { jwt }. */
+function tokenMintBody(jwt: string): unknown {
+  return { jwt };
+}
+
+function signInsResponse(
+  body: unknown,
+  setCookie = '__client=clienttoken123; Path=/; HttpOnly',
+): Response {
+  const res = new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  // happy-dom (the vitest env) drops Set-Cookie from a Response entirely
+  // (get('set-cookie')→null, getSetCookie()→[]). Real Clerk + the Electron
+  // main-process runtime (undici) DO expose it. So the fixture installs a
+  // working getSetCookie() that returns the cookie the code reads — modelling
+  // the production behaviour the env cannot.
+  Object.defineProperty(res.headers, 'getSetCookie', {
+    configurable: true,
+    value: () => [setCookie],
+  });
+  return res;
+}
+
+/** Full happy 2-call sequence: sign_ins (no inline jwt) then /tokens (jwt). */
+function happySequence(jwt: string, opts?: { sessionId?: string; user?: Record<string, unknown> }) {
+  return sequenceFetch([
+    signInsResponse(signInsBody(opts)),
+    new Response(JSON.stringify(tokenMintBody(jwt)), { status: 200 }),
+  ]);
 }
 
 describe('decodeFrontendApiBaseUrl', () => {
@@ -90,6 +141,17 @@ describe('decodeFrontendApiBaseUrl', () => {
     const encoded = `${Buffer.from(host).toString('base64')}$`;
     const url = decodeFrontendApiBaseUrl(`pk_live_${encoded}`);
     expect(url).toBe('https://clerk.production.acme.com');
+  });
+
+  it('decodes a REAL Clerk key where the `$` delimiter is INSIDE the base64 payload', () => {
+    // The production format (verified against a live pk_live_ key): the base64
+    // decodes to `<host>$` — the `$` is part of the encoded payload, NOT appended
+    // to the key. Earlier the decoder only stripped `$` at the encoded level and
+    // left the decoded `host$` intact → regex-rejected → "malformed".
+    const host = 'clerk.smartdatapulse.tech';
+    const encoded = Buffer.from(`${host}$`).toString('base64'); // $ INSIDE base64
+    const url = decodeFrontendApiBaseUrl(`pk_live_${encoded}`);
+    expect(url).toBe('https://clerk.smartdatapulse.tech');
   });
 
   it('returns null for unknown prefix', () => {
@@ -111,17 +173,10 @@ describe('decodeFrontendApiBaseUrl', () => {
 
 describe('createClerkExchanger — request shape', () => {
   it('POSTs to {fapi}/v1/client/sign_ins with form-urlencoded body', async () => {
-    const body = happyClerkBody('jwt-1');
-    const { fetchImpl, captured } = captureFetch(
-      new Response(JSON.stringify(body), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
+    const { fetchImpl, captured } = happySequence('jwt-1');
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     await exchanger.exchange({ identifier: 'sara@x.test', password: 'p455' });
 
-    expect(captured).toHaveLength(1);
     const call = captured[0];
     expect(call).toBeDefined();
     expect(call?.url).toBe(`${FAPI}/v1/client/sign_ins`);
@@ -129,17 +184,28 @@ describe('createClerkExchanger — request shape', () => {
     expect((call?.init.headers as Record<string, string>)['Content-Type']).toBe(
       'application/x-www-form-urlencoded',
     );
-    const formBody = bodyAsString(call?.init.body);
-    const parsed = new URLSearchParams(formBody);
+    const parsed = new URLSearchParams(bodyAsString(call?.init.body));
     expect(parsed.get('identifier')).toBe('sara@x.test');
     expect(parsed.get('strategy')).toBe('password');
     expect(parsed.get('password')).toBe('p455');
   });
 
+  it('mints the session JWT via POST /v1/client/sessions/{sid}/tokens, carrying the __client cookie', async () => {
+    const { fetchImpl, captured } = happySequence('minted.jwt', { sessionId: 'sess_xyz789' });
+    const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
+    await exchanger.exchange({ identifier: 'i', password: 'p' });
+
+    expect(captured).toHaveLength(2);
+    const mint = captured[1];
+    expect(mint?.url).toBe(`${FAPI}/v1/client/sessions/sess_xyz789/tokens`);
+    expect(mint?.init.method).toBe('POST');
+    // The client state from sign_ins' Set-Cookie must travel to the mint call.
+    const cookie = (mint?.init.headers as Record<string, string>)['Cookie'];
+    expect(cookie).toContain('__client=');
+  });
+
   it('strips trailing slash from frontendApiBaseUrl when constructing the URL', async () => {
-    const { fetchImpl, captured } = captureFetch(
-      new Response(JSON.stringify(happyClerkBody('jwt-1')), { status: 200 }),
-    );
+    const { fetchImpl, captured } = happySequence('jwt-1');
     const exchanger = createClerkExchanger({
       frontendApiBaseUrl: 'https://clerk.example.com/',
       fetch: fetchImpl,
@@ -150,68 +216,56 @@ describe('createClerkExchanger — request shape', () => {
 });
 
 describe('createClerkExchanger — happy path', () => {
-  it('returns the JWT, operator id, role, and display name from a successful response', async () => {
-    const { fetchImpl } = captureFetch(
-      new Response(JSON.stringify(happyClerkBody('eyJ.fake.jwt')), { status: 200 }),
-    );
+  it('returns the minted JWT, operator id, and display name from the 2-call exchange', async () => {
+    const { fetchImpl } = happySequence('eyJ.minted.jwt');
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'sara@x.test', password: 'p' });
     expect(result.kind).toBe('ok');
     if (result.kind === 'ok') {
-      expect(result.jwt).toBe('eyJ.fake.jwt');
+      expect(result.jwt).toBe('eyJ.minted.jwt');
       expect(result.operator_id).toBe('user_abc123');
       expect(result.display_name).toBe('Sara K.');
-      expect(result.role).toBe('manager');
     }
+  });
+
+  it('succeeds even when Clerk public_metadata has NO role (DP-2 owns the authoritative role)', async () => {
+    // Real operators have empty public_metadata; the role gate must NOT block
+    // sign-in — DP-2 resolves the role from the DB at /operators/sign-in.
+    const { fetchImpl } = happySequence('j', {
+      user: { id: 'u', public_metadata: {} },
+    });
+    const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
+    const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
+    expect(result.kind).toBe('ok');
   });
 
   it('falls back from first/last name to username, then email, then id', async () => {
     const cases: Array<{ user: Record<string, unknown>; expected: string }> = [
+      { user: { id: 'u1', username: 'sara' }, expected: 'sara' },
       {
-        user: { id: 'u1', username: 'sara', public_metadata: { role: 'manager' } },
-        expected: 'sara',
-      },
-      {
-        user: {
-          id: 'u2',
-          email_addresses: [{ email_address: 'omar@x.test' }],
-          public_metadata: { role: 'admin' },
-        },
+        user: { id: 'u2', email_addresses: [{ email_address: 'omar@x.test' }] },
         expected: 'omar@x.test',
       },
-      { user: { id: 'u3', public_metadata: { role: 'cashier' } }, expected: 'u3' },
+      { user: { id: 'u3' }, expected: 'u3' },
     ];
     for (const c of cases) {
-      const body = {
-        response: {
-          client: {
-            sessions: [{ status: 'active', last_active_token: { jwt: 'j' }, user: c.user }],
-          },
-        },
-      };
-      const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+      const { fetchImpl } = happySequence('j', { user: c.user });
       const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
       const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
       expect(result.kind).toBe('ok');
-      if (result.kind === 'ok') {
-        expect(result.display_name).toBe(c.expected);
-      }
+      if (result.kind === 'ok') expect(result.display_name).toBe(c.expected);
     }
   });
 
   it('reads `client` from either response.client or top-level client', async () => {
-    const body = {
-      client: {
-        sessions: [
-          {
-            status: 'active',
-            last_active_token: { jwt: 'jwt-direct' },
-            user: { id: 'u', public_metadata: { role: 'manager' } },
-          },
-        ],
-      },
-    };
-    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const { fetchImpl } = sequenceFetch([
+      signInsResponse({
+        client: {
+          sessions: [{ id: 'sess_d', status: 'active', user: { id: 'u', public_metadata: {} } }],
+        },
+      }),
+      new Response(JSON.stringify(tokenMintBody('jwt-direct')), { status: 200 }),
+    ]);
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result.kind).toBe('ok');
@@ -219,91 +273,89 @@ describe('createClerkExchanger — happy path', () => {
 });
 
 describe('createClerkExchanger — failure modes', () => {
-  it('collapses 4xx to refused (PR-2 — no factor distinction)', async () => {
+  it('collapses sign_ins 4xx to refused (PR-2 — no factor distinction)', async () => {
     for (const status of [400, 401, 403, 404, 422]) {
-      const { fetchImpl } = captureFetch(new Response('{"errors":[{"code":"...."}]}', { status }));
+      const { fetchImpl } = sequenceFetch([
+        new Response('{"errors":[{"code":"...."}]}', { status }),
+      ]);
       const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
       const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
       expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
     }
   });
 
-  it('collapses 5xx to refused', async () => {
-    const { fetchImpl } = captureFetch(new Response('oops', { status: 500 }));
+  it('collapses sign_ins 5xx to refused', async () => {
+    const { fetchImpl } = sequenceFetch([new Response('oops', { status: 500 })]);
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
   });
 
-  it('returns no_connection on network rejection (DNS/TLS/refused/timeout)', async () => {
+  it('collapses a token-mint 4xx/5xx (e.g. signed_out) to refused', async () => {
+    const { fetchImpl } = sequenceFetch([
+      signInsResponse(signInsBody()),
+      new Response('{"errors":[{"code":"signed_out"}]}', { status: 401 }),
+    ]);
+    const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
+    const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
+    expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
+  });
+
+  it('returns no_connection on sign_ins network rejection (DNS/TLS/refused/timeout)', async () => {
     const fetchImpl = vi.fn(() => Promise.reject(new Error('ECONNREFUSED')));
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result).toEqual<ClerkExchangeResult>({ kind: 'no_connection' });
   });
 
-  it('returns refused when the response is malformed JSON', async () => {
-    const { fetchImpl } = captureFetch(new Response('not-json', { status: 200 }));
+  it('returns no_connection on token-mint network rejection', async () => {
+    const { fetchImpl } = sequenceFetch([
+      signInsResponse(signInsBody()),
+      (): never => {
+        throw new Error('ECONNRESET');
+      },
+    ]);
+    const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
+    const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
+    expect(result).toEqual<ClerkExchangeResult>({ kind: 'no_connection' });
+  });
+
+  it('returns refused when the sign_ins response is malformed JSON', async () => {
+    const { fetchImpl } = sequenceFetch([new Response('not-json', { status: 200 })]);
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
   });
 
-  it('returns refused when no JWT is present in the response', async () => {
-    const body = {
-      response: {
-        client: {
-          sessions: [
-            {
-              status: 'active',
-              last_active_token: {},
-              user: { id: 'u', public_metadata: { role: 'manager' } },
-            },
-          ],
-        },
-      },
-    };
-    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+  it('returns refused when the mint response carries no jwt', async () => {
+    const { fetchImpl } = sequenceFetch([
+      signInsResponse(signInsBody()),
+      new Response(JSON.stringify({ jwt: '' }), { status: 200 }),
+    ]);
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
   });
 
-  it('returns refused when role is outside the closed Role set', async () => {
-    const body = {
-      response: {
-        client: {
-          sessions: [
-            {
-              status: 'active',
-              last_active_token: { jwt: 'j' },
-              user: { id: 'u', public_metadata: { role: 'owner' } },
-            },
-          ],
-        },
-      },
-    };
-    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+  it('returns refused when sign_ins has no resolvable session id', async () => {
+    const { fetchImpl } = sequenceFetch([
+      signInsResponse({ response: { client: { sessions: [] } } }),
+    ]);
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
   });
 
   it('returns refused when session status is not active', async () => {
-    const body = {
-      response: {
-        client: {
-          sessions: [
-            {
-              status: 'pending',
-              last_active_token: { jwt: 'j' },
-              user: { id: 'u', public_metadata: { role: 'manager' } },
-            },
-          ],
+    const { fetchImpl } = sequenceFetch([
+      signInsResponse({
+        response: {
+          client: {
+            sessions: [{ id: 's', status: 'pending', user: { id: 'u', public_metadata: {} } }],
+          },
         },
-      },
-    };
-    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+      }),
+    ]);
     const exchanger = createClerkExchanger({ frontendApiBaseUrl: FAPI, fetch: fetchImpl });
     const result = await exchanger.exchange({ identifier: 'i', password: 'p' });
     expect(result).toEqual<ClerkExchangeResult>({ kind: 'refused' });
