@@ -24,6 +24,10 @@ release/
 .env.*
 !.env.example
 *.local
+# Local smoke/launch helpers (carry env + the publishable key; never commit).
+*.local.ps1
+*.local.cmd
+run-pos-smoke.local.*
 # Block any literal secrets dir at the repo root, but NOT the SecretStore
 # source directory at src/main/secrets/.
 /secrets/
