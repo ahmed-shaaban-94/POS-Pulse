@@ -53,6 +53,9 @@ import { bindSalesRepository } from './sales/repositories/sales.repository.js';
 import { bindPrintEventsRepository } from './sales/repositories/print-events.repository.js';
 import { bindDrawerEventsRepository } from './sales/repositories/drawer-events.repository.js';
 import { bindSaleSyncOutboxRepository } from './sync-outbox/sale-sync-outbox.repository.js';
+import { createSaleSyncFlushWorker } from './sync-outbox/sale-sync-flush-worker.js';
+import { createSaleSyncFlushClient } from './sync-outbox/sale-sync-flush-client.js';
+import { freshJwtOrNull } from './sync-outbox/fresh-jwt.js';
 // 011 sale-sync — S5 live HTTP client + engine + status IPC (#349 cleared).
 import { createSaleSyncStateRepo } from './sales-sync/sale-sync-state-repo.js';
 import { createSaleSyncEngine } from './sales-sync/sale-sync-engine.js';
@@ -602,11 +605,22 @@ app
       logger: mainLogger,
     });
 
+    // 008 sale-sync flush (option c) — late-bound: the worker is constructed
+    // inside the sale-finalization gated block below (it needs salesRepo +
+    // outboxRepo, which only exist when that flag is on — and the outbox is
+    // only WRITTEN under the same flag, so an unset worker has nothing to do).
+    // The on-sign-in trigger closes over this holder so it fires the worker if
+    // and only if it was wired. Fire-and-forget.
+    let saleSyncFlushWorker: { flushPending(): Promise<unknown> } | null = null;
+
     registerOperatorHandlers(ipcMain, {
       signInHandler: operatorSignInHandler,
       cashierSignInHandler: operatorCashierSignInHandler,
       signOutHandler: operatorSignOutHandler,
       rosterHandler: operatorRosterHandler,
+      onManagerAdminSignedIn: () => {
+        void saleSyncFlushWorker?.flushPending().catch(() => undefined);
+      },
       sessionManager: operatorSessionManager,
       inactivityMonitor: operatorInactivityMonitor,
       auditEmitter,
@@ -1139,6 +1153,37 @@ app
       const pairingStatus = await pairingStore.getStatus();
       if (pairingStatus.kind === 'paired') {
         const outboxRepo = bindSaleSyncOutboxRepository(dbHandle);
+
+        // 008 sale-sync flush (option c) — construct the worker here, where
+        // salesRepo + outboxRepo exist (and the outbox is only written under
+        // this same flag). Assigned to the late-bound holder so the on-sign-in
+        // trigger (registered above) drains pending rows within the fresh-JWT
+        // window. A held JWT past its ~60s life is filtered to null by
+        // freshJwtOrNull → the worker no-ops (rows stay pending for next sign-in).
+        saleSyncFlushWorker = createSaleSyncFlushWorker({
+          outbox: outboxRepo,
+          loadSale: (id) => salesRepo.readById(id),
+          flushClient: createSaleSyncFlushClient({
+            baseUrl: apiBaseUrl,
+            fetch: globalThis.fetch.bind(globalThis),
+          }),
+          getOperatorJwt: () => {
+            const current = operatorSessionManager.getCurrent();
+            const jwt =
+              current === null
+                ? null
+                : freshJwtOrNull(operatorJwtHolder.get(current.backend_session_id), Date.now());
+            return Promise.resolve(jwt);
+          },
+          getDeviceAttestation: async () => {
+            const att = await deviceTokenAttestation();
+            return att.length > 0 ? att : null;
+          },
+          // Pilot currency. EGP has 2 minor digits (piastres). When the platform
+          // surfaces a per-tenant currency this becomes config-driven.
+          currency: { currencyCode: 'EGP', minorDigits: 2 },
+        });
+
         const allocator = bindSaleNumberAllocator(dbHandle);
         // saleAuditEmitter + printPipeline + printDispatcher are hoisted above
         // the receipts-bridge registration (T094c — unconditional handlers);

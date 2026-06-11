@@ -54,6 +54,14 @@ export interface OperatorHandlerDeps {
   signInHandler: SignInHandler;
   /** S4 / T075 — cashier PIN sign-in handler. */
   cashierSignInHandler: CashierSignInHandler;
+  /**
+   * 008 sale-sync flush (option c) — fired AFTER a successful manager/admin
+   * sign-in, when the Clerk session JWT is seconds-old. This is the real flush
+   * trigger: it drains any pending sale_sync_outbox rows within the live JWT
+   * window. Optional; absent in tests + when sale-finalization is flag-off.
+   * Fire-and-forget — a flush failure must never affect the sign-in result.
+   */
+  onManagerAdminSignedIn?: () => void;
   signOutHandler: SignOutHandler;
   /** T070b — branch roster handler. */
   rosterHandler: RosterHandler;
@@ -227,7 +235,12 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
         }
         const managerAdminReq = asManagerAdminRequest(request);
         if (managerAdminReq !== null) {
-          return await signInHandler.signIn(managerAdminReq);
+          const result = await signInHandler.signIn(managerAdminReq);
+          // 008 (option c): on a successful manager/admin sign-in, kick the
+          // sale-sync flush — the JWT is fresh now. Fire-and-forget; never let
+          // a flush hiccup touch the sign-in response.
+          if (result.kind === 'signed_in') deps.onManagerAdminSignedIn?.();
+          return result;
         }
         return refuseInvalid();
       } catch (err) {
