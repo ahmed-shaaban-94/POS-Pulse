@@ -8,6 +8,40 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-06-12
+
+This session ran the `/speckit-clarify` ambiguity scan against the spec ahead of `/speckit-plan`. Two classes of item were found:
+
+1. **Genuine scoping ambiguities** — resolved here with the conservative, scope-preserving answer (does not widen the spec).
+2. **Ratified owner-decisions** — the §10 "Open decisions" are NOT clarify fodder. They are owner decisions (tender model, zero-total, receipt-vs-sync ordering, post-handoff edits, repair authority, smoke-evidence form, tender units, etc.). Per the planning charter they are **not auto-decided here**; each is recorded with the explicit answer "DEFER to owner" so downstream `/speckit-plan` and `/speckit-tasks` plan *around* them rather than *through* them. They remain OPEN.
+
+**Resolved scoping ambiguities:**
+
+- Q: Does this spec or its planning chain author any runtime `src/`, OpenAPI, migration, package, or CI artifact? → A: No — SPECIFY/PLAN-only; the deliverable is documentation artifacts (plan/research/data-model/contracts-as-prose/quickstart/tasks) describing the testable contract. The build is the separate owner-gated payment-finalization-hardening lane.
+- Q: Does this spec register or activate the `G-POS-CASHIER-SMOKE` gate? → A: No — the spec records the *evidence bar* only; gate registration stays prose-only at the program (orchestrator) level (§3 non-goal preserved).
+- Q: How are the six Goals (G-1..G-6) and scenarios A–G organized for `/speckit-tasks`, given the spec has no prioritized user stories? → A: Treat each spec Goal as a documentation "story" phase (authoring the corresponding artifact section); scenarios A–G and §9 cashier/offline scenarios become the smoke-evidence catalogue authored within those phases. No code-priority (P1/P2) ranking is fabricated.
+- Q: Is the §4 shipped-mechanism mapping (M-1..M-4) a re-decision of any of those mechanisms? → A: No — M-1..M-4 are verified facts about POS `origin/main`; the spec maps to them and does not propose changing auto-finalize, the POS-local settlement gate, the multi-tender-line FSM, or the money path.
+- Q: Is E-3 ("Amount due 0.25") re-opened or carried as a live defect? → A: No — verified already-fixed; the spec specifies the flow as it ships and authors no E-3 fix.
+
+**Owner-decisions surfaced and DEFERRED (remain OPEN — not decided by this chain):**
+
+- Q: Single-instrument vs multi-tender v1? → A: DEFER to owner. M-3 ships a multi-tender-line FSM; a "single-instrument v1" rule would be a gated EXPANSION. Plan documents both branches; does not pick.
+- Q: Are partial / mixed tenders supported in v1? → A: DEFER to owner (bound to the tender-model decision above).
+- Q: Are post-handoff cart edits allowed? → A: DEFER to owner. State machine keeps the cart-mutation-after-handoff transition marked OPEN.
+- Q: Payment cancellation → return to cart, or void? → A: DEFER to owner. VOIDED_OR_CANCELLED transition stays OPEN.
+- Q: Is overpayment/change cash-only or across all tenders? → A: DEFER to owner.
+- Q: Are zero-total sales allowed? → A: DEFER to owner. Invariant 7 (`saleTotal ≤ 0` cannot finalize) holds unless the owner intentionally enables zero-total.
+- Q: Receipt before or after sync? → A: DEFER to owner. RECEIPT_READY (M-1 auto-finalize, POS-local) and SYNCED are kept as distinct states; ordering is not asserted.
+- Q: Is offline finalization before sync allowed? → A: DEFER to owner (POS-local finalize-gating per M-2 is independent of sync, but the policy is owner-gated).
+- Q: Reconnect-with-failed-auth classification (cross-ref 028 OQ-5)? → A: DEFER — owned by 028 (auth boundary); bound here by reference, not re-decided.
+- Q: Manager override for failed-sync repair? → A: DEFER to owner (Console-side repair authority is a later, separate lane).
+- Q: Required smoke-evidence form (script / automated regression / screenshots) for closeout? → A: DEFER to owner. The plan lists candidate forms; closeout form is the owner's call.
+- Q: Tender input units — minor-units entry vs decimal entry? → A: DEFER to owner (orthogonal UX; money invariants hold regardless).
+
+---
+
 ## 1. Summary
 
 Define the POS-Pulse cashier sale lifecycle as a single ratified contract — the state machine, transition rules, money invariants, and the mandatory smoke scenarios that constitute "the cashier flow works" — so cashier-facing work has a testable boundary. This spec adopts the Orchestrator Spec-029 scenario contract as a POS-Pulse-owned spec, **mapped to the shipped POS mechanism**, and records the per-scenario smoke evidence that feeds the (prose-only) `G-POS-CASHIER-SMOKE` gate. It authors no runtime code.
