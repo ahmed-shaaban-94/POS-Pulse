@@ -8,8 +8,8 @@
 
 > ### Authoring & placement notes (owner can redirect)
 >
-> - **Docs-only.** Authored under the allowed `docs/**` surface at `docs/specs/drafts/028-followups/d6-pos-pin-reanchor/`. This is planning prose; it dispatches nothing and mutates no kernel state.
-> - **No `.specify/` tooling exists in this repo.** This was authored as a draft following the Spec-Kit structure (sections, success-criteria discipline, `[NEEDS CLARIFICATION]` resolved into the Clarifications section), mirroring the house style of `docs/specs/028-project-auth-identity-access-boundary/spec.md`. No feature branch was created; no template was copied; no file outside this draft folder was touched.
+> - **Docs-only.** Authored as planning prose at `specs/017-offline-pin-reanchor/` (the draft was relocated/renumbered to 017 under the POS-Pulse `specs/` tree). It dispatches nothing and mutates no kernel state.
+> - **No `.specify/` tooling exists in this repo.** This was authored as a draft following the Spec-Kit structure (sections, success-criteria discipline, `[NEEDS CLARIFICATION]` resolved into the Clarifications section), mirroring the house style of the Orchestrator-owned `028-project-auth-identity-access-boundary/spec.md`. No feature branch was created; no template was copied; no file outside this draft folder (`spec.md` + `checklists/requirements.md`) was touched.
 > - **This feeds a future Queue Item under G10, not a kernel mutation.** D6 becomes a POS-Pulse Queue Item only with explicit, scoped owner approval after G10 verification. It is **DOUBLE-GATED**: it cannot start until its DAG upstreams (D3, and the D1/D5 envelope) are built — so this draft is intentionally **SPECIFY+CLARIFY only** (no `plan.md`, no `tasks.md`); planning those now would be speculative against unbuilt upstreams.
 
 ---
@@ -72,7 +72,7 @@ It is **DOUBLE-GATED**: G10 (the auth/identity boundary must be signed) *and* th
 - **N-6.** No decision on the migration *transition mechanism* (backfill / dual-key / re-enrollment-fallback) — that is plan-phase (OQ-D6-1).
 - **N-7.** No assertion that any upstream (D3/D1/D5) is built. Their status is "needs verification / gated"; this draft is written *against the target shape*, not against shipped upstreams (SC-09 discipline).
 
-## 0. Architecture boundary (restated, non-negotiable)
+## Architecture boundary (restated, non-negotiable)
 
 ```text
 POS-Pulse → Data-Pulse-2 → Retail-Tower-ERP-Next-Connector → ERPNext/Frappe
@@ -104,14 +104,14 @@ POS-Pulse → Data-Pulse-2 → Retail-Tower-ERP-Next-Connector → ERPNext/Frapp
 **Why this is heavy (the central design problem, at spec altitude):**
 
 - **SQLite cannot alter a PRIMARY KEY in place.** Re-keying requires a *table rebuild* — create a new table with the target PK, copy rows, drop the old table, rename — plus rebuilding `idx_cashier_pin_records_cashier`. This is a destructive-shaped local migration on an offline records table.
-- **Existing rows are keyed on the old (provider) identifier.** Each enrolled cashier's row carries `cashier_clerk_user_id`; the corresponding neutral `user_id` must be **obtained online** (from the §16 link via the D1/D5 envelope) before the old key can be dropped. This implies a **backfill-on-reconnect window** in which rows exist that do not yet have a neutral key.
+- **Existing rows are keyed on the old (provider) identifier.** Each enrolled cashier's row carries `cashier_clerk_user_id`; the corresponding neutral `user_id` must be **obtained online** (from the §16 link via the D1/D5 envelope) before the old key can be dropped. Because the neutral key can only arrive online while the store is offline-first, *any* admissible transition strategy implies a **bounded transition window** in which already-enrolled rows still carry only the old (bridge) key and have not yet acquired a neutral one. *(auto-resolved: §4 must not pre-commit the specific mechanism — backfill-on-reconnect vs dual-key vs re-enrollment-fallback — which is OQ-D6-1 / N-6 plan-phase; only the existence of a transition window is spec-owned and deterministic here.)*
 - **The terminal may be offline at migration time.** A cashier already enrolled may need to unlock offline before any neutral `user_id` has arrived — the migration must not strand them (G-4).
 
 ## 5. Identifier-provisioning seam (where `user_id` comes from)
 
 - The neutral `user_id` is **not** queryable by POS on its own (no direct identity API; the §16 link is DP-2-owned). It arrives as **data** on the online path:
   - At **online sign-in**, the DP-2 operator-authorization envelope (D1, adopted by POS in D5) carries the operator's `user_id` (the §16 `user_id`) alongside the existing identity proof.
-  - POS records `user_id` into the local cached operator grant (028 §6 "Local cached operator profile / offline grant" row) at sign-in time.
+  - POS records `user_id` into the local cached operator grant (028 §6 "Local cached operator profile / offline grant" row) at sign-in time — **once the D1/D5 envelope is extended to carry `user_id`**; until then the grant has no neutral key to record (this seam is inert until D1+D5 land, below).
   - The offline-PIN store keys/migrates rows from that grant — never from a fresh backend call (which would be impossible offline anyway).
 - **Cashier-path gap (E-3) is the reason for the D1/D5 gate.** Today the cashier offline path holds no backend-issued credential and supplies `cashier_clerk_user_id` as a caller input; there is no `user_id` to key on until the envelope delivers it. This seam is **inert until D1+D5 land** — D6 cannot be implemented before them even with D3 present.
 
@@ -120,7 +120,7 @@ POS-Pulse → Data-Pulse-2 → Retail-Tower-ERP-Next-Connector → ERPNext/Frapp
 - **Enrollment (online).** A cashier's PIN can only be set after online verification (028 §10). At that point the envelope carries `user_id`; the new/enrolled row is keyed on `user_id`, with `clerk_user_id` written to the bridge column.
 - **Re-anchor of an existing enrolled cashier (transition).** On a subsequent online sign-in, POS reads `user_id` from the envelope and migrates the existing `clerk_user_id`-keyed row to a `user_id`-keyed row, preserving `pin_hash`/`pin_salt`/lockout state. The exact mechanism (in-place backfill of a neutral column then PK rebuild, vs dual-key transitional period, vs re-enrollment fallback) is **OQ-D6-1** (plan-phase).
 - **Offline unlock during the bridge.** A row already migrated unlocks on `user_id`. A not-yet-migrated row (no neutral key yet) continues to unlock on the bridge `clerk_user_id` until its first post-change online sign-in supplies `user_id` — i.e. **safe degradation, never a hard lockout** (G-4). The bounded offline grace (028 §10, default 24h) is unchanged.
-- **PR-4 scope guard + lockout.** The `rowMatchesScope` guard and the `verifyPinWithWindow` lockout state machine (E-2) re-key their identity comparison to `user_id` once a row is migrated; tenant/branch/terminal scope is unchanged. Lockout counters/`lockout_until` are preserved across the re-key.
+- **PR-4 scope guard + PR-3 lockout.** The `rowMatchesScope` guard (PR-4) and the `verifyPinWithWindow` lockout state machine (PR-3) (E-2) re-key their identity comparison to `user_id` once a row is migrated; tenant/branch/terminal scope is unchanged. Lockout counters/`lockout_until` are preserved across the re-key.
 - **Audit.** Any re-key/migration of an offline-PIN record emits a **local** audit event (synced later, 028 SR-8), recording the scope and the fact of the re-anchor — **never** the PIN, hash, salt, or raw token (028 SR-2 / N-9). Provider-side correlation, if needed, uses the bridge column, not a logged secret.
 
 ## 7. Provider-migration safety (anti-lock-in)

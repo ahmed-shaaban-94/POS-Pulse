@@ -1,9 +1,11 @@
 > **DRAFT — NOT DISPATCHED.** Planning artifact under docs-only Orchestrator. No implementation, no contract, no migration, no gate mutation. Requires explicit scoped owner approval + G10 verification before any sibling-repo dispatch.
 
-# Spec D5+D7 — POS Adopts the Operator Envelope; Device Token Reverts to Device-Scoped
+# Spec 016 — D5+D7: POS Adopts the Operator Envelope; Device Token Reverts to Device-Scoped
 
+**Feature ID:** 016-operator-envelope-adoption
 **Status:** SPECIFY-ONLY / DRAFT — for owner review. No implementation, no contract, no migration authored or implied.
 **Date:** 2026-06-11.
+**Last Updated:** 2026-06-13.
 **Owning repo:** POS-Pulse (the implementation repo this would eventually dispatch to, post-approval).
 **Deciders:** Owner (Ahmed Shaaban); drafted by the Orchestrator on verified `origin/main` evidence.
 **Relation to 028:** Realizes the **POS half** of the 028 keystone — 028 §6 **CM-1** (a provider JWT is identity proof / sign-in evidence only) and **CM-2** (a device credential is device-scoped and must not prove sale ownership alone), and the 028 OQ-8 decision that the current Option-Y sale-sync wire is a **v1 bridge** to an internal provider-neutral operator-authorization envelope. 028 **owns** the boundary (credential ownership, scope-non-interchangeability, the envelope decision); this draft only specifies how **POS-Pulse, as a consumer, conforms** to it. The envelope itself — its format, TTL, refresh, mint mechanics — is **drift D1 / Data-Pulse-2's** to define; here it is an **input**.
@@ -14,9 +16,10 @@
 
 > ### authoring & placement notes (owner can redirect)
 >
-> 1. **Docs-only, no `.specify/` tooling.** The Orchestrator has no `.specify/` Spec-Kit state, so this was authored manually following the speckit *structure* (mirroring the house style of `docs/specs/028-*/spec.md` and `docs/specs/029-*/spec.md`), written under the allowed `docs/**` surface at the dispatched draft path. The `/speckit-specify` template-copy / branch / `feature.json` steps no-op here by design.
+> 1. **Docs-only, no `.specify/` tooling.** The Orchestrator has no `.specify/` Spec-Kit state, so this was authored manually following the speckit *structure* (mirroring the house style of `docs/specs/028-*/spec.md` and `docs/specs/029-*/spec.md`). It originated under the allowed `docs/**` Orchestrator surface and has been **materialized into the POS-Pulse repo at `specs/016-operator-envelope-adoption/`** for owner review; the two paths refer to the same draft. The `/speckit-specify` template-copy / branch / `feature.json` steps no-op here by design.
+> 1a. **Intentional template deviation (GATED docs-only).** The speckit spec-template's *Primary User Story*, *Acceptance Scenarios (Given/When/Then)*, *Edge Cases*, and *Non-Functional Requirements* sections are intentionally omitted. This is a defensible deviation for a SPECIFY-ONLY/DRAFT whose upstream contract (drift D1 / the DP-2 envelope) is **unbuilt**: behavioral scenarios and NFRs would be speculative against a non-existent wire contract, and authoring them would overstep the GATED depth (see A-11). They are deferred to the post-D1 dispatched POS slice.
 > 2. **This is a DRAFT, not a dispatch.** It is planning prose that would *feed* a future POS-Pulse Queue Item **under G10** — it does **not** advance or mutate the kernel queue, the gates file, or any status file. Per the kernel's own rule, *prose is not evidence*; materializing the Queue Item is a separate, owner-gated act.
-> 3. **POS consumer lane only.** This draft specifies POS-side credential acquisition / holding / presentation. It does **not** specify the envelope's wire format, TTL, refresh, or mint mechanics (D1 / DP-2), nor the role-named OpenAPI scheme (drift D4 / DP-2), nor the offline-PIN re-anchor (drift D6, separately gated on D3). Those are referenced as adjacent inputs, not decided here.
+> 3. **POS consumer lane only.** This draft specifies POS-side credential acquisition / holding / presentation, materialized at `specs/016-operator-envelope-adoption/`. It does **not** specify the envelope's wire format, TTL, refresh, or mint mechanics (D1 / DP-2), nor the role-named OpenAPI scheme (drift D4 / DP-2), nor the offline-PIN re-anchor (drift D6, separately gated on D3). Those are referenced as adjacent inputs, not decided here.
 > 4. **No Queue ID exists for this work** (it sits under the 028 follow-up set in `docs/roadmap/auth-028-drift-map.md`, rows D5 + D7). The proposed POS slice is *new*, gated, and owner-approval-pending.
 
 ---
@@ -112,7 +115,7 @@ It is a **POS-consumer conformance draft**: it conforms to a boundary 028 alread
 
 - Current Option-Y tunes `401/403 → transient/retryable` to a ~60s Clerk JWT (E-4). Under the envelope, the credential's lifetime and re-acquisition path change, but the **invariant is preserved**: an authorization refusal on the sale wire is **never** treated as a permanent defect that drops the sale.
 - On `401/403`: re-acquire / re-present a current envelope (per the D1 renewal contract) and re-drain the row; keep the sale pending with backoff in the interim. A genuine non-auth contract defect (other `4xx`) remains dead-letterable, as today.
-- The engine's operator-token gate (today `getOperatorToken() === null → pause`) becomes an **envelope-present gate**: no current envelope ⟹ pause the drain, resume when one returns — preserving "no unauthenticated POST" with the new credential.
+- The engine's operator-token gate (today `getOperatorToken() === null → pause`) becomes an **envelope-present gate**: the drain proceeds only while a current envelope is present, and **pauses on envelope-absent** (resuming when one returns) — preserving "no unauthenticated POST" with the new credential. (§7's "pauses on envelope-absent" names the same gate from the pause condition.)
 
 ## 7. POS surfaces touched (informational map, not a task list)
 
