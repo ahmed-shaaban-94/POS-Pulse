@@ -184,6 +184,83 @@ describe('createBackendClient — sign-in request shape', () => {
   });
 });
 
+describe('016 C-1 — interpreter preserves pos_operator_envelope (D5)', () => {
+  // The interpreter hand-builds its return via an allowlist (operator +
+  // operator_session only) and silently drops unknown fields. The D5 swap is a
+  // no-op unless the interpreter explicitly reads `pos_operator_envelope`. These
+  // tests pin that preservation at the response boundary (both sign-in AND the
+  // takeover-confirm path, which delegates to the same interpreter).
+  const withEnvelope = (envelope: unknown): Record<string, unknown> => ({
+    ...HAPPY_SIGN_IN_BODY,
+    pos_operator_envelope: envelope,
+  });
+
+  it('carries a string pos_operator_envelope verbatim on signed_in', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(withEnvelope('opaque-envelope-xyz')), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.signIn({ kind: 'manager_admin', device_token_attestation: 'a' }, 'j');
+    expect(res.kind).toBe('signed_in');
+    if (res.kind === 'signed_in') {
+      expect(res.pos_operator_envelope).toBe('opaque-envelope-xyz');
+    }
+  });
+
+  it('carries a null pos_operator_envelope (replayed sign-in) as null', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(withEnvelope(null)), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.signIn({ kind: 'manager_admin', device_token_attestation: 'a' }, 'j');
+    expect(res.kind).toBe('signed_in');
+    if (res.kind === 'signed_in') {
+      expect(res.pos_operator_envelope).toBeNull();
+    }
+  });
+
+  it('treats an absent pos_operator_envelope as undefined/null (not a throw)', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(HAPPY_SIGN_IN_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.signIn({ kind: 'manager_admin', device_token_attestation: 'a' }, 'j');
+    expect(res.kind).toBe('signed_in');
+    if (res.kind === 'signed_in') {
+      expect(res.pos_operator_envelope ?? null).toBeNull();
+    }
+  });
+
+  it('refuses a non-string/non-null pos_operator_envelope (allowlist posture)', async () => {
+    for (const bad of [123, true, { not: 'a string' }, ['array']]) {
+      const { fetchImpl } = captureFetch(
+        new Response(JSON.stringify(withEnvelope(bad)), { status: 200 }),
+      );
+      const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+      const res = await client.signIn(
+        { kind: 'manager_admin', device_token_attestation: 'a' },
+        'j',
+      );
+      expect(res.kind).toBe('refused');
+    }
+  });
+
+  it('takeover-confirm inherits the same preservation (delegates to the sign-in interpreter)', async () => {
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(withEnvelope('takeover-envelope-abc')), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.confirmTakeover(
+      { event_id: 'e1', operator_id: 'op1', device_token_attestation: 'a' },
+      'jwt-1',
+    );
+    expect(res.kind).toBe('signed_in');
+    if (res.kind === 'signed_in') {
+      expect(res.pos_operator_envelope).toBe('takeover-envelope-abc');
+    }
+  });
+});
+
 describe('createBackendClient — sign-out request shape', () => {
   it('POSTs to /api/pos/v1/operators/sign-out with Authorization Bearer and the locked body', async () => {
     const { fetchImpl, captured } = captureFetch(
