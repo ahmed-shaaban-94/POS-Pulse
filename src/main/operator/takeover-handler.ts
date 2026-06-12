@@ -194,7 +194,13 @@ export class TakeoverHandler {
       started_at: backendResult.operator_session.issued_at,
     });
 
-    this.deps.jwtHolder.set(record.backend_session_id, proto.jwt ?? '');
+    // 016 (C-2): a takeover installs the NEW operator's authority, so hold the
+    // opaque pos_operator ENVELOPE (#559) from the takeover-confirm success — NOT
+    // proto.jwt (the provider JWT, used only for the confirm CALL above). An absent
+    // or null envelope normalizes to '' so the envelope-present gate (M-1) treats it
+    // as absent and pauses the drain rather than POSTing without a credential. Held
+    // in main-process memory only — NEVER bridged, NEVER logged (P7/P8).
+    this.deps.jwtHolder.set(record.backend_session_id, backendResult.pos_operator_envelope ?? '');
 
     await this.emitTakeoverAudit(event_id, record);
 

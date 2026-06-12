@@ -56,6 +56,9 @@ function fakeBackend(
   };
 }
 
+/** 016 (D5): the opaque pos_operator envelope DP-2 #559 returns on sign-in. */
+const ENVELOPE = 'opaque-pos-operator-envelope-001';
+
 const SUCCESS_BACKEND_RESPONSE: BackendSignInResponse = {
   kind: 'signed_in',
   operator: {
@@ -69,6 +72,7 @@ const SUCCESS_BACKEND_RESPONSE: BackendSignInResponse = {
     id: 'be-sess-1',
     issued_at: '2026-05-06T00:00:00.000Z',
   },
+  pos_operator_envelope: ENVELOPE,
 };
 
 const HAPPY_JWT = 'eyJhbGciOiJSUzI1NiJ9.fake.jwt';
@@ -110,7 +114,7 @@ describe('SignInHandler — manager/admin path', () => {
     expect(sessionManager.getCurrent()?.operator_id).toBe('clerk-user-1');
   });
 
-  it('records the Clerk JWT in the JwtHolder keyed by backend session id', async () => {
+  it('records the pos_operator envelope in the JwtHolder keyed by backend session id (016 D5)', async () => {
     const sessionManager = new SessionManager();
     const jwtHolder = createJwtHolder();
     const handler = new SignInHandler({
@@ -126,10 +130,12 @@ describe('SignInHandler — manager/admin path', () => {
       identifier: 'm@x.test',
       password: 'p',
     });
-    // The Clerk JWT is held in main-process memory keyed by the
-    // backend session id from Data-Pulse-2's response. NEVER crosses
-    // the bridge to the renderer.
-    expect(jwtHolder.get('be-sess-1')).toBe(HAPPY_JWT);
+    // 016 (D5): the credential held against the backend session id is now the
+    // opaque pos_operator ENVELOPE from #559, NOT the Clerk JWT. The provider
+    // JWT's job ends at sign-in. Held in main-process memory only — NEVER
+    // crosses the bridge to the renderer.
+    expect(jwtHolder.get('be-sess-1')).toBe(ENVELOPE);
+    expect(jwtHolder.get('be-sess-1')).not.toBe(HAPPY_JWT);
   });
 
   it('does NOT record the JWT on takeover_required (no local session created)', async () => {

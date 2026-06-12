@@ -60,6 +60,9 @@ function makeSessionManager(): SessionManager {
   } as unknown as SessionManager;
 }
 
+/** 016 (D5 C-2): the opaque pos_operator envelope DP-2 #559 returns on takeover. */
+const TAKEOVER_ENVELOPE = 'opaque-pos-operator-envelope-takeover-002';
+
 function makeBackend(kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_in'): BackendClient {
   const signedInResponse =
     kind === 'signed_in'
@@ -73,6 +76,10 @@ function makeBackend(kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_i
             branch_id: 'b1',
           },
           operator_session: { id: 'bss-001', issued_at: new Date().toISOString() },
+          // 016 (C-2): the takeover-confirm success carries the envelope, exactly
+          // like sign-in (BackendTakeoverConfirmResponse is a union over
+          // BackendSignInSuccess; the C-1 interpreter fix already preserves it).
+          pos_operator_envelope: TAKEOVER_ENVELOPE,
         }
       : null;
 
@@ -213,6 +220,31 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     if (result.kind !== 'signed_in') return;
     expect(result.session.role).toBe('manager');
     expect(result.session.operator_id).toBe('op-mgr-001');
+  });
+
+  it('holds the pos_operator envelope (NOT the proto JWT or empty string) post-takeover (016 C-2)', async () => {
+    const store = makeProtoStore();
+    const proto = buildManagerProto(); // proto.jwt === 'clerk-jwt-token'
+    store.set(proto);
+    const jwtHolder = makeJwtHolder();
+    const { emitter } = makeAuditEmitter();
+    const handler = new TakeoverHandler({
+      protoStore: store,
+      sessionManager: makeSessionManager(),
+      backend: makeBackend('signed_in'),
+      jwtHolder,
+      auditEmitter: emitter,
+      pairingStore: makePairedStore(),
+      deviceTokenAttestation: () => 'att-token',
+    });
+    await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
+    // 016 (C-2): a manager/admin takeover installs the NEW operator's authority,
+    // so the holder must carry the envelope from the takeover-confirm success —
+    // NOT proto.jwt (the provider JWT, used only for the confirm CALL) and NOT ''.
+    // The new session is keyed by the backend operator_session id ('bss-001').
+    expect(jwtHolder.get('bss-001')).toBe(TAKEOVER_ENVELOPE);
+    expect(jwtHolder.get('bss-001')).not.toBe(proto.jwt);
+    expect(jwtHolder.get('bss-001')).not.toBe('');
   });
 
   it('emits operator.session.takeover audit event on success', async () => {

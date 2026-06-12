@@ -161,10 +161,14 @@ export class SignInHandler {
       backend_session_id: backend.operator_session.id,
       started_at: backend.operator_session.issued_at,
     });
-    // Record the JWT against the backend session id for sign-out and
-    // any future authenticated bridge call. Held in main-process
-    // memory only — NEVER crosses to the renderer (Wave 1 path b).
-    this.deps.jwtHolder?.set(record.backend_session_id, exchange.jwt);
+    // 016 (D5): hold the opaque pos_operator ENVELOPE (#559) against the backend
+    // session id, NOT the Clerk JWT — the provider JWT's job ends at sign-in. The
+    // sale-sync POST presents this as `Authorization: Bearer <envelope>`. An absent
+    // or null envelope (legacy backend / replayed sign-in) normalizes to '' so the
+    // envelope-present gate (M-1) treats it as absent and pauses the drain rather
+    // than POSTing without a credential. Held in main-process memory only — NEVER
+    // crosses to the renderer, NEVER logged (P7/P8).
+    this.deps.jwtHolder?.set(record.backend_session_id, backend.pos_operator_envelope ?? '');
 
     this.logSuccess('signed_in');
     return {
