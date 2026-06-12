@@ -17,14 +17,19 @@
  *   transient (retry) ·  400/422 (and other 4xx) → permanent (dead-letter) ·
  *   network/DNS/refused/timeout-before-response → no_connection.
  *
- * Auth (contracts/README.md): `Authorization: Bearer <operator_session_token>`
- * (the Clerk operator JWT — NOT the device token). The token is read fresh per
- * POST via the injected `getOperatorToken` (the engine already gates the drain on
- * a present session and re-checks mid-drain; this is the per-request attach). It is
- * a secret — attached to the outbound request only, NEVER logged, NEVER placed in
- * the payload, NEVER crossing the bridge (P7/P8). `Idempotency-Key` is the
- * deterministic `payload.externalId` (REQUIRED on the write); the backend dedups on
- * `(tenant, sourceSystem, externalId)` so retries collapse to one record.
+ * Auth (016 D5/D7, DP-2 #559): the `operatorAuthorization` scheme =
+ * `Authorization: Bearer <pos_operator_envelope>` — the OPAQUE operator envelope
+ * (NOT the Clerk JWT, NOT the device token). The envelope is read fresh per POST via
+ * the injected `getOperatorToken` (the engine already gates the drain on a present
+ * envelope and re-checks mid-drain; this is the per-request attach). It is an opaque
+ * secret — attached to the outbound request only, NEVER parsed, NEVER logged, NEVER
+ * placed in the payload, NEVER crossing the bridge (P7/P8/G7). 016 (D7):
+ * `X-Device-Attestation` is RETIRED from the sale wire — the backend re-evaluates the
+ * full operator predicate (membership/device/store/role/expiry) live per request from
+ * the envelope-bound principal, so no device-trust attestation co-travels on the sale
+ * POST. `Idempotency-Key` is the deterministic `payload.externalId` (REQUIRED on the
+ * write); the backend dedups on `(tenant, sourceSystem, externalId)` so retries
+ * collapse to one record.
  *
  * Wire-shape boundary: the internal `CaptureSalePayload` carries INTEGER MINOR
  * UNITS (`totalMinor`, `unitPriceMinor`, `lineAmountMinor`) and a numeric
@@ -111,20 +116,14 @@ export interface CreateSaleSyncClientDeps {
   /** `fetch` implementation. Production binds the global; tests inject. */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   /**
-   * In-process read of the operator session JWT. The engine already pauses the
-   * drain when this is null; defensively, a null here maps to `no_connection`
-   * (treated as retryable — the sale stays pending) rather than a POST without auth.
+   * In-process read of the operator session credential — the opaque `pos_operator`
+   * ENVELOPE (016 D5, #559), held in the jwt-holder seam. The engine already pauses
+   * the drain when this is null/empty (the M-1 envelope-present gate); defensively, a
+   * null/empty here maps to `no_connection` (retryable — the sale stays pending)
+   * rather than a POST without auth. Presented as `Authorization: Bearer <envelope>`
+   * via the `operatorAuthorization` scheme. NEVER logged, NEVER in the body (P7/P8).
    */
   getOperatorToken: () => string | null;
-  /**
-   * In-process read of the paired-terminal device attestation. DP-2 captureSale
-   * (Option-Y) REQUIRES it alongside the Clerk JWT (`X-Device-Attestation`
-   * header) — a JWT-only POST 401s. Null/empty when the terminal is not paired;
-   * a null here maps to `no_connection` (retryable, sale stays pending) rather
-   * than a credential-incomplete POST that would 401. Read main-process-side;
-   * NEVER logged, NEVER placed in the body.
-   */
-  getDeviceAttestation: () => string | null;
   /** ISO-4217 currency for the store (v1 single-currency). Defaults to EGP. */
   currencyCode?: string;
   /** Override the request timeout in tests. */
@@ -204,10 +203,12 @@ export function classifyStatus(status: number): SaleSyncResult {
   if (status === 200 || status === 201) return { kind: 'ok' };
   if (status === 409) return { kind: 'duplicate' };
   if (status >= 500) return { kind: 'transient' };
-  // 401/403 — auth refusal. The operator's Clerk session JWT lives ~60s, so a
-  // flush attempted with a stale token legitimately 401s. This is RETRYABLE
-  // (a fresh sign-in re-mints the JWT and the row re-drains), NOT a permanent
-  // defect — dead-lettering it would silently lose the sale. Treat as transient.
+  // 401/403 — auth refusal. 016 (D5/R4): the credential is now the opaque
+  // pos_operator ENVELOPE; an expired/revoked envelope legitimately 401/403s.
+  // This is RETRYABLE (v1 renewal is via re-sign-in, which re-acquires a fresh
+  // envelope into the holder and re-drains the row — G-5), NOT a permanent defect
+  // — dead-lettering it would silently lose the sale. Classification UNCHANGED
+  // from 011: still transient, retryable, never dead-letter (E-4). Treat as transient.
   if (status === 401 || status === 403) return { kind: 'transient' };
   // Other 4xx (400/404/422/…) is a genuine validation/contract defect — the
   // request will not succeed on retry without intervention; dead-letter it.
@@ -217,7 +218,7 @@ export function classifyStatus(status: number): SaleSyncResult {
 }
 
 export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncClient {
-  const { fetch: fetchImpl, baseUrl, getOperatorToken, getDeviceAttestation } = deps;
+  const { fetch: fetchImpl, baseUrl, getOperatorToken } = deps;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const currencyCode = deps.currencyCode ?? DEFAULT_CURRENCY_CODE;
   const root = baseUrl.replace(/\/$/, '');
@@ -226,16 +227,9 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
     async postSale(payload: CaptureSalePayload): Promise<SaleSyncResult> {
       const token = getOperatorToken();
       if (token === null || token.length === 0) {
-        // No session token: do not POST unauthenticated. The engine gate should
-        // have paused already; map to no_connection so the sale stays pending.
-        return { kind: 'no_connection' };
-      }
-
-      const attestation = getDeviceAttestation();
-      if (attestation === null || attestation.length === 0) {
-        // Option-Y requires the paired-terminal attestation alongside the JWT.
-        // Without it captureSale 401s — do not send a credential-incomplete POST;
-        // retryable (the sale stays pending until the terminal is paired).
+        // No operator envelope: do not POST unauthenticated. The engine's
+        // envelope-present gate (M-1) should have paused already; map to
+        // no_connection so the sale stays pending.
         return { kind: 'no_connection' };
       }
 
@@ -256,10 +250,11 @@ export function createSaleSyncClient(deps: CreateSaleSyncClientDeps): SaleSyncCl
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            // 016 (D5): `operatorAuthorization` = opaque bearer envelope. 016 (D7):
+            // X-Device-Attestation is RETIRED from the sale wire (#559) — the
+            // device token reverts to device-scope (read-down Bearer + sign-in
+            // attestation body); it no longer co-travels on the sale POST.
             Authorization: `Bearer ${token}`,
-            // Option-Y: paired-terminal proof, in a header (NOT the body — the
-            // body is hashed into payload_hash + the idempotency fingerprint).
-            'X-Device-Attestation': attestation,
             'Idempotency-Key': payload.externalId,
           },
           body: JSON.stringify(body),
