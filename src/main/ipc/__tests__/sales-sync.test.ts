@@ -76,4 +76,23 @@ describe('T051 — sales:syncStatus IPC (read-only)', () => {
     expect(serialized).not.toContain('operator');
     expect(Object.keys(res).sort()).toEqual(['deadLetter', 'lastSuccessAt', 'pending']);
   });
+
+  it('T050 (016): no credential — opaque envelope or otherwise — crosses the bridge', async () => {
+    // 016 (P7/P8/§A4 re-check): the sale-sync credential is now the OPAQUE
+    // pos_operator envelope (D5). The read-only status channel must STILL carry no
+    // credential of any shape — the envelope (like the Clerk JWT before it) is read
+    // in-process only and never returned through any bridge-facing value. The
+    // surface remains a single read channel (no write/trigger handler), and the
+    // payload is counts + a timestamp only.
+    const { ipcMain, invoke, channels } = fakeIpcMain();
+    registerSalesSyncHandlers(ipcMain, deps());
+    // Single read-only channel — no write/trigger handler exists.
+    expect(channels()).toEqual([SALES_SYNC_IPC_CHANNELS.SYNC_STATUS]);
+    const res = (await invoke(SALES_SYNC_IPC_CHANNELS.SYNC_STATUS, {})) as Record<string, unknown>;
+    const serialized = JSON.stringify(res).toLowerCase();
+    // Opaque-credential-shaped substrings must not appear.
+    for (const forbidden of ['envelope', 'authorization', 'jwt', 'secret', 'credential']) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
 });
