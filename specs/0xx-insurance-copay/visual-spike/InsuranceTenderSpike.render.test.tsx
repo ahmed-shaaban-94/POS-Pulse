@@ -59,6 +59,20 @@ describe('InsuranceTenderSpike — render smoke', () => {
     ).toBeNull();
   });
 
+  it('auto-focuses the member field when a plan is selected (audit P1, §7 first hop)', async () => {
+    render(<InsuranceTenderSpike />);
+    const group = screen.getByRole('radiogroup', { name: 'جهة التأمين' });
+    fireEvent.click(within(group).getAllByRole('radio')[1]); // 80% plan
+    const member = screen.getByPlaceholderText(/MHI-/);
+    // focus is moved via requestAnimationFrame; wait a frame for the commit.
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        resolve();
+      });
+    });
+    expect(document.activeElement).toBe(member);
+  });
+
   it('the 100% plan shows the fully-covered status (no cash step)', () => {
     render(<InsuranceTenderSpike />);
     const group = screen.getByRole('radiogroup', { name: 'جهة التأمين' });

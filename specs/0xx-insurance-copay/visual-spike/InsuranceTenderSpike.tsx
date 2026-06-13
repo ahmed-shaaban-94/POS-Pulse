@@ -22,7 +22,7 @@
  *   #1f8a5b · --color-success-soft · --color-text-muted · --color-border
  *   #d8dfe7 · --font-family-mono · --radius-control 10px · --radius-card 14px
  */
-import { useMemo, useState, type CSSProperties, type JSX } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type JSX } from 'react';
 
 import {
   DEMO_PLANS,
@@ -64,6 +64,12 @@ export function InsuranceTenderSpike(): JSX.Element {
   const [memberId, setMemberId] = useState('');
   const [tendered, setTendered] = useState<number | null>(null);
 
+  // Auto-focus target: the member/card-ID input. Focus is moved here when a
+  // plan is selected (audit P1, cheapest hop of handoff §7's focus flow). This
+  // is the ONLY focus-management implemented; the rest is documented as
+  // carry-forward in README.md.
+  const memberInputRef = useRef<HTMLInputElement>(null);
+
   const plan: InsurancePlan | null = useMemo(
     () => DEMO_PLANS.find((p) => p.id === planId) ?? null,
     [planId],
@@ -81,6 +87,11 @@ export function InsuranceTenderSpike(): JSX.Element {
   function selectPlan(id: string): void {
     setPlanId(id);
     setTendered(null); // reset co-pay when the plan changes
+    // §7 focus flow (first hop only): on selecting a plan, move focus to the
+    // member field so a keyboard cashier flows straight into entry. Done in the
+    // event handler (not a render effect) so focus follows the genuine action.
+    // rAF defers until after React commits the now-enabled input.
+    requestAnimationFrame(() => memberInputRef.current?.focus());
   }
 
   const shellStyle: CSSProperties = {
@@ -215,6 +226,7 @@ export function InsuranceTenderSpike(): JSX.Element {
           <span style={{ fontSize: 13, color: v('--color-text-muted') }}>رقم بطاقة التأمين</span>
           <span style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <input
+              ref={memberInputRef}
               dir="ltr"
               value={memberId}
               onChange={(e) => {
@@ -261,7 +273,12 @@ export function InsuranceTenderSpike(): JSX.Element {
           <>
             <Row label="الأصناف المغطّاة (أدوية)" value={formatMinor(breakdown.eligible)} />
             {breakdown.nonEligible > 0 && (
-              <Row label="غير مغطّى (مستلزمات/عناية)" value={formatMinor(breakdown.nonEligible)} muted />
+              <Row
+                label="غير مغطّى (مستلزمات/عناية)"
+                value={formatMinor(breakdown.nonEligible)}
+                muted
+                coverageNote={`تغطية ${(0).toLocaleString('ar-EG')}٪`}
+              />
             )}
             <Row
               label={`يتحمّله التأمين · ${plan.coverPct.toLocaleString('ar-EG')}٪`}
@@ -382,9 +399,26 @@ interface RowProps {
   totals?: boolean;
   positive?: boolean;
   ariaLive?: boolean;
+  /**
+   * Optional coverage marker rendered as a muted pill before the label.
+   * Used on the non-eligible row to make "0% covered → on the patient"
+   * explicit — the honest inverse of the plan coverage pills. Deliberately
+   * muted grey, NOT a status color (status-containment) and NOT navy (that
+   * reads as "selected/covered"); 0% is information, not a positive.
+   */
+  coverageNote?: string;
 }
 
-function Row({ label, value, muted, success, totals, positive, ariaLive }: RowProps): JSX.Element {
+function Row({
+  label,
+  value,
+  muted,
+  success,
+  totals,
+  positive,
+  ariaLive,
+  coverageNote,
+}: RowProps): JSX.Element {
   const valueColor = success
     ? v('--color-success')
     : muted
@@ -403,7 +437,28 @@ function Row({ label, value, muted, success, totals, positive, ariaLive }: RowPr
         borderTop: totals ? `1px solid ${v('--color-border')}` : 'none',
       }}
     >
-      <span style={{ fontSize: 13, color: muted ? v('--color-text-muted') : 'inherit' }}>{label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        {coverageNote !== undefined && (
+          <span
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              fontFamily: v('--font-family-mono'),
+              color: v('--color-text-muted'),
+              background: '#eef2f6',
+              border: `1px solid ${v('--color-border')}`,
+              borderRadius: 999,
+              padding: '2px 9px',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {coverageNote}
+          </span>
+        )}
+        <span style={{ fontSize: 13, color: muted ? v('--color-text-muted') : 'inherit' }}>
+          {label}
+        </span>
+      </span>
       <span
         dir={value.startsWith('EGP') || value.startsWith('−EGP') ? 'ltr' : 'rtl'}
         aria-live={ariaLive ? 'polite' : undefined}
