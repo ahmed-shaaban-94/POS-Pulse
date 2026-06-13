@@ -47,6 +47,21 @@ export function CashierManagement({ operator }: Props): JSX.Element {
     });
   }, [operator]);
 
+  // Escape closes the Reset-PIN dialog (WCAG 2.1.1), mirroring its Cancel
+  // button (setAction idle). Only active while that dialog is open.
+  useEffect(() => {
+    if (action.kind !== 'resetPin') return;
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setAction({ kind: 'idle' });
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [action.kind]);
+
   async function handleUnlock(cashier: BranchRosterCashier): Promise<void> {
     const req: UnlockCashierRequest = {
       event_id: crypto.randomUUID(),
@@ -100,6 +115,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 <span>{c.display_name}</span>
                 <button
                   type="button"
+                  className="btn btn--secondary btn--md"
                   onClick={() => {
                     setAction({ kind: 'resetPin', cashier: c, pin: '' });
                   }}
@@ -108,6 +124,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
                 </button>
                 <button
                   type="button"
+                  className="btn btn--secondary btn--md"
                   onClick={() => {
                     void handleUnlock(c);
                   }}
@@ -132,6 +149,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             />
             <button
               type="button"
+              className="btn btn--primary btn--md"
               onClick={() => {
                 void handleResetPinConfirm();
               }}
@@ -140,6 +158,7 @@ export function CashierManagement({ operator }: Props): JSX.Element {
             </button>
             <button
               type="button"
+              className="btn btn--ghost btn--md"
               onClick={() => {
                 setAction({ kind: 'idle' });
               }}

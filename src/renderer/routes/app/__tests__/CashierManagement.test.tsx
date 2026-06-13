@@ -134,6 +134,23 @@ describe('CashierManagement (T078)', () => {
     });
   });
 
+  describe('touch-target floor (DESIGN.md 44px — primitive-bypass audit P1)', () => {
+    it('row action buttons carry the .btn--md class (44px floor via primitive styling)', async () => {
+      renderAt(MANAGER_SESSION, makeBridge());
+      await waitFor(() => {
+        expect(screen.getByText('Alice Cashier')).toBeInTheDocument();
+      });
+      // Reset PIN + Unlock for two cashiers = 4 row buttons; each must use the
+      // shared button class so it inherits the 44px floor (was bare <button>).
+      for (const name of [/reset pin/i, /unlock/i]) {
+        for (const btn of screen.getAllByRole('button', { name })) {
+          expect(btn).toHaveClass('btn');
+          expect(btn).toHaveClass('btn--md');
+        }
+      }
+    });
+  });
+
   describe('roster display', () => {
     it('calls listBranchRoster on mount', async () => {
       const bridge = makeBridge();

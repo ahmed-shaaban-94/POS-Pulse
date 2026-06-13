@@ -180,6 +180,23 @@ export function StuckShiftSurface({ operator }: StuckShiftSurfaceProps): JSX.Ele
     void fetchShifts();
   }, [fetchShifts]);
 
+  // Escape closes the force-close dialog (WCAG 2.1.1) when open, mirroring its
+  // Cancel button (setDialog idle). Only active while the dialog is open so it
+  // doesn't swallow Escape elsewhere on the surface. Not submitting-guarded:
+  // cancelling a dialog mid-submit is the same as clicking Cancel.
+  useEffect(() => {
+    if (dialog.kind !== 'open') return;
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setDialog({ kind: 'idle' });
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [dialog.kind]);
+
   async function handleSubmit(
     shift: StuckShiftSummary,
     payload: ForcedCloseFormSubmitPayload,

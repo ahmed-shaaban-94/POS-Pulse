@@ -2684,7 +2684,7 @@ body {
     align-items: center;
     justify-content: center;
     padding-inline: var(--space-5);
-    block-size: 40px;
+    block-size: 44px;
     border-radius: var(--radius-control);
     background-color: transparent;
     border: 1px solid var(--color-border);
@@ -2716,7 +2716,7 @@ body {
     align-items: center;
     justify-content: center;
     padding-inline: var(--space-5);
-    block-size: 40px;
+    block-size: 44px;
     border-radius: var(--radius-control);
     background-color: var(--color-primary);
     border: 1px solid var(--color-primary);
@@ -2894,7 +2894,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    block-size: 40px;
+    block-size: 44px;
     border-radius: var(--radius-control);
     background-color: var(--color-primary);
     border: 1px solid var(--color-primary);
