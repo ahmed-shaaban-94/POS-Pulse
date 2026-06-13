@@ -390,11 +390,7 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   // parsing, no claim inspection, G7); any other type is a malformed response
   // and collapses to `refused`, matching the interpreter's existing posture.
   const rawEnvelope = v['pos_operator_envelope'];
-  if (
-    rawEnvelope !== undefined &&
-    rawEnvelope !== null &&
-    typeof rawEnvelope !== 'string'
-  ) {
+  if (rawEnvelope !== undefined && rawEnvelope !== null && typeof rawEnvelope !== 'string') {
     return { kind: 'refused' };
   }
   return {

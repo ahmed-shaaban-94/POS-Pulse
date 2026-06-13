@@ -3,10 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TakeoverHandler, ProtoSessionStore } from '../takeover-handler.js';
 import { SessionManager } from '../session-manager.js';
 import { createJwtHolder } from '../jwt-holder.js';
-import type {
-  BackendClient,
-  BackendTakeoverConfirmResponse,
-} from '../backend-client.js';
+import type { BackendClient, BackendTakeoverConfirmResponse } from '../backend-client.js';
 import type { AuditEmitter } from '../../audit/audit-emitter.js';
 import type { PairingStore } from '../../pairing/store.js';
 
