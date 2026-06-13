@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Insurance / Co-pay — Visual Spike (UNWIRED)</title>
+    <style>
+      /* Minimal subset of the production tokens (src/renderer/styles/tailwind.css)
+         so the spike renders faithfully when opened standalone via Vite. */
+      :root {
+        --color-text-muted: #5b6b7c;
+        --color-primary: #1f4e7a;
+        --color-primary-emphasis: #163d61;
+        --color-primary-soft: #e6eef6;
+        --color-success: #1f8a5b;
+        --color-success-soft: #e7f5ee;
+        --color-border: #d8dfe7;
+        --font-family-mono: ui-monospace, 'Cascadia Code', 'JetBrains Mono', monospace;
+        --radius-control: 10px;
+        --radius-card: 14px;
+      }
+      body { margin: 0; background: #f4f7fa; }
+    </style>
+  </head>
+  <body>
+    <div id="spike-root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
