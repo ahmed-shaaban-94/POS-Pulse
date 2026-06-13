@@ -47,7 +47,7 @@ The cashier's provider-neutral `user_id` on `PosRosterCashierEntry` is a **DP-2 
 
 ### Provision handler (the core)
 
-- [ ] T014 [US1] RED: success test — manager session + fixture roster cashier with `user_id` + no existing row → row created with `user_id` populated AND `cashier_clerk_user_id` populated, sealed `pin_hash`/`pin_salt`, `failed_attempt_count=0`, `lockout_until=null`; returns `pin_provisioned`. In `src/main/operator/__tests__/pin-management.provision.test.ts`.
+- [ ] T014 [US1] RED: success test — manager session + fixture roster cashier with `user_id` + no existing row → row created with `user_id` populated AND `cashier_clerk_user_id` populated, sealed `pin_hash`/`pin_salt`, `failed_attempt_count=0`, `lockout_until=null`; returns `pin_provisioned`. **Also assert the just-provisioned sealed row is consumable by the existing verifier (`verifyPin` returns `match` for the provisioned PIN) — proving NFR-2 (offline unlock works) without waiting on the DP-2-gated manual smoke (analyze C1).** In `src/main/operator/__tests__/pin-management.provision.test.ts`.
 - [ ] T015 [US1] RED: role-gate test — a cashier-role session → `refused: role_mismatch`; no row written.
 - [ ] T016 [US1] RED: create-only test — an existing row (a legacy `cashier_clerk_user_id`-keyed row OR a `user_id`-keyed row) for the same `(tenant,branch,terminal,cashier)` → `refused: state_invalid`; no duplicate, no secret replaced (FR-5).
 - [ ] T017 [US1] RED: not-ready test — roster entry without `user_id` → `refused: not_ready`; no row; NO fallback to a clerk-keyed row (FR-11).
