@@ -12,6 +12,13 @@
 
 A manager or admin on a paired POS terminal can **provision a cashier's PIN for the first time** — creating that cashier's local unlock record where none exists yet. Today this path is missing: the terminal can *reset* an already-existing PIN but cannot *create* the first one, so a cashier who has never been provisioned cannot be onboarded to PIN-unlock on the terminal at all. This feature fills that gap, and does so such that each provisioned record is keyed on the cashier's **provider-neutral identifier from the moment of creation** — so the offline-PIN store is born provider-independent rather than retro-fitted later. It is a follow-up to feature 004 (operator session), correcting a capability deferred from that feature's internal/dev MVP.
 
+## Clarifications
+
+### Session 2026-06-13
+
+- Q: When a rostered cashier has no provider-neutral identifier yet (unmapped upstream), what does provisioning do? → A: **Refuse** with a truthful "not ready to provision" state; never fall back to a provider-coupled key (Option A). *(Encoded as FR-11 + Assumption.)*
+- Q: A cashier has a **legacy** clerk-keyed PIN row (pre-019/017) but no neutral-keyed row — for FR-5's create-only "already exists" check, does the legacy row count as existing? → A: **Yes — the legacy row counts as "exists", so provisioning refuses** and the legacy row is left for 017's re-anchor migration to handle. 019 never creates a second row for the same cashier-on-terminal; it does not upgrade legacy rows in place (that boundary belongs to 017). *(Encoded in FR-5.)*
+
 ## User Scenarios & Testing
 
 ### Primary User Story
@@ -61,7 +68,7 @@ A pharmacy **manager** is onboarding a new cashier on a paired terminal. The cas
 - **FR-2.** The created record MUST be keyed on the cashier's **provider-neutral identifier** (the durable identity key, not the provider-coupled subject) from the moment of creation.
 - **FR-3.** The cashier's provider-neutral identifier MUST be obtained from the branch **roster** (a delivered attribute of the rostered cashier), not minted locally, not derived from the provider subject, and not fetched on a separate per-provisioning backend call.
 - **FR-4.** Provisioning MUST be role-gated to **manager** or **admin**; a cashier-role operator MUST be refused generically.
-- **FR-5.** Provisioning MUST be **create-only**: if a record already exists for the cashier on this terminal, the provisioning action MUST NOT create a duplicate or silently replace the existing secret; the existing **reset** path remains the mechanism for changing an already-provisioned PIN.
+- **FR-5.** Provisioning MUST be **create-only**: if a record already exists for the cashier on this terminal, the provisioning action MUST NOT create a duplicate or silently replace the existing secret; the existing **reset** path remains the mechanism for changing an already-provisioned PIN. "Already exists" MUST include a **legacy provider-coupled (clerk-keyed) row** for that cashier-on-terminal — provisioning refuses in that case and leaves the legacy row for the 017 re-anchor migration; 019 MUST NOT create a second row for the same cashier-on-terminal, and MUST NOT upgrade a legacy row in place (that is 017's boundary).
 - **FR-6.** The PIN secret (hash + salt) MUST be generated locally, sealed at rest, scoped to `(tenant, branch, terminal, provider-neutral identifier)`, and MUST NEVER leave the device, be transmitted upward, or appear in logs/audit/errors/renderer responses.
 - **FR-7.** A successful provisioning MUST emit a **secret-free** audit event recording scope + the fact of provisioning + the attributable manager/admin — never the PIN, hash, or salt.
 - **FR-8.** The verifier component that checks a PIN at unlock time MUST be unchanged by this feature (it never keys on identity); provisioning only creates the record the verifier later reads.
