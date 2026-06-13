@@ -19,6 +19,14 @@ build/
 # Electron-builder packaged artifacts (signed installers, unpacked dirs)
 release/
 
+# Self-hosted GitHub Actions runner — its own working tree (a nested checkout
+# of this repo plus dist/, _work/, and downloaded actions). Pure CI scratch,
+# never project source. Critically: leaving it untracked makes `npm run lint`
+# recurse into it and report thousands of unrelated errors on compiled JS,
+# masking real lint/prettier failures in src/ (CI uses a clean checkout, so it
+# catches them). Ignore the whole dir.
+actions-runner/
+
 # Env / secrets
 .env
 .env.*
