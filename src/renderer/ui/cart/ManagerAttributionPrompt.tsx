@@ -6,7 +6,7 @@
  * Credential field is a layout placeholder — no auth wiring.
  */
 
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { touchTarget } from '../tokens/touch.js';
 
 export interface ManagerAttributionPromptProps {
@@ -20,6 +20,21 @@ export function ManagerAttributionPrompt({
 }: ManagerAttributionPromptProps): JSX.Element {
   const [managerId, setManagerId] = useState('');
   const [credential, setCredential] = useState('');
+
+  // Escape cancels (WCAG 2.1.1) — the non-destructive dismiss. Mirrors the
+  // Dialog primitive's pattern; this prompt is hand-rolled rather than built on
+  // <Dialog>, so the behavior is added directly.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onCancel]);
 
   return (
     <div

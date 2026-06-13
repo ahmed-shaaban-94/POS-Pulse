@@ -15,7 +15,7 @@
  * be logged here (NFR-006 / Constitution VII).
  */
 
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 export interface LineNotePopoverProps {
   open: boolean;
@@ -36,6 +36,23 @@ export function LineNotePopover({
   onClose,
 }: LineNotePopoverProps): JSX.Element | null {
   const [draft, setDraft] = useState<string>(currentNote ?? '');
+
+  // Escape closes the dialog (WCAG 2.1.1). Mirrors the Dialog primitive's
+  // pattern — this popover is hand-rolled rather than built on <Dialog>, so the
+  // behavior is added here directly. Effect runs before the early return so the
+  // hook order stays stable; it self-gates on `open`.
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 

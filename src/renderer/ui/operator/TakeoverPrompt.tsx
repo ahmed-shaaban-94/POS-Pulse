@@ -76,6 +76,23 @@ export function TakeoverPrompt({
     useOperatorSessionStore.getState().cancelTakeover();
   };
 
+  // Escape cancels the takeover (WCAG 2.1.1) — the non-destructive default,
+  // matching the focus-Cancel-on-mount safety posture (FR-013). Mirrors the
+  // Dialog primitive's keydown pattern; this prompt is hand-rolled.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        void handleCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+    // handleCancel is stable for the prompt's lifetime (deps don't change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div
       role="dialog"
