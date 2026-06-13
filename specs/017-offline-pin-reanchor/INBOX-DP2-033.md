@@ -1,8 +1,29 @@
 # INBOX — from DP-2 (033): confirm POS-Pulse response-validation mode
 
-**From:** Data-Pulse-2 · **Re:** 033 `feat(033)` surface provider-neutral `user_id` on the POS operator response · **Date:** 2026-06-13 · **Status:** awaiting POS-Pulse answer
+**From:** Data-Pulse-2 · **Re:** 033 `feat(033)` surface provider-neutral `user_id` on the POS operator response · **Date:** 2026-06-13 · **Status:** ✅ ANSWERED (POS-Pulse, 2026-06-13)
 
-> This is an inbound cross-repo note from DP-2. It records ONE question for the POS-Pulse owner and does **not** change this spec, its `BLOCKER.md` status, `tasks.md`, or any code. Acting on it (re-pin, unblock) is POS-Pulse's decision.
+> This is an inbound cross-repo note from DP-2. The original question + DP-2 context is preserved below; the POS-Pulse answer is in the **ANSWER** block immediately after.
+
+---
+
+## ✅ ANSWER (POS-Pulse, 2026-06-13): LENIENT — and `user_id` is now consumed
+
+**Verdict: POS-Pulse validates the operator sign-in / takeover-confirm response LENIENTLY.** The coordinated re-pin is therefore **NOT mandatory** for compatibility — DP-2's additive `user_id` was always safe on the wire.
+
+**Evidence (POS-Pulse `src/main/operator/backend-client.ts`):**
+- No runtime schema validator (no zod/ajv) on the operator path — those exist only under `src/main/sales-sync/`.
+- `interpretSignInResponse` is an **allowlist reader**: it `typeof`-checks the known fields, then **constructs a fresh object copying only those fields**. Unknown properties are silently dropped, never rejected — the opposite of `additionalProperties: false` enforcement. (The roster parser states this intent: *"Allowlist: id, display_name, role only — extra fields stripped by construction."*)
+- The operator contract is **not** in the generated `api-types.ts` (that codegen sources the live platform `openapi.json` at `api.smartdatapulse.tech`, which carries no operator endpoints). The operator types are **hand-mirrored** in `backend-client.ts` — so a `codegen:api` re-pin would be a no-op for this contract.
+
+**Action taken (this PR):** rather than a no-op codegen, POS-Pulse **consumes** the new field directly — `user_id` added to `BackendSignInOperator` and read through in `interpretSignInResponse` (now `required`; a response lacking it fails closed to `refused`, matching DP-2's `required` contract). Covers both sign-in and takeover-confirm (which reuses the same interpreter). Verified: operator+ipc suite 246/246 GREEN; main/renderer/preload typecheck clean.
+
+**Net for POS-017:** the `BLOCKER.md` "Unblock criteria" — *"a new DP-2 slice must surface `user_id` on a POS-facing response, and POS must re-pin to consume it"* — is now **met on both sides** (DP-2 033 shipped `c5e1c5d`; POS-Pulse consumes it here). Whether to lift the 017 blocker and start the PK re-anchor remains a separate owner decision (still G10 + DAG-gated per this spec).
+
+---
+
+### Original question + DP-2 context (preserved)
+
+> This was an inbound cross-repo note from DP-2 recording ONE question. Acting on it (re-pin, unblock) was POS-Pulse's decision — now answered above.
 
 ## The one question
 

@@ -30,6 +30,7 @@ const CONFIRM_SUCCESS: BackendTakeoverConfirmResponse = {
   kind: 'signed_in',
   operator: {
     id: 'clerk-user-2',
+    user_id: '44444444-4444-7444-8444-444444444444', // DP-2 033 provider-neutral users.id
     display_name: 'Manager Two',
     role: 'manager',
     tenant_id: 't1',
