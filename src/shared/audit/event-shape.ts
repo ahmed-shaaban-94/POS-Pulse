@@ -25,6 +25,9 @@ export const AUDIT_ACTION_CATEGORIES = [
   'operator.session.takeover',
   'cashier.pin.reset',
   'cashier.pin.unlock',
+  // 019-cashier-pin-provisioning (R-2) — first-PIN create path; sibling to
+  // reset/unlock. Emitter wiring lands with the provision handler.
+  'cashier.pin.provisioned',
   // 005-sales-cart §A3 (FR-026 / Q5) — type-only extension; emitter wiring lands in S3.
   'cart.handoff_to_payment',
   'cart.cancel.post_handoff',
@@ -101,6 +104,13 @@ export type Fr025MandatoryAttribute = (typeof FR025_MANDATORY_ATTRIBUTES)[number
  * (PR-2 explicit carve-out for the cashier-PIN lockout case; visible
  * to the operator so they know to wait). Reachable in S4; harmless
  * to enumerate here.
+ *
+ * `not_ready` (019-cashier-pin-provisioning FR-11) is the truthful
+ * "cannot provision yet" state: the rostered cashier carries no
+ * provider-neutral `user_id`, so provisioning refuses rather than
+ * falling back to a provider-coupled key. A degraded-state signal
+ * (P9), distinct from `invalid_input` — the request was well-formed,
+ * the upstream identity simply isn't available.
  */
 export const REFUSAL_CATEGORIES = [
   'invalid_input',
@@ -109,6 +119,7 @@ export const REFUSAL_CATEGORIES = [
   'role_mismatch',
   'not_signed_in',
   'state_invalid',
+  'not_ready',
 ] as const;
 export type RefusalCategory = (typeof REFUSAL_CATEGORIES)[number];
 

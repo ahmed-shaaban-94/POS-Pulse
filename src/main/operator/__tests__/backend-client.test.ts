@@ -400,6 +400,53 @@ describe('createBackendClient — roster request shape', () => {
     }
   });
 
+  // ─── 019 T020 — roster allowlist threads the held DP-2 `user_id` field ───────
+
+  it('019 T020: threads the provider-neutral user_id through when the backend supplies it', async () => {
+    const body = {
+      kind: 'roster',
+      cashiers: [
+        {
+          id: 'c-1',
+          user_id: 'neutral-uuid-123', // DP-2 held field (028 §16)
+          display_name: 'Cashier One',
+          role: 'cashier',
+          email: 'secret@example.com', // still stripped (not allowlisted)
+        },
+      ],
+    };
+    const { fetchImpl } = captureFetch(new Response(JSON.stringify(body), { status: 200 }));
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('roster');
+    if (res.kind === 'roster') {
+      const cashier = res.cashiers[0];
+      expect(cashier).toEqual({
+        id: 'c-1',
+        user_id: 'neutral-uuid-123',
+        display_name: 'Cashier One',
+        role: 'cashier',
+      });
+      // Secrets are NOT allowlisted even alongside user_id.
+      expect(JSON.stringify(cashier)).not.toContain('email');
+    }
+  });
+
+  it('019 T020: roster path still succeeds when user_id is absent (optional on wire, pre-DP-2)', async () => {
+    // HAPPY_ROSTER_BODY carries NO user_id — the path must not break or invent one.
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(HAPPY_ROSTER_BODY), { status: 200 }),
+    );
+    const client = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+    const res = await client.listRoster('b1');
+    expect(res.kind).toBe('roster');
+    if (res.kind === 'roster') {
+      const cashier = res.cashiers[0];
+      expect(cashier).toEqual({ id: 'c-1', display_name: 'Cashier One', role: 'cashier' });
+      expect(cashier).not.toHaveProperty('user_id');
+    }
+  });
+
   it('returns refused when any cashier entry has a non-cashier role', async () => {
     const body = {
       kind: 'roster',

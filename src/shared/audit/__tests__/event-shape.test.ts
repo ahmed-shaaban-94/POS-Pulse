@@ -88,6 +88,8 @@ describe('audit/event-shape — OperatorRefusal envelope (NFR-003 / PR-2)', () =
       'role_mismatch',
       'not_signed_in',
       'state_invalid',
+      // 019-cashier-pin-provisioning FR-11 — truthful "cannot provision yet" state.
+      'not_ready',
     ]);
   });
 

@@ -232,12 +232,15 @@ attempts (verified by attempting them via raw SQL — they MUST fail).
 
 1. Sign in as the manager (Slice 1 flow).
 2. Navigate to the cashier-management surface (manager-only).
-3. Provision an initial PIN for cashier 1 (`cashier.pin.reset` flow):
+3. Provision an initial PIN for cashier 1 (the dedicated create path
+   `operator.provisionCashierPin`, added in 019 — NOT `cashier.pin.reset`,
+   which only changes an already-provisioned PIN; corrected per 019 FR-10):
    - Pick cashier 1 from the cashier list.
    - Enter a 4-digit PIN (e.g., `1234`).
    - Submit.
-   - **Expected**: A `cashier.pin.reset` audit event is emitted, attributed
-     to the manager, referencing cashier 1.
+   - **Expected**: A `cashier.pin.provisioned` audit event is emitted,
+     attributed to the manager, referencing cashier 1 by provider-neutral
+     `user_id`. (A subsequent *change* would emit `cashier.pin.reset`.)
    - **MUST NOT**: The PIN value (`1234`) appears anywhere in the audit
      payload, the log, or the support bundle.
 4. Sign out.

@@ -21,6 +21,10 @@ export const SIGN_IN_REFUSAL_COPY: Readonly<Record<RefusalCategory, string>> = O
   role_mismatch: 'You do not have access to this surface.',
   not_signed_in: 'Please sign in to continue.',
   state_invalid: 'Action cannot be completed in the current state.',
+  // 019-cashier-pin-provisioning FR-11 — truthful degraded state (P9): the
+  // cashier has no provider-neutral identifier yet, so provisioning is not
+  // possible. Never presented as a failed attempt.
+  not_ready: 'This cashier is not ready to provision yet.',
 });
 
 export const EMPTY_INPUT_MESSAGE = 'Enter your credentials to sign in.';

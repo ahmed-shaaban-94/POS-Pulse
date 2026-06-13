@@ -89,14 +89,15 @@ specs/019-cashier-pin-provisioning/
 ```
 
 Source files the implementation will touch (named, not modified in this pass):
-- `src/main/operator/pin-management.ts` — add `provisionCashierPin` (create path; refuses if row exists or no `user_id`).
-- `src/main/operator/roster-handler.ts` — widen the `{id,display_name,role}` allowlist to thread `user_id`.
+- `src/main/operator/pin-management.ts` — add `provisionCashierPin` (create path; refuses if row exists or no `user_id`). Gains a `backend: BackendClient` dependency.
+- `src/main/operator/backend-client.ts` — **(as-built seam; T020/T021)** widen the `BackendRosterCashier` allowlist `{id,display_name,role}` → `{id,user_id?,display_name,role}` (optional `user_id`). **NOTE:** tasks.md T021 named `roster-handler.ts:43`; the seam moved to the *backend* roster type instead so the neutral↔clerk mapping the handler needs stays main-side and NEVER crosses the bridge (Constitution VII / minimum-disclosure). The renderer-facing `BranchRosterCashier` (`roster-handler.ts`) deliberately does NOT carry `user_id`.
 - `src/shared/bridge-api.ts` — `ProvisionCashierPinRequest`/`Response` + channel.
 - `src/preload/index.ts` — expose `operator.provisionCashierPin`.
 - `src/main/ipc/operator*.ts` — register the handler.
-- `src/shared/audit/*` — add `cashier.pin.provisioned` category + payload.
-- `migrations/` — additive `user_id` column **iff** R-1 says 019 owns it (else 017's `0035`).
-- Docs: `specs/004-operator-session/data-model.md` + `quickstart.md` — correct "provision via reset" language (FR-10).
+- `src/main/index.ts` — composition root: inject `backend: operatorBackend` into `PinManagementHandler`.
+- `src/shared/audit/*` — add `cashier.pin.provisioned` category + payload + `not_ready` refusal category (+ `messages.ts` copy).
+- `migrations/0035_add_user_id_to_cashier_pin_records.sql` — **AUTHORED (T001/T005).** R-1 resolved: **019 owns** the additive nullable, non-key `user_id TEXT` column and claims migration number **`0035`** (next free after `0034`). 017's re-anchor migration takes the NEXT free number and does only the PK re-key + legacy backfill — it MUST NOT re-introduce the column. (017's CLAUDE.md/spec text mentioning "migration `0035`" predates this claim and now refers to 017's own later-numbered re-key migration.)
+- Docs: `specs/004-operator-session/data-model.md` + `quickstart.md` — corrected "provision via reset" language (FR-10 — DONE T030).
 - **Untouched:** `pin-credential.ts`, `pin-lockout.ts` (verifier — FR-8).
 
 ## Test Strategy

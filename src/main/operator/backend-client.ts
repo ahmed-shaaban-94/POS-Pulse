@@ -95,6 +95,16 @@ export type BackendSignOutResponse =
 
 export interface BackendRosterCashier {
   id: string;
+  /**
+   * 019-cashier-pin-provisioning — the cashier's provider-neutral identifier
+   * (028 §16 = DP-2 `users.id`). OPTIONAL on the wire: present once DP-2 ships
+   * the roster `user_id` field (017 OUTBOX), absent until then. The provision
+   * handler keys the born-neutral PIN row off it and refuses `not_ready` when
+   * it is absent (FR-11). Allowlisted (defence-in-depth) so it threads through
+   * to the handler; the renderer-facing `BranchRosterCashier` does NOT carry it
+   * (the clerk↔neutral mapping stays main-side — Constitution VII).
+   */
+  user_id?: string;
   display_name: string;
   /** Literal type: only cashier-role rows cross this layer (FR-006 / FR-031). */
   role: 'cashier';
@@ -431,8 +441,17 @@ function interpretRosterResponse(parsed: unknown): BackendRosterResponse {
     if (typeof e['id'] !== 'string') return { kind: 'refused' };
     if (typeof e['display_name'] !== 'string') return { kind: 'refused' };
     if (e['role'] !== 'cashier') return { kind: 'refused' };
-    // Allowlist: id, display_name, role only — extra fields stripped by construction.
-    cashiers.push({ id: e['id'], display_name: e['display_name'], role: 'cashier' });
+    // Allowlist: id, display_name, role, and the OPTIONAL 019 user_id — every
+    // other field (email/phone/password_hash/…) is stripped by construction.
+    // user_id is threaded only when the backend actually supplies it (string);
+    // absent → omitted, so pre-DP-2 entries stay {id, display_name, role}.
+    const cashier: BackendRosterCashier = {
+      id: e['id'],
+      display_name: e['display_name'],
+      role: 'cashier',
+    };
+    if (typeof e['user_id'] === 'string') cashier.user_id = e['user_id'];
+    cashiers.push(cashier);
   }
   return { kind: 'roster', cashiers };
 }
