@@ -36,6 +36,12 @@ export interface BackendSignInRequest {
 
 export interface BackendSignInOperator {
   id: string;
+  /**
+   * Provider-neutral identity key = DP-2 `users.id` (028 §16). Distinct from
+   * `id` (= `clerk_user_id`, the v1 bridge). Surfaced by DP-2 033; consumed by
+   * POS-017 to re-anchor the offline-PIN store off a provider-independent key.
+   */
+  user_id: string;
   display_name: string;
   role: Role;
   tenant_id: string;
@@ -370,6 +376,7 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   if (op === undefined || sess === undefined) return { kind: 'refused' };
   if (
     typeof op['id'] !== 'string' ||
+    typeof op['user_id'] !== 'string' ||
     typeof op['display_name'] !== 'string' ||
     typeof op['role'] !== 'string' ||
     typeof op['tenant_id'] !== 'string' ||
@@ -397,6 +404,7 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
     kind: 'signed_in',
     operator: {
       id: op['id'],
+      user_id: op['user_id'],
       display_name: op['display_name'],
       role: op['role'],
       tenant_id: op['tenant_id'],

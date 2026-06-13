@@ -63,6 +63,7 @@ const SUCCESS_BACKEND_RESPONSE: BackendSignInResponse = {
   kind: 'signed_in',
   operator: {
     id: 'clerk-user-1',
+    user_id: '33333333-3333-7333-8333-333333333333', // DP-2 033 provider-neutral users.id
     display_name: 'Manager One',
     role: 'manager',
     tenant_id: 't1',

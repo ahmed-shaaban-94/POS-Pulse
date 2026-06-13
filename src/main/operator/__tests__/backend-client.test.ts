@@ -52,6 +52,8 @@ const HAPPY_SIGN_IN_BODY = {
   kind: 'signed_in',
   operator: {
     id: 'clerk-user-1',
+    // DP-2 033: provider-neutral users.id, distinct from the Clerk-subject `id`.
+    user_id: '33333333-3333-7333-8333-333333333333',
     display_name: 'Manager One',
     role: 'manager',
     tenant_id: 't1',
@@ -117,6 +119,8 @@ describe('createBackendClient — sign-in request shape', () => {
     expect(res.kind).toBe('signed_in');
     if (res.kind === 'signed_in') {
       expect(res.operator.id).toBe('clerk-user-1');
+      // DP-2 033: the provider-neutral user_id is read through (distinct from `id`).
+      expect(res.operator.user_id).toBe('33333333-3333-7333-8333-333333333333');
       expect(res.operator.role).toBe('manager');
       expect(res.operator_session.id).toBe('be-sess-1');
     }
@@ -445,6 +449,9 @@ describe('createBackendClient — takeover-confirm request shape', () => {
     kind: 'signed_in',
     operator: {
       id: 'clerk-user-2',
+      // DP-2 033: provider-neutral user_id, present on the takeover-confirm
+      // signed_in response too (it reuses interpretSignInResponse).
+      user_id: '44444444-4444-7444-8444-444444444444',
       display_name: 'Manager Two',
       role: 'manager',
       tenant_id: 't1',
