@@ -23,23 +23,34 @@ But **POS-017 re-keys `cashier_pin_records`, which is keyed to the _cashier_ —
 
 ## Sizing — this is NOT just "add a field"
 
-DP-2's identity resolution has shipped but provisioning has not:
+> **⚠️ REVISED 2026-06-13 after read-only investigation of DP-2 `origin/main` (`88c8d3d`). The original sizing below OVER-STATED the DP-2 cost — corrected here. The DP-2 ask is ~4 lines and needs NO `external_identity_links` provisioning. The larger remaining gap is POS-internal (cashier-PIN enrollment INSERT does not exist yet).**
 
-- ✅ **Resolver is live:** `operator-context-resolver` resolves identity via the `external_identity_links` join (not `clerk_user_id`); unmapped subjects → `user_unmapped → refused`. So given an ACTIVE link row, DP-2 *can* map a cashier's Clerk subject → `user_id` today.
-- ❌ **Link provisioning is NOT live:** `linkExternalIdentity` has **no runtime caller** — it appears only as a readiness stub (`apps/api/test/auth/identity-provider-readiness.unit.spec.ts:46`). Cashiers without an ACTIVE `external_identity_links` row cannot be resolved.
+### DP-2 ask — TRIVIAL (~4 lines, no provisioning) — VERIFIED
 
-**Therefore the DP-2 slice is:** (1) ensure cashiers are provisioned in `external_identity_links` (the 029-deferred work, or a scoped subset for cashiers), and (2) add `user_id` (`required`, `format: uuid`) to `PosRosterCashierEntry` (and any PIN-enrollment payload), resolved server-side per cashier from the link. Until (1) lands, (2) would return rows where `user_id` cannot be resolved.
+The cashier's `user_id` is **already in hand** at the roster build site; only the output shape omits it:
 
-## POS-side follow-up once DP-2 ships (POS-owned, tracked in POS-017)
+- **The roster query already joins on it.** `apps/api/src/pos-operators/pos-operators.service.ts:798-832` `findCashiersByStore` runs `JOIN users u ON u.id = m.user_id` (`:809`). The provider-neutral `user_id` **IS** `u.id` — the very join key. The query SELECTs `u.clerk_user_id, u.display_name` (`:806`) and maps to `{ id: row.clerk_user_id, display_name, role }` (`:827-831`). **No `external_identity_links` lookup is involved** — `users.id` is the users-table PK, always present.
+- **033 confirms the principle explicitly.** `specs/033-pos-facing-user-id-surface/spec.md` Clarification Q4: *"`users.id` already exists and is already SELECTed … It does not depend on `external_identity_links` being backfilled — `userRow.id` is the users-table primary key, always present, independent of the 029 link table's deferred provisioning."* The provisioning concern applies to the **auth resolver** (mapping an inbound Clerk subject → `user_id`), NOT to the **roster** (which already has `users.id` from the membership join).
+- **The change:** add `u.id` to the SELECT, `user_id: row.id` to the `:827` map, `user_id: string` to the `PosRosterCashierEntry` DTO (`dto.ts:138`), and `user_id` (`required`, `format: uuid`) to the OpenAPI schema `PosRosterCashierEntry` (`pos-operators.openapi.yaml:510`). Mirrors exactly what 033 did for `PosOperatorSummary` — but **033 scoped the roster OUT** (it touched `PosOperatorSummary` only; the cashier roster was missed).
 
-1. Widen the `roster-handler.ts:43` allowlist (currently destructures to `{ id, display_name, role }`) to thread `user_id` through.
-2. Carry `user_id` from roster → PIN enrollment → the `cashier_pin_records` row, so the PK rebuild (migration `0035`, currently **not authored**) has a real `<user_id source>`.
-3. Decide OQ-D6-1 (transition mechanism) against the real per-cashier delivery shape. **Constraint discovered this session:** a NULL `user_id` cannot sit in a composite PRIMARY KEY (SQLite anti-pattern), so the transition must retain `cashier_clerk_user_id` as the authoritative key until each row has a real `user_id` — i.e. a dual-key/bridge window, not a single rebuild onto a half-empty `user_id` PK.
+**Why 033's "POS-017 UNBLOCKED" (SC-033-5) is mistaken:** 033 surfaced `user_id` for the *signing-in operator*. POS-017 re-keys `cashier_pin_records`, keyed to the *cashier* — a different principal. Both repos shared the same operator-vs-cashier blind spot. 033 unblocked operator-scoped local records; it did **not** unblock the cashier-PIN re-key.
+
+### POS-side gap — LARGER than first assumed (the real remaining work)
+
+1. **No cashier-PIN enrollment INSERT exists in POS `src/`.** Grep finds zero `INSERT INTO cashier_pin_records` — only `SELECT`/`UPDATE`. `pin-management.ts:142` comments *"the cashier must be onboarded first"* and `resetCashierPin` **refuses** on a missing row (`:151`); its "creates or overwrites" docstring (`:97`) is aspirational — the create path was **never built** (a 004-operator-session gap). **Consequence:** 017's "migration `0035` re-keys existing rows" premise is **partly moot** — there may be nothing to migrate. The honest design is: **the enrollment INSERT (when 004 builds it) keys on `user_id` from the start**, with `0035` only a safety net for any pre-existing rows.
+2. Widen the `roster-handler.ts:43` allowlist (currently destructures to `{ id, display_name, role }`) to thread `user_id` through to the enrollment write site.
+3. Decide OQ-D6-1 against the real shape. **Constraint:** a NULL `user_id` cannot sit in a composite PRIMARY KEY (SQLite anti-pattern), so any pre-existing rows must retain `cashier_clerk_user_id` as the authoritative key until each has a real `user_id` — a dual-key/bridge window, not a single rebuild onto a half-empty `user_id` PK.
+
+### Net blocker composition (shifted, NOT removed)
+
+- **DP-2:** ~4-line roster change, no provisioning, no migration. Feasible today.
+- **POS:** the heavier part — build cashier-PIN enrollment to key on `user_id` (004 dependency), then the bridge-window migration for any legacy rows.
+- **Still blocks 017 implementation** until both land; the OUTBOX requests the DP-2 part (P16 — POS authors no DP-2 code).
 
 ## One question back to DP-2
 
-**Will the cashier's `user_id` be surfaced on `PosRosterCashierEntry`, on a dedicated PIN-enrollment contract, or both — and is per-cashier `external_identity_links` provisioning in scope for that slice or a prerequisite to it?** The answer fixes POS-017's OQ-D6-1 transition design.
+**Will you surface the cashier's `user_id` on `PosRosterCashierEntry` (the ~4-line change above)?** It needs no `external_identity_links` provisioning — `users.id` is already loaded at `findCashiersByStore:809`. (A dedicated PIN-enrollment contract is NOT required on the DP-2 side; POS keys its local enrollment off the roster-delivered `user_id`.)
 
 ---
 
-*Pointers (DP-2 side): contract `packages/contracts/openapi/pos-operators.openapi.yaml` → `PosRosterCashierEntry`; resolver `apps/api/src/.../operator-context-resolver`; link stub `linkExternalIdentity`. POS side: `specs/017-offline-pin-reanchor/BLOCKER.md` rev. 3 has the full evidence.*
+*Pointers (DP-2 side, VERIFIED): query+map `apps/api/src/pos-operators/pos-operators.service.ts:798-832`; DTO `apps/api/src/pos-operators/dto.ts:138`; OpenAPI `packages/contracts/openapi/pos-operators.openapi.yaml:510`. Precedent: 033 did the identical surfacing for `PosOperatorSummary`. POS side: `specs/017-offline-pin-reanchor/BLOCKER.md` rev. 3.*
