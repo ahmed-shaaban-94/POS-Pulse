@@ -16,6 +16,8 @@ import type {
   ListStuckShiftsResponse,
   ManagerAdminSignInRequest,
   OperatorSessionBridgeView,
+  ProvisionCashierPinRequest,
+  ProvisionCashierPinResponse,
   ResetCashierPinRequest,
   ResetCashierPinResponse,
   SignInResponse,
@@ -161,6 +163,25 @@ function asResetCashierPinRequest(value: unknown): ResetCashierPinRequest | null
     event_id: v['event_id'],
     target_cashier_id: v['target_cashier_id'],
     new_pin: v['new_pin'],
+  };
+}
+
+function asProvisionCashierPinRequest(value: unknown): ProvisionCashierPinRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (
+    typeof v['event_id'] !== 'string' ||
+    v['event_id'].length === 0 ||
+    typeof v['target_user_id'] !== 'string' ||
+    v['target_user_id'].length === 0 ||
+    typeof v['initial_pin'] !== 'string' ||
+    v['initial_pin'].length === 0
+  )
+    return null;
+  return {
+    event_id: v['event_id'],
+    target_user_id: v['target_user_id'],
+    initial_pin: v['initial_pin'],
   };
 }
 
@@ -394,6 +415,22 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       if (req === null) return refuseInvalid();
       try {
         return await pinManagementHandler.resetCashierPin(req);
+      } catch {
+        return refuseInvalid();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN,
+    async (
+      _event: IpcMainInvokeEvent,
+      request: unknown,
+    ): Promise<ProvisionCashierPinResponse | OperatorRefusal> => {
+      const req = asProvisionCashierPinRequest(request);
+      if (req === null) return refuseInvalid();
+      try {
+        return await pinManagementHandler.provisionCashierPin(req);
       } catch {
         return refuseInvalid();
       }

@@ -13,6 +13,8 @@ import type {
   ForceCloseShiftResponse,
   ListBranchRosterResponse,
   ListStuckShiftsResponse,
+  ProvisionCashierPinRequest,
+  ProvisionCashierPinResponse,
   ResetCashierPinRequest,
   ResetCashierPinResponse,
   SignInRequest,
@@ -50,6 +52,7 @@ describe('operator bridge typed surface (T008)', () => {
       | 'confirmTakeover'
       | 'cancelTakeover'
       | 'resetCashierPin'
+      | 'provisionCashierPin'
       | 'unlockCashier'
       | 'forceCloseShift'
       | 'listStuckShifts'
@@ -123,6 +126,13 @@ describe('operator bridge typed surface (T008)', () => {
     >().toEqualTypeOf<ResetCashierPinRequest>();
     expectTypeOf<Awaited<ReturnType<OperatorBridgeAPI['resetCashierPin']>>>().toEqualTypeOf<
       ResetCashierPinResponse | OperatorRefusal
+    >();
+
+    expectTypeOf<
+      Parameters<OperatorBridgeAPI['provisionCashierPin']>[0]
+    >().toEqualTypeOf<ProvisionCashierPinRequest>();
+    expectTypeOf<Awaited<ReturnType<OperatorBridgeAPI['provisionCashierPin']>>>().toEqualTypeOf<
+      ProvisionCashierPinResponse | OperatorRefusal
     >();
 
     expectTypeOf<

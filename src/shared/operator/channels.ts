@@ -22,6 +22,8 @@ export const OPERATOR_IPC_CHANNELS = {
   TAKEOVER_CANCEL: 'operator:takeover-cancel',
   /** T072 — manager/admin PIN reset for a cashier on this terminal. */
   RESET_CASHIER_PIN: 'operator:reset-cashier-pin',
+  /** 019 — manager/admin FIRST-PIN provisioning (create) for a cashier on this terminal. */
+  PROVISION_CASHIER_PIN: 'operator:provision-cashier-pin',
   /** T073 — manager/admin unlock of a locked-out cashier on this terminal. */
   UNLOCK_CASHIER: 'operator:unlock-cashier',
   /** T089 — manager/admin forced-close of a stuck cashier shift. */
