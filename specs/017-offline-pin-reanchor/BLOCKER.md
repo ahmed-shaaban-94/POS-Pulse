@@ -2,7 +2,25 @@
 
 # 017 Implementation Blocker — provider-neutral user_id is not delivered to the terminal
 
-**Status:** DESIGN-READY, IMPLEMENTATION-BLOCKED — **gate-1 (user_id-delivery) SATISFIED; G10 component of gate-2 SATISFIED; sole remaining blocker = owner Queue dispatch of POS-017** (updated 2026-06-13).
+**Status:** DESIGN-READY, IMPLEMENTATION-BLOCKED — **RE-BLOCKED at dispatch attempt 2026-06-13: gate-1 is satisfied for the OPERATOR's own identity but NOT for the CASHIER identity 017 re-keys.** A new, deeper data blocker was found when implementation was authorized — see the ⛔ rev. 3 block immediately below. (G10 remains satisfied; owner dispatch is no longer the sole blocker — the cashier-`user_id` delivery gap is.)
+
+## ⛔ UPDATE 2026-06-13 (rev. 3) — RE-BLOCKED: the delivered `user_id` is the operator's, not the cashier's
+
+When the owner authorized dispatch ("go"), a pre-implementation source verification (reading the actual files the migration + re-key would touch, before authoring any SQL) surfaced a blocker **one layer deeper** than the original — and it **partially invalidates the rev. 1/2 "gate-1 satisfied" conclusion**:
+
+- **The `user_id` that DP-2 033 + POS #389 delivered is the SIGNING-IN OPERATOR's `user_id`, not the CASHIER's.** `BackendSignInOperator.user_id` (`src/main/operator/backend-client.ts:44`) is populated only on the online `BackendSignInRequest { kind: 'manager_admin' }` path — i.e. whoever authenticated. But `cashier_pin_records` is keyed to the **cashier** (`cashier_clerk_user_id`), a different principal. Re-keying a cashier's row requires the **cashier's** `user_id`, which is never the signing-in operator's.
+- **Contract-level proof (airtight) — verified on DP-2 `origin/main`, head `88c8d3d`:** across **every** POS-facing contract, the cashier's `user_id` is surfaced **nowhere**. 033 added `user_id` to `PosOperatorSummary` **only** (the signing-in operator: `pos-operators.openapi.yaml:409`, `required: [id, user_id, …]`). `PosRosterCashierEntry` — the **only** POS-facing contract carrying *cashier* identity — is `required: [id, display_name, role]`, `additionalProperties: false`, with `id` documented as the **Clerk subject** (`users.clerk_user_id`) (`pos-operators.openapi.yaml:510-537`). There is no `user_id` field on it. Therefore POS has **zero** source for any cashier's `user_id`, independent of how many local write sites exist.
+- **POS-side corroboration (`main`):** even if DP-2 added the field, `src/main/operator/roster-handler.ts:43` **allowlist-strips** each cashier to `{ id, display_name, role }` by destructuring construction (FR-006/FR-031 defence-in-depth) — it would silently drop a `user_id` before it reached the enrollment write site. PIN reset/lookup (`pin-management.ts:146-167,248-266`) and cashier sign-in (`sign-in-handler.ts:333,549`) all key on caller-supplied `cashier_clerk_user_id`; **no `INSERT INTO cashier_pin_records` exists in `src/` at all** (reset *refuses* on a missing row, `pin-management.ts:151`), so the row-CREATE path is not yet present locally either.
+- **PIN-only cashiers never traverse the online `manager_admin` path** (spec evidence E-3: `backend_session_id: ''`, `jwt: null`, `cashier_clerk_user_id` caller-supplied), so there is no online sign-in moment at which a cashier's `user_id` could arrive.
+- **DP-2 provisioning state (sizes the ask):** DP-2's `operator-context-resolver` now resolves identity via the `external_identity_links` join (not `clerk_user_id`) and refuses `user_unmapped` when no ACTIVE link exists — but `linkExternalIdentity` still has **no live runtime caller** (it appears only as a readiness stub, `identity-provider-readiness.unit.spec.ts:46`). So the DP-2 ask is **"resolve + surface the cashier's `user_id` on the roster, and ensure links are provisioned,"** not merely "add a field."
+
+**Consequence:** re-keying `cashier_pin_records`'s PK onto `user_id` (the entire purpose of 017) would put a `user_id` that **does not exist for cashiers** into a composite PRIMARY KEY — NULL in a PK tuple (a SQLite anti-pattern) — stranding every PIN-only cashier. **The migration `0035` was NOT authored; `cashier_pin_records` and `migrations/` are untouched.**
+
+**New unblock criterion (supersedes the rev. 2 "owner dispatch is the sole blocker"):** a DP-2 (and POS) slice must surface the **cashier's** provider-neutral `user_id` on the **roster and/or PIN-enrollment** path — AND `roster-handler.ts`'s allowlist must be widened to carry it through to the enrollment write site — **before** the PK re-key can be authored. Gate-1 as originally stated (operator sign-in carries `user_id`) is necessary but **not sufficient** for 017. This is the drift-map NEW EDGE, re-scoped to the cashier principal. Owner Queue dispatch (rev. 2) remains a separate governance gate, but is now moot until this data gap closes.
+
+---
+
+**Prior status (rev. 2 — preserved; partially superseded by rev. 3 above):** gate-1 (user_id-delivery) SATISFIED *for operator identity*; G10 component of gate-2 SATISFIED; rev. 2 named owner Queue dispatch as the sole remaining blocker (updated 2026-06-13).
 
 ## ⬆️ UPDATE 2026-06-13 (rev. 2) — the DOUBLE-GATE, reconciled to the Orchestrator kernel
 
