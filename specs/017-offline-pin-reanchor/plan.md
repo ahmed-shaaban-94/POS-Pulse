@@ -1,3 +1,5 @@
+> **⛔ SUPERSEDED IN PART (2026-06-13) — read [`BLOCKER.md`](./BLOCKER.md) rev. 3 + [`UNBLOCK-PLAN.md`](./UNBLOCK-PLAN.md) FIRST.** This plan's blocker premise ("zero `user_id` on all POS contracts; needs an envelope/sign-in slice + `external_identity_links` provisioning + G10 ratification") was **disproven** by a dispatch-attempt investigation. The real gap is a **cashier-scoped** `user_id`: 033 delivered the *operator's* `user_id`, not the *cashier's*. The DP-2 fix is a verified ~4-line roster-field add with **NO provisioning**; the heavier half is POS-internal deferred cashier-PIN provisioning. **Execute [`UNBLOCK-PLAN.md`](./UNBLOCK-PLAN.md) (sequence 2→1→3), NOT the Phase-2 steps below.** The body is retained for history.
+
 > **DRAFT — NOT DISPATCHED.** Planning artifact under docs-only Orchestrator. No implementation, no contract, no migration, no gate mutation. Requires explicit scoped owner approval + G10 verification before any sibling-repo dispatch.
 
 # Implementation Plan: POS Offline-PIN Re-Anchor off a DP-2 Provider-Neutral Identifier (drift D6)
