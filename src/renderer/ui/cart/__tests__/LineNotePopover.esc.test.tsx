@@ -15,9 +15,7 @@ afterEach(cleanup);
 describe('LineNotePopover — Escape to close (audit P1)', () => {
   it('calls onClose when Escape is pressed', () => {
     const onClose = vi.fn();
-    render(
-      <LineNotePopover open currentNote={null} onSave={vi.fn()} onClose={onClose} />,
-    );
+    render(<LineNotePopover open currentNote={null} onSave={vi.fn()} onClose={onClose} />);
     expect(screen.getByTestId('line-note-popover')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledOnce();
