@@ -10,7 +10,7 @@
 
 ## The ask (one sentence)
 
-**DP-2 must resolve and surface each cashier's provider-neutral §16 `user_id` (= `users.id`) on a POS-facing contract that carries cashier identity — i.e. `PosRosterCashierEntry` (and any future PIN-enrollment payload) — so POS-017 can re-key `cashier_pin_records`'s PRIMARY KEY off the Clerk-coupled `cashier_clerk_user_id` and onto `user_id`.**
+**DP-2 must surface each cashier's provider-neutral §16 `user_id` (= `users.id`) on `PosRosterCashierEntry` — a ~4-line additive change, no provisioning (the value is already loaded at `findCashiersByStore:809`) — so POS-017 can key the local cashier-PIN store off the Clerk-coupled `cashier_clerk_user_id` and onto `user_id`. (POS keys its local enrollment off the roster-delivered `user_id`; no dedicated DP-2 PIN-enrollment contract is required.)**
 
 ## Why 033 did not unblock 017 (the precise gap)
 
@@ -21,7 +21,7 @@ But **POS-017 re-keys `cashier_pin_records`, which is keyed to the _cashier_ —
 - **Contract proof (DP-2 `origin/main`, head `88c8d3d`):** `PosRosterCashierEntry` (`packages/contracts/openapi/pos-operators.openapi.yaml:510-537`) is the **only** POS-facing contract carrying cashier identity. It is `required: [id, display_name, role]`, `additionalProperties: false`, and `id` is documented as the **Clerk subject** (`users.clerk_user_id`). **No `user_id`.**
 - PIN-only cashiers never traverse the online `manager_admin` path (POS spec evidence E-3), so there is no sign-in moment at which a cashier `user_id` could arrive by the 033 mechanism.
 
-## Sizing — this is NOT just "add a field"
+## Sizing — DP-2 part is ~4 lines; the heavier half is POS-internal
 
 > **⚠️ REVISED 2026-06-13 after read-only investigation of DP-2 `origin/main` (`88c8d3d`). The original sizing below OVER-STATED the DP-2 cost — corrected here. The DP-2 ask is ~4 lines and needs NO `external_identity_links` provisioning. The larger remaining gap is POS-internal (cashier-PIN enrollment INSERT does not exist yet).**
 
