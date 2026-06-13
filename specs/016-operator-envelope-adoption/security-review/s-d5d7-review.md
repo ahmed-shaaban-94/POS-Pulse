@@ -58,3 +58,60 @@ re-verifies the invariants against the wired path after the credential swap.
   manager/admin D5/D7 path.
 
 **Disposition:** §A4 invariants HOLD after the D5/D7 swap. Confirmation recorded.
+
+---
+
+## External review remediation (2026-06-13) — credential-seam split
+
+An external security review (post-D5/D7) found that the original adoption stored the
+opaque `pos_operator` ENVELOPE in the SINGLE shared `operatorJwtHolder`. That holder is
+read by FIVE call sites in `src/main/index.ts`, and DP-2 splits POS auth into TWO schemes:
+
+| Scheme (DP-2) | Routes | Credential |
+|:--|:--|:--|
+| `operator-identity` (provider JWT, `bearerFormat: JWT`) | sign-out, roster, takeover/confirm, active-session (`pos-operators.openapi.yaml`); stuck-shifts (`pos-shifts.openapi.yaml`) | provider **JWT** — identity proof at sign-in AND subsequent calls (028 §6 CM-1) |
+| `operatorAuthorization` (opaque envelope) | captureSale / recordVoid / recordRefund (`sales.yaml`, spec 031) | opaque **ENVELOPE** (#559) |
+
+### Finding 1 — HIGH: silent regression on operator-identity routes
+
+**Issue:** storing the envelope in `operatorJwtHolder` meant `SignOutHandler` (`index.ts`
+L538 `jwtFor`) and `StuckShiftsHandler` (L625 `jwtHolder`) — both `operator-identity`
+routes — would have sent the ENVELOPE to routes that require the JWT → 401 → silent
+production breakage of sign-out and stuck-shifts.
+
+**Resolution (TDD, two seams):**
+- **REVERTED** the sign-in / takeover writes that put the envelope in `operatorJwtHolder`:
+  `sign-in-handler.ts` now stores `exchange.jwt`; `takeover-handler.ts` stores `proto.jwt`
+  (the NEW operator's provider JWT — the same JWT presented to the confirm CALL).
+- **ADDED** a SECOND seam `operatorEnvelopeHolder = createJwtHolder()` (generic
+  string-by-key holder, keyed on `backend_session_id`). `sign-in-handler` and
+  `takeover-handler` take a new optional `envelopeHolder?: JwtHolder` dep and store the
+  envelope there IN ADDITION to the JWT in `jwtHolder`.
+- **REPOINTED** only the two sale-sync `getOperatorToken` closures (`index.ts`
+  L1265–1268 client + L1276–1279 engine) to read `operatorEnvelopeHolder`. The sign-out
+  (`jwtFor`), stuck-shifts, and takeover/confirm CALL bindings stay on `operatorJwtHolder`.
+- **clearJwt / sign-out teardown** now clears BOTH holders for the ended session.
+- The M-1 envelope-present gate (`'' as absent`) is preserved and now reads the envelope
+  holder.
+
+**Regression coverage (RED → GREEN):**
+- `src/main/operator/__tests__/sign-in-handler.test.ts` — `jwtHolder` = JWT, `envelopeHolder` = envelope; absent envelope → `''`.
+- `src/main/operator/__tests__/takeover-handler.test.ts` (NEW) — confirm CALL receives `proto.jwt`; `jwtHolder` = JWT, `envelopeHolder` = envelope.
+- `tests/unit/main/operator/takeover-handler.test.ts` — corrected the prior C-2 assertion to the two-seam split.
+- `src/main/operator/__tests__/sign-out-handler.test.ts` (NEW case) — `backend.signOut` receives the JWT, NOT the envelope.
+- `src/main/operator/__tests__/stuck-shifts-handler.test.ts` (NEW) — `getStuckShifts` receives the JWT, NOT the envelope.
+- `src/main/sales-sync/__tests__/sale-sync-engine.test.ts` — unchanged; the gate still pauses on `null`/`''` and the engine reads the (now envelope-fed) `getOperatorToken`.
+
+### Finding 2 — MEDIUM: envelope absent from the pino redaction list
+
+**Issue:** `pos_operator_envelope` was not in any pino redaction key set, so a contributor
+who logged a sign-in / takeover success object directly could leak the bearer secret.
+
+**Resolution:** added `'pos_operator_envelope'` to `OPERATOR_REDACTED_KEYS` in
+`src/main/logging/logger.ts` (scrubbed at every wildcard depth, like every other operator
+credential key). Pinned by `src/main/logging/__tests__/logger-audit-redaction.test.ts`
+(RED without the key → GREEN with it).
+
+**Disposition:** HIGH + MEDIUM resolved. The envelope still NEVER crosses the bridge,
+NEVER appears in any body, and is now scrubbed by the logger. The D7 work
+(X-Device-Attestation retired from the sale POST) is unchanged.

@@ -61,11 +61,31 @@ export interface SignInHandlerDeps {
   protoStore: ProtoSessionStore;
   /**
    * Optional JWT holder. Production wires `createJwtHolder()`; tests
-   * may omit. When present, the Clerk JWT is recorded against the
-   * backend session id on successful sign-in so the sign-out handler
-   * can authenticate the backend POST.
+   * may omit. When present, the Clerk provider JWT is recorded against
+   * the backend session id on successful sign-in.
+   *
+   * 016 (review HIGH): DP-2 splits POS auth into TWO schemes. The
+   * provider JWT (`operator-identity`) is identity proof at sign-in AND
+   * on subsequent operator-identity calls — sign-out
+   * (`POST /operators/sign-out`) and stuck-shifts (`GET /shifts/stuck`)
+   * — per 028 §6 CM-1. THIS holder feeds those routes, so it MUST keep
+   * the JWT, NOT the opaque sale-sync envelope.
    */
   jwtHolder?: JwtHolder;
+  /**
+   * Optional envelope holder — the SECOND credential seam (016 review
+   * HIGH). Production wires a separate `createJwtHolder()`; tests may
+   * omit. When present, the opaque `pos_operator` ENVELOPE (#559) is
+   * recorded against the backend session id on successful sign-in.
+   *
+   * The envelope authorizes ONLY the sale-sync routes (`operatorAuthorization`
+   * scheme: captureSale / recordVoid / recordRefund). An absent or null
+   * envelope (legacy backend / replayed sign-in) normalizes to '' so the
+   * sale-sync envelope-present gate (M-1) treats it as absent and pauses
+   * the drain rather than POSTing without a credential. Held in
+   * main-process memory only — NEVER bridged, NEVER logged (P7/P8).
+   */
+  envelopeHolder?: JwtHolder;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -161,14 +181,23 @@ export class SignInHandler {
       backend_session_id: backend.operator_session.id,
       started_at: backend.operator_session.issued_at,
     });
-    // 016 (D5): hold the opaque pos_operator ENVELOPE (#559) against the backend
-    // session id, NOT the Clerk JWT — the provider JWT's job ends at sign-in. The
-    // sale-sync POST presents this as `Authorization: Bearer <envelope>`. An absent
-    // or null envelope (legacy backend / replayed sign-in) normalizes to '' so the
-    // envelope-present gate (M-1) treats it as absent and pauses the drain rather
-    // than POSTing without a credential. Held in main-process memory only — NEVER
-    // crosses to the renderer, NEVER logged (P7/P8).
-    this.deps.jwtHolder?.set(record.backend_session_id, backend.pos_operator_envelope ?? '');
+    // 016 (review HIGH) — two credential seams, contract-correct:
+    //
+    //   • jwtHolder ← the Clerk provider JWT (`operator-identity` scheme). The
+    //     provider JWT is identity proof at sign-in AND on subsequent
+    //     operator-identity calls — sign-out + stuck-shifts (028 §6 CM-1). If
+    //     this held the envelope, those routes would 401 (silent regression).
+    //
+    //   • envelopeHolder ← the opaque pos_operator ENVELOPE (#559,
+    //     `operatorAuthorization` scheme). Authorizes ONLY the sale-sync POSTs.
+    //     An absent or null envelope (legacy backend / replayed sign-in)
+    //     normalizes to '' so the envelope-present gate (M-1) treats it as
+    //     absent and pauses the drain rather than POSTing without a credential.
+    //
+    // Both held in main-process memory only — NEVER crosses to the renderer,
+    // NEVER logged (P7/P8).
+    this.deps.jwtHolder?.set(record.backend_session_id, exchange.jwt);
+    this.deps.envelopeHolder?.set(record.backend_session_id, backend.pos_operator_envelope ?? '');
 
     this.logSuccess('signed_in');
     return {

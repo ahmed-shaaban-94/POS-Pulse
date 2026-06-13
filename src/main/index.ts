@@ -493,6 +493,13 @@ app
     // reachable, but submit fails with the generic refusal copy. CI
     // and production builds set the key; the stub is dev-only.
     const operatorJwtHolder = createJwtHolder();
+    // 016 (review HIGH) — the SECOND credential seam. DP-2 splits POS auth:
+    //   • operatorJwtHolder holds the provider JWT (`operator-identity`) for
+    //     sign-out + stuck-shifts + the takeover/confirm CALL (028 §6 CM-1).
+    //   • operatorEnvelopeHolder holds the opaque pos_operator ENVELOPE (#559,
+    //     `operatorAuthorization`) read ONLY by the sale-sync getOperatorToken
+    //     closures. Keyed on backend_session_id, in-process only, never bridged.
+    const operatorEnvelopeHolder = createJwtHolder();
     const operatorSessionManager = new SessionManager();
     const apiBaseUrl = resolveApiBaseUrl();
     const operatorBackend = createBackendClient({
@@ -511,7 +518,9 @@ app
       clerk: clerkExchanger,
       backend: operatorBackend,
       sessionManager: operatorSessionManager,
+      // 016 (review HIGH): JWT → operator-identity holder; envelope → sale-sync holder.
       jwtHolder: operatorJwtHolder,
+      envelopeHolder: operatorEnvelopeHolder,
       protoStore: operatorProtoStore,
       // Wave 1: device-token attestation = the device token itself
       // (read from SecretStore via the pairingStore). The backend
@@ -535,9 +544,14 @@ app
     const operatorSignOutHandler = new SignOutHandler({
       backend: operatorBackend,
       sessionManager: operatorSessionManager,
+      // 016 (review HIGH): sign-out is an `operator-identity` route — present the
+      // provider JWT from the JWT holder, NOT the sale-sync envelope.
       jwtFor: (sessionId) => operatorJwtHolder.get(sessionId),
+      // Sign-out teardown clears BOTH credential seams for the ended session so
+      // neither the JWT nor the envelope lingers in main-process memory (P7).
       clearJwt: (sessionId) => {
         operatorJwtHolder.clear(sessionId);
+        operatorEnvelopeHolder.clear(sessionId);
       },
       logger: mainLogger,
     });
@@ -574,7 +588,10 @@ app
       protoStore: operatorProtoStore,
       sessionManager: operatorSessionManager,
       backend: operatorBackend,
+      // 016 (review HIGH): the confirm CALL uses proto.jwt; jwtHolder keeps the
+      // new operator's JWT (operator-identity); envelopeHolder gets the sale-sync envelope.
       jwtHolder: operatorJwtHolder,
+      envelopeHolder: operatorEnvelopeHolder,
       auditEmitter,
       pairingStore,
       deviceTokenAttestation,
@@ -1253,18 +1270,20 @@ app
         // backoff, and dead-letter are owned by the engine + state repo (unchanged);
         // the live client only transforms the payload + maps HTTP outcomes.
         const saleSyncStateRepo = createSaleSyncStateRepo(dbHandle);
-        // 016 (D5/D7): the sale-sync POST authenticates with the opaque pos_operator
-        // ENVELOPE only — read in-process per POST through the jwt-holder (which now
-        // holds the envelope, not the Clerk JWT). 016 (D7): X-Device-Attestation is
-        // retired from the sale wire (#559), so the client no longer takes a
-        // getDeviceAttestation dep. The device token keeps its proper roles (read-down
-        // Bearer + sign-in attestation body) elsewhere — untouched here.
+        // 016 (D5/D7 + review HIGH): the sale-sync POST authenticates with the
+        // opaque pos_operator ENVELOPE only (`operatorAuthorization` scheme) — read
+        // in-process per POST through the SEPARATE envelope holder. This is the only
+        // pair of call sites that read the envelope; sign-out / stuck-shifts / the
+        // takeover-confirm CALL all read the JWT holder (`operator-identity`). 016
+        // (D7): X-Device-Attestation is retired from the sale wire (#559), so the
+        // client takes no getDeviceAttestation dep. The device token keeps its proper
+        // roles (read-down Bearer + sign-in attestation body) elsewhere — untouched.
         const saleSyncClient = createSaleSyncClient({
           baseUrl: resolveApiBaseUrl(),
           fetch: globalThis.fetch.bind(globalThis),
           getOperatorToken: () => {
             const sess = operatorSessionManager.getCurrent();
-            return sess === null ? null : operatorJwtHolder.get(sess.backend_session_id);
+            return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
           },
         });
         const saleSyncEngine = createSaleSyncEngine({
@@ -1275,7 +1294,7 @@ app
           branchId: pairingStatus.branch_id,
           getOperatorToken: () => {
             const sess = operatorSessionManager.getCurrent();
-            return sess === null ? null : operatorJwtHolder.get(sess.backend_session_id);
+            return sess === null ? null : operatorEnvelopeHolder.get(sess.backend_session_id);
           },
           now: () => new Date().toISOString(),
           // Exponential backoff: 1s base, capped at 5 min.

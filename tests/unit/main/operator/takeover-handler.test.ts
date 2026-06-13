@@ -222,29 +222,37 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     expect(result.session.operator_id).toBe('op-mgr-001');
   });
 
-  it('holds the pos_operator envelope (NOT the proto JWT or empty string) post-takeover (016 C-2)', async () => {
+  it('splits the credential seam post-takeover: JWT in jwtHolder, envelope in envelopeHolder (016 review HIGH)', async () => {
     const store = makeProtoStore();
     const proto = buildManagerProto(); // proto.jwt === 'clerk-jwt-token'
     store.set(proto);
     const jwtHolder = makeJwtHolder();
+    const envelopeHolder = makeJwtHolder();
     const { emitter } = makeAuditEmitter();
     const handler = new TakeoverHandler({
       protoStore: store,
       sessionManager: makeSessionManager(),
       backend: makeBackend('signed_in'),
       jwtHolder,
+      envelopeHolder,
       auditEmitter: emitter,
       pairingStore: makePairedStore(),
       deviceTokenAttestation: () => 'att-token',
     });
     await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
-    // 016 (C-2): a manager/admin takeover installs the NEW operator's authority,
-    // so the holder must carry the envelope from the takeover-confirm success —
-    // NOT proto.jwt (the provider JWT, used only for the confirm CALL) and NOT ''.
-    // The new session is keyed by the backend operator_session id ('bss-001').
-    expect(jwtHolder.get('bss-001')).toBe(TAKEOVER_ENVELOPE);
-    expect(jwtHolder.get('bss-001')).not.toBe(proto.jwt);
+    // 016 (review HIGH): DP-2 splits POS auth. A manager/admin takeover installs
+    // the NEW operator's authority, so re-key BOTH holders on the new backend
+    // session id ('bss-001'):
+    //   • jwtHolder ← proto.jwt — the NEW operator's provider JWT (operator-identity).
+    //     This is the SAME JWT the confirm CALL used; sign-out + stuck-shifts read it
+    //     (028 §6 CM-1). If it held the envelope, those routes would 401.
+    //   • envelopeHolder ← the opaque pos_operator envelope from the confirm success
+    //     (operatorAuthorization) — authorizes ONLY the sale-sync POSTs.
+    expect(jwtHolder.get('bss-001')).toBe(proto.jwt);
+    expect(jwtHolder.get('bss-001')).not.toBe(TAKEOVER_ENVELOPE);
     expect(jwtHolder.get('bss-001')).not.toBe('');
+    expect(envelopeHolder.get('bss-001')).toBe(TAKEOVER_ENVELOPE);
+    expect(envelopeHolder.get('bss-001')).not.toBe(proto.jwt);
   });
 
   it('emits operator.session.takeover audit event on success', async () => {

@@ -77,7 +77,22 @@ export interface TakeoverHandlerDeps {
   protoStore: ProtoSessionStore;
   sessionManager: SessionManager;
   backend: BackendClient;
+  /**
+   * JWT holder (`operator-identity` scheme). After a confirmed takeover this
+   * holds the new operator's provider JWT (proto.jwt) so sign-out + stuck-shifts
+   * keep authenticating (028 §6 CM-1). 016 (review HIGH): MUST NOT hold the
+   * opaque sale-sync envelope — those routes would 401.
+   */
   jwtHolder: JwtHolder;
+  /**
+   * Envelope holder (`operatorAuthorization` scheme) — the SECOND credential
+   * seam (016 review HIGH). After a confirmed takeover this holds the opaque
+   * `pos_operator` ENVELOPE (#559) from the takeover-confirm success, keyed on
+   * the new backend session id. Authorizes ONLY the sale-sync POSTs. Optional
+   * so existing tests that don't exercise sale-sync may omit it; production
+   * wires it. An absent/null envelope normalizes to '' (M-1 gate sees absent).
+   */
+  envelopeHolder?: JwtHolder;
   auditEmitter: AuditEmitter;
   pairingStore: PairingStore;
   deviceTokenAttestation: () => Promise<string> | string;
@@ -194,13 +209,26 @@ export class TakeoverHandler {
       started_at: backendResult.operator_session.issued_at,
     });
 
-    // 016 (C-2): a takeover installs the NEW operator's authority, so hold the
-    // opaque pos_operator ENVELOPE (#559) from the takeover-confirm success — NOT
-    // proto.jwt (the provider JWT, used only for the confirm CALL above). An absent
-    // or null envelope normalizes to '' so the envelope-present gate (M-1) treats it
-    // as absent and pauses the drain rather than POSTing without a credential. Held
-    // in main-process memory only — NEVER bridged, NEVER logged (P7/P8).
-    this.deps.jwtHolder.set(record.backend_session_id, backendResult.pos_operator_envelope ?? '');
+    // 016 (review HIGH) — two credential seams, contract-correct. A takeover
+    // installs the NEW operator's authority, so re-key BOTH holders on the new
+    // backend session id:
+    //
+    //   • jwtHolder ← proto.jwt (the NEW operator's provider JWT, `operator-identity`
+    //     scheme). This is the same JWT presented to the confirm CALL above; it must
+    //     remain available for the new session's sign-out + stuck-shifts (028 §6 CM-1).
+    //     If this held the envelope, those routes would 401 (silent regression).
+    //
+    //   • envelopeHolder ← the opaque pos_operator ENVELOPE (#559,
+    //     `operatorAuthorization` scheme) from the takeover-confirm success. Authorizes
+    //     ONLY the sale-sync POSTs. An absent/null envelope normalizes to '' so the
+    //     envelope-present gate (M-1) treats it as absent and pauses the drain.
+    //
+    // Both held in main-process memory only — NEVER bridged, NEVER logged (P7/P8).
+    this.deps.jwtHolder.set(record.backend_session_id, proto.jwt ?? '');
+    this.deps.envelopeHolder?.set(
+      record.backend_session_id,
+      backendResult.pos_operator_envelope ?? '',
+    );
 
     await this.emitTakeoverAudit(event_id, record);
 
