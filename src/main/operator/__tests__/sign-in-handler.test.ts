@@ -56,6 +56,9 @@ function fakeBackend(
   };
 }
 
+/** 016 (D5): the opaque pos_operator envelope DP-2 #559 returns on sign-in. */
+const ENVELOPE = 'opaque-pos-operator-envelope-001';
+
 const SUCCESS_BACKEND_RESPONSE: BackendSignInResponse = {
   kind: 'signed_in',
   operator: {
@@ -69,6 +72,7 @@ const SUCCESS_BACKEND_RESPONSE: BackendSignInResponse = {
     id: 'be-sess-1',
     issued_at: '2026-05-06T00:00:00.000Z',
   },
+  pos_operator_envelope: ENVELOPE,
 };
 
 const HAPPY_JWT = 'eyJhbGciOiJSUzI1NiJ9.fake.jwt';
@@ -110,14 +114,16 @@ describe('SignInHandler — manager/admin path', () => {
     expect(sessionManager.getCurrent()?.operator_id).toBe('clerk-user-1');
   });
 
-  it('records the Clerk JWT in the JwtHolder keyed by backend session id', async () => {
+  it('splits the credential seam: JWT in jwtHolder (operator-identity routes) AND envelope in envelopeHolder (sale-sync) — 016 review HIGH', async () => {
     const sessionManager = new SessionManager();
     const jwtHolder = createJwtHolder();
+    const envelopeHolder = createJwtHolder();
     const handler = new SignInHandler({
       clerk: fakeClerk(HAPPY_CLERK_RESULT),
       backend: fakeBackend(SUCCESS_BACKEND_RESPONSE),
       sessionManager,
       jwtHolder,
+      envelopeHolder,
       protoStore: new ProtoSessionStore(),
       deviceTokenAttestation: () => 'attest',
     });
@@ -126,9 +132,41 @@ describe('SignInHandler — manager/admin path', () => {
       identifier: 'm@x.test',
       password: 'p',
     });
-    // The Clerk JWT is held in main-process memory keyed by the
-    // backend session id from Data-Pulse-2's response. NEVER crosses
-    // the bridge to the renderer.
+    // 016 (review HIGH): DP-2 splits POS auth into TWO schemes. The provider
+    // JWT (operator-identity) is identity proof at sign-in AND subsequent
+    // operator-identity calls (sign-out, stuck-shifts) — 028 §6 CM-1. The
+    // opaque pos_operator ENVELOPE (#559) authorizes ONLY the sale-sync routes
+    // (captureSale / recordVoid / recordRefund). Both held in main-process
+    // memory only — NEVER cross the bridge to the renderer.
+    //
+    // jwtHolder MUST keep the JWT (so sign-out / stuck-shifts keep working).
+    expect(jwtHolder.get('be-sess-1')).toBe(HAPPY_JWT);
+    expect(jwtHolder.get('be-sess-1')).not.toBe(ENVELOPE);
+    // envelopeHolder MUST hold the ENVELOPE (so the sale-sync POST is authorized).
+    expect(envelopeHolder.get('be-sess-1')).toBe(ENVELOPE);
+    expect(envelopeHolder.get('be-sess-1')).not.toBe(HAPPY_JWT);
+  });
+
+  it('normalizes an absent envelope to "" in envelopeHolder while jwtHolder keeps the JWT (M-1 gate sees absent)', async () => {
+    const sessionManager = new SessionManager();
+    const jwtHolder = createJwtHolder();
+    const envelopeHolder = createJwtHolder();
+    // Legacy / older backend: no pos_operator_envelope in the success body.
+    const { pos_operator_envelope: _drop, ...legacy } = SUCCESS_BACKEND_RESPONSE;
+    void _drop;
+    const handler = new SignInHandler({
+      clerk: fakeClerk(HAPPY_CLERK_RESULT),
+      backend: fakeBackend(legacy),
+      sessionManager,
+      jwtHolder,
+      envelopeHolder,
+      protoStore: new ProtoSessionStore(),
+      deviceTokenAttestation: () => 'attest',
+    });
+    await handler.signIn({ kind: 'manager_admin', identifier: 'm@x.test', password: 'p' });
+    // M-1: '' is the absent sentinel the sale-sync envelope-present gate treats
+    // as ABSENT (pauses the drain). The JWT still works for operator-identity.
+    expect(envelopeHolder.get('be-sess-1')).toBe('');
     expect(jwtHolder.get('be-sess-1')).toBe(HAPPY_JWT);
   });
 

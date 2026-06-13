@@ -185,6 +185,46 @@ describe('sale-sync-engine', () => {
     h.db.close();
   });
 
+  it('T029 (M-1): empty-envelope ("") gate → no POST, sale stays unsynced (016 D5)', async () => {
+    // 016 (M-1): the holder normalizes an absent/null envelope to '' (sign-in &
+    // takeover). The engine's envelope-present gate MUST treat '' as ABSENT — a
+    // `=== null` check would let '' through, and the client would then reject it
+    // as no_connection, a silent no-op drain. With token '' the drain must pause.
+    const h = harness({ script: [{ kind: 'ok' }], token: '' });
+    const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+    const deps = { ...h.deps, client };
+    seedSale(h.db, { sale_id: 'sale-1' });
+    seedOutbox(h.db, { sale_id: 'sale-1' });
+    await runOnce(deps);
+    // No POST attempted (gate paused) and the sale stays eligible for next tick.
+    expect(client.calls).toHaveLength(0);
+    expect(h.stateRepo.read('sale-1')).toBeNull();
+    expect(h.stateRepo.eligible(SCOPE, '2026-06-09T00:00:00.000Z').map((e) => e.sale_id)).toEqual([
+      'sale-1',
+    ]);
+    h.db.close();
+  });
+
+  it('T043 (D7 invariant): device-token-alone is impossible — present device token, absent envelope → drain pauses (016)', async () => {
+    // 016 (D7 / CM-2 / 028 §18): with X-Device-Attestation retired from the sale
+    // wire, the ONLY sale-wire credential is the operator envelope. A terminal that
+    // holds a valid device token but has NO operator envelope (absent → '') must NOT
+    // POST: the envelope-present gate pauses the drain, so a sale-sync POST authorized
+    // by the device token alone is structurally impossible. (The device token is read
+    // by the client's Bearer/read-down paths, never by this engine gate.)
+    for (const absentEnvelope of [null, ''] as Array<string | null>) {
+      const h = harness({ script: [{ kind: 'ok' }], token: absentEnvelope });
+      const client = createFakeSaleSyncClient([{ kind: 'ok' }]);
+      const deps = { ...h.deps, client };
+      seedSale(h.db, { sale_id: 'sale-1' });
+      seedOutbox(h.db, { sale_id: 'sale-1' });
+      await runOnce(deps);
+      expect(client.calls).toHaveLength(0); // no POST left the terminal
+      expect(h.stateRepo.read('sale-1')).toBeNull(); // row stays pending (no attempt)
+      h.db.close();
+    }
+  });
+
   it('single-flight: a second runTickOnce while one is in flight returns already_running', async () => {
     const h = harness({ script: [{ kind: 'ok' }] });
     seedSale(h.db, { sale_id: 'sale-1' });

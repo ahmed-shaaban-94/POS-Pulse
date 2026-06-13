@@ -60,6 +60,9 @@ function makeSessionManager(): SessionManager {
   } as unknown as SessionManager;
 }
 
+/** 016 (D5 C-2): the opaque pos_operator envelope DP-2 #559 returns on takeover. */
+const TAKEOVER_ENVELOPE = 'opaque-pos-operator-envelope-takeover-002';
+
 function makeBackend(kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_in'): BackendClient {
   const signedInResponse =
     kind === 'signed_in'
@@ -73,6 +76,10 @@ function makeBackend(kind: 'signed_in' | 'refused' | 'no_connection' = 'signed_i
             branch_id: 'b1',
           },
           operator_session: { id: 'bss-001', issued_at: new Date().toISOString() },
+          // 016 (C-2): the takeover-confirm success carries the envelope, exactly
+          // like sign-in (BackendTakeoverConfirmResponse is a union over
+          // BackendSignInSuccess; the C-1 interpreter fix already preserves it).
+          pos_operator_envelope: TAKEOVER_ENVELOPE,
         }
       : null;
 
@@ -213,6 +220,39 @@ describe('TakeoverHandler — confirmTakeover: manager/admin path (backend calle
     if (result.kind !== 'signed_in') return;
     expect(result.session.role).toBe('manager');
     expect(result.session.operator_id).toBe('op-mgr-001');
+  });
+
+  it('splits the credential seam post-takeover: JWT in jwtHolder, envelope in envelopeHolder (016 review HIGH)', async () => {
+    const store = makeProtoStore();
+    const proto = buildManagerProto(); // proto.jwt === 'clerk-jwt-token'
+    store.set(proto);
+    const jwtHolder = makeJwtHolder();
+    const envelopeHolder = makeJwtHolder();
+    const { emitter } = makeAuditEmitter();
+    const handler = new TakeoverHandler({
+      protoStore: store,
+      sessionManager: makeSessionManager(),
+      backend: makeBackend('signed_in'),
+      jwtHolder,
+      envelopeHolder,
+      auditEmitter: emitter,
+      pairingStore: makePairedStore(),
+      deviceTokenAttestation: () => 'att-token',
+    });
+    await handler.confirmTakeover({ pending_takeover_id: proto.pending_takeover_id });
+    // 016 (review HIGH): DP-2 splits POS auth. A manager/admin takeover installs
+    // the NEW operator's authority, so re-key BOTH holders on the new backend
+    // session id ('bss-001'):
+    //   • jwtHolder ← proto.jwt — the NEW operator's provider JWT (operator-identity).
+    //     This is the SAME JWT the confirm CALL used; sign-out + stuck-shifts read it
+    //     (028 §6 CM-1). If it held the envelope, those routes would 401.
+    //   • envelopeHolder ← the opaque pos_operator envelope from the confirm success
+    //     (operatorAuthorization) — authorizes ONLY the sale-sync POSTs.
+    expect(jwtHolder.get('bss-001')).toBe(proto.jwt);
+    expect(jwtHolder.get('bss-001')).not.toBe(TAKEOVER_ENVELOPE);
+    expect(jwtHolder.get('bss-001')).not.toBe('');
+    expect(envelopeHolder.get('bss-001')).toBe(TAKEOVER_ENVELOPE);
+    expect(envelopeHolder.get('bss-001')).not.toBe(proto.jwt);
   });
 
   it('emits operator.session.takeover audit event on success', async () => {

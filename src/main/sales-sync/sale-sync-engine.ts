@@ -111,14 +111,25 @@ export function createSaleSyncEngine(deps: SaleSyncEngineDeps): SaleSyncEngine {
     }
   }
 
+  // 016 (M-1): envelope-present gate. The holder normalizes an absent/null
+  // pos_operator envelope to '' (sign-in & takeover), so '' must be treated as
+  // ABSENT exactly like null — otherwise an empty string slips past a `=== null`
+  // check and the client rejects it as no_connection, a silent no-op drain. After
+  // D7 (X-Device-Attestation retired) the envelope is the ONLY sale-wire credential,
+  // so an absent envelope makes a device-token-alone POST structurally impossible.
+  function envelopePresent(): boolean {
+    const token = getOperatorToken();
+    return token !== null && token.length > 0;
+  }
+
   async function runTick(): Promise<void> {
     try {
-      // Operator-session gate (FR-3): no token → pause the whole drain.
-      if (getOperatorToken() === null) return;
+      // Operator-session gate (FR-3): no envelope (null or '') → pause the whole drain.
+      if (!envelopePresent()) return;
       const due = stateRepo.eligible(scope, now());
       for (const sale of due) {
         // Re-check the session before each POST so a mid-drain expiry pauses cleanly.
-        if (getOperatorToken() === null) return;
+        if (!envelopePresent()) return;
         await drainOne(sale.sale_id);
       }
     } finally {

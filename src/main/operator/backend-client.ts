@@ -49,6 +49,19 @@ export interface BackendSignInSuccess {
     id: string;
     issued_at: string;
   };
+  /**
+   * 016-operator-envelope-adoption (D5) — the opaque `pos_operator` envelope
+   * minted by DP-2 #559 on sign-in / takeover (hash-once: returned once, `null`
+   * on replay). POS treats it as an UNSTRUCTURED bearer secret — no parsing, no
+   * claim inspection (G7 provider-neutrality). Held in-process in the `jwt-holder`
+   * seam and presented as `Authorization: Bearer <envelope>` on the sale-sync POST;
+   * NEVER bridged, NEVER logged, NEVER in any body (P7/P8). Optional/nullable:
+   * absent on legacy/older backends, `null` on a replayed sign-in.
+   *
+   * `BackendTakeoverConfirmResponse` is a union over this interface, so this single
+   * field covers BOTH the sign-in and the takeover-confirm success envelopes.
+   */
+  pos_operator_envelope?: string | null;
 }
 
 export interface BackendTakeoverRequired {
@@ -370,6 +383,16 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   if (typeof sess['id'] !== 'string' || typeof sess['issued_at'] !== 'string') {
     return { kind: 'refused' };
   }
+  // 016 C-1 (D5): explicitly preserve the opaque `pos_operator_envelope`. The
+  // allowlist above silently drops unknown fields, so without this read the D5
+  // credential swap would no-op with a green suite. Validate `string | null |
+  // absent` only (treat the envelope as an unstructured bearer secret — no
+  // parsing, no claim inspection, G7); any other type is a malformed response
+  // and collapses to `refused`, matching the interpreter's existing posture.
+  const rawEnvelope = v['pos_operator_envelope'];
+  if (rawEnvelope !== undefined && rawEnvelope !== null && typeof rawEnvelope !== 'string') {
+    return { kind: 'refused' };
+  }
   return {
     kind: 'signed_in',
     operator: {
@@ -383,6 +406,9 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
       id: sess['id'],
       issued_at: sess['issued_at'],
     },
+    // Preserved verbatim: `string` when present, `null` on a replayed sign-in,
+    // omitted only when truly absent (legacy/older backend).
+    ...(rawEnvelope === undefined ? {} : { pos_operator_envelope: rawEnvelope }),
   };
 }
 

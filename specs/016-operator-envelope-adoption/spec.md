@@ -3,14 +3,14 @@
 # Spec 016 — D5+D7: POS Adopts the Operator Envelope; Device Token Reverts to Device-Scoped
 
 **Feature ID:** 016-operator-envelope-adoption
-**Status:** SPECIFY-ONLY / DRAFT — for owner review. No implementation, no contract, no migration authored or implied.
+**Status:** PLAN+TASKS authored (implementation-enablement pass) — for owner review. No implementation, no contract, no migration authored or implied; dispatch still requires explicit scoped owner approval. The A-11 "no plan.md / tasks.md (GATED depth)" condition has **lifted**: drift **D1** SHIPPED & CLOSED in Data-Pulse-2 (PR #559 / `202d253`, DP-2 spec 031 — sign-in/takeover RETURN the nullable opaque `pos_operator` envelope; the sale routes adopt the `operatorAuthorization` opaque-bearer scheme and retire `X-Device-Attestation`), and **G10** is **SATISFIED-FOR-BOUNDARY-DECISIONS** (028 merged, PR #85 / `76cfcc3`). [`plan.md`](./plan.md) (v1.0) + [`tasks.md`](./tasks.md) (T001–T063) + [`analysis-report-impl.md`](./analysis-report-impl.md) (0 CRITICAL, 100% coverage) are therefore **now authored**. The spec body below is **unchanged** (only this status block reflects the lift).
 **Date:** 2026-06-11.
 **Last Updated:** 2026-06-13.
 **Owning repo:** POS-Pulse (the implementation repo this would eventually dispatch to, post-approval).
 **Deciders:** Owner (Ahmed Shaaban); drafted by the Orchestrator on verified `origin/main` evidence.
 **Relation to 028:** Realizes the **POS half** of the 028 keystone — 028 §6 **CM-1** (a provider JWT is identity proof / sign-in evidence only) and **CM-2** (a device credential is device-scoped and must not prove sale ownership alone), and the 028 OQ-8 decision that the current Option-Y sale-sync wire is a **v1 bridge** to an internal provider-neutral operator-authorization envelope. 028 **owns** the boundary (credential ownership, scope-non-interchangeability, the envelope decision); this draft only specifies how **POS-Pulse, as a consumer, conforms** to it. The envelope itself — its format, TTL, refresh, mint mechanics — is **drift D1 / Data-Pulse-2's** to define; here it is an **input**.
 
-**Gating label:** **gated — requires owner approval + G10 verification before any dispatch.** Additionally sequenced behind drift **D1** (the DP-2 mint-and-return slice) per the verified DAG `D1 → D5 → D7`. Specify+clarify depth ONLY: this draft contains **no plan.md and no tasks.md**, because D5's upstream (D1) is not built and any plan/tasks would be speculative.
+**Gating label:** **gated — requires explicit scoped owner approval before any dispatch.** The G10 verification and the D1-sequencing precondition are now **SATISFIED**: G10 is **SATISFIED-FOR-BOUNDARY-DECISIONS** (028 merged, PR #85 / `76cfcc3`) and drift **D1** (the DP-2 mint-and-return slice) **SHIPPED & CLOSED** (PR #559 / `202d253`), clearing the verified DAG `D1 → D5 → D7`. The prior "specify+clarify depth ONLY — no plan.md and no tasks.md" gate (A-11) was conditioned on D1 being unbuilt; that condition has **lifted**, so [`plan.md`](./plan.md) + [`tasks.md`](./tasks.md) + [`analysis-report-impl.md`](./analysis-report-impl.md) are now authored against the SHIPPED #559 contract. Dispatch itself remains owner-gated.
 
 ---
 
@@ -171,4 +171,4 @@ These are genuinely-open 028 boundary questions on the do-not-decide list; they 
 
 ---
 
-> **Docs-only record (SPECIFY-ONLY / DRAFT).** This draft records the POS-side conformance plan for drift items D5 + D7; it does not implement, define contracts, create migrations, or mutate any gate, kernel node, or status file. No implementation is dispatched from it without explicit, scoped owner approval **after** G10 verification and **after** drift D1 (the DP-2 envelope) is built and returned. No plan.md / tasks.md is authored (GATED depth: D5's upstream is not built).
+> **Docs-only record (DRAFT — plan+tasks authored).** This draft records the POS-side conformance plan for drift items D5 + D7; it does not implement, define contracts, create migrations, or mutate any gate, kernel node, or status file. The A-11 "no plan.md / tasks.md (GATED depth)" condition has **lifted** — drift **D1** (the DP-2 envelope) SHIPPED & CLOSED (PR #559 / `202d253`) and **G10** is SATISFIED-FOR-BOUNDARY-DECISIONS (PR #85 / `76cfcc3`) — so [`plan.md`](./plan.md), [`tasks.md`](./tasks.md), and [`analysis-report-impl.md`](./analysis-report-impl.md) are **now authored** against the shipped #559 contract. No implementation is dispatched from them without explicit, scoped owner approval.

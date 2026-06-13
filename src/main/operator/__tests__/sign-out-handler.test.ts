@@ -112,4 +112,29 @@ describe('SignOutHandler', () => {
     await handler.signOut();
     expect(cleared).toEqual(['be-sess-1']);
   });
+
+  it('sends the operator-identity JWT to backend.signOut, NOT the pos_operator envelope (016 review HIGH regression)', async () => {
+    // POST /api/pos/v1/operators/sign-out uses the `operator-identity` scheme
+    // (pos-operators.openapi.yaml) — the provider JWT, NOT the opaque sale-sync
+    // envelope. After 016 split the credential seam, the sign-out binding
+    // (`jwtFor`) MUST read the jwt holder. Sending the envelope would 401.
+    const JWT = 'eyJhbGciOiJSUzI1NiJ9.identity.jwt';
+    const ENVELOPE = 'opaque-pos-operator-envelope-signout-001';
+    const sessionManager = makeFilledManager();
+    const calls: Array<{ req: unknown; jwt: string }> = [];
+    const handler = new SignOutHandler({
+      backend: fakeBackend({ kind: 'signed_out' }, calls),
+      sessionManager,
+      // Production wires `jwtFor` to the JWT holder (operator-identity), never
+      // the envelope holder.
+      jwtFor: () => JWT,
+    });
+    await handler.signOut();
+    // signOut is fire-and-forget; allow the microtask to land the backend call.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.jwt).toBe(JWT);
+    expect(calls[0]?.jwt).not.toBe(ENVELOPE);
+  });
 });

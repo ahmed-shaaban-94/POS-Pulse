@@ -118,6 +118,24 @@ describe('createLogger — audit-event forbidden-key redaction (T050)', () => {
     expect(text).toContain('2026-05-07T10:00:00.000Z');
   });
 
+  it('redacts pos_operator_envelope at every wildcard depth (016 review MEDIUM)', async () => {
+    // 016-operator-envelope-adoption (review MEDIUM): the opaque pos_operator
+    // ENVELOPE (#559) is an unstructured bearer secret. It is never intentionally
+    // logged, but a contributor who logs a sign-in / takeover success object
+    // directly would leak it. It MUST be scrubbed at the logger layer (P7),
+    // at the same wildcard depths as every other operator credential key.
+    for (const shape of [
+      { pos_operator_envelope: SENTINEL },
+      { operator: { pos_operator_envelope: SENTINEL } },
+      { audit: { operator: { pos_operator_envelope: SENTINEL } } },
+    ]) {
+      const { logger, read } = await makeLoggerForTest();
+      logger.info(shape, 'operator:debug-trace');
+      await flush();
+      expect(read()).not.toContain(SENTINEL);
+    }
+  });
+
   it('combined payload — credential keys scrubbed while clean keys pass through', async () => {
     // Realistic shape: an audit `shift.forced_close` payload merged with
     // a stray credential field. The credential MUST be scrubbed; the
