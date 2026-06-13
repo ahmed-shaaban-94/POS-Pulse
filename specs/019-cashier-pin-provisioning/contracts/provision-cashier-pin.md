@@ -1,0 +1,59 @@
+# Contract: `operator.provisionCashierPin`
+
+Main-process action exposed via the typed preload bridge (Constitution III: renderer reaches main only through `bridge-api.ts`). Sibling to `operator.resetCashierPin`. **New IPC channel — owes §A4 bridge-security review (P8).**
+
+## Request
+
+```ts
+interface ProvisionCashierPinRequest {
+  /** Client-generated UUID v4 — P5 idempotency key. */
+  event_id: string;
+  /**
+   * The cashier to provision, identified by the PROVIDER-NEUTRAL user_id
+   * (028 §16 = DP-2 users.id), as delivered on the branch roster entry.
+   * NOT the Clerk subject. (FR-2 / FR-3)
+   */
+  target_user_id: string;
+  /** Plaintext 4–6 digit PIN — consumed by the main-process verifier, never persisted in plaintext, never logged, never returned. */
+  initial_pin: string;
+}
+```
+
+> **Contrast with `ResetCashierPinRequest`:** reset takes `target_cashier_id` (the Clerk subject, the current PK). Provision takes `target_user_id` (the neutral key) because a born-neutral row is keyed on `user_id`. The handler resolves the roster entry to confirm the `user_id` is a real rostered cashier with a delivered neutral key.
+
+## Response
+
+```ts
+type ProvisionCashierPinResponse =
+  | { kind: 'pin_provisioned'; audit_event_id: string }   // success; echoes event_id
+  | OperatorRefusal;                                       // see refusal categories
+```
+
+## Refusal categories (no row created)
+
+| Category | Trigger |
+|:--|:--|
+| `role_mismatch` | active operator is not manager/admin (FR-4) |
+| `not_ready` | the rostered cashier has no provider-neutral `user_id` yet (FR-11) — **never** falls back to a clerk-keyed row |
+| `state_invalid` | a record already exists for this cashier-on-terminal (incl. a legacy clerk-keyed row) — directs to reset (FR-5) |
+| `invalid_input` | terminal not paired, malformed `event_id`, or invalid PIN shape — rejected value never echoed |
+
+## Invariants (verified before any success)
+
+1. PIN/hash/salt never cross the bridge upward, never logged, never in the response (FR-6 / P7).
+2. Scope (`tenant/branch/terminal`) sourced from pairing state, never the renderer (FR-9 / Constitution VII).
+3. Role-gate is the first executable check (FR-4), mirroring `resetCashierPin`.
+4. Success implies a durably sealed row + a committed `cashier.pin.provisioned` audit event in one transaction (NFR-1 / P18).
+5. The row is created keyed on `user_id` (born-neutral, FR-2) with `cashier_clerk_user_id` also populated for the bridge window.
+
+## Bridge surface
+
+```ts
+// bridge-api.ts (operator namespace)
+provisionCashierPin(req: ProvisionCashierPinRequest): Promise<ProvisionCashierPinResponse>;
+// channel: 'operator.provisionCashierPin'
+```
+
+## Roster dependency (held)
+
+The handler reads the cashier's `user_id` from the cached/fetched branch roster (`PosRosterCashierEntry.user_id`) — a **held DP-2 upstream field** (017 OUTBOX). Until DP-2 ships it, `roster-handler.ts` carries no `user_id`, so every provisioning attempt returns `not_ready` — the truthful state.
