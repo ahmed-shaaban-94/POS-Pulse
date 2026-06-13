@@ -37,10 +37,14 @@ Once Steps 1+2 land, 017 executes as the tasks already specify — but with a co
 
 ## Recommended sequence
 
-**2 → 1 → 3**, not 1 → 2 → 3. Step 1 (DP-2) is trivial and not at risk, but it's the *lighter* half — shipping it first delivers a `user_id` POS has nowhere to write. Resolving **Fork 2 first** (where provisioning lives) defines *what* Step 1 must coordinate with. Concretely:
-1. **Owner resolves Fork 2** (017-absorbs vs 004-follow-up). Recommend 004-follow-up.
-2. **Build/confirm POS provisioning** (Step 2) so a write site keyed on `user_id` exists.
-3. **Ship the DP-2 roster `user_id`** (Step 1) — now it has a consumer. Resolve Fork 1 (spec in DP-2 vs OUTBOX handoff) at this point; recommend speccing it in DP-2 once Step 2 is real, so the two land coordinated.
+> **✅ BOTH FORKS RESOLVED (owner, 2026-06-13):**
+> - **Fork 2 → 004 follow-up.** Cashier-PIN provisioning is a deferred 004-operator-session capability, spec'd as its own feature — **[`specs/019-cashier-pin-provisioning`](../019-cashier-pin-provisioning/)** (tracking stub). 017 *depends on* it; it does not absorb it (P16).
+> - **Fork 1 → hold.** Leave [`OUTBOX-DP2-cashier-user_id.md`](./OUTBOX-DP2-cashier-user_id.md) as the handoff; spec the ~4-line DP-2 roster `user_id` add **after** 019 is real, so the change and its POS consumer land coordinated.
+
+**2 → 1 → 3**, not 1 → 2 → 3. Step 1 (DP-2) is trivial and not at risk, but it's the *lighter* half — shipping it first delivers a `user_id` POS has nowhere to write. With the forks resolved, the live order is:
+1. ~~Owner resolves Fork 2~~ ✅ DONE → 004 follow-up = **019**.
+2. **Build POS provisioning (019)** so a write site keyed on `user_id` exists. ← **current critical-path head.**
+3. **Spec + ship the DP-2 roster `user_id`** (Step 1 / Fork 1) once 019 is real — now it has a consumer.
 4. **Execute 017** (Step 3) against the real per-cashier delivery.
 
 ## Dependency graph
