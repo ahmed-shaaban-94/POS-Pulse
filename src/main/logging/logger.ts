@@ -114,6 +114,13 @@ const OPERATOR_REDACTED_KEYS = [
   'authorization',
   'pin_hash',
   'pin_salt',
+  // 016-operator-envelope-adoption (review MEDIUM) — the opaque pos_operator
+  // ENVELOPE (#559) is an unstructured bearer secret held in the in-process
+  // envelope holder and presented as `Authorization: Bearer <envelope>` on the
+  // sale-sync POST. It is NEVER intentionally logged, but a future contributor
+  // who logs a sign-in / takeover success object directly would otherwise emit
+  // it cleartext. Scrub it at the logger layer for defence-in-depth (P7).
+  'pos_operator_envelope',
 ] as const;
 
 /**
