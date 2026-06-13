@@ -2,9 +2,11 @@
 
 # /speckit-analyze — Cross-Artifact Analysis Report
 
+> **⚠️ SUPERSEDED (2026-06-13).** This report documents the earlier **SPECIFY+CLARIFY-only** state and asserts "plan.md and tasks.md are intentionally absent." That is no longer current: `plan.md` + `tasks.md` were since authored (design-ready). The current implementation-enablement analysis is **[analysis-report-impl.md](analysis-report-impl.md)**, and the implementation blocker is recorded in **[BLOCKER.md](BLOCKER.md)** — 017 is **DESIGN-READY, IMPLEMENTATION-BLOCKED** (the §16 `user_id` is not delivered to the terminal). Retained for history.
+
 **Spec:** 017-offline-pin-reanchor — POS Offline-PIN Re-Anchor off a DP-2 Provider-Neutral Identifier (drift D6)
 **Feature ID:** 017-offline-pin-reanchor
-**Depth:** SPECIFY + CLARIFY + ANALYZE ONLY (double-gated: G10 unsigned + D3/D1/D5 unbuilt)
+**Depth:** SPECIFY + CLARIFY + ANALYZE ONLY (double-gated: G10 unsigned + D3/D1/D5 unbuilt) — *superseded; see banner above*
 **Date:** 2026-06-13
 **Artifacts analyzed:** spec.md, checklists/requirements.md, constitution v1.5.1, cited 028 §5/§6/§16 + drift-map deps, verified evidence files on origin/main.
 **Spec:** [spec.md](spec.md) · **Checklist:** [checklists/requirements.md](checklists/requirements.md)
