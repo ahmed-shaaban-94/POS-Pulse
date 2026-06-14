@@ -127,3 +127,22 @@ export const FIX_POS_PAIRING_PATH_BRANCH_PREFIX = 'fix/pos-pairing-path' as cons
 export const FIX_POS_PAIRING_PATH_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `fix/380-*` is the P0 #380 fix for F-007 (the payment/sales/cart session
+ * adapters stamped `terminal_id = session.branch_id`, collapsing every terminal
+ * at a branch into one payment scope so one stuck attempt bricked them all). The
+ * fix adds a synchronous `getCurrentTerminalId()` accessor to `PairingStore`
+ * (`src/main/pairing/store.ts` + its service mock) so the adapters can source the
+ * REAL terminal_id. The pairing module is the authoritative home of the
+ * terminal_id, so the accessor must live there.
+ *
+ * Authority: issue #380 (P0, area:004-operator-session). Exemption is narrow:
+ * ONLY `src/main/pairing/`. All other forbidden prefixes (`src/main/secrets/`,
+ * `src/shared/api-types.ts`, `scripts/codegen-api.ts`,
+ * `scripts/openapi-snapshot.json`, `.github/workflows/`) remain blocked.
+ */
+export const FIX_380_F007_BRANCH_PREFIX = 'fix/380' as const;
+export const FIX_380_F007_EXEMPT_PREFIXES = [
+  'src/main/pairing/',
+] as const satisfies readonly ForbiddenPathPrefix[];
