@@ -139,18 +139,21 @@ Each defines: preconditions · actions · expected UI · expected local state ·
 
 ## 10. Open decisions (carry to clarify; do NOT pre-decide)
 
-- Single-instrument vs multi-tender v1 (M-3 ships multi → single = gated expansion).
-- Partial / mixed tenders supported v1?
-- Post-handoff cart edits allowed?
-- Payment cancellation → cart or void?
-- Overpayment/change cash-only or all tenders?
-- Zero-total sales allowed?
-- Receipt before or after sync?
-- Offline finalization before sync allowed?
-- Reconnect-with-failed-auth classification (cross-ref 028 OQ-5).
-- Manager override for failed-sync repair?
-- Required smoke evidence form (script / automated regression / screenshots) for closeout.
-- Tender input units: minor-units entry vs decimal entry (orthogonal UX).
+> **✅ OWNER DECISION 2026-06-14 — Option A selected for all listed items (POS1–POS12 + DP1–DP4).**
+> The owner ratified **Option A** (the first-listed / conservative, scope-preserving branch) for every open decision below and the four DP-facing companions in [Orchestrator 029 §19](../../../Retail-Tower-Orchestrator/docs/specs/029-pos-cashier-operating-scenarios-and-smoke-gate/spec.md). The items are no longer "DEFER to owner"; downstream `/speckit-plan` + `/speckit-tasks` may now plan *through* them. Each bullet is annotated below with its resolved Option-A branch. (Labels POS1–POS12 are assigned in list order; DP1–DP4 are the DP-facing subset — see 029 §19 for their resolution.)
+
+- **POS1** — Single-instrument vs multi-tender v1 (M-3 ships multi → single = gated expansion). → **Option A: keep the shipped multi-tender-line FSM as v1** (no single-instrument restriction; under-tender refused server-side at `payments.confirm`).
+- **POS2** — Partial / mixed tenders supported v1? → **Option A: supported** (bound to POS1; partial lines applied, mixed tenders allowed — the shipped behaviour).
+- **POS3** — Post-handoff cart edits allowed? → **Option A: NOT allowed** (the conservative branch; the `HANDED_OFF_TO_PAYMENT → cart-mutation` transition stays closed).
+- **POS4** — Payment cancellation → cart or void? → **Option A: return to cart** (non-destructive; the cart is preserved, not voided).
+- **POS5** — Overpayment/change cash-only or all tenders? → **Option A: cash-only change** (the conservative branch).
+- **POS6** — Zero-total sales allowed? → **Option A: NOT allowed** (Invariant 7 holds; `saleTotal ≤ 0` cannot finalize).
+- **POS7** — Receipt before or after sync? → **Option A: receipt independent of sync** (RECEIPT_READY via M-1 auto-finalize/print seam is POS-local; ordering not coupled to SYNCED).
+- **POS8** — Offline finalization before sync allowed? → **Option A: allowed** (POS-local finalize-gating per M-2 is independent of sync — the shipped offline-first posture).
+- **POS9** — Reconnect-with-failed-auth classification (cross-ref 028 OQ-5). → **Option A: defer to 028's device-trust + captured-time provenance model** (no POS-side reclassification). *(= DP4.)*
+- **POS10** — Manager override for failed-sync repair? → **Option A: NOT in POS v1** (repair authority is the later Console-side lane). *(= DP3.)*
+- **POS11** — Required smoke evidence form (script / automated regression / screenshots) for closeout. → **Option A: automated regression** (the durable, re-runnable form; screenshots/script are supplementary).
+- **POS12** — Tender input units: minor-units entry vs decimal entry (orthogonal UX). → **Option A: keep minor-units entry (E-4)** (money invariants hold; no decimal-entry switch in v1).
 
 ## 11. Acceptance criteria
 
