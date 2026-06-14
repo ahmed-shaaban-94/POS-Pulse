@@ -43,9 +43,9 @@ Once Steps 1+2 land, 017 executes as the tasks already specify — but with a co
 
 **2 → 1 → 3**, not 1 → 2 → 3. Step 1 (DP-2) is trivial and not at risk, but it's the *lighter* half — shipping it first delivers a `user_id` POS has nowhere to write. With the forks resolved, the live order is:
 1. ~~Owner resolves Fork 2~~ ✅ DONE → 004 follow-up = **019**.
-2. **Build POS provisioning (019)** so a write site keyed on `user_id` exists. ← **current critical-path head.**
-3. **Spec + ship the DP-2 roster `user_id`** (Step 1 / Fork 1) once 019 is real — now it has a consumer.
-4. **Execute 017** (Step 3) against the real per-cashier delivery.
+2. ~~**Build POS provisioning (019)**~~ ✅ **DONE** — POS #398 merged. The create path + the **entire main-side consumption seam** shipped here: `interpretRosterResponse` (`backend-client.ts`) already populates the optional `user_id` from the wire when present; `provisionCashierPin` resolves `target_user_id` against the roster main-side and refuses `not_ready` if absent. **Built to light up automatically when DP-2 ships the field — no further POS wiring was needed to consume it.**
+3. ~~**Spec + ship the DP-2 roster `user_id`** (Step 1)~~ ✅ **DONE** — DP-2 #571 (spec) + #573 (impl) merged; `user_id` is live on `PosRosterCashierEntry`. **⚠️ CORRECTION:** earlier framing said *"POS widens its roster allowlist as the matching half."* **That was wrong** — the renderer-facing `roster-handler.ts` allowlist (`{id,display_name,role}`) MUST stay strict (Constitution VII; the clerk↔neutral mapping stays main-side). 019 already kept `user_id` main-side; widening the renderer allowlist would *leak* it. No POS allowlist change was or is required. (Verified: `pin-management.provision.test.ts` covers both the populated-`user_id` success and pre-DP-2 `not_ready` paths — 71/71 green.)
+4. **Execute 017** (Step 3) against the real per-cashier delivery — **the sole remaining feature work** (migration `0036` + code re-key on live sealed rows; needs the second-pair-of-eyes security review). Separately, a future **provisioning UI surface** is needed for a manager to actually invoke `provisionCashierPin` from the renderer (019 built the contract+handler+migration, not the UI) — but that is out of 017's scope.
 
 ## Dependency graph
 
