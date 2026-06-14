@@ -63,6 +63,7 @@ async function makeFrozenCart(): Promise<FrozenFixture> {
   const session = makeSession();
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: bindCartStore(makeSqlJsHandle(db)),
     resolveItemRef: resolver,
     clock: () => new Date('2026-05-17T10:00:00.000Z'),

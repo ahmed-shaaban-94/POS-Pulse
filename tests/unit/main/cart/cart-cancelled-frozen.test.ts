@@ -74,6 +74,7 @@ async function makeCartInState(state: 'frozen_handed_off' | 'cancelled'): Promis
   const store = bindCartStore(handle);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     resolveItemRef: fixtureResolver,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),

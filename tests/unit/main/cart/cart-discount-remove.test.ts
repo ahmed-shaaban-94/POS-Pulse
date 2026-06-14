@@ -74,6 +74,7 @@ async function newCartWithPlaceholder(session = makeSession()): Promise<Fixture>
   const store = bindCartStore(handle);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     resolveItemRef: fixtureResolver,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
@@ -128,6 +129,7 @@ describe('cart.discountPlaceholders.remove — gate layer (S2 live)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => null,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
     });
     const res = await handlers.discountPlaceholdersRemove({
@@ -145,6 +147,7 @@ describe('cart.discountPlaceholders.remove — gate layer (S2 live)', () => {
     const session = makeSession();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
     });
     const res = await handlers.discountPlaceholdersRemove({
@@ -161,7 +164,11 @@ describe('cart.discountPlaceholders.remove — gate layer (S2 live)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const session = makeSession();
     const store = bindCartStore(makeSqlJsHandle(db));
-    const handlers = new CartBridgeHandlers({ getCurrentSession: () => session, cartStore: store });
+    const handlers = new CartBridgeHandlers({
+      getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
+      cartStore: store,
+    });
     const createRes = await handlers.create({ idempotency_key: 'create-frozen-t062' });
     if (createRes.kind !== 'ok') throw new Error();
     db.run(`UPDATE carts SET state = 'frozen_handed_off' WHERE cart_id = ?`, [createRes.cart_id]);
@@ -247,6 +254,7 @@ describe('cart.discountPlaceholders.remove — S3 contract (RED until T069)', ()
     const store2 = bindCartStore(handle2);
     const mgrHandlers = new CartBridgeHandlers({
       getCurrentSession: () => mgrSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store2,
     });
     const createRes = await mgrHandlers.create({ idempotency_key: 'create-mgr-t062' });

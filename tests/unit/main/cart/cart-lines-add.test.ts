@@ -39,6 +39,7 @@ function makeSession(
 function makeHandlers(currentSession: OperatorSessionRecord | null): CartBridgeHandlers {
   return new CartBridgeHandlers({
     getCurrentSession: () => currentSession,
+    getTerminalId: () => 'terminal-test-380',
   });
 }
 
@@ -87,6 +88,7 @@ describe('cart.lines.add — role gating', () => {
     const otherHandlers = new CartBridgeHandlers({
       getCurrentSession: () =>
         makeSession('cashier', { id: 'sess-other', operator_id: 'cashier-other' }),
+      getTerminalId: () => 'terminal-test-380',
       shareStateWith: handlers,
     });
 
@@ -110,6 +112,7 @@ describe('cart.lines.add — role gating', () => {
     const t2Handlers = new CartBridgeHandlers({
       getCurrentSession: () =>
         makeSession('cashier', { tenant_id: 'tenant-2', branch_id: 'branch-1' }),
+      getTerminalId: () => 'terminal-test-380',
       shareStateWith: handlers,
     });
 

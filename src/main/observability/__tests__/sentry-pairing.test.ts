@@ -48,6 +48,7 @@ function makeStore(): PairingStore {
     persist: vi.fn(() => Promise.resolve()),
     clear: vi.fn(() => Promise.resolve()),
     getStatus: vi.fn(() => Promise.resolve({ kind: 'unpaired' as const })),
+    getCurrentTerminalId: vi.fn(() => null),
   };
 }
 

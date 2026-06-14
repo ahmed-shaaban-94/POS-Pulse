@@ -68,6 +68,7 @@ async function newEditingCart(session = makeSession()): Promise<Fixture> {
   const store = bindCartStore(handle);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
   });
@@ -110,6 +111,7 @@ describe('cart.void — gate layer (S2 live)', () => {
     const store = bindCartStore(handle);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => null,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
     });
     const res = await handlers.void({
@@ -125,6 +127,7 @@ describe('cart.void — gate layer (S2 live)', () => {
     const otherSession = makeSession({ id: 'sess-other', operator_id: 'cashier-99' });
     const otherHandlers = new CartBridgeHandlers({
       getCurrentSession: () => otherSession,
+      getTerminalId: () => 'terminal-test-380',
       shareStateWith: f.handlers,
       cartStore: bindCartStore(makeSqlJsHandle(f.db)),
     });
@@ -189,6 +192,7 @@ describe('cart.void — pre-handoff S3 contract (T055 — RED until T067)', () =
     const store2 = bindCartStore(handle2);
     const mgrHandlers = new CartBridgeHandlers({
       getCurrentSession: () => mgr,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store2,
     });
     const createRes = await mgrHandlers.create({ idempotency_key: 'mgr-create' });

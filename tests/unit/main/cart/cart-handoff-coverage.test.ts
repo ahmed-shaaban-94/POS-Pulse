@@ -59,6 +59,7 @@ describe('handoff() S1 in-memory fallback (no cartStore)', () => {
     const session = makeSession({ id: 'sess-s1-h', operator_id: 'cashier-s1' });
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       // no cartStore — S1 path
     });
 
@@ -78,6 +79,7 @@ describe('handoff() S1 in-memory fallback (no cartStore)', () => {
   it('returns refused wrong_owner for unknown cart_id in S1 mode', async () => {
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => makeSession({ id: 'sess-s1-x' }),
+      getTerminalId: () => 'terminal-test-380',
     });
 
     const res = await handlers.handoff({
@@ -157,6 +159,7 @@ describe('cart-store S4 query methods', () => {
     const store = bindCartStore(makeSqlJsHandle(db));
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
       resolveItemRef: resolver,
     });
@@ -187,6 +190,7 @@ describe('cart-store S4 query methods', () => {
     const store = bindCartStore(makeSqlJsHandle(db));
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
       resolveItemRef: resolver,
     });
@@ -205,6 +209,7 @@ describe('cart-store S4 query methods', () => {
     const store = bindCartStore(makeSqlJsHandle(db));
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
       resolveItemRef: resolver,
     });
@@ -227,6 +232,7 @@ describe('cart-store S4 query methods', () => {
     const store = bindCartStore(makeSqlJsHandle(db));
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
       resolveItemRef: resolver,
     });
@@ -271,6 +277,7 @@ describe('buildPaymentIntentEnvelope with discount placeholders', () => {
     const session = makeSession({ id: 'sess-dp-h', operator_id: 'manager-dp' });
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });

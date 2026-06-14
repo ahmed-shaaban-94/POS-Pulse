@@ -53,6 +53,7 @@ describe('cart.handoff stale version refusal (T080)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });
@@ -81,6 +82,7 @@ describe('cart.handoff stale version refusal (T080)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });
@@ -117,6 +119,7 @@ describe('cart.handoff stale version refusal (T080)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });

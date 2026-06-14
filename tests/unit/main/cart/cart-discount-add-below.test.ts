@@ -76,6 +76,7 @@ async function newCartWithLine(session = makeSession()): Promise<Fixture> {
   const store = bindCartStore(handle);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     resolveItemRef: fixtureResolver,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
@@ -123,6 +124,7 @@ describe('cart.discountPlaceholders.add — gate layer (S2 live)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => null,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
     });
     const res = await handlers.discountPlaceholdersAdd({
@@ -141,6 +143,7 @@ describe('cart.discountPlaceholders.add — gate layer (S2 live)', () => {
     const session = makeSession();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
     });
     const res = await handlers.discountPlaceholdersAdd({

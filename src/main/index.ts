@@ -36,6 +36,8 @@ import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel
 import { createPaymentsForceFailHandler } from './payments/handlers/payments-force-fail.js';
 import { createPaymentsSubscribeHandler } from './payments/handlers/payments-subscribe.js';
 import { createPaymentsReadHandler } from './payments/handlers/payments-read.js';
+import { createPaymentsDiscardOnSessionEndHandler } from './payments/handlers/payments-discard-on-session-end.js';
+import { createStuckAttemptSweeper } from './payments/sweep-stuck-attempt.js';
 import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
@@ -47,6 +49,7 @@ import {
 } from './payments/voucher-authority/reverse.js';
 import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
 import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
+import { resolveSessionScope } from './operator/resolve-session-scope.js';
 // 008-sale-finalization-and-receipts Slice 1c.3 (T094c) — AD-2 worker + sales.* bridge.
 import { registerSalesHandlers } from './ipc/sales.js';
 import { bindSalesRepository } from './sales/repositories/sales.repository.js';
@@ -63,7 +66,7 @@ import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitt
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
 import { buildFinalizeInput } from './sales/finalize-dispatch.js';
 import { createFinalizeListener } from './sales/finalize-listener.js';
-import { createSalesBridge } from './sales/sales-bridge.js';
+import { createSalesBridge, type OperatorSessionForSales } from './sales/sales-bridge.js';
 import { bindBannerStateProjector } from './sales/banner-state-projector.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
@@ -665,6 +668,8 @@ app
     const cartBridgeHandlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => operatorSessionManager.getCurrent(),
+      // #380 (F-007) — stamp cart rows with the real terminal_id, not branch_id.
+      getTerminalId: () => pairingStore.getCurrentTerminalId(),
       logger: mainLogger,
       auditEmitter,
       isPackaged: app.isPackaged,
@@ -815,26 +820,14 @@ app
       },
     });
 
-    const paymentsSessionAdapter = (): OperatorSessionForPayments | null => {
-      const sess = operatorSessionManager.getCurrent();
-      if (sess === null) return null;
-      // Adapter — payments require terminal_id on the session. 004's
-      // session record stores branch context but no separate terminal id;
-      // use pairing-store's terminal id, matching cart's posture
-      // (cart-bridge.ts uses session.branch_id as terminal scope).
-      // F-007: a follow-up PR can plumb the real terminal id through 004.
-      return {
-        role: sess.role,
-        operator_id: sess.operator_id,
-        operator_session_id: sess.id,
-        tenant_id: sess.tenant_id,
-        branch_id: sess.branch_id,
-        terminal_id: sess.branch_id,
-        // 008 T094b — persist the human-readable name into payment.settled
-        // so the session-independent finalize worker can stamp the Sale row.
-        display_name: sess.display_name,
-      };
-    };
+    const paymentsSessionAdapter = (): OperatorSessionForPayments | null =>
+      // #380 (F-007 FIXED) — stamp the REAL terminal_id from the pairing store,
+      // NOT session.branch_id (the retired shortcut that collapsed every
+      // terminal at a branch into one payment scope so one stuck attempt
+      // bricked them all). resolveSessionScope is the extracted, unit-tested
+      // seam shared with the sales adapter; returns null on no-session OR
+      // unpaired. display_name flows through for 008 T094b's settled audit.
+      resolveSessionScope(operatorSessionManager.getCurrent(), pairingStore.getCurrentTerminalId());
 
     const paymentsClock = (): Date => new Date();
     const paymentsUuid = (): string => randomUUID();
@@ -919,6 +912,40 @@ app
       tenderReverse,
       tenderRead,
       paymentsForceFail,
+    });
+
+    // #380 (F-007 part b) — orphan-attempt recovery. A stuck `started` payment
+    // attempt blocks every future sale on the terminal. The discard handler
+    // (LIFO-reverse + fail + audit) existed but was never wired to any signal.
+    // Wire it to the session lifecycle: clean session-END discards a live
+    // orphan; sign-in (session-START) recovers the CRASH case where end() never
+    // ran. Both resolve the REAL terminal_id (F-007 part a) and reuse the same
+    // idempotent discard. Fired role-agnostically — the brick is terminal-
+    // scoped and blocks every operator at the terminal.
+    const paymentsDiscardOnSessionEnd = createPaymentsDiscardOnSessionEndHandler({
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+      paymentAttemptFsm,
+      tenderLineFsm,
+      auditEmitter: paymentAuditEmitter,
+      uuid: paymentsUuid,
+      clock: paymentsClock,
+    });
+    const sweepStuckAttempt = createStuckAttemptSweeper({
+      attemptsRepo: paymentsAttemptsRepo,
+      discard: paymentsDiscardOnSessionEnd,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      logError: (err, ctx) => {
+        mainLogger.error({ err, ...ctx }, 'stuck_attempt_sweep:failed');
+      },
+    });
+    // Sync lifecycle hooks → fire-and-forget the async sweep. The SessionManager
+    // wrappers swallow subscriber throws, so the sweeper logs its own failures.
+    operatorSessionManager.onEnded(() => {
+      void sweepStuckAttempt();
+    });
+    operatorSessionManager.onStarted(() => {
+      void sweepStuckAttempt();
     });
 
     // 006 T271 — deferred-reversal resolver bootstrap.
@@ -1008,18 +1035,15 @@ app
       // handlers; otherwise the renderer's reads reject at the IPC layer. Both
       // bridges gate on the live session at call time, so they are inert until
       // an operator signs in regardless of pairing timing.
-      const getCurrentSalesSession = () => {
-        const sess = operatorSessionManager.getCurrent();
-        if (sess === null) return null;
-        return {
-          role: sess.role,
-          operator_id: sess.operator_id,
-          operator_session_id: sess.id,
-          tenant_id: sess.tenant_id,
-          branch_id: sess.branch_id,
-          terminal_id: sess.branch_id,
-        };
-      };
+      // #380 (F-007 FIXED) — same extracted seam as the payments adapter; the
+      // returned payments-shaped scope is a structural superset of
+      // OperatorSessionForSales. Real terminal_id from the pairing store; null
+      // on no-session or unpaired.
+      const getCurrentSalesSession = (): OperatorSessionForSales | null =>
+        resolveSessionScope(
+          operatorSessionManager.getCurrent(),
+          pairingStore.getCurrentTerminalId(),
+        );
       const salesBridge = createSalesBridge({
         getCurrentSession: getCurrentSalesSession,
         salesRepo,
@@ -1206,19 +1230,15 @@ app
           });
         };
 
-        // F-007 alignment — the AD-2 scan filters `audit_events` by
-        // `originating_terminal_id`, which 006 writes as the payment
-        // attempt's `terminal_id`. That value comes from
-        // `paymentsSessionAdapter`, which (per the documented F-007 shortcut)
-        // sets `terminal_id: sess.branch_id` because 004's session record
-        // carries no separate terminal id. So the value 006 stamps into
-        // `originating_terminal_id` is the BRANCH id, not the pairing row's
-        // real terminal_id. The scan MUST bind the same value 006 wrote, or
-        // it matches zero settled rows and finalizes nothing. We therefore
-        // scope the worker with terminal_id = branch_id, tagged to the same
-        // F-007 debt: when the real terminal id is plumbed through 004, BOTH
-        // the payments adapter and this scope flip together.
-        const payments006TerminalId = pairingStatus.branch_id; // F-007
+        // #380 (F-007 FIXED) — the AD-2 scan filters `audit_events` by
+        // `originating_terminal_id`, which 006 writes as the payment attempt's
+        // `terminal_id`. Post-#380 that value comes from
+        // `paymentsSessionAdapter`, which now sources the REAL terminal_id from
+        // `pairingStore.getCurrentTerminalId()` (= `pairingStatus.terminal_id`
+        // here). The scan MUST bind the SAME value 006 wrote, or it matches
+        // zero settled rows and finalizes nothing. This is the lockstep half of
+        // the adapter flip — pinned by finalize-listener.f007-scope.test.ts.
+        const payments006TerminalId = pairingStatus.terminal_id;
         const finalizeListener = createFinalizeListener({
           db: dbHandle,
           tenant_id: pairingStatus.tenant_id,

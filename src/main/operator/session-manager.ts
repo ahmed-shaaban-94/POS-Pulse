@@ -45,10 +45,14 @@ type SessionEndCallback = (
   cause: SessionEndCause | undefined,
 ) => void;
 
+/** #380 — fired after a new session is created (any sign-in role). */
+type SessionStartCallback = (record: OperatorSessionRecord) => void;
+
 export class SessionManager {
   private current: OperatorSessionRecord | null = null;
   private lastEndCause: SessionEndCause | null = null;
   private readonly endCallbacks: SessionEndCallback[] = [];
+  private readonly startCallbacks: SessionStartCallback[] = [];
 
   getCurrent(): OperatorSessionRecord | null {
     return this.current;
@@ -85,12 +89,31 @@ export class SessionManager {
       last_activity_at: now,
     };
     this.current = record;
+    // #380 — fire start subscribers (e.g. the orphan-attempt sweep). A
+    // throwing subscriber must not break sign-in (mirrors end()).
+    for (const cb of this.startCallbacks) {
+      try {
+        cb(record);
+      } catch {
+        // subscribers must not break create()
+      }
+    }
     return record;
   }
 
   /** Register a callback fired after each session ends. */
   onEnded(cb: SessionEndCallback): void {
     this.endCallbacks.push(cb);
+  }
+
+  /**
+   * #380 — register a callback fired after each session is created. The
+   * symmetric counterpart of onEnded; used to sweep a stuck `started` payment
+   * attempt left by a crashed prior session (the clean-end case is handled by
+   * the onEnded discard). Role-agnostic — both sign-in paths call create().
+   */
+  onStarted(cb: SessionStartCallback): void {
+    this.startCallbacks.push(cb);
   }
 
   /**

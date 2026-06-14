@@ -13,6 +13,9 @@ pnpm-debug.log*
 dist/
 dist-electron/
 out/
+
+# Code-analysis tool output (graphify) — local cache, never committed
+graphify-out/
 build/
 *.tsbuildinfo
 

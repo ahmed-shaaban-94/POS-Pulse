@@ -83,6 +83,7 @@ async function newCartWithLine(): Promise<Fixture> {
   const auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => cashierSession,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     resolveItemRef: fixtureResolver,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),

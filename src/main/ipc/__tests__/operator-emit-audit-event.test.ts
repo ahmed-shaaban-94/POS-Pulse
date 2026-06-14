@@ -68,7 +68,12 @@ function fakePairingStore(terminalId: string | null = 'terminal-001'): PairingSt
     }
     return Promise.resolve({ kind: 'unpaired' as const });
   });
-  const store: PairingStore = { getStatus, persist: vi.fn(), clear: vi.fn() };
+  const store: PairingStore = {
+    getStatus,
+    getCurrentTerminalId: vi.fn(() => terminalId),
+    persist: vi.fn(),
+    clear: vi.fn(),
+  };
   return store;
 }
 

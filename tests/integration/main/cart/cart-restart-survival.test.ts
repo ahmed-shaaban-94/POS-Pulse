@@ -72,6 +72,7 @@ describe('cart draft survives application restart (T038)', () => {
     let db = freshDb();
     let handlers = new CartBridgeHandlers({
       getCurrentSession: () => session(),
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       clock: () => new Date('2026-05-14T10:00:00.000Z'),
@@ -105,6 +106,7 @@ describe('cart draft survives application restart (T038)', () => {
     db = reopenDb(bytes);
     handlers = new CartBridgeHandlers({
       getCurrentSession: () => session(),
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       clock: () => new Date('2026-05-14T10:00:00.000Z'),

@@ -86,6 +86,7 @@ async function makeCartWithLine(): Promise<{
   const { emitter, events } = makeAuditCapture();
   const handlers = new CartBridgeHandlers({
     getCurrentSession: makeSession,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: bindCartStore(makeSqlJsHandle(db)),
     resolveItemRef: resolver,
     auditEmitter: emitter,

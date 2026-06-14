@@ -32,7 +32,10 @@ function fakeEvent(): IpcMainInvokeEvent {
 describe('registerCartHandlers — channel registration', () => {
   it('registers all 10 cart channels', () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     registerCartHandlers(ipcMain, { handlers: bridge });
     for (const ch of Object.values(CART_IPC_CHANNELS)) {
       expect(handlers.has(ch)).toBe(true);
@@ -69,7 +72,10 @@ describe('registerCartHandlers — input validation refusals', () => {
     [CART_IPC_CHANNELS.SUBSCRIBE, {}],
   ])('refuses malformed payload on %s', async (channel, payload) => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(channel);
     if (handler === undefined) throw new Error(`missing handler for ${channel}`);
@@ -81,7 +87,10 @@ describe('registerCartHandlers — input validation refusals', () => {
 describe('registerCartHandlers — valid payload forwards to bridge', () => {
   it('CREATE forwards to bridge.create', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'create');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.CREATE);
@@ -92,7 +101,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('LINES_ADD forwards a fully-typed request to bridge.linesAdd', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'linesAdd');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.LINES_ADD);
@@ -104,7 +116,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('LINES_UPDATE forwards with delta+absolute optional fields', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'linesUpdate');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.LINES_UPDATE);
@@ -124,7 +139,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('LINES_SET_NOTE accepts null note', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'linesSetNote');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.LINES_SET_NOTE);
@@ -141,7 +159,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('DISCOUNT_PLACEHOLDERS_ADD accepts optional attribution_operator_id', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'discountPlaceholdersAdd');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_ADD);
@@ -160,7 +181,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('VOID accepts optional attribution_operator_id', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'void');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.VOID);
@@ -175,7 +199,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('DISCOUNT_PLACEHOLDERS_REMOVE forwards with attribution optional', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'discountPlaceholdersRemove');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.DISCOUNT_PLACEHOLDERS_REMOVE);
@@ -191,7 +218,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('HANDOFF forwards array of per_line_versions', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'handoff');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.HANDOFF);
@@ -206,7 +236,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('LINES_REMOVE forwards', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'linesRemove');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.LINES_REMOVE);
@@ -222,7 +255,10 @@ describe('registerCartHandlers — valid payload forwards to bridge', () => {
 
   it('SUBSCRIBE forwards', async () => {
     const { ipcMain, handlers } = mkIpc();
-    const bridge = new CartBridgeHandlers({ getCurrentSession: () => null });
+    const bridge = new CartBridgeHandlers({
+      getCurrentSession: () => null,
+      getTerminalId: () => null,
+    });
     const spy = vi.spyOn(bridge, 'subscribe');
     registerCartHandlers(ipcMain, { handlers: bridge });
     const handler = handlers.get(CART_IPC_CHANNELS.SUBSCRIBE);

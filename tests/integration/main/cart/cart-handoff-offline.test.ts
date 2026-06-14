@@ -66,6 +66,7 @@ async function makeHandoffResult(): Promise<{
   for (const sql of MIGRATIONS) db.run(sql);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: makeSession,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: bindCartStore(makeSqlJsHandle(db)),
     resolveItemRef: resolver,
     clock: () => new Date('2026-05-17T10:00:00.000Z'),

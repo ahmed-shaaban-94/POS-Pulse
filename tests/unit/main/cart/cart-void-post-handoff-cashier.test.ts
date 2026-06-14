@@ -65,6 +65,7 @@ async function newFrozenCart(session = makeSession()): Promise<Fixture> {
   const store = bindCartStore(handle);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
   });
@@ -124,6 +125,7 @@ describe('cart.void — frozen cart (S2 live — GREEN)', () => {
     const store = bindCartStore(handle);
     const mgrHandlers = new CartBridgeHandlers({
       getCurrentSession: () => mgr,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
     });
     const res = await mgrHandlers.void({

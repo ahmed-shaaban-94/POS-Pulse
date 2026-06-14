@@ -86,6 +86,7 @@ async function newEditingCart(session = makeSession()): Promise<SessionEndFixtur
   const store = bindCartStore(handle);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
   });
@@ -215,6 +216,7 @@ describe('cart session-end discard — S3 contract (RED until T070)', () => {
     const store2 = bindCartStore(handle2);
     const handlers2 = new CartBridgeHandlers({
       getCurrentSession: () => session2,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store2,
     });
     const createRes2 = await handlers2.create({ idempotency_key: 'create-t063-b' });

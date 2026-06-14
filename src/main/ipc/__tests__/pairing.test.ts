@@ -33,6 +33,7 @@ type IpcHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 function makeFakeStore(status: PairingStatus): PairingStore {
   return {
     getStatus: vi.fn(() => Promise.resolve(status)),
+    getCurrentTerminalId: vi.fn(() => (status.kind === 'paired' ? status.terminal_id : null)),
     persist: vi.fn(() => Promise.resolve()),
     clear: vi.fn(() => Promise.resolve()),
   };
@@ -134,6 +135,7 @@ describe('registerPairingHandlers — pairing:get-status (T012)', () => {
     );
     const store: PairingStore = {
       getStatus: getStatusMock,
+      getCurrentTerminalId: vi.fn(() => null),
       persist: vi.fn(() => Promise.resolve()),
       clear: vi.fn(() => Promise.resolve()),
     };

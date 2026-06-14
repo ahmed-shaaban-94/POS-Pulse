@@ -72,6 +72,7 @@ describe('cart.handoff_to_payment audit (T084)', () => {
     const { emitter, events } = makeAuditCapture();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       auditEmitter: emitter,
@@ -104,6 +105,7 @@ describe('cart.handoff_to_payment audit (T084)', () => {
     const session = makeSession();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       auditEmitter: emitter,
@@ -149,6 +151,7 @@ describe('cart.handoff_to_payment audit (T084)', () => {
     const { emitter, events } = makeAuditCapture();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       auditEmitter: emitter,
@@ -184,6 +187,7 @@ describe('cart.handoff_to_payment audit (T084)', () => {
     const { emitter, events } = makeAuditCapture();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       auditEmitter: emitter,
@@ -214,6 +218,7 @@ describe('cart.handoff_to_payment audit (T084)', () => {
     const { emitter, events } = makeAuditCapture();
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       auditEmitter: emitter,

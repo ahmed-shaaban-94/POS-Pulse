@@ -59,6 +59,7 @@ describe('envelope persistence across restart (T083)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       clock: () => new Date('2026-05-17T10:00:00.000Z'),
@@ -102,6 +103,7 @@ describe('envelope persistence across restart (T083)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers1 = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       clock: () => new Date('2026-05-17T10:00:00.000Z'),
@@ -131,6 +133,7 @@ describe('envelope persistence across restart (T083)', () => {
 
     const handlers2 = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       clock: () => new Date('2026-05-17T11:00:00.000Z'),
@@ -158,6 +161,7 @@ describe('envelope persistence across restart (T083)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
       clock: () => new Date('2026-05-17T10:00:00.000Z'),
