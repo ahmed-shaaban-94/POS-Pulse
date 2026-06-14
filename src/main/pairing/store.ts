@@ -101,6 +101,27 @@ export interface PairingStore {
   getStatus(): Promise<PairingStatus>;
 
   /**
+   * #380 (F-007) — the SYNCHRONOUS real-terminal-id accessor. Returns the
+   * `terminal_assignment` row's `terminal_id`, or null when unpaired.
+   *
+   * Why a separate sync method rather than reading it off `getStatus()`:
+   * `getStatus()` is async ONLY because it must `await` the device-token
+   * decrypt (safeStorage) to distinguish paired/invalid. The `terminal_id`
+   * itself is a plaintext column read synchronously from SQLite
+   * (`db.readAssignment()`) and needs no token. The payment / sales / cart
+   * session adapters are SYNC closures invoked per-operation; they need the
+   * real terminal_id without taking an async hop (making them async would
+   * ripple through the whole payment handler chain). This accessor gives
+   * them that sync seam and reflects pairing state at CALL time, so a
+   * terminal that pairs mid-process resolves correctly.
+   *
+   * Constitution VIII: the terminal_id is device-scope identity (not the
+   * operator/branch), and it is NOT a secret — so exposing it synchronously
+   * here, separate from the encrypted token path, is correct.
+   */
+  getCurrentTerminalId(): string | null;
+
+  /**
    * Persist a successful pairing: write the device_token to the
    * SecretStore AND insert the assignment row, in a single
    * transactional unit. Rolls back the SecretStore write if the SQL
@@ -192,6 +213,12 @@ export function createPairingStore(options: CreatePairingStoreOptions): PairingS
       // tokenPresent XOR rowPresent — orphan in one direction.
       if (rowPresent) return { kind: 'invalid', reason: 'orphaned_row' };
       return { kind: 'invalid', reason: 'missing_token' };
+    },
+
+    getCurrentTerminalId(): string | null {
+      // Sync plaintext read — see the interface doc for why this does NOT
+      // go through the async token path. No safeStorage, no await.
+      return db.readAssignment()?.terminal_id ?? null;
     },
 
     async persist(input: PersistInput): Promise<void> {

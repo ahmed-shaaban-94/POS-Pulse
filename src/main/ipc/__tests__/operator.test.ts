@@ -98,6 +98,7 @@ function fakeRosterHandler(): RosterHandler {
 function fakePairingStore(): PairingStore {
   const store: PairingStore = {
     getStatus: vi.fn(() => Promise.resolve({ kind: 'unpaired' as const })),
+    getCurrentTerminalId: vi.fn(() => null),
     persist: vi.fn(),
     clear: vi.fn(),
   };
@@ -363,6 +364,7 @@ describe('operator:dismiss-shift-closed-notice', () => {
               : { kind: 'unpaired' as const },
           ),
         ),
+        getCurrentTerminalId: vi.fn(() => (opts.paired ? 'terminal-1' : null)),
         persist: vi.fn(),
         clear: vi.fn(),
       },
@@ -511,6 +513,7 @@ function makePairedPairingStore(
         paired_at: 1735689600,
       }),
     ),
+    getCurrentTerminalId: vi.fn(() => 'term-1'),
     persist: vi.fn(),
     clear: vi.fn(),
   };
@@ -572,6 +575,7 @@ describe('operator:list-branch-roster — pre-sign-in access', () => {
   it('refuses with invalid_input when terminal is unpaired', async () => {
     const unpaired: PairingStore = {
       getStatus: vi.fn(() => Promise.resolve({ kind: 'unpaired' as const })),
+      getCurrentTerminalId: vi.fn(() => null),
       persist: vi.fn(),
       clear: vi.fn(),
     };

@@ -138,6 +138,7 @@ function fakePairingStore(terminal_id = 'term-1'): PairingStore {
         paired_at: 1735689600,
       }),
     ),
+    getCurrentTerminalId: vi.fn(() => terminal_id),
     persist: vi.fn(),
     clear: vi.fn(),
   };
@@ -383,6 +384,7 @@ describe('operator:_emit-audit-event-smoke — unpaired terminal', () => {
     const { ipcMain, handlers } = makeIpcMain();
     const pairingStore: PairingStore = {
       getStatus: vi.fn(() => Promise.resolve({ kind: 'unpaired' as const })),
+      getCurrentTerminalId: vi.fn(() => null),
       persist: vi.fn(),
       clear: vi.fn(),
     };

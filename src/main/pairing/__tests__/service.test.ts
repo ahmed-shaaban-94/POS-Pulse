@@ -87,7 +87,8 @@ function makeHarness(opts: HarnessOpts = {}): Harness {
   });
   const clear = vi.fn<() => Promise<void>>(() => Promise.resolve());
   const getStatus = vi.fn<PairingStore['getStatus']>(() => Promise.resolve({ kind: 'unpaired' }));
-  const store: PairingStore = { persist, clear, getStatus };
+  const getCurrentTerminalId = vi.fn<PairingStore['getCurrentTerminalId']>(() => null);
+  const store: PairingStore = { persist, clear, getStatus, getCurrentTerminalId };
 
   const pairRejection = opts.pairRejection;
   const pair = vi.fn<Network['pair']>(() => {
