@@ -136,6 +136,15 @@ export interface CartBridgeHandlersDeps {
   /** Returns the currently-authenticated operator session, or null. */
   getCurrentSession: () => OperatorSessionRecord | null;
   /**
+   * #380 (F-007) — returns the pairing row's REAL terminal_id, or null when
+   * unpaired. The cart row's `terminal_id` (carts.terminal_id, NOT NULL) is
+   * stamped from this, NOT from `session.branch_id` (the retired F-007
+   * shortcut). Required so a dropped wiring can't silently revert to the bug
+   * (a branch_id fallback would be F-007 in disguise). Sourced in production
+   * from `pairingStore.getCurrentTerminalId()` (sync, no token path).
+   */
+  getTerminalId: () => string | null;
+  /**
    * Optional shared state — when set, this instance reuses the cart
    * store of the provided instance. Used by tests that swap sessions
    * mid-test while continuing to operate on the same cart store.
@@ -189,6 +198,14 @@ export class CartBridgeHandlers {
 
     const session = gate.session;
 
+    // #380 (F-007) — resolve the REAL terminal_id before doing any work. An
+    // unpaired terminal cannot stamp a cart row (carts.terminal_id is NOT
+    // NULL); refuse `no_session` consistently with the payments/sales adapters
+    // (which return a null session on unpaired) rather than persist a wrong
+    // (branch_id) or null terminal_id.
+    const terminal_id = this.deps.getTerminalId();
+    if (terminal_id === null) return refuse('no_session');
+
     // Idempotency: replay-safe when a CartStore is wired.
     if (this.deps.cartStore !== undefined) {
       const existing = this.deps.cartStore.getOutboxRow(req.idempotency_key);
@@ -209,10 +226,11 @@ export class CartBridgeHandlers {
           cart_id,
           tenant_id: session.tenant_id,
           branch_id: session.branch_id,
-          // Terminal id is part of the session record's branch context;
-          // the operator session does not carry a separate terminal_id
-          // column. Use branch_id as the support-bundle scope.
-          terminal_id: session.branch_id,
+          // #380 (F-007) — the pairing row's REAL terminal_id, NOT
+          // session.branch_id. Stamped for audit fidelity (cart events write
+          // it into audit_events.originating_terminal_id, alongside the
+          // payment events which now use the same value).
+          terminal_id,
           owning_operator_id: session.operator_id,
           operator_session_id: session.id,
           state: CartState.empty,

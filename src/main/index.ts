@@ -665,6 +665,8 @@ app
     const cartBridgeHandlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => operatorSessionManager.getCurrent(),
+      // #380 (F-007) — stamp cart rows with the real terminal_id, not branch_id.
+      getTerminalId: () => pairingStore.getCurrentTerminalId(),
       logger: mainLogger,
       auditEmitter,
       isPackaged: app.isPackaged,
@@ -818,18 +820,23 @@ app
     const paymentsSessionAdapter = (): OperatorSessionForPayments | null => {
       const sess = operatorSessionManager.getCurrent();
       if (sess === null) return null;
-      // Adapter — payments require terminal_id on the session. 004's
-      // session record stores branch context but no separate terminal id;
-      // use pairing-store's terminal id, matching cart's posture
-      // (cart-bridge.ts uses session.branch_id as terminal scope).
-      // F-007: a follow-up PR can plumb the real terminal id through 004.
+      // #380 (F-007 FIXED) — payments key the attempt on terminal_id (the
+      // partial unique index "one started attempt per terminal" guards on it).
+      // Source the REAL terminal_id from the pairing store, NOT session.branch_id
+      // (the retired F-007 shortcut, which collapsed every terminal at a branch
+      // into a single payment scope so one stuck attempt bricked them all).
+      // Sync read — see PairingStore.getCurrentTerminalId. A signed-in session
+      // on an unpaired terminal cannot transact: return null (callers already
+      // handle a null session as "no operator session").
+      const terminal_id = pairingStore.getCurrentTerminalId();
+      if (terminal_id === null) return null;
       return {
         role: sess.role,
         operator_id: sess.operator_id,
         operator_session_id: sess.id,
         tenant_id: sess.tenant_id,
         branch_id: sess.branch_id,
-        terminal_id: sess.branch_id,
+        terminal_id,
         // 008 T094b — persist the human-readable name into payment.settled
         // so the session-independent finalize worker can stamp the Sale row.
         display_name: sess.display_name,
@@ -1011,13 +1018,19 @@ app
       const getCurrentSalesSession = () => {
         const sess = operatorSessionManager.getCurrent();
         if (sess === null) return null;
+        // #380 (F-007 FIXED) — source the REAL terminal_id from the pairing
+        // store, in lockstep with paymentsSessionAdapter. An unpaired terminal
+        // with a live session cannot transact → null (callers treat as no
+        // session). See PairingStore.getCurrentTerminalId (sync, no token path).
+        const terminal_id = pairingStore.getCurrentTerminalId();
+        if (terminal_id === null) return null;
         return {
           role: sess.role,
           operator_id: sess.operator_id,
           operator_session_id: sess.id,
           tenant_id: sess.tenant_id,
           branch_id: sess.branch_id,
-          terminal_id: sess.branch_id,
+          terminal_id,
         };
       };
       const salesBridge = createSalesBridge({
@@ -1206,19 +1219,15 @@ app
           });
         };
 
-        // F-007 alignment — the AD-2 scan filters `audit_events` by
-        // `originating_terminal_id`, which 006 writes as the payment
-        // attempt's `terminal_id`. That value comes from
-        // `paymentsSessionAdapter`, which (per the documented F-007 shortcut)
-        // sets `terminal_id: sess.branch_id` because 004's session record
-        // carries no separate terminal id. So the value 006 stamps into
-        // `originating_terminal_id` is the BRANCH id, not the pairing row's
-        // real terminal_id. The scan MUST bind the same value 006 wrote, or
-        // it matches zero settled rows and finalizes nothing. We therefore
-        // scope the worker with terminal_id = branch_id, tagged to the same
-        // F-007 debt: when the real terminal id is plumbed through 004, BOTH
-        // the payments adapter and this scope flip together.
-        const payments006TerminalId = pairingStatus.branch_id; // F-007
+        // #380 (F-007 FIXED) — the AD-2 scan filters `audit_events` by
+        // `originating_terminal_id`, which 006 writes as the payment attempt's
+        // `terminal_id`. Post-#380 that value comes from
+        // `paymentsSessionAdapter`, which now sources the REAL terminal_id from
+        // `pairingStore.getCurrentTerminalId()` (= `pairingStatus.terminal_id`
+        // here). The scan MUST bind the SAME value 006 wrote, or it matches
+        // zero settled rows and finalizes nothing. This is the lockstep half of
+        // the adapter flip — pinned by finalize-listener.f007-scope.test.ts.
+        const payments006TerminalId = pairingStatus.terminal_id;
         const finalizeListener = createFinalizeListener({
           db: dbHandle,
           tenant_id: pairingStatus.tenant_id,

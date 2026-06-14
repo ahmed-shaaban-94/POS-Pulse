@@ -62,6 +62,7 @@ async function makeCart(): Promise<{
   for (const sql of MIGRATIONS) db.run(sql);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => newSession(),
+    getTerminalId: () => 'terminal-test-380',
     cartStore: bindCartStore(makeSqlJsHandle(db)),
     resolveItemRef: resolver,
     clock: () => new Date('2026-05-14T10:00:00.000Z'),

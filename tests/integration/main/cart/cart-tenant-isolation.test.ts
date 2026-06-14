@@ -58,6 +58,7 @@ describe('tenant isolation (T039)', () => {
     let currentSession: OperatorSessionRecord = sessionFor('tenant-1');
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => currentSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
       resolveItemRef: resolver,
     });
@@ -84,6 +85,7 @@ describe('tenant isolation (T039)', () => {
     let currentSession: OperatorSessionRecord = sessionFor('tenant-1');
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => currentSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: store,
       resolveItemRef: resolver,
     });

@@ -10,6 +10,13 @@ import type { OperatorSessionRecord } from '../operator/session-manager.js';
 export interface CartHandlersDeps {
   dbHandle: DatabaseHandle;
   getCurrentSession: () => OperatorSessionRecord | null;
+  /**
+   * #380 (F-007) — returns the pairing row's REAL terminal_id, or null when
+   * unpaired. Threaded into CartBridgeHandlers so cart rows stamp the real
+   * terminal_id (not session.branch_id). Wired to
+   * `pairingStore.getCurrentTerminalId` in the composition root.
+   */
+  getTerminalId: () => string | null;
   logger: Logger;
   auditEmitter: AuditEmitter;
   /**
@@ -71,6 +78,7 @@ export function createCartBridgeHandlers(deps: CartHandlersDeps): CartBridgeHand
 
   const baseDeps = {
     getCurrentSession: deps.getCurrentSession,
+    getTerminalId: deps.getTerminalId,
     cartStore: bindCartStore(deps.dbHandle),
     logger: deps.logger,
     auditEmitter: deps.auditEmitter,

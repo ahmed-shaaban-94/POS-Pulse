@@ -102,6 +102,7 @@ async function newFrozenCart(): Promise<Fixture> {
   // Cashier creates the cart.
   const cashierHandlers = new CartBridgeHandlers({
     getCurrentSession: () => cashierSession,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
   });
@@ -113,6 +114,7 @@ async function newFrozenCart(): Promise<Fixture> {
   const auditEmitter = { emit: emitFn } as unknown as AuditEmitter;
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => managerSession,
+    getTerminalId: () => 'terminal-test-380',
     cartStore: store,
     clock: () => new Date('2026-05-16T10:05:00.000Z'),
     auditEmitter,
@@ -288,6 +290,7 @@ describe('cart.cancelPostHandoff — manager-attributed cancel S3 contract (RED 
     // Cashier session — no attribution.
     const cashierHandlers = new CartBridgeHandlers({
       getCurrentSession: () => f.cashierSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(f.db)),
     });
     if (!hasCancelPostHandoff(cashierHandlers)) {

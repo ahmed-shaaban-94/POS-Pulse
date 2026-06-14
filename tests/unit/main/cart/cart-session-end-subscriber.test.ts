@@ -74,6 +74,7 @@ async function newWiredFixture(): Promise<WiringFixture> {
 
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => sessionManager.getCurrent(),
+    getTerminalId: () => 'terminal-test-380',
     cartStore,
     clock: () => new Date('2026-05-16T10:00:00.000Z'),
   });

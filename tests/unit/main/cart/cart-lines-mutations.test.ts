@@ -58,6 +58,7 @@ async function freshCartWithLine(): Promise<{
   for (const sql of MIGRATIONS) db.run(sql);
   const handlers = new CartBridgeHandlers({
     getCurrentSession: () => session(),
+    getTerminalId: () => 'terminal-test-380',
     cartStore: bindCartStore(makeSqlJsHandle(db)),
     resolveItemRef: resolver,
     clock: () => new Date('2026-05-14T10:00:00.000Z'),
@@ -626,6 +627,7 @@ describe('S2 stub handlers still gate before refusing not_implemented', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session(),
+      getTerminalId: () => 'terminal-test-380',
       cartStore: (await import('../../../../src/main/cart/cart-store.js')).bindCartStore(
         makeSqlJsHandle(db),
       ),
@@ -638,6 +640,7 @@ describe('S2 stub handlers still gate before refusing not_implemented', () => {
     // Swap to no-session for the stub gates.
     const signedOut = new CartBridgeHandlers({
       getCurrentSession: () => null,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: (await import('../../../../src/main/cart/cart-store.js')).bindCartStore(
         makeSqlJsHandle(db),
       ),
@@ -660,6 +663,7 @@ describe('S2 stub handlers still gate before refusing not_implemented', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => session(),
+      getTerminalId: () => 'terminal-test-380',
       cartStore: (await import('../../../../src/main/cart/cart-store.js')).bindCartStore(
         makeSqlJsHandle(db),
       ),

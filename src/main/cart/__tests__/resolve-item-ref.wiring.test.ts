@@ -92,6 +92,7 @@ function handlersFor(opts: { isPackaged: boolean; withProductionResolver: boolea
   return createCartBridgeHandlers({
     dbHandle,
     getCurrentSession: () => session,
+    getTerminalId: () => 'terminal-test',
     logger: makeTestLogger(),
     auditEmitter: new AuditEmitter({ insertIgnore: () => {} }),
     isPackaged: opts.isPackaged,

@@ -1,26 +1,27 @@
 /**
- * T094c regression — AD-2 scan scope must match what 006 writes into
+ * #380 (F-007 FIXED) — AD-2 scan scope must match what 006 writes into
  * `audit_events.originating_terminal_id`.
  *
- * 006's `paymentsSessionAdapter` sets the payment attempt's `terminal_id`
- * to `session.branch_id` (the documented F-007 shortcut — 004's session
- * record carries no separate terminal id). `payments-confirm` then emits
- * the `payment.settled` audit row with `originating_terminal_id =
- * row.terminal_id` — i.e. the BRANCH id value, not the pairing row's real
- * terminal_id.
+ * Post-#380, 006's `paymentsSessionAdapter` sources the payment attempt's
+ * `terminal_id` from the pairing row's REAL terminal_id (via
+ * `pairingStore.getCurrentTerminalId()`), NOT `session.branch_id`.
+ * `payments-confirm` emits `payment.settled` with `originating_terminal_id =
+ * row.terminal_id` — now the real terminal_id value.
  *
- * The AD-2 worker scans `WHERE originating_terminal_id = ?`. If index.ts
- * scopes the listener with the pairing row's real terminal_id (which
- * differs from branch_id in any real install), the scan matches ZERO
- * settled rows and finalizes nothing — silently breaking the happy path
- * (T111). Every unit fixture elsewhere uses a self-consistent terminal_id,
- * so this cross-component disagreement is invisible to them.
+ * The AD-2 worker scans `WHERE originating_terminal_id = ?`. index.ts MUST
+ * therefore scope the finalize-listener with the SAME real terminal_id
+ * (`pairingStatus.terminal_id`), in lockstep with the adapter flip. If it
+ * still scoped with branch_id (the pre-#380 F-007 shortcut), the scan would
+ * match ZERO settled rows and finalize nothing — the same silent break, just
+ * with the polarity reversed. Every unit fixture elsewhere uses a
+ * self-consistent terminal_id, so this cross-component disagreement is
+ * invisible to them.
  *
  * This test pins the seam with DISTINCT branch_id and terminal_id values:
- *   • Positive: scoping the listener with the branch_id value (matching
- *     006) dispatches the settled row.
- *   • Negative: scoping with the real terminal_id value matches nothing —
- *     the exact bug this guards against.
+ *   • Positive: scoping the listener with the REAL terminal_id (matching the
+ *     post-#380 adapter) dispatches the settled row.
+ *   • Negative: scoping with the branch_id value (the retired F-007
+ *     shortcut) matches nothing — the regression this guards against.
  */
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -58,9 +59,9 @@ beforeEach(() => {
 });
 
 /**
- * Seed a `payment.settled` audit row EXACTLY as 006 writes it: the
- * `originating_terminal_id` column holds the branch_id value (the F-007
- * shortcut), NOT the real terminal_id.
+ * Seed a `payment.settled` audit row EXACTLY as 006 writes it POST-#380: the
+ * `originating_terminal_id` column holds the REAL terminal_id value (sourced
+ * from the pairing row), NOT branch_id.
  */
 function seedSettledAs006Writes(handoff_action_id: string): void {
   const payload = JSON.stringify({
@@ -74,20 +75,20 @@ function seedSettledAs006Writes(handoff_action_id: string): void {
        event_id, tenant_id, branch_id, originating_terminal_id, acting_operator_id,
        session_id, action_category, created_at, payload
      ) VALUES (?, ?, ?, ?, 'op-abc', 'sess-1', 'payment.settled', '2026-05-28T10:00:00.000Z', ?)`,
-    [`evt-${handoff_action_id}`, TENANT_ID, BRANCH_ID, BRANCH_ID, payload],
+    [`evt-${handoff_action_id}`, TENANT_ID, BRANCH_ID, REAL_TERMINAL_ID, payload],
   );
 }
 
-describe('T094c — AD-2 scan scope alignment with 006 (F-007)', () => {
-  it('dispatches when the listener is scoped with the branch_id value (matches 006)', () => {
+describe('#380 — AD-2 scan scope alignment with 006 (F-007 fixed)', () => {
+  it('dispatches when the listener is scoped with the REAL terminal_id (matches post-#380 006)', () => {
     seedSettledAs006Writes('handoff-1');
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
       tenant_id: TENANT_ID,
       branch_id: BRANCH_ID,
-      // index.ts scopes with branch_id (the value 006 wrote) per F-007.
-      terminal_id: BRANCH_ID,
+      // index.ts scopes with the real terminal_id (the value 006 now writes).
+      terminal_id: REAL_TERMINAL_ID,
       dispatch: (handoff) => dispatched.push(handoff),
       tickIntervalMs: 200,
       now: () => '2026-05-28T10:00:01.000Z',
@@ -96,16 +97,16 @@ describe('T094c — AD-2 scan scope alignment with 006 (F-007)', () => {
     expect(dispatched).toEqual(['handoff-1']);
   });
 
-  it('matches NOTHING when scoped with the real terminal_id (the bug this guards)', () => {
+  it('matches NOTHING when scoped with branch_id (the retired F-007 shortcut)', () => {
     seedSettledAs006Writes('handoff-1');
     const dispatched: string[] = [];
     const listener = createFinalizeListener({
       db: makeSqlJsHandle(db),
       tenant_id: TENANT_ID,
       branch_id: BRANCH_ID,
-      // The WRONG scope — pairing row's real terminal_id, which 006 never
-      // wrote into originating_terminal_id. Proves the mismatch is silent.
-      terminal_id: REAL_TERMINAL_ID,
+      // The WRONG scope post-#380 — branch_id, which 006 no longer writes
+      // into originating_terminal_id. Proves the lockstep flip is required.
+      terminal_id: BRANCH_ID,
       dispatch: (handoff) => dispatched.push(handoff),
       tickIntervalMs: 200,
       now: () => '2026-05-28T10:00:01.000Z',

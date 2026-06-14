@@ -95,6 +95,7 @@ describe('production cart wiring (T100 regression)', () => {
     const handlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
       isPackaged: true,
@@ -135,6 +136,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
     const handlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
       isPackaged: false,
@@ -182,6 +184,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
     const handlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
       isPackaged: true,
@@ -213,6 +216,7 @@ describe('dev fixture resolver wiring matrix (Option B)', () => {
     const handlers = createCartBridgeHandlers({
       dbHandle,
       getCurrentSession: () => session,
+      getTerminalId: () => 'terminal-test-380',
       logger: makeTestLogger(),
       auditEmitter: makeTestAuditEmitter(),
       isPackaged: false,

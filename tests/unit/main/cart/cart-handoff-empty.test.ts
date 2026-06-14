@@ -52,6 +52,7 @@ describe('cart.handoff empty cart refusal (T079)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });
@@ -73,6 +74,7 @@ describe('cart.handoff empty cart refusal (T079)', () => {
     for (const sql of MIGRATIONS) db.run(sql);
     const handlers = new CartBridgeHandlers({
       getCurrentSession: makeSession,
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });
@@ -109,6 +111,7 @@ describe('cart.handoff empty cart refusal (T079)', () => {
     let authenticated = true;
     const handlers = new CartBridgeHandlers({
       getCurrentSession: () => (authenticated ? makeSession() : null),
+      getTerminalId: () => 'terminal-test-380',
       cartStore: bindCartStore(makeSqlJsHandle(db)),
       resolveItemRef: resolver,
     });

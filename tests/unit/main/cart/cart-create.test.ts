@@ -35,9 +35,17 @@ function makeSession(
   };
 }
 
-function makeHandlers(currentSession: OperatorSessionRecord | null): CartBridgeHandlers {
+const REAL_TERMINAL_ID = 'terminal-0556bfa4'; // pairing row's real terminal_id
+
+function makeHandlers(
+  currentSession: OperatorSessionRecord | null,
+  terminalId: string | null = REAL_TERMINAL_ID,
+): CartBridgeHandlers {
   return new CartBridgeHandlers({
     getCurrentSession: () => currentSession,
+    // #380 (F-007) — the cart stamps the REAL terminal_id, sourced from the
+    // pairing store, NOT session.branch_id.
+    getTerminalId: () => terminalId,
   });
 }
 
@@ -94,6 +102,46 @@ describe('cart.create — role gating', () => {
     const r2 = await handlers.create({ idempotency_key: 'k2' });
     if (r1.kind === 'ok' && r2.kind === 'ok') {
       expect(r1.cart_id).not.toBe(r2.cart_id);
+    }
+  });
+});
+
+describe('cart.create — #380 (F-007) terminal_id is the REAL terminal, not branch_id', () => {
+  it('stamps the persisted cart with the pairing-store terminal_id (not session.branch_id)', async () => {
+    // Capture what cart.create persists. The cart row's terminal_id is the
+    // F-007 site (cart-bridge.ts) — post-#380 it must be the real terminal_id
+    // sourced from getTerminalId(), never session.branch_id.
+    let captured: { terminal_id: string; branch_id: string } | undefined;
+    const cartStore = {
+      getOutboxRow: () => undefined, // no prior idempotency row
+      insertCartAndOutbox: (cart: { terminal_id: string; branch_id: string }) => {
+        captured = { terminal_id: cart.terminal_id, branch_id: cart.branch_id };
+      },
+    } as unknown as import('../../../../src/main/cart/cart-store.js').CartStore;
+
+    const session = makeSession('cashier'); // branch_id = 'branch-1'
+    const handlers = new CartBridgeHandlers({
+      getCurrentSession: () => session,
+      getTerminalId: () => REAL_TERMINAL_ID,
+      cartStore,
+    });
+
+    const res = await handlers.create({ idempotency_key: 'k-real-term' });
+    expect(res.kind).toBe('ok');
+    expect(captured?.terminal_id).toBe(REAL_TERMINAL_ID);
+    expect(captured?.terminal_id).not.toBe(session.branch_id); // the F-007 bug
+    expect(captured?.branch_id).toBe(session.branch_id); // branch_id unchanged
+  });
+
+  it('refuses with no_session when the terminal is unpaired (terminal_id null)', async () => {
+    // carts.terminal_id is NOT NULL — an unpaired terminal cannot stamp a row.
+    // Refuse consistently with the payments/sales adapters (which return a null
+    // session on unpaired), rather than persist a null/branch_id terminal_id.
+    const handlers = makeHandlers(makeSession('cashier'), null);
+    const res = await handlers.create({ idempotency_key: 'k-unpaired' });
+    expect(res.kind).toBe('refused');
+    if (res.kind === 'refused') {
+      expect(res.reason).toBe('no_session');
     }
   });
 });
