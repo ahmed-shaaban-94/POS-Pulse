@@ -49,6 +49,7 @@ import {
 } from './payments/voucher-authority/reverse.js';
 import type { ActionCategory as Audit004ActionCategory } from '../shared/audit/event-shape.js';
 import type { OperatorSessionForPayments } from './payments/require-operator-session.js';
+import { resolveSessionScope } from './operator/resolve-session-scope.js';
 // 008-sale-finalization-and-receipts Slice 1c.3 (T094c) — AD-2 worker + sales.* bridge.
 import { registerSalesHandlers } from './ipc/sales.js';
 import { bindSalesRepository } from './sales/repositories/sales.repository.js';
@@ -65,7 +66,7 @@ import { createSaleAuditEmitter, type SaleAuditEvent } from './sales/audit-emitt
 import { bindFinalizeTransaction } from './sales/finalize-transaction.js';
 import { buildFinalizeInput } from './sales/finalize-dispatch.js';
 import { createFinalizeListener } from './sales/finalize-listener.js';
-import { createSalesBridge } from './sales/sales-bridge.js';
+import { createSalesBridge, type OperatorSessionForSales } from './sales/sales-bridge.js';
 import { bindBannerStateProjector } from './sales/banner-state-projector.js';
 import { createReceiptsBridge } from './receipts/receipts-bridge.js';
 import { registerReceiptsHandlers } from './ipc/receipts.js';
@@ -819,31 +820,14 @@ app
       },
     });
 
-    const paymentsSessionAdapter = (): OperatorSessionForPayments | null => {
-      const sess = operatorSessionManager.getCurrent();
-      if (sess === null) return null;
-      // #380 (F-007 FIXED) — payments key the attempt on terminal_id (the
-      // partial unique index "one started attempt per terminal" guards on it).
-      // Source the REAL terminal_id from the pairing store, NOT session.branch_id
-      // (the retired F-007 shortcut, which collapsed every terminal at a branch
-      // into a single payment scope so one stuck attempt bricked them all).
-      // Sync read — see PairingStore.getCurrentTerminalId. A signed-in session
-      // on an unpaired terminal cannot transact: return null (callers already
-      // handle a null session as "no operator session").
-      const terminal_id = pairingStore.getCurrentTerminalId();
-      if (terminal_id === null) return null;
-      return {
-        role: sess.role,
-        operator_id: sess.operator_id,
-        operator_session_id: sess.id,
-        tenant_id: sess.tenant_id,
-        branch_id: sess.branch_id,
-        terminal_id,
-        // 008 T094b — persist the human-readable name into payment.settled
-        // so the session-independent finalize worker can stamp the Sale row.
-        display_name: sess.display_name,
-      };
-    };
+    const paymentsSessionAdapter = (): OperatorSessionForPayments | null =>
+      // #380 (F-007 FIXED) — stamp the REAL terminal_id from the pairing store,
+      // NOT session.branch_id (the retired shortcut that collapsed every
+      // terminal at a branch into one payment scope so one stuck attempt
+      // bricked them all). resolveSessionScope is the extracted, unit-tested
+      // seam shared with the sales adapter; returns null on no-session OR
+      // unpaired. display_name flows through for 008 T094b's settled audit.
+      resolveSessionScope(operatorSessionManager.getCurrent(), pairingStore.getCurrentTerminalId());
 
     const paymentsClock = (): Date => new Date();
     const paymentsUuid = (): string => randomUUID();
@@ -1051,24 +1035,15 @@ app
       // handlers; otherwise the renderer's reads reject at the IPC layer. Both
       // bridges gate on the live session at call time, so they are inert until
       // an operator signs in regardless of pairing timing.
-      const getCurrentSalesSession = () => {
-        const sess = operatorSessionManager.getCurrent();
-        if (sess === null) return null;
-        // #380 (F-007 FIXED) — source the REAL terminal_id from the pairing
-        // store, in lockstep with paymentsSessionAdapter. An unpaired terminal
-        // with a live session cannot transact → null (callers treat as no
-        // session). See PairingStore.getCurrentTerminalId (sync, no token path).
-        const terminal_id = pairingStore.getCurrentTerminalId();
-        if (terminal_id === null) return null;
-        return {
-          role: sess.role,
-          operator_id: sess.operator_id,
-          operator_session_id: sess.id,
-          tenant_id: sess.tenant_id,
-          branch_id: sess.branch_id,
-          terminal_id,
-        };
-      };
+      // #380 (F-007 FIXED) — same extracted seam as the payments adapter; the
+      // returned payments-shaped scope is a structural superset of
+      // OperatorSessionForSales. Real terminal_id from the pairing store; null
+      // on no-session or unpaired.
+      const getCurrentSalesSession = (): OperatorSessionForSales | null =>
+        resolveSessionScope(
+          operatorSessionManager.getCurrent(),
+          pairingStore.getCurrentTerminalId(),
+        );
       const salesBridge = createSalesBridge({
         getCurrentSession: getCurrentSalesSession,
         salesRepo,
