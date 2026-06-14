@@ -332,3 +332,44 @@ describe('TakeoverPrompt — T077 cancel flow', () => {
     });
   });
 });
+
+describe('TakeoverPrompt — Escape-to-cancel (WCAG 2.1.1)', () => {
+  it('Escape cancels the takeover (calls cancelTakeover, drops to signedOut)', async () => {
+    const cancelTakeover = vi.fn(() => Promise.resolve({ kind: 'cancelled' as const }));
+    const bridge = makeBridge({ cancelTakeover });
+    render(<TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    await waitFor(() => {
+      expect(cancelTakeover).toHaveBeenCalledWith({ pending_takeover_id: PENDING_ID });
+    });
+    await waitFor(() => {
+      expect(useOperatorSessionStore.getState().state.kind).toBe('signedOut');
+    });
+  });
+
+  it('a non-Escape key does NOT cancel the takeover', () => {
+    const cancelTakeover = vi.fn(() => Promise.resolve({ kind: 'cancelled' as const }));
+    const bridge = makeBridge({ cancelTakeover });
+    render(<TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(cancelTakeover).not.toHaveBeenCalled();
+    expect(useOperatorSessionStore.getState().state.kind).toBe('takeoverPrompt');
+  });
+
+  it('removes the keydown listener on unmount (no cancel after unmount)', () => {
+    const cancelTakeover = vi.fn(() => Promise.resolve({ kind: 'cancelled' as const }));
+    const bridge = makeBridge({ cancelTakeover });
+    const { unmount } = render(
+      <TakeoverPrompt operator={bridge} pending_takeover_id={PENDING_ID} />,
+    );
+
+    unmount();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(cancelTakeover).not.toHaveBeenCalled();
+  });
+});
