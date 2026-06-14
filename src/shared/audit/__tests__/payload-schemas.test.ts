@@ -7,6 +7,7 @@ import {
   type CartDiscardedOnSessionEndPayload,
   type CartDiscountAboveThresholdPayload,
   type CartHandoffToPaymentPayload,
+  type CashierPinProvisionedPayload,
   type CashierPinResetPayload,
   type CashierPinUnlockPayload,
   type ForcedCloseReason,
@@ -39,6 +40,7 @@ describe('audit/payload-schemas (T049)', () => {
       'operator.session.takeover',
       'cashier.pin.reset',
       'cashier.pin.unlock',
+      'cashier.pin.provisioned',
       // 005-sales-cart §A3
       'cart.handoff_to_payment',
       'cart.cancel.post_handoff',
@@ -130,6 +132,18 @@ describe('audit/payload-schemas (T049)', () => {
     };
     expect(Object.keys(payload)).not.toContain('pin');
     expect(Object.keys(payload)).not.toContain('pin_hash');
+    expect(Object.keys(payload)).not.toContain('password');
+  });
+
+  it('CashierPinProvisionedPayload is secret-free (019 — FR-7 / PR-1)', () => {
+    const payload: CashierPinProvisionedPayload = {
+      // target_cashier_id is the provider-neutral user_id the row is keyed on.
+      target_cashier_id: 'neutral-user-uuid-5',
+      terminal_id: 'term-internal-id-D',
+    };
+    expect(Object.keys(payload)).not.toContain('pin');
+    expect(Object.keys(payload)).not.toContain('pin_hash');
+    expect(Object.keys(payload)).not.toContain('pin_salt');
     expect(Object.keys(payload)).not.toContain('password');
   });
 

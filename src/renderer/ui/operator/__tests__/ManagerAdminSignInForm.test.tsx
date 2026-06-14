@@ -60,6 +60,9 @@ function bridgeWith(impl: (req: unknown) => Promise<SignInResponse>): BridgeWith
     resetCashierPin: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
+    provisionCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
     unlockCashier: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
@@ -239,6 +242,9 @@ describe('ManagerAdminSignInForm — T021 (Slice 0 Note 1) error-then-resubmit',
       resetCashierPin: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
+      provisionCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
       unlockCashier: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
@@ -296,6 +302,9 @@ describe('ManagerAdminSignInForm — re-entry guard', () => {
       resetCashierPin: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
+      provisionCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
       unlockCashier: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
@@ -344,6 +353,9 @@ describe('ManagerAdminSignInForm — bridge throw fallback', () => {
       ),
       cancelTakeover: vi.fn(() => Promise.resolve({ kind: 'cancelled' as const })),
       resetCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+      ),
+      provisionCashierPin: vi.fn(() =>
         Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
       ),
       unlockCashier: vi.fn(() =>

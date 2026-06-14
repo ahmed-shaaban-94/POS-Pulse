@@ -152,6 +152,7 @@ describe('preload bridge', () => {
         'getCurrentSession',
         'listBranchRoster',
         'listStuckShifts',
+        'provisionCashierPin',
         'resetCashierPin',
         'signIn',
         'signOut',

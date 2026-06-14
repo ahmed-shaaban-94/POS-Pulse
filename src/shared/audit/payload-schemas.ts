@@ -112,6 +112,23 @@ export interface CashierPinUnlockPayload {
   [key: string]: unknown;
 }
 
+// ─── cashier.pin.provisioned (019-cashier-pin-provisioning, R-2) ──────────
+
+/**
+ * Emitted when a manager/admin provisions a cashier's FIRST PIN (create path).
+ * Scope + fact only — mirrors `CashierPinResetPayload` exactly. Carries NO
+ * secret (no PIN, hash, or salt — FR-7 / P7). `target_cashier_id` is the
+ * provider-neutral `user_id` the row is born keyed on (028 §16).
+ */
+export interface CashierPinProvisionedPayload {
+  /** Provider-neutral `user_id` of the cashier whose first PIN was provisioned. */
+  target_cashier_id: string;
+  /** Terminal id on which the PIN record lives (PR-4 per-terminal scope). */
+  terminal_id: string;
+  // PIN value MUST NEVER appear here (PR-1 / FR-027).
+  [key: string]: unknown;
+}
+
 // ─── 005-sales-cart §A3 categories (type-only; emitters land in S3) ──────
 
 /**
@@ -260,6 +277,7 @@ export type AuditPayloadMap = {
   'operator.session.takeover': OperatorSessionTakeoverPayload;
   'cashier.pin.reset': CashierPinResetPayload;
   'cashier.pin.unlock': CashierPinUnlockPayload;
+  'cashier.pin.provisioned': CashierPinProvisionedPayload;
   // 005-sales-cart §A3 (FR-026 / Q5)
   'cart.handoff_to_payment': CartHandoffToPaymentPayload;
   'cart.cancel.post_handoff': CartCancelPostHandoffPayload;

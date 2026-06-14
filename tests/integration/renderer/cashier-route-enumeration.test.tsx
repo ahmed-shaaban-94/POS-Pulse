@@ -85,6 +85,9 @@ function makeOperatorBridge(overrides?: Partial<OperatorBridgeAPI>): OperatorBri
     resetCashierPin: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'role_mismatch' as const }),
     ),
+    provisionCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
     unlockCashier: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'role_mismatch' as const }),
     ),

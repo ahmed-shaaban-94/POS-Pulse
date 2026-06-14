@@ -1,0 +1,44 @@
+-- 019-cashier-pin-provisioning T005 (R-1) — additive `user_id` column on
+-- `cashier_pin_records`.
+--
+-- ## Why this migration exists
+--
+-- 019 introduces the FIRST-PIN *create* path. Rows it creates are "born
+-- neutral": keyed on the provider-neutral `user_id` (028 §16 = DP-2
+-- `users.id`), not on the provider-coupled Clerk subject. For 019 to write
+-- that key, the column must exist when 019 ships.
+--
+-- The work splits cleanly along the P16 feature boundary (research.md R-1):
+--   • 019 owns this ADDITIVE column (new column + write path).
+--   • 017 owns the destructive PRIMARY KEY re-key (table rebuild + legacy
+--     backfill) in its own migration. This file does NOT touch the PK.
+--
+-- ## Nullability posture
+--
+-- `user_id TEXT` is NULLABLE and NON-KEY in 019:
+--   1. SQLite's ALTER TABLE ADD COLUMN with NOT NULL would require a DEFAULT,
+--      which would lie about legacy rows (their neutral id is genuinely
+--      unknown until 017 backfills it). NULL is the honest "not yet mapped"
+--      sentinel.
+--   2. A column cannot enter the composite PK until every row has a non-NULL
+--      value — exactly the 017 dual-key-window constraint. So 019 adds it
+--      nullable + non-key; 017 promotes it into the PK after backfilling.
+--   3. 019-created rows ALWAYS populate it (the provision handler writes both
+--      `user_id` and the current-PK `cashier_clerk_user_id`), so 017's
+--      re-anchor never has to touch a 019-created row (SC-2).
+--
+-- ## Re-apply protection
+--
+-- SQLite has no `ADD COLUMN IF NOT EXISTS`. Like the sibling additive
+-- migrations 0027/0028, this file is NOT file-level idempotent; the runner
+-- (`src/main/db/migrate.ts`) skips already-applied migrations by name in
+-- `schema_migrations`, so it runs exactly once per database.
+--
+-- ## Append-only / trigger compatibility
+--
+-- ALTER TABLE ADD COLUMN is DDL, not a row UPDATE — it is applied directly by
+-- SQLite and is unaffected by any BEFORE UPDATE/DELETE triggers. No index or
+-- trigger change is required (the existing lookup index already covers the
+-- current PK columns).
+
+ALTER TABLE cashier_pin_records ADD COLUMN user_id TEXT;

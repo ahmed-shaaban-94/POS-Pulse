@@ -20,6 +20,8 @@ import type {
   OperatorSessionBridgeView,
   PairingBridgeAPI,
   PreloadBridgeAPI,
+  ProvisionCashierPinRequest,
+  ProvisionCashierPinResponse,
   ResetCashierPinRequest,
   ResetCashierPinResponse,
   SignInRequest,
@@ -106,6 +108,10 @@ const operator: OperatorBridgeAPI = {
   resetCashierPin: (req: ResetCashierPinRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.RESET_CASHIER_PIN, req) as Promise<
       ResetCashierPinResponse | import('../shared/audit/event-shape').OperatorRefusal
+    >,
+  provisionCashierPin: (req: ProvisionCashierPinRequest) =>
+    ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN, req) as Promise<
+      ProvisionCashierPinResponse | import('../shared/audit/event-shape').OperatorRefusal
     >,
   unlockCashier: (req: UnlockCashierRequest) =>
     ipcRenderer.invoke(OPERATOR_IPC_CHANNELS.UNLOCK_CASHIER, req) as Promise<

@@ -604,6 +604,9 @@ app
       sessionManager: operatorSessionManager,
       pairingStore,
       auditEmitter,
+      // 019 — roster source for the provision path; resolves the neutral
+      // target_user_id → the cashier's roster entry (clerk id + user_id presence).
+      backend: operatorBackend,
       logger: mainLogger,
     });
 

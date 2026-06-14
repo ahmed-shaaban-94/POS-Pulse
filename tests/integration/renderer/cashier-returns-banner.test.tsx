@@ -558,6 +558,7 @@ describe('registerOperatorHandlers — DISMISS_SHIFT_CLOSED_NOTICE', () => {
       takeoverHandler: { confirmTakeover: vi.fn(), cancelTakeover: vi.fn() } as unknown as never,
       pinManagementHandler: {
         resetCashierPin: vi.fn(),
+        provisionCashierPin: vi.fn(),
         unlockCashier: vi.fn(),
       } as unknown as never,
       forcedCloseHandler: { forceCloseShift: vi.fn() } as unknown as never,

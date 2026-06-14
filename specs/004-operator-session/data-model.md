@@ -316,7 +316,7 @@ gate denies AD-2, this entity falls away entirely.
 | `failed_attempt_count` | non-negative integer | PR-3 — reset to 0 on successful unlock or lockout-timer expiry. |
 | `lockout_until` | timestamp \| null | PR-3 — non-null while locked out; null otherwise. Wall-clock; persists across restart. |
 | `created_at` | timestamp | When the PIN was set (initial provisioning or last reset). |
-| `created_by_operator_id` | string (Clerk user id, role ∈ `manager` \| `admin`) | PR-5 — every PIN record was provisioned by a manager or admin (the `cashier.pin.reset` audit trail provides the durable history; this column is the most-recent-creator denormalisation for support queries). |
+| `created_by_operator_id` | string (Clerk user id, role ∈ `manager` \| `admin`) | PR-5 — every PIN record was provisioned by a manager or admin (the `cashier.pin.provisioned` create-trail + the `cashier.pin.reset` change-trail together provide the durable history; this column is the most-recent-creator denormalisation for support queries. Provisioning trail added in 019 — FR-10). |
 
 The composite key is
 `(tenant_id, branch_id, terminal_id, cashier_clerk_user_id)`. A cashier
@@ -370,7 +370,10 @@ Windows profile of the same paired terminal.
 - It is **not** transferable across terminals or machines.
 - Its absence does **not** mean "this cashier doesn't exist" — it means
   "this cashier doesn't have a PIN provisioned on this terminal yet"
-  (manager/admin must provision via `cashier.pin.reset`).
+  (a manager/admin provisions the first PIN via the dedicated **create** path
+  `operator.provisionCashierPin` → `cashier.pin.provisioned`, added in
+  019-cashier-pin-provisioning; `cashier.pin.reset` only *changes* an
+  already-provisioned PIN — it is not the create path. Corrected per 019 FR-10).
 
 ---
 

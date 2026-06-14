@@ -30,6 +30,8 @@
 import type { Logger } from 'pino';
 
 import type {
+  ProvisionCashierPinRequest,
+  ProvisionCashierPinResponse,
   ResetCashierPinRequest,
   ResetCashierPinResponse,
   UnlockCashierRequest,
@@ -42,10 +44,12 @@ import type { SafeStorageLike } from '../secrets/safe-storage.js';
 import type { PairingStore } from '../pairing/store.js';
 import type { SessionManager, OperatorSessionRecord } from './session-manager.js';
 import type { AuditEmitter } from '../audit/audit-emitter.js';
+import type { BackendClient } from './backend-client.js';
 import { requireRole } from './role-enforcement.js';
 import { hashPin } from './pin-credential.js';
 import { sealPinMaterial } from './pin-seal.js';
 import type {
+  CashierPinProvisionedPayload,
   CashierPinResetPayload,
   CashierPinUnlockPayload,
 } from '../../shared/audit/payload-schemas.js';
@@ -72,6 +76,8 @@ type PrepareGet = { get(...p: unknown[]): PinRecordRow | undefined };
 
 const REFUSE_INVALID: OperatorRefusal = { kind: 'refused', category: 'invalid_input' };
 const REFUSE_STATE_INVALID: OperatorRefusal = { kind: 'refused', category: 'state_invalid' };
+const REFUSE_NOT_READY: OperatorRefusal = { kind: 'refused', category: 'not_ready' };
+const REFUSE_NO_CONNECTION: OperatorRefusal = { kind: 'refused', category: 'no_connection' };
 
 // ─── Dependencies ─────────────────────────────────────────────────────────
 
@@ -81,6 +87,13 @@ export interface PinManagementHandlerDeps {
   sessionManager: SessionManager;
   pairingStore: PairingStore;
   auditEmitter: AuditEmitter;
+  /**
+   * 019 — roster source for the provision path. `provisionCashierPin` resolves
+   * the request's provider-neutral `target_user_id` to the cashier's roster
+   * entry (to read the legacy clerk `id` and confirm a `user_id` exists). The
+   * neutral↔clerk mapping is resolved main-side and NEVER crosses the bridge.
+   */
+  backend: BackendClient;
   /** Optional logger. Tests omit it. */
   logger?: Logger;
 }
@@ -198,6 +211,167 @@ export class PinManagementHandler {
 
     this.log('info', 'reset_cashier_pin.success', undefined);
     return { kind: 'pin_reset', audit_event_id: req.event_id };
+  }
+
+  /**
+   * 019 — manager/admin FIRST-PIN provisioning (create path) for a cashier on
+   * this terminal.
+   *
+   * Distinct from `resetCashierPin` (which overwrites an EXISTING secret): this
+   * CREATES the row where none exists, born keyed on the provider-neutral
+   * `user_id` (028 §16), never the Clerk subject (Constitution VIII — advanced).
+   *
+   * Flow (data-model.md §"State transitions"):
+   *   1. role-gate (manager/admin) — FIRST executable call (AD-1).
+   *   2. validate event_id + PIN shape — generic refusal, value never echoed.
+   *   3. resolve scope from pairing state (never the renderer — Constitution VII).
+   *   4. fetch the branch roster; find the entry whose `user_id` === target_user_id.
+   *      The roster is the only source of the neutral↔clerk mapping needed for
+   *      both the legacy create-only check and the NOT-NULL clerk PK column.
+   *        • no entry carries that user_id → `not_ready` (FR-11; covers the
+   *          pre-DP-2 "no user_ids at all" state). NO fallback to a clerk key.
+   *        • roster unreachable → `no_connection` (truthful; provisioning is
+   *          an online manager action).
+   *   5. create-only guard: a row already exists for (scope, cashier) on EITHER
+   *      key column (a born-neutral `user_id` row OR a legacy clerk-keyed row)
+   *      → `state_invalid` (FR-5). 019 never duplicates, never replaces a
+   *      secret, never upgrades a legacy row in place (that is 017's boundary).
+   *   6. hash + seal (same order as reset) → INSERT keyed on `user_id`, ALSO
+   *      writing `cashier_clerk_user_id` (the current PK column) so the row is
+   *      valid today AND born ready for 017's re-key (SC-2). failed=0, lockout=null.
+   *   7. emit `cashier.pin.provisioned` (secret-free) → return `pin_provisioned`.
+   */
+  async provisionCashierPin(
+    req: ProvisionCashierPinRequest,
+  ): Promise<ProvisionCashierPinResponse | OperatorRefusal> {
+    const session = this.deps.sessionManager.getCurrent();
+
+    try {
+      requireRole(['manager', 'admin'], session);
+    } catch (err) {
+      if (err instanceof OperatorRefusalError) {
+        this.log('info', 'provision_cashier_pin.refused', err.category);
+        return { kind: 'refused', category: err.category };
+      }
+      this.log('info', 'provision_cashier_pin.refused', 'invalid_input');
+      return REFUSE_INVALID;
+    }
+    // requireRole throws on null session — safe to narrow here.
+    const activeSession = session as OperatorSessionRecord;
+
+    // Input validation — generic refusal; never echo the rejected value.
+    if (
+      typeof req.event_id !== 'string' ||
+      req.event_id.length === 0 ||
+      typeof req.target_user_id !== 'string' ||
+      req.target_user_id.length === 0 ||
+      typeof req.initial_pin !== 'string' ||
+      !isValidPin(req.initial_pin)
+    ) {
+      this.log('info', 'provision_cashier_pin.refused', 'invalid_input');
+      return REFUSE_INVALID;
+    }
+
+    const pairingStatus = await this.deps.pairingStore.getStatus();
+    if (pairingStatus.kind !== 'paired') {
+      this.log('info', 'provision_cashier_pin.refused', 'invalid_input');
+      return REFUSE_INVALID;
+    }
+
+    const { tenant_id, branch_id, terminal_id } = pairingStatus;
+    const { target_user_id } = req;
+
+    // Resolve the cashier's roster entry by provider-neutral user_id. This is
+    // the ONLY source of the user_id→clerk mapping required by both the legacy
+    // create-only check and the NOT-NULL clerk PK column. The mapping is
+    // resolved here and NEVER crosses the bridge.
+    const roster = await this.deps.backend.listRoster(branch_id);
+    if (roster.kind === 'no_connection') {
+      this.log('info', 'provision_cashier_pin.refused', 'no_connection');
+      return REFUSE_NO_CONNECTION;
+    }
+    if (roster.kind !== 'roster') {
+      this.log('info', 'provision_cashier_pin.refused', 'invalid_input');
+      return REFUSE_INVALID;
+    }
+
+    // FR-11: the cashier must carry a provider-neutral user_id. Absent → not_ready,
+    // no row, no fallback to a clerk-keyed row. Also covers the pre-DP-2 state
+    // where NO entry has a user_id (every attempt is truthfully not_ready).
+    const entry = roster.cashiers.find((c) => c.user_id === target_user_id);
+    if (entry === undefined) {
+      this.log('info', 'provision_cashier_pin.refused', 'not_ready');
+      return REFUSE_NOT_READY;
+    }
+    const cashierClerkId = entry.id;
+
+    // Create-only guard (FR-5): refuse if ANY row already exists for this
+    // (scope, cashier) on EITHER key column — a born-neutral user_id row OR a
+    // legacy clerk-keyed row (user_id NULL). Match on both so a legacy row,
+    // whose user_id is NULL, is still caught by its clerk id.
+    const existing = (
+      this.deps.db.prepare(
+        `SELECT 1 AS present
+           FROM cashier_pin_records
+          WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ?
+            AND (user_id = ? OR cashier_clerk_user_id = ?)`,
+      ) as PrepareGet
+    ).get(tenant_id, branch_id, terminal_id, target_user_id, cashierClerkId);
+
+    if (existing !== undefined) {
+      this.log('info', 'provision_cashier_pin.refused', 'state_invalid');
+      return REFUSE_STATE_INVALID;
+    }
+
+    // Hash the new PIN — plaintext is consumed here and never stored.
+    const raw = await hashPin(req.initial_pin);
+    const sealed = sealPinMaterial(raw, this.deps.safeStorage);
+
+    // INSERT a born-neutral row: user_id is the identity key; cashier_clerk_user_id
+    // satisfies the current PK and bridges to 017's re-key. failed=0, lockout=null.
+    (
+      this.deps.db.prepare(
+        `INSERT INTO cashier_pin_records
+           (tenant_id, branch_id, terminal_id, cashier_clerk_user_id, user_id,
+            pin_hash, pin_salt, failed_attempt_count, lockout_until,
+            created_at, created_by_operator_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)`,
+      ) as PrepareRun
+    ).run(
+      tenant_id,
+      branch_id,
+      terminal_id,
+      cashierClerkId,
+      target_user_id,
+      sealed.pin_hash,
+      sealed.pin_salt,
+      new Date().toISOString(),
+      activeSession.operator_id,
+    );
+
+    // Emit audit event — PIN value MUST NOT appear in payload (PR-1 / FR-7).
+    // target_cashier_id is the provider-neutral user_id the row is keyed on.
+    const payload: CashierPinProvisionedPayload = {
+      target_cashier_id: target_user_id,
+      terminal_id,
+    };
+
+    this.deps.auditEmitter.emit({
+      event_id: req.event_id,
+      tenant_id,
+      branch_id,
+      originating_terminal_id: terminal_id,
+      acting_operator_id: activeSession.operator_id,
+      session_id: activeSession.id,
+      shift_id: null,
+      action_category: 'cashier.pin.provisioned',
+      created_at: new Date().toISOString(),
+      approving_supervisor_id: null,
+      payload,
+    });
+
+    this.log('info', 'provision_cashier_pin.success', undefined);
+    return { kind: 'pin_provisioned', audit_event_id: req.event_id };
   }
 
   /**

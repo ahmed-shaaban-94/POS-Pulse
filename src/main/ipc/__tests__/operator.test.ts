@@ -127,6 +127,9 @@ function fakePinManagementHandler(): PinManagementHandler {
     resetCashierPin: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
+    provisionCashierPin: vi.fn(() =>
+      Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
+    ),
     unlockCashier: vi.fn(() =>
       Promise.resolve({ kind: 'refused' as const, category: 'invalid_input' as const }),
     ),
@@ -614,5 +617,110 @@ describe('operator:takeover-cancel — boundary behaviour', () => {
     const res = await cancelChannel(FAKE_EVENT, { pending_takeover_id: 'tok-uuid-003' });
     expect(res).toEqual({ kind: 'cancelled' });
     expect(cancelFn).toHaveBeenCalledWith({ pending_takeover_id: 'tok-uuid-003' });
+  });
+});
+
+// ─── 019 — operator:provision-cashier-pin boundary validation + delegation ───
+
+/**
+ * Registers the operator handlers with an injected pinManagementHandler so the
+ * PROVISION_CASHIER_PIN channel's validator + delegation + catch branches are
+ * exercised at the IPC boundary (the handler's own logic is unit-tested in
+ * pin-management.provision.test.ts; here we cover the IPC-layer guard).
+ */
+function registerWithPinManagement(
+  pinManagementHandler: PinManagementHandler,
+): Map<string, IpcHandler> {
+  const { ipcMain, handlers } = makeIpcMain();
+  registerOperatorHandlers(ipcMain, {
+    signInHandler: fakeSignInHandler({ kind: 'refused', category: 'invalid_input' }),
+    cashierSignInHandler: fakeCashierSignInHandler(),
+    signOutHandler: fakeSignOutHandler({ kind: 'signed_out' }),
+    rosterHandler: fakeRosterHandler(),
+    sessionManager: fakeSessionManager(null),
+    inactivityMonitor: fakeInactivityMonitor().monitor,
+    auditEmitter: fakeAuditEmitter(),
+    pairingStore: fakePairingStore(),
+    takeoverHandler: fakeTakeoverHandler(),
+    pinManagementHandler,
+    forcedCloseHandler: fakeForcedCloseHandler(),
+    stuckShiftsHandler: fakeStuckShiftsHandler(),
+  });
+  return handlers;
+}
+
+const VALID_PROVISION_REQUEST = {
+  event_id: 'evt-uuid-019',
+  target_user_id: 'neutral-user-uuid-1',
+  initial_pin: '4729',
+};
+
+describe('operator:provision-cashier-pin — boundary input validation + delegation', () => {
+  it('refuses invalid_input (and never calls the handler) when the payload is not an object', async () => {
+    const inner = fakePinManagementHandler();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const provisionFn = inner.provisionCashierPin as ReturnType<typeof vi.fn>;
+    const handlers = registerWithPinManagement(inner);
+    const channel = getHandler(handlers, OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN);
+
+    for (const bad of [null, undefined, 'string', 42, true]) {
+      const res = await channel(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+    expect(provisionFn).not.toHaveBeenCalled();
+  });
+
+  it('refuses invalid_input when a required field is missing, empty, or the wrong type', async () => {
+    const inner = fakePinManagementHandler();
+    const handlers = registerWithPinManagement(inner);
+    const channel = getHandler(handlers, OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN);
+
+    for (const bad of [
+      {},
+      { ...VALID_PROVISION_REQUEST, event_id: '' },
+      { ...VALID_PROVISION_REQUEST, event_id: 42 },
+      { ...VALID_PROVISION_REQUEST, target_user_id: '' },
+      { ...VALID_PROVISION_REQUEST, target_user_id: null },
+      { ...VALID_PROVISION_REQUEST, initial_pin: '' },
+      { ...VALID_PROVISION_REQUEST, initial_pin: 1234 },
+    ]) {
+      const res = await channel(FAKE_EVENT, bad);
+      expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    }
+  });
+
+  it('forwards a well-formed request to pinManagementHandler.provisionCashierPin', async () => {
+    const inner = {
+      resetCashierPin: vi.fn(),
+      provisionCashierPin: vi.fn(() =>
+        Promise.resolve({ kind: 'pin_provisioned' as const, audit_event_id: 'evt-uuid-019' }),
+      ),
+      unlockCashier: vi.fn(),
+    } as unknown as PinManagementHandler;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const provisionFn = inner.provisionCashierPin as ReturnType<typeof vi.fn>;
+    const handlers = registerWithPinManagement(inner);
+    const channel = getHandler(handlers, OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN);
+
+    const res = await channel(FAKE_EVENT, VALID_PROVISION_REQUEST);
+
+    expect(res).toEqual({ kind: 'pin_provisioned', audit_event_id: 'evt-uuid-019' });
+    expect(provisionFn).toHaveBeenCalledWith(VALID_PROVISION_REQUEST);
+  });
+
+  it('refuses generically (no error message crosses the bridge) when the inner handler throws', async () => {
+    const inner = {
+      resetCashierPin: vi.fn(),
+      provisionCashierPin: vi.fn(() => Promise.reject(new Error('db is on fire — must not leak'))),
+      unlockCashier: vi.fn(),
+    } as unknown as PinManagementHandler;
+    const handlers = registerWithPinManagement(inner);
+    const channel = getHandler(handlers, OPERATOR_IPC_CHANNELS.PROVISION_CASHIER_PIN);
+
+    const res = await channel(FAKE_EVENT, VALID_PROVISION_REQUEST);
+
+    expect(res).toEqual({ kind: 'refused', category: 'invalid_input' });
+    // The thrown error message MUST NOT cross the bridge (Constitution VII / PR-2).
+    expect(JSON.stringify(res)).not.toContain('fire');
   });
 });
