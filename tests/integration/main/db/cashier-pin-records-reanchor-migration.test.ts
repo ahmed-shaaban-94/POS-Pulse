@@ -61,7 +61,14 @@ function dbAfter0036(): SqlJsDatabase {
 /** Seed a born-neutral row (as 019's provision handler writes it). */
 function seedBornNeutral(
   db: SqlJsDatabase,
-  o: { clerk: string; userId: string; hash: string; salt: string; failed?: number; lockout?: string | null },
+  o: {
+    clerk: string;
+    userId: string;
+    hash: string;
+    salt: string;
+    failed?: number;
+    lockout?: string | null;
+  },
 ): void {
   db.run(
     `INSERT INTO cashier_pin_records
@@ -79,9 +86,9 @@ function pkColumns(db: SqlJsDatabase): string[] {
   const r = db.exec(`PRAGMA table_info(cashier_pin_records)`);
   const rows = (r[0]?.values ?? []) as Array<[number, string, string, number, unknown, number]>;
   return rows
-    .filter((row) => (row[5] as number) > 0)
-    .sort((a, b) => (a[5] as number) - (b[5] as number))
-    .map((row) => row[1] as string);
+    .filter((row) => row[5] > 0)
+    .sort((a, b) => a[5] - b[5])
+    .map((row) => row[1]);
 }
 
 describe('017 T030 — 0036 re-anchor migration-safety', () => {
@@ -111,8 +118,8 @@ describe('017 T030 — 0036 re-anchor migration-safety', () => {
     // index_list columns: [seq, name, unique, origin, partial]
     const idxRows = (list[0]?.values ?? []) as Array<[number, string, number, string, number]>;
     const uniqueOverClerk = idxRows.some((row) => {
-      if ((row[2] as number) !== 1) return false; // must be UNIQUE
-      const info = db.exec(`PRAGMA index_info('${row[1] as string}')`);
+      if (row[2] !== 1) return false; // must be UNIQUE
+      const info = db.exec(`PRAGMA index_info('${row[1]}')`);
       const cols = (info[0]?.values ?? []).map((c) => c[2] as string);
       return (
         JSON.stringify(cols) ===
@@ -128,18 +135,18 @@ describe('017 T030 — 0036 re-anchor migration-safety', () => {
     seedBornNeutral(db, { clerk: 'clerk-dup', userId: 'neutral-1', hash: 'aabb', salt: 'ccdd' });
     // Same (scope, clerk) but a DIFFERENT user_id must STILL collide — proving the
     // runtime lookup key is schema-unique, not merely app-guarded.
-    expect(() =>
-      seedBornNeutral(db, { clerk: 'clerk-dup', userId: 'neutral-2', hash: 'eeff', salt: '0011' }),
-    ).toThrow();
+    expect(() => {
+      seedBornNeutral(db, { clerk: 'clerk-dup', userId: 'neutral-2', hash: 'eeff', salt: '0011' });
+    }).toThrow();
     db.close();
   });
 
   it('new PK enforces uniqueness on user_id (same user_id+scope collides)', () => {
     const db = dbAfter0036();
     seedBornNeutral(db, { clerk: 'clerk-1', userId: 'neutral-A', hash: 'aabb', salt: 'ccdd' });
-    expect(() =>
-      seedBornNeutral(db, { clerk: 'clerk-2', userId: 'neutral-A', hash: 'eeff', salt: '0011' }),
-    ).toThrow(); // same (t,b,term,user_id) → PK collision even with a different clerk id
+    expect(() => {
+      seedBornNeutral(db, { clerk: 'clerk-2', userId: 'neutral-A', hash: 'eeff', salt: '0011' });
+    }).toThrow(); // same (t,b,term,user_id) → PK collision even with a different clerk id
     db.close();
   });
 
