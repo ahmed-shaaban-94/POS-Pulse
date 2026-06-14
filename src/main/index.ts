@@ -36,6 +36,8 @@ import { createPaymentsCancelHandler } from './payments/handlers/payments-cancel
 import { createPaymentsForceFailHandler } from './payments/handlers/payments-force-fail.js';
 import { createPaymentsSubscribeHandler } from './payments/handlers/payments-subscribe.js';
 import { createPaymentsReadHandler } from './payments/handlers/payments-read.js';
+import { createPaymentsDiscardOnSessionEndHandler } from './payments/handlers/payments-discard-on-session-end.js';
+import { createStuckAttemptSweeper } from './payments/sweep-stuck-attempt.js';
 import { createTenderApplyHandler } from './payments/handlers/tender-apply.js';
 import { createTenderReverseHandler } from './payments/handlers/tender-reverse.js';
 import { createTenderReadHandler } from './payments/handlers/tender-read.js';
@@ -926,6 +928,40 @@ app
       tenderReverse,
       tenderRead,
       paymentsForceFail,
+    });
+
+    // #380 (F-007 part b) — orphan-attempt recovery. A stuck `started` payment
+    // attempt blocks every future sale on the terminal. The discard handler
+    // (LIFO-reverse + fail + audit) existed but was never wired to any signal.
+    // Wire it to the session lifecycle: clean session-END discards a live
+    // orphan; sign-in (session-START) recovers the CRASH case where end() never
+    // ran. Both resolve the REAL terminal_id (F-007 part a) and reuse the same
+    // idempotent discard. Fired role-agnostically — the brick is terminal-
+    // scoped and blocks every operator at the terminal.
+    const paymentsDiscardOnSessionEnd = createPaymentsDiscardOnSessionEndHandler({
+      attemptsRepo: paymentsAttemptsRepo,
+      linesRepo: paymentsLinesRepo,
+      paymentAttemptFsm,
+      tenderLineFsm,
+      auditEmitter: paymentAuditEmitter,
+      uuid: paymentsUuid,
+      clock: paymentsClock,
+    });
+    const sweepStuckAttempt = createStuckAttemptSweeper({
+      attemptsRepo: paymentsAttemptsRepo,
+      discard: paymentsDiscardOnSessionEnd,
+      resolveTerminalId: () => pairingStore.getCurrentTerminalId(),
+      logError: (err, ctx) => {
+        mainLogger.error({ err, ...ctx }, 'stuck_attempt_sweep:failed');
+      },
+    });
+    // Sync lifecycle hooks → fire-and-forget the async sweep. The SessionManager
+    // wrappers swallow subscriber throws, so the sweeper logs its own failures.
+    operatorSessionManager.onEnded(() => {
+      void sweepStuckAttempt();
+    });
+    operatorSessionManager.onStarted(() => {
+      void sweepStuckAttempt();
     });
 
     // 006 T271 — deferred-reversal resolver bootstrap.

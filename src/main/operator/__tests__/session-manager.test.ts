@@ -91,4 +91,64 @@ describe('SessionManager', () => {
     }).not.toThrow();
     expect(m.getCurrent()).toBeNull();
   });
+
+  // #380 (F-007 part b) — onStarted is the symmetric counterpart of onEnded.
+  // It is the single seam the cashier-PIN + manager/admin sign-in paths both
+  // funnel through (both call create()), so the orphan-attempt sweep registered
+  // here covers every sign-in role without per-handler wiring.
+  describe('#380 onStarted — fires on session create', () => {
+    it('invokes registered callbacks with the new record on create()', () => {
+      const m = makeManager();
+      const seen: string[] = [];
+      m.onStarted((record) => seen.push(record.operator_id));
+      m.create({
+        operator_id: 'op-start',
+        display_name: 'Manager',
+        role: 'manager',
+        tenant_id: 't1',
+        branch_id: 'b1',
+        backend_session_id: 'be-1',
+        started_at: FIXED_NOW,
+      });
+      expect(seen).toEqual(['op-start']);
+    });
+
+    it('fires every registered callback in order', () => {
+      const m = makeManager();
+      const order: number[] = [];
+      m.onStarted(() => order.push(1));
+      m.onStarted(() => order.push(2));
+      m.create({
+        operator_id: 'op-1',
+        display_name: 'M',
+        role: 'manager',
+        tenant_id: 't1',
+        branch_id: 'b1',
+        backend_session_id: 'be-1',
+        started_at: FIXED_NOW,
+      });
+      expect(order).toEqual([1, 2]);
+    });
+
+    it('a throwing subscriber does not break create() (mirrors onEnded)', () => {
+      const m = makeManager();
+      m.onStarted(() => {
+        throw new Error('subscriber boom');
+      });
+      let record;
+      expect(() => {
+        record = m.create({
+          operator_id: 'op-1',
+          display_name: 'M',
+          role: 'manager',
+          tenant_id: 't1',
+          branch_id: 'b1',
+          backend_session_id: 'be-1',
+          started_at: FIXED_NOW,
+        });
+      }).not.toThrow();
+      expect(record).toBeDefined();
+      expect(m.getCurrent()).not.toBeNull();
+    });
+  });
 });
