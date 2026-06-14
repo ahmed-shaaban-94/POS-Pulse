@@ -1,6 +1,6 @@
 # Draft D6 — POS Offline-PIN Re-Anchor off a DP-2 Provider-Neutral Identifier
 
-> **⛔ SUPERSEDED IN PART (2026-06-13) — read [`BLOCKER.md`](./BLOCKER.md) rev. 3 + [`UNBLOCK-PLAN.md`](./UNBLOCK-PLAN.md) FIRST.** A dispatch-attempt investigation found a **deeper blocker** that invalidates the "sole blocker = owner dispatch / `user_id` arrives via the envelope / zero `user_id` on all POS contracts / G10-ratification" framing in the body below. **The truth:** 033 delivered the *operator's* `user_id`, not the *cashier's*; `cashier_pin_records` is cashier-keyed, so 017 is data-blocked on a **cashier-scoped** `user_id`. The DP-2 fix is a verified ~4-line roster-field add (NO provisioning); the heavier gap is POS-internal (deferred cashier-PIN provisioning). **Do NOT execute the envelope/provisioning/G10 work this body describes** — follow `UNBLOCK-PLAN.md` (sequence 2→1→3). The body below is retained for history only.
+> **✅ IMPLEMENTED & MERGED 2026-06-14 (PR #401, migration `0036`).** OQ-D6-1 collapsed → direct rebuild, no transition window. See [UNBLOCK-PLAN.md](./UNBLOCK-PLAN.md) Step 3 and [security-review/s-reanchor-review.md](./security-review/s-reanchor-review.md) for the as-built design. The body below is retained as history; the blocker/gate narrative it describes is now resolved.
 
 > **DRAFT — NOT DISPATCHED.** Planning artifact under docs-only Orchestrator. No implementation, no contract, no migration, no gate mutation. Requires explicit scoped owner approval + G10 verification before any sibling-repo dispatch.
 
