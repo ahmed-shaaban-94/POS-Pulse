@@ -84,11 +84,6 @@ function pkColumns(db: SqlJsDatabase): string[] {
     .map((row) => row[1] as string);
 }
 
-function indexedColumns(db: SqlJsDatabase): string[] {
-  const r = db.exec(`PRAGMA index_info('idx_cashier_pin_records_cashier')`);
-  return (r[0]?.values ?? []).map((row) => row[2] as string);
-}
-
 describe('017 T030 — 0036 re-anchor migration-safety', () => {
   it('target PK is (tenant_id, branch_id, terminal_id, user_id)', () => {
     const db = dbAfter0036();
@@ -105,9 +100,37 @@ describe('017 T030 — 0036 re-anchor migration-safety', () => {
     db.close();
   });
 
-  it('covering index re-keys to the target tuple (…, user_id)', () => {
+  it('a UNIQUE index covers the runtime-lookup key (tenant,branch,terminal,clerk) — defense-in-depth (review finding #1)', () => {
+    // The old 0006 PK enforced one row per (scope, clerk) at the schema level.
+    // 0036 demotes clerk to a non-key bridge → that schema guarantee must be
+    // restored as a partial UNIQUE index on the column the SELECT/.get() filters
+    // on, so a hypothetical app-guard bug can't yield two rows + an arbitrary
+    // .get(). This index ALSO covers the lookup (it keys on the exact WHERE tuple).
     const db = dbAfter0036();
-    expect(indexedColumns(db)).toEqual(['tenant_id', 'branch_id', 'terminal_id', 'user_id']);
+    const list = db.exec(`PRAGMA index_list('cashier_pin_records')`);
+    // index_list columns: [seq, name, unique, origin, partial]
+    const idxRows = (list[0]?.values ?? []) as Array<[number, string, number, string, number]>;
+    const uniqueOverClerk = idxRows.some((row) => {
+      if ((row[2] as number) !== 1) return false; // must be UNIQUE
+      const info = db.exec(`PRAGMA index_info('${row[1] as string}')`);
+      const cols = (info[0]?.values ?? []).map((c) => c[2] as string);
+      return (
+        JSON.stringify(cols) ===
+        JSON.stringify(['tenant_id', 'branch_id', 'terminal_id', 'cashier_clerk_user_id'])
+      );
+    });
+    expect(uniqueOverClerk).toBe(true);
+    db.close();
+  });
+
+  it('the clerk-bridge UNIQUE index enforces one row per (scope, clerk) — the invariant the old PK guaranteed', () => {
+    const db = dbAfter0036();
+    seedBornNeutral(db, { clerk: 'clerk-dup', userId: 'neutral-1', hash: 'aabb', salt: 'ccdd' });
+    // Same (scope, clerk) but a DIFFERENT user_id must STILL collide — proving the
+    // runtime lookup key is schema-unique, not merely app-guarded.
+    expect(() =>
+      seedBornNeutral(db, { clerk: 'clerk-dup', userId: 'neutral-2', hash: 'eeff', salt: '0011' }),
+    ).toThrow();
     db.close();
   });
 

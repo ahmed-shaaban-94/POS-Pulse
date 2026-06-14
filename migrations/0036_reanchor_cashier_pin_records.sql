@@ -117,8 +117,25 @@ DROP TABLE cashier_pin_records;
 -- Step 4. Rename the new table into the original name.
 ALTER TABLE cashier_pin_records_new RENAME TO cashier_pin_records;
 
--- Step 5. Re-create the covering index on the TARGET tuple (…, user_id), in
--- lockstep with the re-keyed PK. Replaces the 0006 index that keyed on
--- cashier_clerk_user_id.
-CREATE INDEX IF NOT EXISTS idx_cashier_pin_records_cashier
-  ON cashier_pin_records (tenant_id, branch_id, terminal_id, user_id);
+-- Step 5. Re-create the covering index — as a PARTIAL UNIQUE index on the
+-- RUNTIME-LOOKUP key (the clerk bridge), NOT a plain index on the PK tuple.
+--
+-- Why unique-on-clerk, not on user_id (security review findings #1 + #2):
+--   • The new PK already creates an implicit unique index on
+--     (tenant,branch,terminal,user_id) — a second plain index on the same
+--     tuple would be redundant (finding #2).
+--   • The offline-unlock path (sign-in-handler.ts SELECT/UPDATE,
+--     pin-lockout.ts rowMatchesScope, pin-management.ts reset/unlock) filters
+--     on `cashier_clerk_user_id`, which this migration demoted from a PK
+--     component to a plain nullable column — losing the SCHEMA-enforced
+--     "one row per (scope, clerk)" guarantee 0006's PK provided. The SELECT
+--     uses `.get()` (single row); without schema uniqueness a future
+--     create-guard bug could leave two rows and return an arbitrary one
+--     (wrong PIN/lockout state). This restores that defense-in-depth (P2) on
+--     a live credential table, AND covers the exact WHERE tuple the lookup uses.
+--   • PARTIAL (`WHERE cashier_clerk_user_id IS NOT NULL`): the column is
+--     nullable in the bridge design, so a partial unique index permits NULLs
+--     while still forbidding duplicate non-null clerk ids in the same scope.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cashier_pin_records_clerk
+  ON cashier_pin_records (tenant_id, branch_id, terminal_id, cashier_clerk_user_id)
+  WHERE cashier_clerk_user_id IS NOT NULL;
