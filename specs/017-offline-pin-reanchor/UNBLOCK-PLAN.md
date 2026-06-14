@@ -29,11 +29,11 @@ Add `u.id` to the `findCashiersByStore` SELECT + map (`pos-operators.service.ts:
 > **🔱 DECISION FORK 1:** spec this in DP-2 **now** (a real DP-2 feature, e.g. `034`) **vs** leave the [`OUTBOX`](./OUTBOX-DP2-cashier-user_id.md) as the handoff and let the DP-2 owner pick it up. *Recommendation: see "Recommended sequence" below.*
 
 ### Step 2 — POS: complete cashier-PIN provisioning, keyed on `user_id` from creation (004 ownership)
-Today there is no production INSERT into `cashier_pin_records` (deferred MVP scope). A provision-time write site must exist **and** must key the row on the roster-delivered `user_id` at creation — so the row is born provider-neutral and `0035` never has to migrate it. Also widen `roster-handler.ts:43`'s allowlist (`{id,display_name,role}`) to thread `user_id` through to that write site, and correct the 004 data-model/quickstart "provision via reset" language.
+Today there is no production INSERT into `cashier_pin_records` (deferred MVP scope). A provision-time write site must exist **and** must key the row on the roster-delivered `user_id` at creation — so the row is born provider-neutral and 017's re-key migration (`0036`) never has to migrate it. Also widen `roster-handler.ts:43`'s allowlist (`{id,display_name,role}`) to thread `user_id` through to that write site, and correct the 004 data-model/quickstart "provision via reset" language. *(Status: POS-019 — this Step 2 — is now MERGED (PR #398): it added the additive `user_id` column as migration `0035` and the born-neutral create path.)*
 > **🔱 DECISION FORK 2:** does **017** absorb this provisioning work, or is it a **004 follow-up**? *Recommendation: **004 follow-up** — 017 is the re-anchor of an existing store, not the feature that builds the missing provisioning path (P16 feature-scope discipline). 017 should depend on it, not contain it.*
 
-### Step 3 — 017: the re-anchor itself (migration `0035` + code re-key)
-Once Steps 1+2 land, 017 executes as the tasks already specify — but with a corrected premise: **migration `0035` is a safety-net for any legacy rows, not the primary mechanism** (new rows are born on `user_id` per Step 2). Re-key `pin-lockout.ts`/`sign-in-handler.ts` to `user_id`; `pin-credential.ts` stays untouched (never keyed on identity). **Constraint:** a NULL `user_id` cannot sit in a composite PRIMARY KEY (SQLite anti-pattern), so any legacy rows retain `cashier_clerk_user_id` as authoritative until each has a real `user_id` — a **dual-key/bridge window** (OQ-D6-1), not a single rebuild onto a half-empty PK. Second-pair-of-eyes security review required (live sealed credential rows).
+### Step 3 — 017: the re-anchor itself (migration `0036` + code re-key)
+Once Steps 1+2 land, 017 executes as the tasks already specify — but with a corrected premise: **the re-key migration `0036` is a safety-net for any legacy rows, not the primary mechanism** (new rows are born on `user_id` per Step 2). **NOTE — migration number:** per research R-1, 019 landed first and **took `0035`** (`migrations/0035_add_user_id_to_cashier_pin_records.sql`, merged PR #398 — the *additive `user_id` column*). 017's *PK re-key + legacy backfill* migration is therefore the next free number, **`0036`** (NOT `0035`, which already exists). Re-key `pin-lockout.ts`/`sign-in-handler.ts` to `user_id`; `pin-credential.ts` stays untouched (never keyed on identity). **Constraint:** a NULL `user_id` cannot sit in a composite PRIMARY KEY (SQLite anti-pattern), so any legacy rows retain `cashier_clerk_user_id` as authoritative until each has a real `user_id` — a **dual-key/bridge window** (OQ-D6-1), not a single rebuild onto a half-empty PK. Second-pair-of-eyes security review required (live sealed credential rows).
 
 ## Recommended sequence
 
@@ -55,7 +55,7 @@ Fork 2 (owner: provisioning owner = 017 or 004?)
 Fork 1 (owner: spec DP-2 now vs OUTBOX handoff)          │
    └─► Step 1 (DP-2 roster user_id, ~4 lines) ───────────┤
                                                           ▼
-                                      Step 3 (017 re-anchor; 0035 = safety net; dual-key window)
+                                      Step 3 (017 re-anchor; migration 0036 = safety net; dual-key window)
                                                           │
                                                           ▼
                                       §A4 bridge re-check + §A5 readiness (T070)
