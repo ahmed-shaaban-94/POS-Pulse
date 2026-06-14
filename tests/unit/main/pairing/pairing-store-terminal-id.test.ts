@@ -45,29 +45,27 @@ function makeDb(assignment: TerminalAssignmentRow | null): PairingStoreDb {
     readAssignment: vi.fn(() => assignment),
     writeAssignment: vi.fn(),
     deleteAssignment: vi.fn(),
-    transaction: vi.fn((fn) => fn()),
+    transaction: vi.fn(<T>(fn: () => T): T => fn()),
   };
 }
 
-function makeSecretStore(): SecretStore {
-  // Never touched by getCurrentTerminalId — its presence proves the accessor
-  // does NOT go through the token path.
-  return {
-    get: vi.fn(() => Promise.reject(new Error('secret store must not be read'))),
-    set: vi.fn(),
-    delete: vi.fn(),
-  } as unknown as SecretStore;
+function makeSecretStore(): { secretStore: SecretStore; get: ReturnType<typeof vi.fn> } {
+  // Never touched by getCurrentTerminalId — the `get` spy is returned so the
+  // test can assert the accessor does NOT go through the token path.
+  const get = vi.fn(() => Promise.reject(new Error('secret store must not be read')));
+  const secretStore = { get, set: vi.fn(), delete: vi.fn() } as unknown as SecretStore;
+  return { secretStore, get };
 }
 
 function makeStore(assignment: TerminalAssignmentRow | null) {
   const db = makeDb(assignment);
-  const secretStore = makeSecretStore();
+  const { secretStore, get } = makeSecretStore();
   const store = createPairingStore({
     secretStore,
     db,
     deviceTokenKey: makeSecretKey('device-token'),
   });
-  return { store, db, secretStore };
+  return { store, db, secretStoreGet: get };
 }
 
 describe('#380 getCurrentTerminalId — sync real-terminal-id accessor', () => {
@@ -84,9 +82,9 @@ describe('#380 getCurrentTerminalId — sync real-terminal-id accessor', () => {
   });
 
   it('is synchronous (returns a string|null, not a Promise) and never reads the SecretStore', () => {
-    const { store, secretStore } = makeStore(row());
+    const { store, secretStoreGet } = makeStore(row());
     const result = store.getCurrentTerminalId();
     expect(result).not.toBeInstanceOf(Promise);
-    expect(secretStore.get).not.toHaveBeenCalled();
+    expect(secretStoreGet).not.toHaveBeenCalled();
   });
 });
