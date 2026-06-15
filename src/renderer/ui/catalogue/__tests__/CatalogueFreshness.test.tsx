@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 
@@ -174,6 +174,148 @@ describe('T045 — CatalogueFreshness: manual refresh affordance', () => {
     const button = await screen.findByRole('button', { name: /تحديث/ });
     // The shared `btn` base enforces 44px; assert the class contract is present.
     expect(button.className).toMatch(/btn/);
+  });
+});
+
+describe('T039 (#360) — post-commit freshness re-read (ONE-SHOT, no poll)', () => {
+  // The driver admits a tick SYNCHRONOUSLY (`started`) and commits the promote
+  // LATER on its own `completed` promise — which the bridge deliberately drops
+  // (WR-2/P9-2). So the immediate `loadFreshness()` after `started` reads the
+  // PRE-commit timestamp. The owner shape brief scoped OUT a polling clock, so
+  // the fix is ONE bounded deferred re-read (not a repeating poll): it catches
+  // the committed timestamp in the common fast case and otherwise decays to the
+  // honest in-flight feedback + the next natural read. Cancelled on unmount.
+
+  // fireEvent (synchronous) is used instead of userEvent here: userEvent's
+  // internal awaits couple badly with vi.useFakeTimers() and hang. The click
+  // handler is exercised the same way; we then flush its async with
+  // act + advanceTimersByTimeAsync.
+
+  /** Flush pending microtasks (the awaited bridge promises) under fake timers. */
+  async function flushMicrotasks(): Promise<void> {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it('schedules exactly ONE deferred re-read after a started tick (catches the committed timestamp)', async () => {
+    vi.useFakeTimers();
+    try {
+      // freshness() returns the PRE-commit timestamp on the first two reads
+      // (mount + immediate post-click), then the COMMITTED timestamp once the
+      // tick has had time to promote — modelling the driver's real async timing.
+      let committed = false;
+      const freshness = vi.fn(() =>
+        Promise.resolve<CatalogueFreshnessResponse>({
+          kind: 'ok',
+          last_success_at: committed ? '2026-06-15T12:00:05.000Z' : '2026-06-15T12:00:00.000Z',
+          is_empty: false,
+        }),
+      );
+      const refresh = vi.fn(() => {
+        // The promote commits shortly after admission — by the time the deferred
+        // re-read fires, the new timestamp is live.
+        committed = true;
+        return Promise.resolve<CatalogueRefreshResponse>({ kind: 'started' });
+      });
+      const bridge = freshnessBridge({ freshness, refresh });
+      render(<CatalogueFreshness bridge={bridge} />);
+
+      // Drain the mount read.
+      await flushMicrotasks();
+      const mountReads = freshness.mock.calls.length;
+
+      const button = screen.getByRole('button', { name: /تحديث/ });
+      fireEvent.click(button);
+      // refresh() + the immediate (pre-commit) re-read resolve on microtasks.
+      await flushMicrotasks();
+
+      // After the click: refresh() + the immediate (pre-commit) re-read have run,
+      // but the ONE deferred re-read has NOT fired yet.
+      expect(refresh).toHaveBeenCalledOnce();
+      const afterClickReads = freshness.mock.calls.length;
+      expect(afterClickReads).toBe(mountReads + 1); // immediate re-read only
+
+      // Advance past the bounded delay → exactly ONE more freshness() read fires.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_000);
+      });
+      expect(freshness.mock.calls.length).toBe(afterClickReads + 1);
+
+      // And it must NOT keep firing (one-shot, not a poll).
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(freshness.mock.calls.length).toBe(afterClickReads + 1);
+
+      // The committed timestamp is now displayed.
+      const time = screen.getByTestId('catalogue-freshness-time');
+      expect(time).toHaveAttribute('dateTime', '2026-06-15T12:00:05.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does NOT schedule a deferred re-read when the tick was already_running', async () => {
+    vi.useFakeTimers();
+    try {
+      const freshness = vi.fn(() =>
+        Promise.resolve<CatalogueFreshnessResponse>({
+          kind: 'ok',
+          last_success_at: '2026-06-15T12:00:00.000Z',
+          is_empty: false,
+        }),
+      );
+      const refresh = vi.fn(() =>
+        Promise.resolve<CatalogueRefreshResponse>({ kind: 'already_running' }),
+      );
+      const bridge = freshnessBridge({ freshness, refresh });
+      render(<CatalogueFreshness bridge={bridge} />);
+      await flushMicrotasks();
+
+      fireEvent.click(screen.getByRole('button', { name: /تحديث/ }));
+      await flushMicrotasks();
+      const afterClickReads = freshness.mock.calls.length;
+
+      // No deferred re-read for already_running (this terminal didn't start the tick).
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(freshness.mock.calls.length).toBe(afterClickReads);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels the deferred re-read on unmount (no setState after unmount)', async () => {
+    vi.useFakeTimers();
+    try {
+      const freshness = vi.fn(() =>
+        Promise.resolve<CatalogueFreshnessResponse>({
+          kind: 'ok',
+          last_success_at: '2026-06-15T12:00:00.000Z',
+          is_empty: false,
+        }),
+      );
+      const refresh = vi.fn(() => Promise.resolve<CatalogueRefreshResponse>({ kind: 'started' }));
+      const bridge = freshnessBridge({ freshness, refresh });
+      const { unmount } = render(<CatalogueFreshness bridge={bridge} />);
+      await flushMicrotasks();
+
+      fireEvent.click(screen.getByRole('button', { name: /تحديث/ }));
+      await flushMicrotasks();
+      const afterClickReads = freshness.mock.calls.length;
+
+      // Unmount BEFORE the deferred re-read fires → it must be cancelled.
+      unmount();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(freshness.mock.calls.length).toBe(afterClickReads);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

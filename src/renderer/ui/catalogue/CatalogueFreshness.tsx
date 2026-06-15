@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import type {
   CatalogueBridgeAPI,
@@ -104,11 +104,33 @@ const STATE_ICON: Record<Exclude<FreshnessState, 'loading'>, string> = {
   unavailable: '⛔',
 };
 
+/**
+ * T039 (#360) — bounded delay for the ONE-SHOT post-commit re-read.
+ *
+ * The driver admits a tick synchronously (`started`) and commits the promote
+ * LATER on its own `completed` promise — which the bridge deliberately drops
+ * (WR-2/P9-2). So the immediate post-`started` `loadFreshness()` reads the
+ * PRE-commit timestamp. The owner shape brief scoped OUT a polling clock, so the
+ * fix is a SINGLE deferred re-read (NOT a repeating poll): one re-read, ~3s
+ * after admission, catches the committed timestamp in the common fast case. If
+ * the tick is still running by then, the read is simply truthful-to-now again
+ * and the next NATURAL read (next mount / next refresh) corrects it — no clock
+ * ticks in the background. Cancelled on unmount and superseded by any new
+ * refresh (no overlap). Sized to comfortably clear a typical promote without
+ * leaving the cashier staring at a stale stamp.
+ */
+const POST_COMMIT_REREAD_DELAY_MS = 3_000;
+
 export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Element {
   const [state, setState] = useState<FreshnessState>('loading');
   const [lastSuccessAt, setLastSuccessAt] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<RefreshFeedback>('idle');
   const [refreshing, setRefreshing] = useState(false);
+
+  // T039 (#360) — the single pending post-commit re-read timer. Held in a ref so
+  // it survives re-renders, can be superseded by a new refresh, and is cancelled
+  // on unmount (no setState-after-unmount). `null` when none is scheduled.
+  const rereadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resolveBridge = useCallback((): FreshnessBridge => {
     /* v8 ignore next — production arm only reachable in Electron; tests inject `bridge` */
@@ -133,8 +155,26 @@ export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Ele
     void loadFreshness();
   }, [loadFreshness]);
 
+  // T039 (#360) — cancel any pending post-commit re-read on unmount, so a tick
+  // admitted just before the pane closes never fires a setState into a dead
+  // component (React warns + it is a latent leak). Idempotent.
+  useEffect(() => {
+    return () => {
+      if (rereadTimerRef.current !== null) {
+        clearTimeout(rereadTimerRef.current);
+        rereadTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const onRefresh = useCallback(async (): Promise<void> => {
     setRefreshing(true);
+    // Supersede any in-flight re-read from a prior click: only the latest tick's
+    // re-read should land (no overlapping timers, no double-read).
+    if (rereadTimerRef.current !== null) {
+      clearTimeout(rereadTimerRef.current);
+      rereadTimerRef.current = null;
+    }
     try {
       const res: CatalogueRefreshResponse = await resolveBridge().refresh({});
       // Honest feedback only — never a fake "completed". The promote's outcome
@@ -142,17 +182,22 @@ export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Ele
       if (res.kind === 'already_running') setFeedback('already-running');
       else if (res.kind === 'started') setFeedback('started');
       else setFeedback('idle'); // refused — stay silent (no leaked reason)
-      // KNOWN-LIMITATION (deferred to T039 / #349): `started` means the tick was
-      // ADMITTED, not committed (the bridge drops `completed`, WR-2/P9-2), so this
-      // immediate re-read sees the PRE-tick timestamp. There is no later poll —
-      // the owner shape brief scoped OUT a polling clock (absolute-time decision).
-      // This is not a lie (the in-flight "جارٍ التحديث…" feedback is the honest
-      // surface; the timestamp is accurate to *now*, just not yet advanced), and
-      // it is UNREACHABLE today (`refresh` refuses with no driver wired). When the
-      // driver lands (T039), decide the post-commit refresh mechanism then, against
-      // the driver's real async timing and the owner's no-poll constraint — and
-      // re-check under §A4 (s4-review §11). Flagged by Codex review on PR #358.
+      // The immediate re-read sees the PRE-commit timestamp: `started` means the
+      // tick was ADMITTED, not committed (the bridge drops `completed`, WR-2/P9-2).
       await loadFreshness();
+      // T039 (#360) — schedule ONE bounded deferred re-read to catch the committed
+      // timestamp, but ONLY when THIS click admitted the tick (`started`). On
+      // `already_running` another caller owns the tick; on `refused` nothing ran.
+      // This is NOT a poll: a single setTimeout, superseded by a later refresh and
+      // cancelled on unmount. If the promote is still running when it fires, the
+      // read is simply truthful-to-now again and the next natural read corrects it
+      // — no background clock (respects the owner's no-poll / absolute-time brief).
+      if (res.kind === 'started') {
+        rereadTimerRef.current = setTimeout(() => {
+          rereadTimerRef.current = null;
+          void loadFreshness();
+        }, POST_COMMIT_REREAD_DELAY_MS);
+      }
     } finally {
       setRefreshing(false);
     }
