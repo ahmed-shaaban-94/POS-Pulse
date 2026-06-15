@@ -167,53 +167,75 @@ export function createReadDownWriter(deps: CreateReadDownWriterDeps): ReadDownWr
     );
   }
 
-  function stageProduct(tenantId: string, branchId: string, rec: MappedRecord): void {
-    const p = rec.product;
-    const fold = nameFold(p.name_ar, p.name_en);
-    const aFold = aliasFold(p.aliases_json);
-    const skuNorm = normalize(p.sku);
-    const stmt = db.prepare(`
+  /**
+   * Stage the full validated set in ONE transaction (#411 perf fix). The prior
+   * per-row autocommit path issued ~2 INSERTs/row in autocommit mode (~100k
+   * separate WAL commits at synchronous=FULL on a 50k snapshot), which blocked the
+   * single shared main-thread connection for ~20 s — every barcode scan / lookup
+   * froze behind it (T054 §A5, perf-bringup.md §6). Wrapping the loop in one
+   * `db.transaction()` collapses those to a single commit (~20 s → ~1 s).
+   *
+   * Live tables are untouched here (staging only), so this does NOT affect FR-7
+   * (the prior-catalogue-intact guarantee is a property of the promote tx alone —
+   * the ONLY live-table writer). A throw mid-loop rolls back the whole staging tx;
+   * `run()`'s outer catch still maps it to `failed` and `promote()` never runs, so
+   * the observable outcome is unchanged (single-flight, single thread — no consumer
+   * ever reads a half-populated staging). The two prepared statements are now
+   * prepared ONCE (not per row) — a side win.
+   */
+  function stageAll(tenantId: string, branchId: string, recs: MappedRecord[]): void {
+    const productStmt = db.prepare(`
       INSERT INTO products_staging (${PRODUCT_COLUMNS.join(', ')})
       VALUES (${PRODUCT_COLUMNS.map(() => '?').join(', ')})
     `) as PrepareRun;
-    stmt.run(
-      p.product_id,
-      tenantId,
-      branchId,
-      p.sku,
-      skuNorm,
-      p.name_ar,
-      p.name_en,
-      fold,
-      p.aliases_json,
-      aFold,
-      p.price_minor,
-      p.tax_category,
-      p.unit_pack_label,
-      p.active,
-      p.controlled_substance,
-      p.prescription_required,
-      p.row_version,
-      p.created_at,
-      p.updated_at,
-    );
-
-    // Explode the barcode records (duplicates preserved — no dedupe, FR-4).
-    const bcStmt = db.prepare(`
+    const barcodeStmt = db.prepare(`
       INSERT INTO product_barcodes_staging (${BARCODE_COLUMNS.join(', ')})
       VALUES (${BARCODE_COLUMNS.map(() => '?').join(', ')})
     `) as PrepareRun;
-    for (const b of rec.barcodes) {
-      bcStmt.run(
-        b.barcode_id,
-        b.product_id,
-        tenantId,
-        b.barcode,
-        normalize(b.barcode),
-        b.barcode_kind,
-        p.created_at,
-      );
-    }
+
+    const stageTx = db.transaction(() => {
+      for (const rec of recs) {
+        const p = rec.product;
+        const fold = nameFold(p.name_ar, p.name_en);
+        const aFold = aliasFold(p.aliases_json);
+        const skuNorm = normalize(p.sku);
+        productStmt.run(
+          p.product_id,
+          tenantId,
+          branchId,
+          p.sku,
+          skuNorm,
+          p.name_ar,
+          p.name_en,
+          fold,
+          p.aliases_json,
+          aFold,
+          p.price_minor,
+          p.tax_category,
+          p.unit_pack_label,
+          p.active,
+          p.controlled_substance,
+          p.prescription_required,
+          p.row_version,
+          p.created_at,
+          p.updated_at,
+        );
+
+        // Explode the barcode records (duplicates preserved — no dedupe, FR-4).
+        for (const b of rec.barcodes) {
+          barcodeStmt.run(
+            b.barcode_id,
+            b.product_id,
+            tenantId,
+            b.barcode,
+            normalize(b.barcode),
+            b.barcode_kind,
+            p.created_at,
+          );
+        }
+      }
+    });
+    stageTx();
   }
 
   function promote(
@@ -320,10 +342,9 @@ export function createReadDownWriter(deps: CreateReadDownWriterDeps): ReadDownWr
         };
       }
 
-      // Step 4: stage the validated set (fold columns via normalize()).
-      for (const rec of validRecords) {
-        stageProduct(input.tenantId, input.branchId, rec);
-      }
+      // Step 4: stage the validated set (fold columns via normalize()) in ONE
+      // transaction (#411 — collapses ~100k autocommit INSERTs to one commit).
+      stageAll(input.tenantId, input.branchId, validRecords);
 
       // Step 5: promote atomically (DELETE live + INSERT…SELECT + freshness).
       // The committed outcome distinguishes a clean promote from one that dropped
