@@ -146,3 +146,26 @@ export const FIX_380_F007_BRANCH_PREFIX = 'fix/380' as const;
 export const FIX_380_F007_EXEMPT_PREFIXES = [
   'src/main/pairing/',
 ] as const satisfies readonly ForbiddenPathPrefix[];
+
+/**
+ * `feat/349-*` is the #349 re-pin: replace the stale pharmacy-era catalogue
+ * surface in the pinned OpenAPI snapshot with the DEPLOYED read-down contract
+ * (`/api/pos/v1/catalog/snapshot` + `/deltas`, from DP-2
+ * `packages/contracts/openapi/catalog/read-down.yaml`), then regenerate the
+ * types. Its sole purpose is to update the two codegen artefacts — exactly the
+ * `feat/006-` precedent.
+ *
+ * Authority: issue #349 (D-DEPLOY cleared 2026-06-15 — DP-2 main deployed to
+ * preprod; `/api/pos/v1/catalog/snapshot` + `/deltas` serve 401, stale
+ * `/catalog/products` → 404). Design:
+ * `docs/superpowers/specs/2026-06-15-349-repin-readdown-contract-design.md`.
+ *
+ * Exemption is narrow: ONLY the two codegen artefacts. All other forbidden
+ * prefixes (`src/main/pairing/`, `src/main/secrets/`, `scripts/codegen-api.ts`,
+ * `.github/workflows/`) remain blocked on `feat/349-*` branches.
+ */
+export const FEAT_349_REPIN_BRANCH_PREFIX = 'feat/349-' as const;
+export const FEAT_349_REPIN_EXEMPT_PREFIXES = [
+  'src/shared/api-types.ts',
+  'scripts/openapi-snapshot.json',
+] as const satisfies readonly ForbiddenPathPrefix[];

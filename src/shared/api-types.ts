@@ -5,6 +5,46 @@
 // and commit both the new snapshot and the regenerated types.
 
 export interface paths {
+    "/api/pos/v1/catalog/deltas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get ordered sellable-stream changes after a cursor.
+         * @description Return ordered, idempotent, gap-detectable `upsert` / `remove_from_sellable` changes after the supplied opaque `since` cursor, for the device principal's `(tenant_id, store_id)`, with an advanced cursor reaching the current resolved state. The stream unions the store's own events with tenant-wide events server-side (R9) — the per-tenant sequence is sparse per store and that is correct; completeness is server-guaranteed, NOT consumer-verified by contiguity (FR-022). Re-requesting the same `since` cursor yields the same logical change set (idempotent replay, FR-021). A cursor older than the retained change-log horizon → `snapshot_required` (FR-023). A cursor presented under a foreign scope → non-disclosing refusal (FR-024).
+         */
+        get: operations["posGetCatalogDeltas"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pos/v1/catalog/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the full resolved sellable store catalogue at a server cursor.
+         * @description Return the full Resolved Sellable Store Catalogue (Tenant ⊕ Store Override, sellable-filtered) for the authenticated device principal's `(tenant_id, store_id)` at a server-issued opaque cursor. Cursor-paginated via `next_page_token`; every page reflects the SAME consistent cursor point (FR-012). Unpriced / missing-currency / non-representable products are absent (R5) and recorded to the unpriced-issue signal + backlog (R6). The resolved row is an explicit `toBody()` projection — never a raw DB entity (§IV). Scope is taken from the device principal ONLY; a supplied `branch_id` mismatching the token scope is refused non-disclosingly (FR-002/003/004); an unresolved store context returns `store_context_required` (FR-005).
+         */
+        get: operations["posGetCatalogSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pos/v1/vouchers/redeem": {
         parameters: {
             query?: never;
@@ -3760,53 +3800,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/pos/catalog/products": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Paginated product catalog for offline sync
-         * @description Return a page of products ordered by ``drug_code``.
-         *
-         *     Pass the returned ``next_cursor`` on subsequent requests to page forward.
-         *     When ``next_cursor`` is null the catalog is exhausted; reset to
-         *     ``cursor=null`` on the next sync cycle.
-         */
-        get: operations["get_catalog_products_api_v1_pos_catalog_products_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/pos/catalog/stock": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Paginated active-batch stock for offline sync
-         * @description Return a page of active batches from ``stg_batches`` ordered by ``loaded_at``.
-         *
-         *     Pass the returned ``next_cursor`` on subsequent requests.  Optionally
-         *     filter by ``site`` to pull stock for a single branch.
-         */
-        get: operations["get_catalog_stock_api_v1_pos_catalog_stock_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/pos/controlled/verify": {
         parameters: {
             query?: never;
@@ -7007,6 +7000,24 @@ export interface components {
          * @enum {string}
          */
         CashDrawerEventType: "sale" | "refund" | "float" | "pickup";
+        /** @description One ordered change. `row` is present for `upsert` and omitted for `remove_from_sellable` (the consumer drops the product by `product_id`). */
+        CatalogDeltaOp: {
+            /** @enum {string} */
+            op: "upsert" | "remove_from_sellable";
+            /** Format: uuid */
+            product_id: string;
+            row?: components["schemas"]["SellableCatalogRow"];
+            /** @description Opaque advanced cursor after this op (the canonical per-row token). Clients MUST treat as opaque. */
+            row_cursor: string;
+        };
+        /** @description A page of ordered sellable-stream changes after the supplied `since` cursor, with the advanced server cursor. */
+        CatalogDeltaPage: {
+            /** @description The advanced opaque server cursor — pass as `since` next time. Opaque; do not decode. */
+            cursor: string;
+            /** @description Opaque continuation token for the next page; null on the last page. Opaque; do not decode. */
+            next_page_token: string | null;
+            ops: components["schemas"]["CatalogDeltaOp"][];
+        };
         /**
          * CatalogProductEntry
          * @description One product entry in the offline-catalog pull response.
@@ -7040,6 +7051,14 @@ export interface components {
             items: components["schemas"]["CatalogProductEntry"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** @description A page of the resolved sellable catalogue. `cursor` is the snapshot's server-issued opaque cursor (the same value across every page of one snapshot — FR-012); `next_page_token` advances pagination within that consistent point. */
+        CatalogSnapshotPage: {
+            /** @description The snapshot's opaque server cursor — pass as `since` to the delta endpoint to advance from here. Opaque; do not decode. */
+            cursor: string;
+            items: components["schemas"]["SellableCatalogRow"][];
+            /** @description Opaque continuation token for the next page; null on the last page. All pages reflect the SAME `cursor` point. Opaque; do not decode. */
+            next_page_token: string | null;
         };
         /**
          * CatalogStockEntry
@@ -7583,6 +7602,8 @@ export interface components {
             /** Unit Price */
             unit_price: number;
         };
+        /** @description ISO-4217 alphabetic currency code (FR-005). Preserved as received. */
+        CurrencyCode: string;
         /**
          * CustomerAnalytics
          * @description Detailed analytics for a single customer.
@@ -7842,6 +7863,8 @@ export interface components {
             /** Site Name */
             site_name: string;
         };
+        /** @description Exact-decimal monetary amount as a string (gate A.6 — never a float). Up to 4 fractional digits, stored as `numeric(19,4)`. Always paired with a `currency_code`. */
+        DecimalAmount: string;
         /**
          * DeliveryChannel
          * @enum {string}
@@ -9533,6 +9556,11 @@ export interface components {
          * @enum {string}
          */
         MetricType: "sum" | "average" | "count" | "count_distinct" | "min" | "max";
+        /** @description Resolved sellable price at the currency's natural minor precision. Always present for a sellable row (R5). */
+        Money: {
+            amount: components["schemas"]["DecimalAmount"];
+            currency_code: components["schemas"]["CurrencyCode"];
+        };
         /**
          * MoverItem
          * @description Single entity in a top-movers list (gainer or loser).
@@ -12130,6 +12158,27 @@ export interface components {
             /** Total Revenue */
             total_revenue: number;
         };
+        /** @description One resolved sellable catalogue row (Tenant ⊕ Store Override, 003 §6.4), real-schema-backed fields only (R-1/Option B). No raw DB columns, no soft-delete internals, no credential fields (§IV). */
+        SellableCatalogRow: {
+            /** @description Always true for a sellable row (the field is explicit for consumer clarity). */
+            active: boolean;
+            /** @description Raw alias terms (non-sku barcode/plu/supplier_code/external_pos_id). The consumer folds them; the platform does not. */
+            aliases: string[];
+            /** @description Single display name (DP2 catalog is language-neutral; no ar/en split). */
+            name: string;
+            price: components["schemas"]["Money"];
+            /**
+             * Format: uuid
+             * @description Stable product identity — the consumer's resolver key.
+             */
+            product_id: string;
+            /** @description Opaque per-row change cursor (≤ the response cursor). Clients MUST treat as opaque. The canonical per-row token name (locks I2/R-5). */
+            row_cursor: string;
+            /** @description Exact-lookup key (product_aliases identifier_type = 'sku'). */
+            sku: string;
+            /** @description Resolved tax category (tenant ⊕ override). */
+            tax_category: string;
+        };
         /**
          * ShiftRecord
          * @description Internal domain model for a shift record.
@@ -13674,14 +13723,134 @@ export interface components {
             xp_amount: number;
         };
     };
-    responses: never;
-    parameters: never;
+    responses: {
+        /** @description `not_found` — non-disclosing 404-class for a cross-tenant / cross-store / scope-mismatch read or a foreign-scope cursor (FR-002/003/004/024). Identical for cross-tenant, out-of-scope, and genuinely-absent scope, with NO existence leak via any response or error shape (§II/§XII, SI). */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description `snapshot_required` (409) — the supplied `since` cursor is older than the retained change-log horizon (or otherwise unservable). The consumer MUST re-baseline via `posGetCatalogSnapshot` (FR-023). Deterministic. */
+        SnapshotRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description `system_failure` (500) — an unexpected server error. The cause is recorded server-side keyed by `request_id` and is never returned. */
+        SystemFailure: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Generic refusal (401). The body does not distinguish a missing / invalid / revoked device token, a missing tenant/store binding, or a manager Clerk-JWT without a device principal (FR-001). Non-disclosing. */
+        Unauthorized: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description `validation_failure` — malformed query, bad/opaque cursor format, or a bad parameter. OR `store_context_required` — the device principal has no resolved store context (FR-005). Deterministic; no record created (this is a read surface). */
+        ValidationFailure: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+    };
+    parameters: {
+        /** @description Branch (store) id to scope the read. When provided, the server validates it against the device token's resolved branch scope; a mismatch is refused non-disclosingly (FR-002/003/004). When omitted, the server uses the device token's branch scope directly. POS callers SHOULD always pass this to catch stale-token / branch drift early. `branch_id` is POS vocabulary mapped internally to `store_id`. */
+        BranchId: string;
+        /** @description Maximum rows per page. The server MAY return fewer. Bounds memory on both ends at the ~50k-product scale (R8). */
+        Limit: number;
+        /** @description Opaque continuation token returned in the previous page's `next_page_token`. Treated as opaque — clients MUST NOT decode or construct it. All pages of one snapshot/delta read reflect the SAME consistent cursor point (FR-012). */
+        PageToken: string;
+        /** @description The opaque `cursor` returned by a prior snapshot or delta page (both page schemas expose the advanced server cursor as `cursor`). Treated as opaque — clients MUST NOT decode or construct it. Scope-bound: a cursor presented under a foreign scope is refused non-disclosingly (FR-024); a cursor older than the retained horizon returns `snapshot_required` (FR-023). */
+        Since: string;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    posGetCatalogDeltas: {
+        parameters: {
+            query: {
+                /** @description Branch (store) id to scope the read. When provided, the server validates it against the device token's resolved branch scope; a mismatch is refused non-disclosingly (FR-002/003/004). When omitted, the server uses the device token's branch scope directly. POS callers SHOULD always pass this to catch stale-token / branch drift early. `branch_id` is POS vocabulary mapped internally to `store_id`. */
+                branch_id?: components["parameters"]["BranchId"];
+                /** @description Maximum rows per page. The server MAY return fewer. Bounds memory on both ends at the ~50k-product scale (R8). */
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque continuation token returned in the previous page's `next_page_token`. Treated as opaque — clients MUST NOT decode or construct it. All pages of one snapshot/delta read reflect the SAME consistent cursor point (FR-012). */
+                page_token?: components["parameters"]["PageToken"];
+                /** @description The opaque `cursor` returned by a prior snapshot or delta page (both page schemas expose the advanced server cursor as `cursor`). Treated as opaque — clients MUST NOT decode or construct it. Scope-bound: a cursor presented under a foreign scope is refused non-disclosingly (FR-024); a cursor older than the retained horizon returns `snapshot_required` (FR-023). */
+                since: components["parameters"]["Since"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered sellable-stream changes after `since`, with the advanced cursor. Cursor-paginated via `next_page_token`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogDeltaPage"];
+                };
+            };
+            400: components["responses"]["ValidationFailure"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["SnapshotRequired"];
+            500: components["responses"]["SystemFailure"];
+        };
+    };
+    posGetCatalogSnapshot: {
+        parameters: {
+            query?: {
+                /** @description Branch (store) id to scope the read. When provided, the server validates it against the device token's resolved branch scope; a mismatch is refused non-disclosingly (FR-002/003/004). When omitted, the server uses the device token's branch scope directly. POS callers SHOULD always pass this to catch stale-token / branch drift early. `branch_id` is POS vocabulary mapped internally to `store_id`. */
+                branch_id?: components["parameters"]["BranchId"];
+                /** @description Maximum rows per page. The server MAY return fewer. Bounds memory on both ends at the ~50k-product scale (R8). */
+                limit?: components["parameters"]["Limit"];
+                /** @description Opaque continuation token returned in the previous page's `next_page_token`. Treated as opaque — clients MUST NOT decode or construct it. All pages of one snapshot/delta read reflect the SAME consistent cursor point (FR-012). */
+                page_token?: components["parameters"]["PageToken"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the resolved sellable catalogue at a consistent server cursor. The final page carries the snapshot `cursor`; subsequent pages are fetched via `next_page_token`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogSnapshotPage"];
+                };
+            };
+            400: components["responses"]["ValidationFailure"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["SystemFailure"];
+        };
+    };
     posRedeemVoucher: {
         parameters: {
             query?: never;
@@ -19889,74 +20058,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CapabilitiesDoc"];
-                };
-            };
-        };
-    };
-    get_catalog_products_api_v1_pos_catalog_products_get: {
-        parameters: {
-            query?: {
-                /** @description Last drug_code from previous page */
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogProductPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_catalog_stock_api_v1_pos_catalog_stock_get: {
-        parameters: {
-            query?: {
-                /** @description Last loaded_at ISO (cursor) */
-                cursor?: string | null;
-                limit?: number;
-                /** @description Filter to a specific site_code */
-                site?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CatalogStockPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
