@@ -34,8 +34,18 @@
  * parameter, accumulating `items` into one rows array. A full-snapshot-replace
  * (FR-7 / R3) needs the COMPLETE set, so ANY non-2xx / malformed page mid-loop
  * fails the whole fetch (`failed`), and a transport fault maps to `no_connection`
- * — never a partial snapshot. `api-types.ts` is NOT yet re-pinned (#349) and MUST
- * NOT be hand-edited, so the page is validated structurally here.
+ * — never a partial snapshot.
+ *
+ * Type pin (#349 RESOLVED — PR #406): `api-types.ts` is now re-pinned to the
+ * deployed read-down contract; its generated `SellableCatalogRow` matches this
+ * client's local mirror (`map-sellable-row.ts`) field-for-field (the mirror's
+ * `aliases?` is intentionally MORE lenient than the generated required `aliases`
+ * — the safe direction). The page is still validated STRUCTURALLY here on
+ * purpose: the generated snapshot has no `CatalogSnapshotPage` page-wrapper type
+ * (the live preprod backend serves no `/openapi.json`, so the snapshot was
+ * merged from the contract YAML's row schema, not the paginated response
+ * envelope). The local mirror remains the validated shape; the structural check
+ * is the deliberate transport-boundary guard, not a #349 workaround.
  */
 
 import type { SellableCatalogRow } from './map-sellable-row.js';

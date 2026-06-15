@@ -297,3 +297,82 @@ decision against the driver's real async timing — not buildable now (the path 
 no-poll constraint. Not a lie today (the in-flight feedback is honest); latent until the driver lands. That is the one remaining §A4 item, gated on #349.
 
 **End of post-wiring re-check.** Prepared 2026-06-07 against `src/main/ipc/catalogue.ts` + `src/main/index.ts`.
+
+---
+
+## 12. Final `refresh` re-check — 2026-06-15 (driver now wired; §A4 residual CLEARED)
+
+The §11 residual reserved a final `refresh` re-check **"when the driver is wired (T039/#349)."** The driver
+landed in **PR #367 (`d6bd40f`)** + **PR #368 (`5abe692`)** — the live `createReadDownClient` + the
+composition-root driver wiring (paired-terminal-only). This re-check confirms the two reserved invariants
+against the **actual wired path** (not the driver-less stub §11 reviewed), and closes the residual.
+
+### Invariant 1 — SEC-1: the device token reaches ONLY the client, never the bridge response
+
+Traced end-to-end against the wired code:
+
+- **`src/main/index.ts:700–709`** — the device token is read inside the `getDeviceToken` closure, which is
+  passed **only** to `createReadDownClient`. The closure reads `secretStore.get(DEVICE_TOKEN_KEY)` and returns
+  it to the client; it is attached to the outbound HTTPS request (`Authorization: Bearer`) inside
+  `read-down-client.ts` and never returned.
+- **`src/main/catalogue/read-down/read-down-driver.ts:91–125`** — `runTick()` calls `client.fetchSnapshot()`
+  and receives a `ReadDownFetchResult` (`ok | no_connection | failed`) — a token-free union. The driver never
+  sees or forwards the token.
+- **`src/main/catalogue/catalogue-bridge.ts:167–185`** — `refresh()` calls `readDownDriver.runTickOnce()` and
+  maps the admission `kind` → `{ kind: 'started' | 'already_running' }`. No token field exists on
+  `CatalogueRefreshResponse`; `completed` is dropped.
+- **`src/main/ipc/catalogue.ts:117–119`** — the `REFRESH` handler returns `bridge.refresh({})` verbatim.
+
+**Verdict: SEC-1 HOLDS.** The token flows pairing-store → client → outbound request only. It is structurally
+impossible for it to appear on the bridge response (the response union has no token-shaped field; the driver
+return type carries none). Never logged (the client redacts; verified by the T018 redaction smoke).
+
+### Invariant 2 — `refresh` honesty: `started` / `already_running` only, never a fake "done"
+
+- **`catalogue-bridge.ts:179–184`** — admission `'already_running'` → `{ kind:'already_running' }`; otherwise
+  `{ kind:'started' }`. `completed` (the promote outcome) is deliberately dropped — `refresh` can NEVER return
+  a "completed/done" kind. The renderer (`CatalogueFreshness.tsx`) maps these to the honest
+  `جارٍ التحديث…` / `جارٍ التحديث بالفعل` in-flight feedback and never claims completion.
+
+**Verdict: `refresh` honesty HOLDS.**
+
+### Invariant 3 — AD-1: session gate first (unchanged, re-confirmed)
+
+- **`catalogue-bridge.ts:168`** — `requireCatalogueSession(getCurrentSession())` is the FIRST statement in
+  `refresh()`, before any driver call. A refused gate short-circuits before the driver is touched.
+
+**Verdict: AD-1 HOLDS.**
+
+### Folded-in Codex freshness-staleness item — RESOLVED (one-shot re-read, no poll)
+
+The §11 verdict folded in the PR #358 Codex flag: after a `started` tick, the renderer's immediate
+`loadFreshness()` reads the PRE-commit timestamp (the bridge drops `completed`). **Owner decision (2026-06-15):
+a ONE-SHOT bounded deferred re-read** — implemented in `CatalogueFreshness.tsx` (`POST_COMMIT_REREAD_DELAY_MS`
+= 3s): a single `setTimeout` scheduled ONLY on `started`, superseded by a later refresh, cancelled on unmount.
+It is **not a poll** (no recurring clock — respects the owner's absolute-time / no-poll brief).
+
+**Best-effort, not a guarantee.** The 3s delay catches the committed timestamp in the common fast case. A real
+paginated catalogue (≤1000 rows/page × N pages → validate → stage → promote under WAL) can exceed 3s on target
+hardware; when it does, the one-shot read sees the stamp UNCHANGED and the timestamp only advances on the next
+natural read (next mount / next refresh). This is acceptable and HONEST by construction: the in-flight
+`جارٍ التحديث…` feedback is true while the promote runs.
+
+**Contradiction guard (review catch, 2026-06-15).** Because the deferred read advances the timestamp, it would
+otherwise show a FRESH `آخر تحديث: <new time>` alongside the stale `جارٍ التحديث…` feedback — the exact
+contradiction this honesty surface exists to remove. So the deferred read clears the feedback to `idle`
+**iff the timestamp ADVANCED** (the promote landed) past the stamp captured at admission; if UNCHANGED (slow
+promote still running), the feedback persists (still true). No new bridge channel, no new renderer→main surface
+— so **no new §A4 attack surface** (the re-read calls the already-cleared `catalogue.freshness` read;
+INP-1/P17-1 unchanged). Covered by five TDD tests: schedules exactly one re-read on `started` (and it surfaces a
+LATER commit the immediate read missed); none on `already_running`; cancels on unmount; clears feedback when the
+stamp advances; keeps feedback when the stamp is unchanged.
+
+### Verdict (final)
+
+**§A4 FULLY CLEARED.** All reserved invariants (SEC-1 / refresh-honesty / AD-1) re-verified against the wired
+driver path; the Codex freshness-staleness item resolved with no new bridge surface. **No §A4 residuals
+remain for 010.** Typecheck clean; the 71 read-down tests + the 13 `CatalogueFreshness` tests are green.
+
+**End of final re-check.** Prepared 2026-06-15 against `src/main/index.ts`, `read-down-driver.ts`,
+`catalogue-bridge.ts`, `src/main/ipc/catalogue.ts`, and `CatalogueFreshness.tsx` (the wired path landed in
+PRs #367/#368).
