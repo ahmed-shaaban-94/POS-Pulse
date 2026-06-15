@@ -2,8 +2,9 @@
 
 **Task:** T054 (§A5 production-readiness perf bring-up).
 **Date measured:** 2026-06-15 · **Hardware:** target POS terminal (owner-confirmed — see §2).
-**Status:** measured + recorded. **VERDICT IS THE OWNER'S CALL** (§7) — this doc records numbers + a
-finding; it does NOT self-declare PASS/FAIL.
+**Status:** measured + recorded; **T054 VERDICT = PASS** (owner, 2026-06-15 — §7). The ~20 s read-down
+finding was fixed (#411, single-transaction staging → ~3.6 s p50); the residual atomic block is accepted for
+v1 (background non-session-gated pull). Chunked R-RISK-2 declined for v1.
 
 > **HEADLINE FINDING (read first).** NFR-1 (exact lookup) and NFR-2 (folded search) pass comfortably
 > against a read-down-populated 50k catalogue (§5). The read-down completion (write path) was the finding:
@@ -202,17 +203,25 @@ interactive POS surface, or whether the chunked R-RISK-2 follow-up is warranted,
 
 ---
 
-## 7. Verdict — **OWNER'S CALL**
+## 7. Verdict — **OWNER: T054 PASS** (2026-06-15)
 
-Per the 009 §A5 precedent, the owner verdicts. For the record:
+Per the 009 §A5 precedent. The owner verdicted both open questions (by directed recommendation, this session):
 
-- **NFR-1 / NFR-2:** indicatively PASS, comfortably (§5). R-RISK-1 not triggered. Unchanged by the #411 fix.
-- **SC-8 read-down window:** was a ~20 s block (§6); the **#411 single-transaction fix cut it to ~3.6 s p50**
-  (§6.1). The ~3.6 s is ONE atomic freeze (the residual irreducible insert + index + promote cost). The
-  author's read: 5.4× better and likely acceptable for a background paired-terminal read-down (it is not
-  session-gated and runs off-peak / on app-start), but a ~3.6 s freeze of cashier interaction during a
-  manual mid-shift refresh is a judgement call. **Owner verdicts (a) T054 PASS/FAIL given ~3.6 s, and
-  (b) whether the chunked R-RISK-2 follow-up is warranted.**
+- **NFR-1 / NFR-2: PASS, comfortably** (§5). NFR-1 worst p95 ≤ 0.45 ms ≤ 50 ms; NFR-2 worst p95 ≤ 48 ms ≤
+  150 ms (~3× headroom). R-RISK-1 / FTS5 fallback **NOT triggered**. Unchanged by the #411 fix.
+- **SC-8 read-down window: PASS** at **~3.6 s p50** post-#411 (§6.1), accepted on this rationale: the
+  read-down is a **background, non-session-gated** pull (Constitution VIII — app-start + hourly interval),
+  so its one atomic ~3.6 s block almost never coincides with active scanning. The only case it is felt is a
+  **manual mid-shift refresh**, where the cashier explicitly initiated it and sees the honest
+  `جارٍ التحديث…` in-flight feedback (`CatalogueFreshness`, #408) — a deliberate, infrequent, signalled
+  action, not a silent freeze. 5.4× under the pre-fix block; acceptable for v1.
+- **(b) Chunked staging (R-RISK-2): DECLINED for v1.** The single-transaction approach is sufficient at this
+  scale. Chunking (let lookups interleave between batches) remains a documented future option **iff** real
+  fleet catalogues materially exceed 50k rows or operators report the manual-refresh freeze as disruptive —
+  re-open then with fresh evidence. NOT pursued now.
+
+**T054 = the perf evidence for §A5; §A5 production-readiness (runbook / rollback / failure-modes) is recorded
+separately. With T054 PASS, the perf bring-up — the last open 010 engineering item — is CLEARED.**
 
 ---
 
