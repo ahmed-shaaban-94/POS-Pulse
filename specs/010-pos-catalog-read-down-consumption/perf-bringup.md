@@ -6,11 +6,17 @@
 finding; it does NOT self-declare PASS/FAIL.
 
 > **HEADLINE FINDING (read first).** NFR-1 (exact lookup) and NFR-2 (folded search) pass comfortably
-> against a read-down-populated 50k catalogue (§5). **BUT the read-down itself blocks the Electron main
-> thread for ~20 s at 50k rows** (§6) — because production shares ONE synchronous `better-sqlite3`
-> connection on the main thread (no worker threads), every barcode scan / lookup / manual refresh freezes
-> for the duration of a read-down. This is the **SC-8** concern made concrete and is a **likely sign-off
-> blocker** pending the owner's verdict + the R-RISK-2 mitigation. See §6 + §8.
+> against a read-down-populated 50k catalogue (§5). The read-down completion (write path) was the finding:
+> it blocked the Electron main thread for **~20 s at 50k rows** (production shares ONE synchronous
+> `better-sqlite3` connection on the main thread — no worker threads — so every barcode scan / lookup /
+> manual refresh froze for the duration). This is the **SC-8** concern made concrete.
+>
+> **FIX LANDED (#411, single-transaction approach — owner-chosen).** Wrapping the staging loop in one
+> `db.transaction()` (was ~100k autocommit INSERTs) cut the block to **~3.6 s p50 at 50k rows — a 5.4×
+> improvement** (§6.1). The residual is the irreducible insert + index-maintenance + promote cost, not
+> fsync overhead. It is ONE atomic ~3.6 s freeze (the single-transaction tradeoff the owner picked over
+> chunked staging). **Whether ~3.6 s clears the §A5 bar — or warrants the chunked R-RISK-2 follow-up — is
+> the owner's verdict.** See §6.1 + §8.
 
 ---
 
@@ -134,7 +140,7 @@ verdict; the read-down-populated table is structurally identical.
 
 ---
 
-## 6. Read-down completion window (SC-8) — recorded 2026-06-15, target terminal · **THE FINDING**
+## 6. Read-down completion window (SC-8) — recorded 2026-06-15, target terminal · **PRE-FIX baseline (the finding)**
 
 5 full-replace runs @ 50,000 rows; products written/run = 50,000 (verified). Production `writer.run()` span:
 
@@ -174,35 +180,60 @@ the staging loop — which is **NOT** wrapped in a `db.transaction()` (unlike th
 dominates. The staging/promote split was therefore **not separately measured**: the per-row linearity is
 conclusive.
 
+## 6.1 POST-FIX result (#411, single-transaction staging) — recorded 2026-06-15, target terminal
+
+Fix landed: the staging loop is now wrapped in ONE `db.transaction()` (the owner-chosen single-transaction
+approach over chunked R-RISK-2). Same harness, same 5 full-replace runs @ 50,000 rows; products written/run
+= 50,000 (verified):
+
+| Metric | min | **p50** | **p95** | max |
+|:--|--:|--:|--:|--:|
+| read-down `writer.run()` (ms) — **post-fix** | 3554.5 | **3639.3** | **3726.2** | 3726.2 |
+
+**~20 s → ~3.6 s p50 = a 5.4× improvement.** The ~16 s of fsync overhead (the ~100k autocommit commits at
+`synchronous=FULL`) is gone. The residual ~3.6 s is the **irreducible** cost the single transaction cannot
+remove: 100k INSERTs + B-tree maintenance on 4 indexes + the promote's DELETE-50k + INSERT…SELECT-50k —
+real CPU, not durability waiting. NFR-1 / NFR-2 (§5) are **unchanged** by the fix (the read path is
+untouched; the post-fix run measured NFR-1 p95 ≤ 0.35 ms, NFR-2 p95 ≤ 47 ms — same as pre-fix).
+
+**It is ONE atomic ~3.6 s freeze** — no lookup interleaves during it (the single-transaction tradeoff the
+owner picked over chunked staging's many-short-pauses). Whether ~3.6 s clears the §A5 bar for an
+interactive POS surface, or whether the chunked R-RISK-2 follow-up is warranted, is the **owner's verdict**.
+
 ---
 
 ## 7. Verdict — **OWNER'S CALL**
 
 Per the 009 §A5 precedent, the owner verdicts. For the record:
 
-- **NFR-1 / NFR-2:** indicatively PASS, comfortably (§5). R-RISK-1 not triggered.
-- **SC-8 read-down window:** a **~20 s main-thread block** at 50k rows. There is no explicit numeric budget
-  in the spec for read-down completion, but a ~20 s freeze of all cashier interaction is **not acceptable
-  for an interactive POS surface** and contradicts the SC-8 intent (lookups stay responsive during a
-  read-down). The author's recommendation: **treat as a sign-off blocker** pending the §8 mitigation — but
-  the verdict + sequencing (ship-doc-then-fix vs fix-then-reverify) is the owner's.
+- **NFR-1 / NFR-2:** indicatively PASS, comfortably (§5). R-RISK-1 not triggered. Unchanged by the #411 fix.
+- **SC-8 read-down window:** was a ~20 s block (§6); the **#411 single-transaction fix cut it to ~3.6 s p50**
+  (§6.1). The ~3.6 s is ONE atomic freeze (the residual irreducible insert + index + promote cost). The
+  author's read: 5.4× better and likely acceptable for a background paired-terminal read-down (it is not
+  session-gated and runs off-peak / on app-start), but a ~3.6 s freeze of cashier interaction during a
+  manual mid-shift refresh is a judgement call. **Owner verdicts (a) T054 PASS/FAIL given ~3.6 s, and
+  (b) whether the chunked R-RISK-2 follow-up is warranted.**
 
 ---
 
-## 8. Recommended fix (separate task — owner-sequenced, NOT done here)
+## 8. Fix status (#411 — single-transaction approach, LANDED)
 
-The fix is **out of T054's measure-only scope** and is flagged for a follow-up task (own TDD + P8/review +
-PR), because it touches the atomic stage/promote path (FR-7 "prior catalogue preserved", data-model
-invariant-2 on staging leakage) and involves a real UX tradeoff:
+The owner chose the **single-transaction** approach. **DONE** (this doc's §6.1 records the result):
 
-1. **Wrap the staging loop in one `db.transaction()`** — collapses ~100k fsyncs to ~1, expected ~20 s → ~1 s.
-   Simplest; but the thread still blocks **atomically** for that ~1 s (no lookup interleaves).
-2. **Chunked staging** (plan **R-RISK-2** named mitigation) — stage in batches so queued lookups can run
-   **between** chunks. Turns one ~20 s freeze into many short pauses — better worst-case scan latency, more
-   complexity. **Single-big-tx vs chunked is a design/owner call** (one ~1 s freeze vs many short ones).
+1. ✅ **Staging loop wrapped in one `db.transaction()`** (`read-down-writer.ts` `stageAll`) — collapsed ~100k
+   autocommit fsyncs to one commit, **~20 s → ~3.6 s p50** (§6.1). Prepared statements now hoisted once (a
+   side win). FR-7 / data-model invariant-2 preserved (live tables are written ONLY in the promote tx, which
+   is unchanged — grep-verified; the existing `promote-atomicity` + `happy` tests stay green as the guard).
+   The thread still blocks **atomically** for ~3.6 s (no lookup interleaves) — the explicit single-tx
+   tradeoff.
+2. ⏸️ **Chunked staging** (plan **R-RISK-2**) — the alternative the owner did NOT pick (one ~3.6 s freeze vs
+   chunked's many short pauses). Kept on the table as a follow-up IFF the owner finds ~3.6 s insufficient.
 
-Either way: re-run §6 after the fix to confirm the block is within a cashier-tolerable bound, and confirm
-the §5 NFR-1/NFR-2 lookups still pass (they will — the read path is unchanged).
+Re-ran §5 + §6 after the fix: §6.1 confirms the new block; §5 confirms NFR-1/NFR-2 still pass (read path
+unchanged). The fix is a **pure perf refactor** — observable output (live rows, freshness, rejection counts,
+failure outcome) is identical before/after, so no new behavioural test was warranted (the existing writer
+suite is the regression guard; a "staging atomicity" test would not have failed pre-fix because FR-7 already
+held via the promote tx).
 
 ---
 
