@@ -349,12 +349,23 @@ The §11 verdict folded in the PR #358 Codex flag: after a `started` tick, the r
 `loadFreshness()` reads the PRE-commit timestamp (the bridge drops `completed`). **Owner decision (2026-06-15):
 a ONE-SHOT bounded deferred re-read** — implemented in `CatalogueFreshness.tsx` (`POST_COMMIT_REREAD_DELAY_MS`
 = 3s): a single `setTimeout` scheduled ONLY on `started`, superseded by a later refresh, cancelled on unmount.
-It is **not a poll** (no recurring clock — respects the owner's absolute-time / no-poll brief): one re-read
-catches the committed timestamp in the common fast case; a slow promote decays to the honest in-flight
-feedback + the next natural read. No new bridge channel, no new renderer→main surface — so **no new §A4
-attack surface** (the re-read calls the already-cleared `catalogue.freshness` read; INP-1/P17-1 unchanged).
-Covered by three TDD tests (schedules exactly one re-read on `started`; none on `already_running`; cancels on
-unmount).
+It is **not a poll** (no recurring clock — respects the owner's absolute-time / no-poll brief).
+
+**Best-effort, not a guarantee.** The 3s delay catches the committed timestamp in the common fast case. A real
+paginated catalogue (≤1000 rows/page × N pages → validate → stage → promote under WAL) can exceed 3s on target
+hardware; when it does, the one-shot read sees the stamp UNCHANGED and the timestamp only advances on the next
+natural read (next mount / next refresh). This is acceptable and HONEST by construction: the in-flight
+`جارٍ التحديث…` feedback is true while the promote runs.
+
+**Contradiction guard (review catch, 2026-06-15).** Because the deferred read advances the timestamp, it would
+otherwise show a FRESH `آخر تحديث: <new time>` alongside the stale `جارٍ التحديث…` feedback — the exact
+contradiction this honesty surface exists to remove. So the deferred read clears the feedback to `idle`
+**iff the timestamp ADVANCED** (the promote landed) past the stamp captured at admission; if UNCHANGED (slow
+promote still running), the feedback persists (still true). No new bridge channel, no new renderer→main surface
+— so **no new §A4 attack surface** (the re-read calls the already-cleared `catalogue.freshness` read;
+INP-1/P17-1 unchanged). Covered by five TDD tests: schedules exactly one re-read on `started` (and it surfaces a
+LATER commit the immediate read missed); none on `already_running`; cancels on unmount; clears feedback when the
+stamp advances; keeps feedback when the stamp is unchanged.
 
 ### Verdict (final)
 

@@ -131,25 +131,46 @@ export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Ele
   // it survives re-renders, can be superseded by a new refresh, and is cancelled
   // on unmount (no setState-after-unmount). `null` when none is scheduled.
   const rereadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirror of `lastSuccessAt` for the deferred re-read's advancement check — a ref
+  // so the timer callback compares against the value AT ADMISSION, not a stale
+  // render closure.
+  const lastSuccessAtRef = useRef<string | null>(null);
+  lastSuccessAtRef.current = lastSuccessAt;
 
   const resolveBridge = useCallback((): FreshnessBridge => {
     /* v8 ignore next — production arm only reachable in Electron; tests inject `bridge` */
     return bridge ?? readCatalogueBridge();
   }, [bridge]);
 
-  const loadFreshness = useCallback(async (): Promise<void> => {
-    try {
-      const res = await resolveBridge().freshness({});
-      const next = toState(res);
-      setState(next.state);
-      setLastSuccessAt(next.lastSuccessAt);
-    } catch {
-      // A rejected freshness invoke (IPC transport edge) degrades to the
-      // unavailable state — never leaves the indicator stuck on `loading`.
-      setState('unavailable');
-      setLastSuccessAt(null);
-    }
-  }, [resolveBridge]);
+  const loadFreshness = useCallback(
+    async (opts?: { clearFeedbackIfAdvancedFrom: string | null }): Promise<void> => {
+      try {
+        const res = await resolveBridge().freshness({});
+        const next = toState(res);
+        setState(next.state);
+        setLastSuccessAt(next.lastSuccessAt);
+        // T039 (#360) — the deferred post-commit re-read passes the stamp captured
+        // at admission. If the timestamp ADVANCED, the promote landed → the
+        // in-flight "جارٍ التحديث…" feedback is now a lie and is cleared (kills the
+        // fresh-stamp + "updating now" contradiction). If UNCHANGED (slow promote
+        // still running), the feedback stays — it remains honest. Only the deferred
+        // read passes this; the mount / immediate reads never touch feedback.
+        if (
+          opts !== undefined &&
+          next.lastSuccessAt !== null &&
+          next.lastSuccessAt !== opts.clearFeedbackIfAdvancedFrom
+        ) {
+          setFeedback('idle');
+        }
+      } catch {
+        // A rejected freshness invoke (IPC transport edge) degrades to the
+        // unavailable state — never leaves the indicator stuck on `loading`.
+        setState('unavailable');
+        setLastSuccessAt(null);
+      }
+    },
+    [resolveBridge],
+  );
 
   useEffect(() => {
     void loadFreshness();
@@ -193,9 +214,13 @@ export function CatalogueFreshness({ bridge }: CatalogueFreshnessProps): JSX.Ele
       // read is simply truthful-to-now again and the next natural read corrects it
       // — no background clock (respects the owner's no-poll / absolute-time brief).
       if (res.kind === 'started') {
+        // Capture the stamp AT ADMISSION (post-immediate-read): the deferred read
+        // clears the in-flight feedback iff it advances past this (the promote
+        // landed), so a fresh timestamp never shows alongside "جارٍ التحديث…".
+        const stampAtAdmission = lastSuccessAtRef.current;
         rereadTimerRef.current = setTimeout(() => {
           rereadTimerRef.current = null;
-          void loadFreshness();
+          void loadFreshness({ clearFeedbackIfAdvancedFrom: stampAtAdmission });
         }, POST_COMMIT_REREAD_DELAY_MS);
       }
     } finally {
