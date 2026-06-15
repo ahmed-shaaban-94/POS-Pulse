@@ -11,6 +11,9 @@ const baseSnapshot = {
   },
   components: {
     schemas: { Error: { type: 'object' }, ActiveShiftResponse: { type: 'object' } },
+    parameters: { ExistingParam: { name: 'x', in: 'query' } },
+    responses: { ExistingResponse: { description: 'kept' } },
+    securitySchemes: { clerkJwt: { type: 'http', scheme: 'bearer' } },
   },
 };
 
@@ -19,12 +22,14 @@ const readDown = {
   paths: {
     '/api/pos/v1/catalog/snapshot': {
       get: {
+        parameters: [{ $ref: '#/components/parameters/BranchId' }],
         responses: {
           '200': {
             content: {
               'application/json': { schema: { $ref: '#/components/schemas/CatalogSnapshotPage' } },
             },
           },
+          '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
     },
@@ -39,6 +44,9 @@ const readDown = {
       },
       Error: { type: 'object', description: 'dup' },
     },
+    parameters: { BranchId: { name: 'branch_id', in: 'query' }, Limit: { name: 'limit', in: 'query' } },
+    responses: { Unauthorized: { description: 'unauth' }, NotFound: { description: 'nf' } },
+    securitySchemes: { device: { type: 'http', scheme: 'bearer' } },
   },
 };
 
@@ -72,5 +80,27 @@ describe('mergeReadDown', () => {
       (out.components.schemas.CatalogSnapshotPage as { properties: { err: { $ref: string } } })
         .properties.err.$ref,
     ).toBe('#/components/schemas/Error');
+  });
+
+  it('merges read-down components.parameters (paths $ref them — must not dangle)', () => {
+    const out = mergeReadDown(baseSnapshot, readDown);
+    expect(out.components.parameters?.BranchId).toBeDefined();
+    expect(out.components.parameters?.Limit).toBeDefined();
+    // existing parameters preserved
+    expect(out.components.parameters?.ExistingParam).toBeDefined();
+  });
+
+  it('merges read-down components.responses (paths $ref them — must not dangle)', () => {
+    const out = mergeReadDown(baseSnapshot, readDown);
+    expect(out.components.responses?.Unauthorized).toBeDefined();
+    expect(out.components.responses?.NotFound).toBeDefined();
+    // existing responses preserved
+    expect(out.components.responses?.ExistingResponse).toBeDefined();
+  });
+
+  it('merges read-down securitySchemes without clobbering existing ones', () => {
+    const out = mergeReadDown(baseSnapshot, readDown);
+    expect(out.components.securitySchemes?.device).toBeDefined();
+    expect(out.components.securitySchemes?.clerkJwt).toBeDefined();
   });
 });
