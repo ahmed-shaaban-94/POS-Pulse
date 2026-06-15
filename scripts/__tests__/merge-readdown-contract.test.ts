@@ -44,7 +44,10 @@ const readDown = {
       },
       Error: { type: 'object', description: 'dup' },
     },
-    parameters: { BranchId: { name: 'branch_id', in: 'query' }, Limit: { name: 'limit', in: 'query' } },
+    parameters: {
+      BranchId: { name: 'branch_id', in: 'query' },
+      Limit: { name: 'limit', in: 'query' },
+    },
     responses: { Unauthorized: { description: 'unauth' }, NotFound: { description: 'nf' } },
     securitySchemes: { device: { type: 'http', scheme: 'bearer' } },
   },

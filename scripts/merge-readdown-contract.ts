@@ -41,7 +41,10 @@ const STALE_PATHS = ['/api/v1/pos/catalog/products', '/api/v1/pos/catalog/stock'
  * Merge one components sub-bag (e.g. schemas): snapshot entries win on collision
  * (skip the read-down entry of the same name). Pure — returns a new object.
  */
-function mergeBag(snapshotBag: ComponentBag | undefined, readDownBag: ComponentBag | undefined): ComponentBag | undefined {
+function mergeBag(
+  snapshotBag: ComponentBag | undefined,
+  readDownBag: ComponentBag | undefined,
+): ComponentBag | undefined {
   if (readDownBag === undefined) return snapshotBag;
   const merged: ComponentBag = { ...(snapshotBag ?? {}) };
   for (const [name, def] of Object.entries(readDownBag)) {
@@ -55,8 +58,11 @@ function mergeBag(snapshotBag: ComponentBag | undefined, readDownBag: ComponentB
  * Merge the read-down contract into the snapshot. Pure — does not mutate inputs.
  */
 export function mergeReadDown(snapshot: OpenApiDoc, readDown: OpenApiDoc): OpenApiDoc {
-  const paths: Record<string, unknown> = { ...snapshot.paths };
-  for (const p of STALE_PATHS) delete paths[p];
+  const stale = new Set(STALE_PATHS);
+  // Rebuild paths without the stale catalogue entries (no dynamic delete).
+  const paths: Record<string, unknown> = Object.fromEntries(
+    Object.entries(snapshot.paths).filter(([p]) => !stale.has(p)),
+  );
   for (const [p, def] of Object.entries(readDown.paths)) paths[p] = def;
 
   // Merge every components sub-bag present in either doc (schemas, parameters,
@@ -79,7 +85,11 @@ export function mergeReadDown(snapshot: OpenApiDoc, readDown: OpenApiDoc): OpenA
 import { readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import yaml from 'js-yaml';
+// js-yaml ships no bundled types and @types/js-yaml is not a dependency; type the
+// one function we use at the import boundary so the parse is type-safe downstream.
+import jsYaml from 'js-yaml';
+
+const loadYaml = (jsYaml as { load: (src: string) => unknown }).load;
 
 const SCRIPTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_PATH = path.join(SCRIPTS_DIR, 'openapi-snapshot.json');
@@ -87,7 +97,7 @@ const READDOWN_YAML_PATH = path.join(SCRIPTS_DIR, '.readdown-source.yaml');
 
 function main(): void {
   const snapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf8')) as OpenApiDoc;
-  const readDown = yaml.load(readFileSync(READDOWN_YAML_PATH, 'utf8')) as OpenApiDoc;
+  const readDown = loadYaml(readFileSync(READDOWN_YAML_PATH, 'utf8')) as OpenApiDoc;
   const merged = mergeReadDown(snapshot, readDown);
   // The committed snapshot is single-line minified JSON; match that exactly so
   // the diff is the content change, not a reformat. Trailing newline.
