@@ -26,19 +26,28 @@
  * USAGE (from repo root):
  *   npx tsx scripts/perf-seed-catalogue.ts --rows 50000 --out ./perf-catalogue.db
  *   npx tsx scripts/perf-seed-catalogue.ts --rows 50000 --measure --samples 1000
+ *   npx tsx scripts/perf-seed-catalogue.ts --rows 50000 --read-down --measure   # 010 T054
  *
  * FLAGS:
- *   --rows N        row count to seed (default 50000; NFR floor is 50k)
- *   --out PATH      on-disk db path (default ./perf-catalogue.db); deleted+recreated
- *   --measure       after seeding, run the p95 timing harness (§4/§5 of the doc)
- *   --samples N     timed iterations per scenario (default 1000); >=1000 recommended
- *   --warmup N      discarded warm-up iterations per scenario (default 50)
- *   --keep          do not delete an existing --out before seeding (resume/inspect)
+ *   --rows N           row count to seed (default 50000; NFR floor is 50k)
+ *   --out PATH         on-disk db path (default ./perf-catalogue.db); deleted+recreated
+ *   --measure          after seeding, run the p95 timing harness (009 §4/§5 of the doc)
+ *   --samples N        timed iterations per scenario (default 1000); >=1000 recommended
+ *   --warmup N         discarded warm-up iterations per scenario (default 50)
+ *   --keep             do not delete an existing --out before seeding (resume/inspect)
+ *   --read-down        (010 T054) time the PRODUCTION read-down writer's full run()
+ *                      span — the main-thread block a mid-read-down scan inherits (SC-8).
+ *                      Runs BEFORE --measure so the NFR-1/NFR-2 lookups then run against
+ *                      a writer-promoted (read-down-populated) catalogue.
+ *   --read-down-runs N timed full-replace read-down runs (default 10)
  *
- * The script ONLY measures the repo-level query (prepared-statement exec + row
- * mapping). It does NOT measure render (NFR-4) or the IPC round-trip — those are
- * separate budgets per the doc. Numbers are PRINTED, never written into the doc:
- * the owner transcribes them into the §5 tables and decides the verdict.
+ * The repo-level scenarios ONLY measure the prepared-statement exec + row mapping
+ * (NOT render / NOT IPC — separate budgets). The --read-down scenario measures the
+ * whole synchronous writer.run() span (stage + promote), which IS the worst-case
+ * main-thread block in production (single shared synchronous connection; no worker
+ * threads → no in-process WAL reader/writer concurrency to measure). Numbers are
+ * PRINTED, never written into the doc: the owner transcribes them into the §5/§6
+ * tables and decides the verdict.
  */
 
 import { existsSync, rmSync } from 'fs';
@@ -51,6 +60,12 @@ import { openDatabase } from '../src/main/db/client.js';
 import { bindMigrationsDb, readMigrationsFromDisk, runMigrations } from '../src/main/db/migrate.js';
 import { createProductRepo, type ProductRepo } from '../src/main/catalogue/product-repo.js';
 import { normalize } from '../src/main/catalogue/normalize.js';
+// 010 T054 — read-down completion + promote-window bring-up (SC-8). Times the
+// PRODUCTION writer path (createReadDownWriter) so the numbers reflect the real
+// main-thread block a barcode scan inherits if it lands during a read-down.
+import { createReadDownWriter } from '../src/main/catalogue/read-down/read-down-writer.js';
+import { createCatalogueSyncStateRepo } from '../src/main/catalogue/catalogue-sync-state-repo.js';
+import type { SellableCatalogRow } from '../src/main/catalogue/read-down/map-sellable-row.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -65,6 +80,10 @@ interface Args {
   samples: number;
   warmup: number;
   keep: boolean;
+  /** 010 T054 — time the read-down writer (staging + promote windows). */
+  readDown: boolean;
+  /** Timed read-down runs (each is a FULL replace of all `rows`). Default 10. */
+  readDownRuns: number;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -75,6 +94,8 @@ function parseArgs(argv: string[]): Args {
     samples: 1000,
     warmup: 50,
     keep: false,
+    readDown: false,
+    readDownRuns: 10,
   };
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i] ?? '';
@@ -103,6 +124,8 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--warmup') a.warmup = Number.parseInt(next(), 10);
     else if (flag === '--measure') a.measure = true;
     else if (flag === '--keep') a.keep = true;
+    else if (flag === '--read-down') a.readDown = true;
+    else if (flag === '--read-down-runs') a.readDownRuns = Number.parseInt(next(), 10);
     // Hard error on a genuinely unknown flag. Do NOT silently ignore: a typo'd
     // flag silently falling back to the default (e.g. 50k rows when you meant
     // something else) would corrupt the perf evidence without warning.
@@ -113,6 +136,8 @@ function parseArgs(argv: string[]): Args {
     throw new Error('--samples must be a positive integer');
   if (!Number.isInteger(a.warmup) || a.warmup < 0)
     throw new Error('--warmup must be a non-negative integer');
+  if (!Number.isInteger(a.readDownRuns) || a.readDownRuns < 1)
+    throw new Error('--read-down-runs must be a positive integer');
   return a;
 }
 
@@ -272,6 +297,91 @@ function measure(repo: ProductRepo, t: SeedTargets, warmup: number, samples: num
   console.log('If any NFR-2 p95 > 150ms -> open R-RISK-1 / FTS5-fallback review.');
 }
 
+/**
+ * 010 T054 — build `n` valid `SellableCatalogRow`s (the backend snapshot shape).
+ * One barcode (alias) each, exact-decimal price string, opaque row_cursor. These
+ * all PASS map + validate so the writer stages + promotes the full set (the
+ * realistic full-snapshot-replace path, FR-7). NOT the 009 seed shape — this is
+ * the wire shape the writer consumes before folding.
+ */
+function buildSnapshotRows(n: number): SellableCatalogRow[] {
+  const rows: SellableCatalogRow[] = [];
+  for (let i = 0; i < n; i++) {
+    const id = String(i);
+    rows.push({
+      product_id: `p-${id}`,
+      sku: `SKU-${id}`,
+      name: `منتج ${id} Product ${id}`,
+      aliases: [`62210${id.padStart(8, '0')}`],
+      price: { amount: (1 + (i % 1000) / 100).toFixed(2), currency_code: 'EGP' },
+      tax_category: 'standard',
+      active: true,
+      row_cursor: `rc-${id}`,
+    });
+  }
+  return rows;
+}
+
+/**
+ * 010 T054 — time the PRODUCTION read-down writer's full `run()` span over
+ * `runs` iterations, each a full-snapshot replace of all `rows` rows.
+ *
+ * WHY `writer.run()` TOTAL IS THE DECISION-CRITICAL NUMBER (SC-8): production
+ * shares ONE synchronous better-sqlite3 connection on the Electron main thread
+ * (one `openDatabase`, no worker threads — verified at the composition root).
+ * The promote is `db.transaction()`, which holds the thread BEGIN→COMMIT; the
+ * staging loop runs before it. So a barcode-lookup IPC that arrives mid-read-down
+ * does NOT race the writer under WAL — it QUEUES behind the writer's synchronous
+ * span and runs after. The worst-case latency that span adds to a scan IS the
+ * full `writer.run()` duration. There is no in-process WAL reader-vs-writer
+ * concurrency to measure; the thread-block span is the honest SC-8 number.
+ *
+ * The seed already populated `rows` live rows, so the FIRST run replaces a full
+ * catalogue (DELETE live + INSERT…SELECT staging) — the realistic steady-state
+ * cost, not an empty-table first-fill.
+ */
+function measureReadDown(db: DatabaseHandle, rows: number, runs: number): void {
+  const syncStateRepo = createCatalogueSyncStateRepo(db);
+  const writer = createReadDownWriter({ db, syncStateRepo });
+  const snapshot = buildSnapshotRows(rows);
+
+  console.log(
+    `\n=== read-down completion window — ${String(runs)} full-replace runs @ ${String(rows)} rows ===`,
+  );
+  console.log(
+    '=== PRODUCTION writer.run() span = the main-thread BLOCK a mid-read-down scan inherits (SC-8) ===',
+  );
+  console.log(
+    '=== single shared synchronous connection: no in-process WAL reader/writer race; the block IS the cost ===\n',
+  );
+
+  const samplesMs: number[] = [];
+  let lastWritten = 0;
+  for (let i = 0; i < runs; i++) {
+    const t0 = performance.now();
+    const result = writer.run({
+      tenantId: TENANT,
+      branchId: 'branch-1',
+      sourceSnapshotId: `snap-${String(i)}`,
+      now: '2026-06-15T00:00:00.000Z',
+      rows: snapshot,
+    });
+    samplesMs.push(performance.now() - t0);
+    lastWritten = result.productsWritten;
+    if (result.outcome === 'failed')
+      throw new Error(`read-down run ${String(i)} FAILED: ${String(result.failureCategory)}`);
+  }
+
+  const s = stats(samplesMs);
+  console.log(`products written / run : ${String(lastWritten)} (expected ${String(rows)})`);
+  console.log(`read-down full run()   : ${fmt(s)}`);
+  console.log('\nThis is the worst-case main-thread block. A barcode scan arriving during a');
+  console.log('read-down waits at most ~this long before its lookup runs (then its own');
+  console.log('NFR-1 budget applies). Transcribe p50/p95/max into perf-bringup.md §6.');
+  console.log('If the block is material vs the cashier-tolerable scan latency → consider chunked');
+  console.log('staging / smaller promote (plan §R-RISK-2 mitigation).');
+}
+
 function openWithAbiGuard(dbPath: string): DatabaseHandle {
   try {
     return openDatabase(dbPath);
@@ -339,12 +449,21 @@ function main(): void {
       `[seed] seeded ${String(args.rows)} rows in ${((performance.now() - t0) / 1000).toFixed(1)}s`,
     );
 
+    // 010 T054 — read-down completion window FIRST (before --measure), so the
+    // NFR-1/NFR-2 lookups below run against a catalogue the PRODUCTION WRITER
+    // promoted (a read-down-populated catalogue, exactly what §A5 asks), not just
+    // the raw seed. Each read-down run is a full replace of all `rows` rows.
+    if (args.readDown) {
+      measureReadDown(db, args.rows, args.readDownRuns);
+    }
+
     if (args.measure) {
       const repo = createProductRepo(db);
       measure(repo, targets, args.warmup, args.samples);
-    } else {
+    } else if (!args.readDown) {
       console.log(
-        '\n[seed] done. Re-run with --measure to time NFR-1/NFR-2, or open the db with the repo.',
+        '\n[seed] done. Re-run with --measure to time NFR-1/NFR-2, --read-down for the' +
+          ' read-down completion window, or open the db with the repo.',
       );
     }
   } finally {
