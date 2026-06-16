@@ -756,6 +756,8 @@ app
       freshness: {
         readSyncState: (tenantId) => catalogueSyncStateRepo.read(tenantId),
         countProducts: (tenantId) => catalogueRepo.countByTenant(tenantId),
+        // 010 diagnostics — tenant-scoped barcode-alias count for catalogue:counts.
+        countBarcodes: (tenantId) => catalogueRepo.countBarcodesByTenant(tenantId),
       },
       // 010 T039 — the live read-down driver (paired terminals only). Omitted
       // when unpaired (exactOptionalPropertyTypes — spread the key only when

@@ -54,12 +54,13 @@ function fakeBridge(over: Partial<CatalogueBridge> = {}): CatalogueBridge {
     freshness: vi.fn(() =>
       Promise.resolve({ kind: 'ok' as const, last_success_at: null, is_empty: true }),
     ),
+    counts: vi.fn(() => Promise.resolve({ kind: 'ok' as const, products: 0, barcodes: 0 })),
     ...over,
   };
 }
 
 describe('registerCatalogueHandlers', () => {
-  it('registers all six catalogue channels', () => {
+  it('registers all seven catalogue channels', () => {
     const { ipcMain, channels } = fakeIpcMain();
     registerCatalogueHandlers(ipcMain, { bridge: fakeBridge() });
     expect(channels().sort()).toEqual(
@@ -70,8 +71,20 @@ describe('registerCatalogueHandlers', () => {
         CATALOGUE_IPC_CHANNELS.RESOLVE,
         CATALOGUE_IPC_CHANNELS.REFRESH,
         CATALOGUE_IPC_CHANNELS.FRESHNESS,
+        CATALOGUE_IPC_CHANNELS.COUNTS,
       ].sort(),
     );
+  });
+
+  it('counts channel delegates to bridge.counts and returns its integers', async () => {
+    const { ipcMain, invoke } = fakeIpcMain();
+    const counts = vi.fn(() =>
+      Promise.resolve({ kind: 'ok' as const, products: 50, barcodes: 49 }),
+    );
+    registerCatalogueHandlers(ipcMain, { bridge: fakeBridge({ counts }) });
+    const res = await invoke(CATALOGUE_IPC_CHANNELS.COUNTS, {});
+    expect(res).toEqual({ kind: 'ok', products: 50, barcodes: 49 });
+    expect(counts).toHaveBeenCalledOnce();
   });
 
   it('freshness delegates to the bridge and returns its response', async () => {

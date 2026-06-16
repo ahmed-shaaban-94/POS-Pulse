@@ -14,6 +14,7 @@ import { DashboardRoute } from './routes/app/DashboardRoute';
 import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
 import { CartPlaceholder } from './routes/app/CartPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
+import { CatalogueDiagnostics } from './routes/app/CatalogueDiagnostics';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
 import { CheckoutRoute } from './routes/app/checkout/CheckoutRoute';
 import { CashierManagement } from './routes/app/manager/CashierManagement';
@@ -175,6 +176,7 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         { path: 'cart', element: <CartPlaceholder /> },
         { path: 'checkout', element: <CheckoutRoute /> },
         { path: 'inventory', element: <InventoryPlaceholder /> },
+        { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
         { path: 'settings', element: <SettingsHelpPlaceholder /> },
         {
           path: 'manager/cashiers',

@@ -13,6 +13,8 @@ import type {
   CatalogueFreshnessRequest,
   CatalogueRefreshResponse,
   CatalogueFreshnessResponse,
+  CatalogueCountsRequest,
+  CatalogueCountsResponse,
 } from '../shared/bridge-api.js';
 import { CATALOGUE_IPC_CHANNELS } from '../shared/catalogue/channels.js';
 
@@ -51,4 +53,7 @@ export const catalogue: CatalogueBridgeAPI = {
       CATALOGUE_IPC_CHANNELS.FRESHNESS,
       req,
     ) as Promise<CatalogueFreshnessResponse>,
+  // 010 diagnostics — pure read of tenant-scoped local read-model counts.
+  counts: (req: CatalogueCountsRequest) =>
+    ipcRenderer.invoke(CATALOGUE_IPC_CHANNELS.COUNTS, req) as Promise<CatalogueCountsResponse>,
 };

@@ -51,6 +51,7 @@ function catalogueBridge(over: Partial<CatalogueBridgeAPI> = {}): CatalogueBridg
     resolve: vi.fn(),
     refresh: vi.fn(),
     freshness: vi.fn(),
+    counts: vi.fn(),
     ...over,
   };
 }

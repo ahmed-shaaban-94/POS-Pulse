@@ -11,6 +11,7 @@ import type {
   CatalogueResolveResponse,
   CatalogueRefreshResponse,
   CatalogueFreshnessResponse,
+  CatalogueCountsResponse,
 } from '../../shared/bridge-api.js';
 import type { CatalogueBridge } from '../catalogue/catalogue-bridge.js';
 
@@ -124,4 +125,10 @@ export function registerCatalogueHandlers(ipcMain: IpcMain, deps: CatalogueHandl
       return bridge.freshness({});
     },
   );
+
+  // 010 diagnostics — read-only tenant-scoped counts. `{}` request (identity from
+  // the session, INP-1); the bridge owns the session gate + tenant scope.
+  ipcMain.handle(CATALOGUE_IPC_CHANNELS.COUNTS, async (): Promise<CatalogueCountsResponse> => {
+    return bridge.counts({});
+  });
 }
