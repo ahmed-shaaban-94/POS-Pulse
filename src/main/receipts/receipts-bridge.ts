@@ -326,10 +326,11 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
               tender_lines_summary_json: row.tender_lines_summary_json,
               triggering_print_event_id: print_event_id,
             });
-          } catch {
+          } catch (err: unknown) {
             // Defence-in-depth: dispatcher resolves void by contract, but a
             // buggy drawer dispatch must not turn a successful print into a
             // refused retry. The print already succeeded + is durable.
+            console.error('[pos-pulse] drawer dispatch after retry-print failed', err);
           }
         }
         return {
@@ -528,8 +529,9 @@ export function createReceiptsBridge(deps: ReceiptsBridgeDependencies): Receipts
         created_at: overridden_at,
         payload: { sale_id: row.sale_id, print_event_id },
       });
-    } catch {
-      /* audit emit is best-effort; the durable override row already landed */
+    } catch (err: unknown) {
+      // audit emit is best-effort; the durable override row already landed
+      console.error('[pos-pulse] manual-override audit emit failed', err);
     }
 
     return {

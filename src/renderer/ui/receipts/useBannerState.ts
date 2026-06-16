@@ -62,7 +62,8 @@ export function useBannerState(options: UseBannerStateOptions = {}): PrinterFail
             setPrintFailure(null);
           }
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.warn('[pos-pulse] printer banner poll failed', err);
           if (!cancelled) setPrintFailure(null);
         });
     };

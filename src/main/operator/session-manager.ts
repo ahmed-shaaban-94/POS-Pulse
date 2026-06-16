@@ -94,8 +94,8 @@ export class SessionManager {
     for (const cb of this.startCallbacks) {
       try {
         cb(record);
-      } catch {
-        // subscribers must not break create()
+      } catch (err: unknown) {
+        console.error('[pos-pulse] session start subscriber threw', err);
       }
     }
     return record;
@@ -131,8 +131,8 @@ export class SessionManager {
       for (const cb of this.endCallbacks) {
         try {
           cb(ending, cause);
-        } catch {
-          // subscribers must not break end()
+        } catch (err: unknown) {
+          console.error('[pos-pulse] session end subscriber threw', err);
         }
       }
     }

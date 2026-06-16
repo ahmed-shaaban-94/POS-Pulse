@@ -306,9 +306,12 @@ export class TakeoverHandler {
         approving_supervisor_id: null,
         payload: {},
       });
-    } catch {
+    } catch (err: unknown) {
       // Audit failure must not abort the sign-in flow (best-effort).
-      // Error detail is intentionally swallowed (PR-1 / NFR-003).
+      this.deps.logger?.warn(
+        { event: 'operator.takeover.audit_emit_failed', error: err instanceof Error ? err.message : String(err) },
+        'takeover audit emit failed',
+      );
     }
   }
 

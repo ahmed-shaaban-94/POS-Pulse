@@ -65,7 +65,8 @@ export function useDrawerBannerState(
             setDrawerFailure(null);
           }
         })
-        .catch(() => {
+        .catch((err: unknown) => {
+          console.warn('[pos-pulse] drawer banner poll failed', err);
           if (!cancelled) setDrawerFailure(null);
         });
     };

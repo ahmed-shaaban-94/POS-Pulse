@@ -134,8 +134,9 @@ export function registerSessionEndCartDiscardSubscriber(
       discard_cause: cause ?? 'signed_out',
       cartStore,
       auditEmitter,
-    }).catch(() => {
+    }).catch((err: unknown) => {
       // discard failure must not propagate to callers of sessionManager.end()
+      console.error('[pos-pulse] session-end cart discard failed', err);
     });
   });
 }

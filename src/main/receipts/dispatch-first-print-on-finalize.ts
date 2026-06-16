@@ -78,7 +78,8 @@ export async function dispatchFirstPrintOnFinalize(
   let payload;
   try {
     payload = deriveReceiptPayload(row, { variant: 'first_print' });
-  } catch {
+  } catch (err) {
+    deps.logError?.(err);
     return;
   }
 

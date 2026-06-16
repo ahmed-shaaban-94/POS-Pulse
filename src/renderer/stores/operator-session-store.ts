@@ -110,7 +110,9 @@ export const useOperatorSessionStore = create<OperatorSessionStore>((set) => ({
       window as { api?: { operator?: { dismissShiftClosedNotice?(): Promise<void> } } }
     ).api?.operator
       ?.dismissShiftClosedNotice?.()
-      .catch(() => undefined);
+      .catch((err: unknown) => {
+        console.warn('[pos-pulse] dismissShiftClosedNotice IPC failed', err);
+      });
   },
   promptTakeover: (pending_takeover_id) => {
     set((s) => {
