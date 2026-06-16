@@ -42,7 +42,7 @@
  * `aliases?` is intentionally MORE lenient than the generated required `aliases`
  * — the safe direction). The page is still validated STRUCTURALLY here on
  * purpose: the generated snapshot has no `CatalogSnapshotPage` page-wrapper type
- * (the live preprod backend serves no `/openapi.json`, so the snapshot was
+ * (the deployed backend serves no `/openapi.json`, so the snapshot was
  * merged from the contract YAML's row schema, not the paginated response
  * envelope). The local mirror remains the validated shape; the structural check
  * is the deliberate transport-boundary guard, not a #349 workaround.
@@ -62,7 +62,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_PAGES = 100_000;
 
 export interface CreateReadDownClientDeps {
-  /** Data-Pulse-2 base URL, e.g. `https://api-preprod.smartdatapulse.tech`. */
+  /** Data-Pulse-2 base URL, e.g. `https://example.invalid` in tests/templates. */
   baseUrl: string;
   /** `fetch` implementation. Production binds the global; tests inject. */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

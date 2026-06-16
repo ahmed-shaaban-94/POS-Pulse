@@ -17,7 +17,7 @@ import type { SellableCatalogRow } from '../map-sellable-row.js';
  * mid-loop failure NEVER yields a partial snapshot (R3 full-replace).
  */
 
-const BASE = 'https://api-preprod.smartdatapulse.tech';
+const BASE = 'https://example.invalid';
 const SNAPSHOT_PATH = '/api/pos/v1/catalog/snapshot';
 const TOKEN = 'device-token-xyz';
 

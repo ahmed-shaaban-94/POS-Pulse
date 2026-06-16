@@ -22,7 +22,7 @@ import type { CaptureSalePayload } from '../capture-payload.js';
  * and never surfaced.
  */
 
-const BASE = 'https://api-preprod.smartdatapulse.tech';
+const BASE = 'https://example.invalid';
 const SALES_PATH = '/api/pos/v1/sales';
 // 016 (D5): the credential the holder now delivers is the opaque pos_operator
 // ENVELOPE (NOT the Clerk JWT). `getOperatorToken` returns it; the client presents

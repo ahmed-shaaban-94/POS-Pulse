@@ -15,8 +15,8 @@ import { createCartBridgeHandlers } from './cart/wire-cart-handlers.js';
 import { createProductRepo } from './catalogue/product-repo.js';
 import { createCatalogueResolver } from './catalogue/resolve-item-ref.js';
 import { applyDevSeedCatalogueIfRequested } from './catalogue/dev-seed-catalogue.js';
-// 010 read-down — catalogue bridge + freshness + live driver wiring (#349 cleared:
-// live DP-2 preprod edge deployed; T021 client + T039 driver now wired).
+// 010 read-down — catalogue bridge + freshness + driver wiring (#349 cleared:
+// DP-2 backend contract deployed; T021 client + T039 driver now wired).
 import { createCatalogueBridge } from './catalogue/catalogue-bridge.js';
 import { createCatalogueSyncStateRepo } from './catalogue/catalogue-sync-state-repo.js';
 import { createReadDownClient } from './catalogue/read-down/read-down-client.js';
@@ -121,15 +121,13 @@ import type { AppConfig } from '../shared/app-config.js';
  * 002-terminal-pairing US2: API base URL for the pair endpoint. Reads
  * `VITE_API_BASE_URL` from `process.env` (Vite does NOT prefix-filter
  * the main bundle — main is built with tsc, not Vite). Falls back to
- * the active deployed edge when unset.
+ * a non-routable placeholder when unset.
  *
- * P-0 preprod (#349, 2026-06-09): the default targets the LIVE preprod edge
- * `api-preprod.smartdatapulse.tech` (the deployed DP-2 backend — verified serving
- * HTTPS over Let's Encrypt). The prior default `api.smartdatapulse.tech` never
- * deployed (does not resolve) and is retired as the active target. Override per
- * environment via `VITE_API_BASE_URL` (e.g. a future production host).
+ * Public hardening: source must not publish live environment endpoints.
+ * Configure the real Data-Pulse-2 host per environment via `VITE_API_BASE_URL`;
+ * the default intentionally fails closed.
  */
-const DEFAULT_API_BASE_URL = 'https://api-preprod.smartdatapulse.tech';
+const DEFAULT_API_BASE_URL = 'https://example.invalid';
 
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env['VITE_API_BASE_URL'];
