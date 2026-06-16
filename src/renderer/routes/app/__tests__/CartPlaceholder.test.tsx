@@ -28,6 +28,7 @@ function makeCatalogueBridge(): CatalogueBridgeAPI {
     resolve: vi.fn(),
     refresh: vi.fn(),
     freshness: vi.fn(),
+    counts: vi.fn(),
   };
 }
 

@@ -29,6 +29,7 @@ import type {
   CatalogueResolveResponse,
   CatalogueRefreshResponse,
   CatalogueFreshnessResponse,
+  CatalogueCountsResponse,
 } from '../../shared/bridge-api.js';
 import {
   requireCatalogueSession,
@@ -55,6 +56,12 @@ export interface CatalogueFreshnessSource {
   readSyncState(tenantId: string): CatalogueSyncStateRow | null;
   /** The session tenant's live product count (for the `is_empty` discriminator). */
   countProducts(tenantId: string): number;
+  /**
+   * The session tenant's live product_barcodes (alias) count — diagnostics only.
+   * Optional so existing freshness-only sources stay valid; `counts` refuses if
+   * the source cannot supply it.
+   */
+  countBarcodes?(tenantId: string): number;
 }
 
 export interface CatalogueBridgeDependencies {
@@ -207,6 +214,23 @@ export function createCatalogueBridge(deps: CatalogueBridgeDependencies): Catalo
         kind: 'ok',
         last_success_at: lastSuccessAt,
         is_empty: isEmpty,
+      });
+    },
+
+    // 010 diagnostics — tenant-scoped LOCAL read-model counts (integers only;
+    // WR-2: no catalogue rows, no secrets). Session gate FIRST (AD-1); refuse if
+    // the source cannot supply both counts (cannot read truthfully → never
+    // throw/leak, IPC-1). Tenant scoping flows from the session (P17-1).
+    async counts(): Promise<CatalogueCountsResponse> {
+      const gate = requireCatalogueSession(getCurrentSession());
+      if (gate.kind === 'refused') return gate;
+      if (freshness === undefined || freshness.countBarcodes === undefined)
+        return await Promise.resolve({ kind: 'refused', reason: 'no_session' });
+      const tenantId = gate.session.tenant_id;
+      return await Promise.resolve({
+        kind: 'ok',
+        products: freshness.countProducts(tenantId),
+        barcodes: freshness.countBarcodes(tenantId),
       });
     },
   };

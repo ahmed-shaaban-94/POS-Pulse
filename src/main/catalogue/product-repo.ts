@@ -113,6 +113,11 @@ export interface ProductRepo {
    * read model (never throws across the boundary, mirroring the lookup discipline).
    */
   countByTenant(tenantId: string): number;
+  /**
+   * 010 diagnostics — tenant-scoped product_barcodes (alias) count (P17). Same
+   * degrade-to-0 discipline as `countByTenant`; never throws across the boundary.
+   */
+  countBarcodesByTenant(tenantId: string): number;
 }
 
 // Qualified with the `p.` alias: in the barcode JOIN, `products` and
@@ -252,7 +257,26 @@ export function createProductRepo(db: DatabaseHandle): ProductRepo {
     }
   }
 
-  return { lookupByBarcode, lookupBySku, search, resolveForSeam, countByTenant };
+  function countBarcodesByTenant(tenantId: string): number {
+    try {
+      const stmt = db.prepare(
+        'SELECT COUNT(*) AS n FROM product_barcodes WHERE tenant_id = ?',
+      ) as PrepareGet<{ n: number }>;
+      return stmt.get(tenantId)?.n ?? 0;
+    } catch {
+      // Missing table / unreadable handle → 0, never throw across the boundary.
+      return 0;
+    }
+  }
+
+  return {
+    lookupByBarcode,
+    lookupBySku,
+    search,
+    resolveForSeam,
+    countByTenant,
+    countBarcodesByTenant,
+  };
 }
 
 /**

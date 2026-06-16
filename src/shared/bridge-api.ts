@@ -1244,6 +1244,7 @@ export type CatalogueResolveResponse =
 /** Empty request — no renderer-supplied identity/scope/cursor (INP-1 / FR-15a). */
 export type CatalogueRefreshRequest = Record<string, never>;
 export type CatalogueFreshnessRequest = Record<string, never>;
+export type CatalogueCountsRequest = Record<string, never>;
 
 /**
  * `catalogue.refresh` response (contract Addition 1). Status ONLY — no catalogue
@@ -1268,6 +1269,17 @@ export type CatalogueFreshnessResponse =
   | { kind: 'refused'; reason: CatalogueRefusalReason };
 
 /**
+ * `catalogue.counts` response (diagnostics) — the tenant-scoped LOCAL read-model
+ * size for the Catalogue Diagnostics screen. Integers ONLY (WR-2): no catalogue
+ * rows, no secrets, no device token. `products` = live products row count;
+ * `barcodes` = product_barcodes (alias) row count. Both scoped to the session
+ * tenant (P17-1). Refuses (never throws/leaks) with no session or no source.
+ */
+export type CatalogueCountsResponse =
+  | { kind: 'ok'; products: number; barcodes: number }
+  | { kind: 'refused'; reason: CatalogueRefusalReason };
+
+/**
  * 009 read-only `catalogue.*` bridge surface, EXTENDED by 010 with the read-down
  * `refresh` / `freshness` additions. Gated server-side on an active operator
  * session (NFR-6a); renderer-side checks are never load-bearing. Tenant scoping
@@ -1288,4 +1300,6 @@ export interface CatalogueBridgeAPI {
   refresh(req: CatalogueRefreshRequest): Promise<CatalogueRefreshResponse>;
   /** 010 — truthful last-updated read for the FR-16 indicator (§A4 Addition 2). */
   freshness(req: CatalogueFreshnessRequest): Promise<CatalogueFreshnessResponse>;
+  /** 010 diagnostics — tenant-scoped local read-model counts (integers only). */
+  counts(req: CatalogueCountsRequest): Promise<CatalogueCountsResponse>;
 }

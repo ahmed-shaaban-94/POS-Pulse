@@ -20,6 +20,8 @@ export const CATALOGUE_IPC_CHANNELS = {
   // `FRESHNESS`: truthful last-updated read for the FR-16 indicator.
   REFRESH: 'catalogue:refresh',
   FRESHNESS: 'catalogue:freshness',
+  // 010 diagnostics — read-only tenant-scoped local read-model counts (integers only).
+  COUNTS: 'catalogue:counts',
 } as const;
 
 export type CatalogueIpcChannel =

@@ -29,6 +29,7 @@ function catalogueBridge(over: Partial<CatalogueBridgeAPI> = {}): CatalogueBridg
     freshness: vi.fn(() =>
       Promise.resolve({ kind: 'ok' as const, last_success_at: null, is_empty: true }),
     ),
+    counts: vi.fn(() => Promise.resolve({ kind: 'ok' as const, products: 0, barcodes: 0 })),
     ...over,
   };
 }
