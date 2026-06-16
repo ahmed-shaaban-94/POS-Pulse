@@ -58,7 +58,11 @@ describe('main/index.ts wires the operator namespace (004 S1)', () => {
   });
 
   it('calls registerOperatorHandlers (the load-bearing call site)', () => {
-    expect(source).toMatch(/registerOperatorHandlers\(\s*ipcMain\s*,/);
+    // #370: the call site now passes `guardedIpcMain` (the sender-origin-guarded
+    // wrapper from createSenderGuardedIpcMain), not the raw `ipcMain`. Accept
+    // either so the assertion tracks "operator handlers are wired to the IPC
+    // surface" rather than the specific instance name.
+    expect(source).toMatch(/registerOperatorHandlers\(\s*(?:guardedIpcMain|ipcMain)\s*,/);
   });
 
   it('starts the inactivity monitor', () => {

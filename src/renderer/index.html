@@ -3,9 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Shipped meta CSP. For a packaged build the renderer loads via file:// (loadFile),
+      which webRequest.onHeadersReceived does NOT intercept — so THIS meta is the
+      authoritative prod policy. #370: the dev `ws://localhost:5173` (Vite HMR socket)
+      was a dev-only artifact baked into the shipped policy and is removed — prod never
+      dials a dev websocket. (`style-src 'unsafe-inline'` is retained: React renders
+      `style={{…}}` props as inline style attributes; removing it needs a nonce/hash
+      migration — tracked separately, see #370 follow-up.)
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:5173;"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';"
     />
     <title>POS Pulse</title>
   </head>

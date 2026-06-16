@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, safeStorage, session } from 'electron';
 import * as Sentry from '@sentry/electron/main';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { createSenderGuardedIpcMain } from './ipc/sender-guard.js';
 import { registerPingHandler } from './ipc/ping.js';
 import { registerAppVersionHandler } from './ipc/app-version.js';
 import { registerLogHandler } from './ipc/log.js';
@@ -186,6 +187,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const isDev = process.env['NODE_ENV'] === 'development';
 
+/**
+ * The trusted renderer origin allow-list. Dev = the Vite server; prod = the
+ * packaged renderer dir on disk (`pathToFileURL` → a normalized `file://` URL,
+ * forward slashes on Windows). SINGLE SOURCE OF TRUTH (#370): consumed by BOTH
+ * the `will-navigate` block in `createWindow` AND the IPC `createSenderGuardedIpcMain`
+ * wiring in `whenReady`, so the navigation check and the IPC sender check can
+ * never drift apart.
+ */
+function resolveRendererOrigin(): string {
+  return isDev
+    ? 'http://localhost:5173'
+    : pathToFileURL(path.join(__dirname, '../renderer/')).toString();
+}
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -199,11 +214,8 @@ function createWindow(): void {
     },
   });
 
-  // Renderer origin allow-list. Dev = Vite server; prod = packaged renderer dir on disk.
-  // pathToFileURL produces a normalized file:// URL with forward slashes on Windows.
-  const rendererOrigin = isDev
-    ? 'http://localhost:5173'
-    : pathToFileURL(path.join(__dirname, '../renderer/')).toString();
+  // Renderer origin allow-list (single source of truth — see resolveRendererOrigin).
+  const rendererOrigin = resolveRendererOrigin();
 
   // Deny navigation to any URL outside the renderer origin (defense-in-depth against
   // injected redirects, drag-drop URLs, file:// traversal).
@@ -422,11 +434,18 @@ app
       clock: () => new Date(),
     });
 
+    // #370 (LOW hardening) — wrap ipcMain ONCE so every handler is sender-origin
+    // guarded (defense-in-depth on the renderer→main trust boundary). Uses the
+    // SAME `resolveRendererOrigin()` the `will-navigate` allow-list uses, so the
+    // navigation check and the IPC check cannot drift. Every `register…` below
+    // receives the guarded instance — zero registrar edits (they take IpcMain).
+    const guardedIpcMain = createSenderGuardedIpcMain(ipcMain, resolveRendererOrigin());
+
     // Register IPC handlers BEFORE the first window loads so the renderer's
     // first call cannot race the registration.
-    registerPingHandler(ipcMain);
-    registerAppVersionHandler(ipcMain);
-    registerLogHandler(ipcMain, rendererLogger);
+    registerPingHandler(guardedIpcMain);
+    registerAppVersionHandler(guardedIpcMain);
+    registerLogHandler(guardedIpcMain, rendererLogger);
     // T067 + D3 — renderer pulls its DSN over the bridge; never via
     // `import.meta.env.VITE_*` (which would inline it into the
     // renderer bundle at build time). The closure resolves the DSN
@@ -478,12 +497,12 @@ app
       };
       return cfg;
     };
-    registerAppConfigHandler(ipcMain, getAppConfig);
+    registerAppConfigHandler(guardedIpcMain, getAppConfig);
 
     // 002-terminal-pairing T013 + T025 — wire BOTH pairing channels.
     // T025 lands `pairing:submit`; the SUBMIT handler validates the
     // argument shape and forwards the service result unchanged.
-    registerPairingHandlers(ipcMain, { store: pairingStore, service: pairingService });
+    registerPairingHandlers(guardedIpcMain, { store: pairingStore, service: pairingService });
 
     // 004-operator-session — wire `operator.*` IPC.
     //
@@ -625,7 +644,7 @@ app
       logger: mainLogger,
     });
 
-    registerOperatorHandlers(ipcMain, {
+    registerOperatorHandlers(guardedIpcMain, {
       signInHandler: operatorSignInHandler,
       cashierSignInHandler: operatorCashierSignInHandler,
       signOutHandler: operatorSignOutHandler,
@@ -675,7 +694,7 @@ app
       isPackaged: app.isPackaged,
       productionResolver: catalogueResolver,
     });
-    registerCartHandlers(ipcMain, { handlers: cartBridgeHandlers });
+    registerCartHandlers(guardedIpcMain, { handlers: cartBridgeHandlers });
 
     // 009 + 010 — wire the `catalogue.*` IPC surface. Registered unconditionally
     // (same as cart): the handlers are session-gated and refuse with no session,
@@ -746,7 +765,7 @@ app
       // `runTickOnce` (admit); start/stop are owned here at the root.
       ...(readDownDriver !== undefined ? { readDownDriver } : {}),
     });
-    registerCatalogueHandlers(ipcMain, { bridge: catalogueBridge });
+    registerCatalogueHandlers(guardedIpcMain, { bridge: catalogueBridge });
 
     // Start the background snapshot pull (paired terminals only). The driver's
     // setInterval is stopped on quit via `closeDbHandle()` so it never outlives
@@ -902,7 +921,7 @@ app
       clock: paymentsClock,
     });
 
-    registerPaymentsHandlers(ipcMain, {
+    registerPaymentsHandlers(guardedIpcMain, {
       paymentsStart,
       paymentsConfirm,
       paymentsCancel,
@@ -1054,7 +1073,7 @@ app
         bannerStateProjector: bindBannerStateProjector(dbHandle),
         newSubscriptionToken: () => randomUUID(),
       });
-      registerSalesHandlers(ipcMain, { salesBridge });
+      registerSalesHandlers(guardedIpcMain, { salesBridge });
 
       // 008 Slice 3 — print dispatcher (used by both the auto-fire finalize
       // seam AND the renderer-callable receipts.retryPrint handler). Built
@@ -1173,7 +1192,7 @@ app
         auditEmitter: saleAuditEmitter,
         newPrintEventId: () => randomUUID(),
       });
-      registerReceiptsHandlers(ipcMain, { receiptsBridge });
+      registerReceiptsHandlers(guardedIpcMain, { receiptsBridge });
 
       // The AD-2 finalize WORKER, by contrast, IS terminal-scoped and only
       // starts for an already-paired terminal — it needs the pairing row's
@@ -1329,7 +1348,7 @@ app
 
         // Read-only status surface for the renderer (counts + last-success only;
         // no token/PII/raw body crosses the bridge). No write/trigger handler.
-        registerSalesSyncHandlers(ipcMain, {
+        registerSalesSyncHandlers(guardedIpcMain, {
           readStatus: () =>
             saleSyncStateRepo.readSyncStatus({
               tenantId: pairingStatus.tenant_id,
