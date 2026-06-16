@@ -182,7 +182,9 @@ describe('CatalogueDiagnostics', () => {
     renderScreen(bridge({ search }));
     const input = await screen.findByLabelText('Search local catalogue');
     await userEvent.type(input, 'para');
-    await waitFor(() => expect(search).toHaveBeenCalledWith({ query: 'para' }));
+    await waitFor(() => {
+      expect(search).toHaveBeenCalledWith({ query: 'para' });
+    });
     await waitFor(() =>
       expect(screen.getByTestId('diagnostics-search-results')).toHaveTextContent('1 match'),
     );
