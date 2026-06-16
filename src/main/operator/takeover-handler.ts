@@ -309,7 +309,10 @@ export class TakeoverHandler {
     } catch (err: unknown) {
       // Audit failure must not abort the sign-in flow (best-effort).
       this.deps.logger?.warn(
-        { event: 'operator.takeover.audit_emit_failed', error: err instanceof Error ? err.message : String(err) },
+        {
+          event: 'operator.takeover.audit_emit_failed',
+          error: err instanceof Error ? err.message : String(err),
+        },
         'takeover audit emit failed',
       );
     }
