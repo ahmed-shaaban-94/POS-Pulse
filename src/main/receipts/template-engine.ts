@@ -38,6 +38,14 @@ export interface ReceiptRenderOutput {
 }
 
 const COLS = 42;
+const DEFAULT_RECEIPT_WEBSITE = 'www.example.test';
+
+function receiptWebsite(): string {
+  const configured = process.env['POS_PULSE_RECEIPT_WEBSITE'];
+  return typeof configured === 'string' && configured.trim().length > 0
+    ? configured.trim()
+    : DEFAULT_RECEIPT_WEBSITE;
+}
 
 // ── Intermediate representation ──────────────────────────────────────────────
 
@@ -167,7 +175,7 @@ function compose(payload: ReceiptPayload): Band[] {
   // Closing band.
   rule('=');
   text('شكرًا لتعاملكم معنا — Thank you', 'center');
-  text('www.smartdatapulse.tech', 'center');
+  text(receiptWebsite(), 'center');
   rule('=');
 
   return bands;

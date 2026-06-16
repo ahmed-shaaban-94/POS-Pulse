@@ -200,7 +200,7 @@ const STUCK_SHIFTS_PATH = '/api/pos/v1/shifts/stuck';
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 export interface CreateBackendClientDeps {
-  /** Data-Pulse-2 base URL, e.g. `https://api.smartdatapulse.tech`. */
+  /** Data-Pulse-2 base URL, e.g. `https://api.example.test`. */
   baseUrl: string;
   /** `fetch` implementation. Production binds the global; tests inject. */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

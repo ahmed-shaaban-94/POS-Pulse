@@ -57,7 +57,7 @@ export type ValidateVoucherOutcome =
   | { kind: 'authority_unreachable' };
 
 export interface ValidateVoucherDeps {
-  /** Data-Pulse-2 base URL, e.g. `https://api.smartdatapulse.tech`. */
+  /** Data-Pulse-2 base URL, e.g. `https://api.example.test`. */
   baseUrl: string;
   /** `fetch` implementation. Production binds the global; tests inject. */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;

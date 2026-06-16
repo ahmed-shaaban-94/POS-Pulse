@@ -72,7 +72,7 @@ function sequenceFetch(responses: Array<Response | (() => never)>): {
  * inline jwt (Clerk mints the session JWT via a separate POST
  * /v1/client/sessions/{sid}/tokens call). The client identity that the mint
  * call needs is returned in the `Authorization` RESPONSE header (a rotating
- * client token), NOT a cookie — verified against live preprod Clerk.
+ * client token), NOT a cookie — verified against a deployed Clerk environment.
  */
 function signInsBody(opts: { sessionId?: string; user?: Record<string, unknown> } = {}): unknown {
   return {
@@ -134,15 +134,15 @@ describe('decodeFrontendApiBaseUrl', () => {
     expect(url).toBe('https://clerk.production.acme.com');
   });
 
-  it('decodes a REAL Clerk key where the `$` delimiter is INSIDE the base64 payload', () => {
-    // The production format (verified against a live pk_live_ key): the base64
+  it('decodes a Clerk key where the `$` delimiter is INSIDE the base64 payload', () => {
+    // The production format: the base64
     // decodes to `<host>$` — the `$` is part of the encoded payload, NOT appended
     // to the key. Earlier the decoder only stripped `$` at the encoded level and
     // left the decoded `host$` intact → regex-rejected → "malformed".
-    const host = 'clerk.smartdatapulse.tech';
+    const host = 'clerk.example.test';
     const encoded = Buffer.from(`${host}$`).toString('base64'); // $ INSIDE base64
     const url = decodeFrontendApiBaseUrl(`pk_live_${encoded}`);
-    expect(url).toBe('https://clerk.smartdatapulse.tech');
+    expect(url).toBe('https://clerk.example.test');
   });
 
   it('returns null for unknown prefix', () => {
@@ -192,7 +192,7 @@ describe('createClerkExchanger — request shape', () => {
     expect(mint?.init.method).toBe('POST');
     // The client token from sign_ins' Authorization RESPONSE header must travel
     // to the mint call as `Authorization: Bearer <client-token>` — without it
-    // Clerk's mint returns `signed_out` (verified against live preprod Clerk).
+    // Clerk's mint returns `signed_out`.
     const auth = (mint?.init.headers as Record<string, string>)['Authorization'];
     expect(auth).toBe(`Bearer ${CLIENT_TOKEN}`);
   });

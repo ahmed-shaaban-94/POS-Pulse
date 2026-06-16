@@ -156,7 +156,7 @@ export const FIX_380_F007_EXEMPT_PREFIXES = [
  * `feat/006-` precedent.
  *
  * Authority: issue #349 (D-DEPLOY cleared 2026-06-15 — DP-2 main deployed to
- * preprod; `/api/pos/v1/catalog/snapshot` + `/deltas` serve 401, stale
+ * the configured backend environment; `/api/pos/v1/catalog/snapshot` + `/deltas` serve 401, stale
  * `/catalog/products` → 404). Design:
  * `docs/superpowers/specs/2026-06-15-349-repin-readdown-contract-design.md`.
  *
