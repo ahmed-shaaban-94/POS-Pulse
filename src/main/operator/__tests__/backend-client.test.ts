@@ -16,7 +16,7 @@ import { createBackendClient } from '../backend-client.js';
  * network failures resolve to `{ kind: 'no_connection' }`.
  */
 
-const BASE = 'https://api.smartdatapulse.tech';
+const BASE = 'https://api.example.test';
 
 interface CapturedRequest {
   url: string;

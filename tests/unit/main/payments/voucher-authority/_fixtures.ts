@@ -81,7 +81,7 @@ export function bareResponse(status: number): Response {
   return new Response('', { status });
 }
 
-export const BASE_URL = 'https://api.smartdatapulse.tech';
+export const BASE_URL = 'https://api.example.test';
 
 /** Reusable canonical UUIDs. */
 export const FAKE_IDEMPOTENCY_KEY = '11111111-1111-4111-8111-111111111111';
