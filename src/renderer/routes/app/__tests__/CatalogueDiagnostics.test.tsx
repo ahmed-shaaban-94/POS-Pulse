@@ -113,5 +113,98 @@ describe('CatalogueDiagnostics', () => {
     await waitFor(() => {
       expect(refresh).toHaveBeenCalled();
     });
+    // honest status surfaces (started), never a fake "done"
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-refresh-status')).toHaveTextContent('started'),
+    );
+  });
+
+  it('renders "unavailable" counts when catalogue.counts is refused', async () => {
+    renderScreen(
+      bridge({ counts: () => Promise.resolve({ kind: 'refused', reason: 'no_session' }) }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-counts')).toHaveTextContent('unavailable'),
+    );
+  });
+
+  it('shows "Not paired." when pairing status is not paired', async () => {
+    renderScreen(bridge({ status: () => Promise.resolve({ kind: 'unpaired' } as never) }));
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-pairing')).toHaveTextContent('Not paired'),
+    );
+  });
+
+  it('freshness: never-synced (null) shows "never synced"', async () => {
+    renderScreen(
+      bridge({
+        freshness: () => Promise.resolve({ kind: 'ok', last_success_at: null, is_empty: true }),
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-sync-state')).toHaveTextContent('never synced'),
+    );
+  });
+
+  it('freshness: synced-but-empty shows the empty marker', async () => {
+    renderScreen(
+      bridge({
+        freshness: () =>
+          Promise.resolve({
+            kind: 'ok',
+            last_success_at: '2026-06-16T12:00:00.000Z',
+            is_empty: true,
+          }),
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-sync-state')).toHaveTextContent('empty'),
+    );
+  });
+
+  it('freshness: refused shows "unavailable"', async () => {
+    renderScreen(
+      bridge({ freshness: () => Promise.resolve({ kind: 'refused', reason: 'no_session' }) }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-sync-state')).toHaveTextContent('unavailable'),
+    );
+  });
+
+  it('search: a >=2-char query calls catalogue.search and renders the match count', async () => {
+    const search = vi.fn(() =>
+      Promise.resolve({
+        kind: 'results' as const,
+        items: [{ product_id: 'p-1' }] as never,
+        truncated: false,
+      }),
+    );
+    renderScreen(bridge({ search }));
+    const input = await screen.findByLabelText('Search local catalogue');
+    await userEvent.type(input, 'para');
+    await waitFor(() => expect(search).toHaveBeenCalledWith({ query: 'para' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-search-results')).toHaveTextContent('1 match'),
+    );
+  });
+
+  it('search: a sub-2-char query never calls the bridge (short-circuit)', async () => {
+    const search = vi.fn(() => Promise.resolve({ kind: 'not_found' as const }));
+    renderScreen(bridge({ search }));
+    const input = await screen.findByLabelText('Search local catalogue');
+    await userEvent.type(input, 'p');
+    // give any pending effect a tick; the bridge must NOT have been called
+    await waitFor(() => expect(input).toHaveValue('p'));
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('search: a rejected bridge call surfaces "unavailable" (never throws)', async () => {
+    const search = vi.fn(() => Promise.reject(new Error('boom')));
+    renderScreen(bridge({ search }));
+    const input = await screen.findByLabelText('Search local catalogue');
+    await userEvent.type(input, 'para');
+    await waitFor(() =>
+      expect(screen.getByTestId('diagnostics-search-results')).toHaveTextContent('unavailable'),
+    );
   });
 });
