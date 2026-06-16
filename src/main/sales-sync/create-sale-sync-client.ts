@@ -111,7 +111,7 @@ export function minorUnitsToDecimalString(minor: number, exponent: number): stri
 }
 
 export interface CreateSaleSyncClientDeps {
-  /** Data-Pulse-2 base URL, e.g. `https://api-preprod.smartdatapulse.tech`. */
+  /** Data-Pulse-2 base URL, e.g. `https://example.invalid` in tests/templates. */
   baseUrl: string;
   /** `fetch` implementation. Production binds the global; tests inject. */
   fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
