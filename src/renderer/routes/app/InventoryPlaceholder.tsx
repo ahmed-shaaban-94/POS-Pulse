@@ -9,6 +9,7 @@
  * (FR-13) — inventory management is not available at this terminal.
  */
 import type { JSX } from 'react';
+import { Link } from 'react-router-dom';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
 
@@ -47,6 +48,11 @@ export function InventoryPlaceholder(): JSX.Element {
     <Workspace title="Inventory">
       <section className="placeholder-pane">
         <p>Navigation only — inventory management is not available at this terminal.</p>
+        <p>
+          <Link to="/app/inventory/diagnostics" data-testid="inventory-diagnostics-link">
+            Catalogue Diagnostics
+          </Link>
+        </p>
       </section>
     </Workspace>
   );
