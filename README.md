@@ -10,7 +10,7 @@
   <a href="docs/product.md"><img alt="Product: POS Pulse" src="https://img.shields.io/badge/product-POS%20Pulse-0f766e?style=flat-square"></a>
   <a href="README.md"><img alt="Repo: POS-Pulse" src="https://img.shields.io/badge/repo-POS--Pulse-181717?style=flat-square&logo=github&logoColor=white"></a>
   <a href="docs/hardware-matrix.md"><img alt="Platform: Windows terminal" src="https://img.shields.io/badge/platform-Windows%20terminal-2563eb?style=flat-square"></a>
-  <a href="LICENSE"><img alt="License: UNLICENSED" src="https://img.shields.io/badge/license-UNLICENSED-334155?style=flat-square"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square"></a>
 </p>
 
 <p align="center">
