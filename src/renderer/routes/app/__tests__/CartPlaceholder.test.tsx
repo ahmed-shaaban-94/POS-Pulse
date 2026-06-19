@@ -86,3 +86,23 @@ describe('CartPlaceholder — catalogue surface gating (T049a)', () => {
     expect(screen.queryByTestId('catalogue-sale-pane')).not.toBeInTheDocument();
   });
 });
+
+describe('CartPlaceholder — POS v3.5 two-column sale-layout (Phase 2)', () => {
+  it('wraps catalogue + cart in a sale-layout container when both surfaces show', () => {
+    useFeatureFlagsStore.getState().hydrate({ cart: true, productSearch: true });
+    renderPlaceholder();
+    const layout = screen.getByTestId('sale-layout');
+    expect(layout).toBeInTheDocument();
+    // Both panes live inside the two-column layout (v3.5: catalogue + cart).
+    expect(layout).toContainElement(screen.getByTestId('catalogue-sale-pane'));
+  });
+
+  it('renders the sale-layout even when only the cart pane shows (productSearch off)', () => {
+    useFeatureFlagsStore.getState().hydrate({ cart: true, productSearch: false });
+    renderPlaceholder();
+    // The layout container is the stable workspace frame; the catalogue column
+    // is simply absent when productSearch is off.
+    expect(screen.getByTestId('sale-layout')).toBeInTheDocument();
+    expect(screen.queryByTestId('catalogue-sale-pane')).not.toBeInTheDocument();
+  });
+});
