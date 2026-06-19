@@ -2021,6 +2021,29 @@ body {
    * Surface 8 (frozen_handed_off) swaps the body for HandoffSummary.
    */
 
+  /*
+   * POS v3.5 Phase 2 — two-column sale workspace.
+   * Catalogue column is flexible; the cart column is a fixed rail. The grid
+   * flows along the inline axis, so the root `dir="rtl"` (Phase 1) places the
+   * catalogue at the visual start (right) and the cart rail at the end (left)
+   * without any direction-specific rule. Recreated against POS-Pulse tokens
+   * from the v3.5 design reference — not copied.
+   */
+  .sale-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    flex: 1 1 auto;
+    min-block-size: 0;
+    block-size: 100%;
+  }
+
+  /* Narrow terminals: stack catalogue over cart; the workspace scrolls as one. */
+  @media (max-width: 1023px) {
+    .sale-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .cart-pane {
     display: flex;
     flex-direction: column;

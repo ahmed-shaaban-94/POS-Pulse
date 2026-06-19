@@ -90,8 +90,18 @@ function CartWorkspace({ showCatalogue }: { showCatalogue: boolean }): JSX.Eleme
 
   return (
     <Workspace title="Cart">
-      {showCatalogue && <CatalogueSalePane onLineAdded={forwardAddLine} />}
-      <CartPane onLineAdded={registerAddLine} onPaymentContinue={handlePaymentContinue} />
+      {/*
+        POS v3.5 Phase 2 — two-column sale workspace (catalogue + cart).
+        Presentation only: the `sale-layout` container arranges the existing
+        catalogue and cart panes side by side (catalogue leads, cart trails;
+        the root `dir="rtl"` from Phase 1 places catalogue left / cart right).
+        Wiring is unchanged — `forwardAddLine`/`registerAddLine` remain the
+        single add-line write path (FR-20).
+      */}
+      <div className="sale-layout" data-testid="sale-layout">
+        {showCatalogue && <CatalogueSalePane onLineAdded={forwardAddLine} />}
+        <CartPane onLineAdded={registerAddLine} onPaymentContinue={handlePaymentContinue} />
+      </div>
     </Workspace>
   );
 }
