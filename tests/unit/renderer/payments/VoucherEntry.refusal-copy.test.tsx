@@ -88,7 +88,7 @@ async function driveRefusal(
     <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
   );
   await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-  await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+  await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
   await user.click(screen.getByTestId('voucher-entry-confirm'));
   await waitFor(() => {
     expect(screen.queryByTestId('voucher-entry-refused')).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe('F-A4B-003 — VoucherEntry rejected-promise path', () => {
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
     await waitFor(() => {
       expect(screen.queryByTestId('voucher-entry-refused')).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe('F-A4B-003 — VoucherEntry refusal banner clears on input edit', () =>
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'BADCODE');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
     await waitFor(() => {
       expect(screen.queryByTestId('voucher-entry-refused')).toBeInTheDocument();

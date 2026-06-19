@@ -3,6 +3,7 @@ import { useMemo, useState, type JSX } from 'react';
 import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
 import { AmountPad } from './AmountPad.js';
 import { MoneyRoll } from './MoneyRoll.js';
 
@@ -55,17 +56,6 @@ function formatMinorUnits(minor: number): string {
   return `¤${whole.toString()}.${frac}`;
 }
 
-function parseIntegerMinorUnits(input: string): number | null {
-  // Allow only an all-digit non-empty string; reject leading minus, decimal
-  // point, alphabetic, scientific notation, anything else. This is the
-  // keystroke-level guard FR-004 / Constitution §II demand.
-  if (input === '' || !/^\d+$/.test(input)) {
-    return null;
-  }
-  const parsed = Number.parseInt(input, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
 export function CashEntry({
   remainingBalanceMinor,
   onConfirm,
@@ -78,7 +68,7 @@ export function CashEntry({
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
 
-  const amountAppliedMinor = useMemo(() => parseIntegerMinorUnits(rawInput), [rawInput]);
+  const amountAppliedMinor = useMemo(() => parseCurrencyToMinor(rawInput), [rawInput]);
 
   const isRemainingValid =
     Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
@@ -95,7 +85,14 @@ export function CashEntry({
   // stays in force.
   const isBridged = tenderApply !== undefined && paymentAttemptId !== undefined;
   const isPositive = amountAppliedMinor !== null && amountAppliedMinor > 0;
-  const canConfirm = isBridged ? isPositive : isSufficient;
+  // Defect B guard: in bridged mode, only allow applying a cash line while a
+  // balance is still owed (remaining > 0). Once the attempt is fully tendered
+  // (remaining == 0), applying more cash only piles all-change lines — the
+  // cashier must use "Confirm payment" (settle) instead. Split-tender partial
+  // applies remain allowed because they happen while remaining is still > 0.
+  const canConfirm = isBridged
+    ? isPositive && isRemainingValid && remainingBalanceMinor > 0
+    : isSufficient;
 
   // computeChangeDueMinor throws on under-tender; only compute it when the
   // cash amount actually covers the remaining balance.
@@ -152,7 +149,7 @@ export function CashEntry({
       </div>
 
       <label className="cash-entry__amount-label" htmlFor="cash-entry-amount-input">
-        Amount received (minor units)
+        Amount received (¤)
       </label>
       <input
         id="cash-entry-amount-input"
@@ -164,7 +161,12 @@ export function CashEntry({
         value={rawInput}
         onChange={(e) => {
           const next = e.target.value;
-          if (next === '' || /^\d+$/.test(next)) {
+          // Keystroke guard: permit an in-progress currency amount — digits with
+          // an optional single decimal point and up to 2 fractional digits.
+          // Allows partial entries while typing ("12", "12.", "12.5"); the
+          // commit-time parse (parseCurrencyToMinor) is the authoritative gate
+          // (a bare "12." parses to null → cannot confirm).
+          if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
             setRawInput(next);
             setBridgeRefusal(false);
           }
@@ -176,12 +178,21 @@ export function CashEntry({
         source of truth (it reads the parsed value, writes back the string).
         It introduces no second amount state, so the confirm/bridge/refusal
         logic keyed on `rawInput` is unchanged. Total drives quick-amounts.
+
+        MERGE RECONCILIATION (fix/pos-payment-due-calculation × v3.5 Phase 3):
+        AmountPad's `onChange` emits integer MINOR UNITS (`valueMinor` contract),
+        but after the currency-input fix `rawInput` holds a CURRENCY-AMOUNT string
+        ("12.50"), parsed back by `parseCurrencyToMinor`. Writing `next.toString()`
+        ("1250") directly would be parsed as ¤1250.00 — a 100× bug. Convert the
+        pad's minor-units output to the currency-amount string with
+        `formatMinorToInput` so both the keypad and free-type paths share one
+        consistent `rawInput` contract.
       */}
       <AmountPad
         valueMinor={amountAppliedMinor}
         totalMinor={isRemainingValid ? remainingBalanceMinor : 0}
         onChange={(next) => {
-          setRawInput(next.toString());
+          setRawInput(formatMinorToInput(next));
           setBridgeRefusal(false);
         }}
       />

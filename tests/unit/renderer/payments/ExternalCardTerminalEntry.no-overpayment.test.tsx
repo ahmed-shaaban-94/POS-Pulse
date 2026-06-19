@@ -39,7 +39,7 @@ function setup(props: Partial<ComponentProps<typeof ExternalCardTerminalEntry>> 
 describe('<ExternalCardTerminalEntry> — defaults to exact amount', () => {
   it('amount field defaults to remainingBalanceMinor', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
-    expect(input.value).toBe('12550');
+    expect(input.value).toBe('125.50');
   });
 
   it('confirm is enabled when amount equals remaining (default)', () => {
@@ -87,7 +87,7 @@ describe('<ExternalCardTerminalEntry> — refuses overpayment', () => {
 
   it('disables confirm when amount < remaining (no underpay on non-cash)', () => {
     const { input, confirm } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     expect(confirm).toBeDisabled();
   });
 });
@@ -146,7 +146,7 @@ describe('<ExternalCardTerminalEntry> — safe-integer guard on remaining', () =
 
   it('refuses an under-amount with the dedicated under-amount refusal copy', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     expect(screen.getByTestId('external-card-refusal-underpay')).toHaveTextContent(/must match/i);
   });
 });

@@ -25,6 +25,16 @@ export function createJwtHolder(): JwtHolder {
   const tokens = new Map<string, string>();
   return {
     set(backendSessionId, jwt) {
+      // Envelope-retention (sync-gap fix). DP-2's takeover-confirm idempotent
+      // replay returns `envelope: null` for the SAME backend_session_id — it
+      // means "use the one you already hold from the first confirm". Call sites
+      // normalize null → '' before calling set(). An empty value must therefore
+      // NOT clobber a previously-held non-empty one, or the sale-sync drain
+      // loses its operator credential and silently never POSTs. A deliberate
+      // removal uses clear(); an empty set is only ever the replay overwrite.
+      if (jwt === '' && (tokens.get(backendSessionId) ?? '') !== '') {
+        return;
+      }
       tokens.set(backendSessionId, jwt);
     },
     get(backendSessionId) {

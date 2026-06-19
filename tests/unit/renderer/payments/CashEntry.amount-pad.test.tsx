@@ -25,7 +25,10 @@ describe('<CashEntry> — AmountPad shared-state integration', () => {
     fireEvent.click(screen.getByTestId('amount-pad-key-5'));
     fireEvent.click(screen.getByTestId('amount-pad-key-0'));
     const input = screen.getByTestId<HTMLInputElement>('cash-entry-amount-input');
-    expect(input.value).toBe('12550');
+    // Merge reconciliation: after the currency-input fix, `rawInput` holds a
+    // currency-amount string ("125.50"), not raw minor units. AmountPad emits
+    // minor units (12550) which CashEntry formats via formatMinorToInput.
+    expect(input.value).toBe('125.50');
   });
 
   it('a pad-built sufficient amount enables Confirm (shared gating)', () => {
@@ -39,7 +42,8 @@ describe('<CashEntry> — AmountPad shared-state integration', () => {
     render(<CashEntry remainingBalanceMinor={19925} onConfirm={vi.fn()} />);
     fireEvent.click(screen.getByTestId('amount-pad-quick-19925'));
     const input = screen.getByTestId<HTMLInputElement>('cash-entry-amount-input');
-    expect(input.value).toBe('19925');
+    // Currency-amount string contract (see note above): 19925 minor → "199.25".
+    expect(input.value).toBe('199.25');
     // Exact amount → no change-due row.
     expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });

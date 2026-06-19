@@ -45,10 +45,17 @@ describe('<CashEntry> — input only accepts non-negative integer minor units', 
     expect(input.value).not.toMatch(/^-/);
   });
 
-  it('rejects float input (decimal point not a valid keystroke)', () => {
+  it('accepts a 2-decimal currency keystroke (decimal point is now valid)', () => {
     const { input } = setup();
     fireEvent.change(input, { target: { value: '125.50' } });
-    expect(input.value).not.toContain('.');
+    expect(input.value).toBe('125.50');
+  });
+
+  it('rejects more than 2 decimal places (no rounding)', () => {
+    const { input } = setup();
+    fireEvent.change(input, { target: { value: '125.555' } });
+    // Keystroke guard caps at 2 fractional digits; the 3rd is not accepted.
+    expect(input.value).not.toBe('125.555');
   });
 
   it('rejects alphabetic input', () => {
@@ -57,10 +64,10 @@ describe('<CashEntry> — input only accepts non-negative integer minor units', 
     expect(input.value).toBe('');
   });
 
-  it('accepts a valid integer-minor keystroke', () => {
+  it('accepts a valid currency keystroke', () => {
     const { input } = setup();
-    fireEvent.change(input, { target: { value: '15000' } });
-    expect(input.value).toBe('15000');
+    fireEvent.change(input, { target: { value: '150.00' } });
+    expect(input.value).toBe('150.00');
   });
 
   it('keeps the value empty until a valid integer is entered', () => {
@@ -77,19 +84,19 @@ describe('<CashEntry> — confirm enablement', () => {
 
   it('disables confirm when amount < remaining', () => {
     const { input, confirm } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     expect(confirm).toBeDisabled();
   });
 
   it('enables confirm when amount == remaining', () => {
     const { input, confirm } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '12550' } });
+    fireEvent.change(input, { target: { value: '125.50' } });
     expect(confirm).toBeEnabled();
   });
 
   it('enables confirm when amount > remaining (overpay → change due)', () => {
     const { input, confirm } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '15000' } });
+    fireEvent.change(input, { target: { value: '150.00' } });
     expect(confirm).toBeEnabled();
   });
 });
@@ -97,26 +104,26 @@ describe('<CashEntry> — confirm enablement', () => {
 describe('<CashEntry> — change-due display (display only, major units)', () => {
   it('hides change-due row when not earned (amount < remaining)', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });
 
   it('hides change-due row when amount == remaining (exact change)', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '12550' } });
+    fireEvent.change(input, { target: { value: '125.50' } });
     expect(screen.queryByTestId('cash-entry-change-due')).toBeNull();
   });
 
-  it('renders change-due in major units when overpay (15000 − 12550 = 2450 → ¤24.50)', () => {
+  it('renders change-due in major units when overpay (150.00 − 125.50 = ¤24.50)', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '15000' } });
+    fireEvent.change(input, { target: { value: '150.00' } });
     const changeDue = screen.getByTestId('cash-entry-change-due');
     expect(changeDue).toHaveTextContent('¤24.50');
   });
 
-  it('renders change-due as ¤1.00 for amount=12650 remaining=12550', () => {
+  it('renders change-due as ¤1.00 for amount=126.50 remaining=125.50', () => {
     const { input } = setup({ remainingBalanceMinor: 12550 });
-    fireEvent.change(input, { target: { value: '12650' } });
+    fireEvent.change(input, { target: { value: '126.50' } });
     const changeDue = screen.getByTestId('cash-entry-change-due');
     expect(changeDue).toHaveTextContent('¤1.00');
   });
@@ -126,7 +133,7 @@ describe('<CashEntry> — onConfirm callback', () => {
   it('calls onConfirm with integer minor units when confirmed', () => {
     const onConfirm = vi.fn();
     const { input, confirm } = setup({ remainingBalanceMinor: 12550, onConfirm });
-    fireEvent.change(input, { target: { value: '15000' } });
+    fireEvent.change(input, { target: { value: '150.00' } });
     fireEvent.click(confirm);
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledWith({ amountAppliedMinor: 15000, changeDueMinor: 2450 });
@@ -135,7 +142,7 @@ describe('<CashEntry> — onConfirm callback', () => {
   it('does not call onConfirm when amount is under', () => {
     const onConfirm = vi.fn();
     const { input, confirm } = setup({ remainingBalanceMinor: 12550, onConfirm });
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     fireEvent.click(confirm);
     expect(onConfirm).not.toHaveBeenCalled();
   });

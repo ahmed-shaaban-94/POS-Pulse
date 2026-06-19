@@ -269,7 +269,7 @@ describe('PaymentSurface — split-tender UX (T154)', () => {
     expect(entry).toBeInTheDocument();
     const amountInput = screen.getByTestId('external-card-amount-input');
     // Default amount = remaining balance for external_card_terminal.
-    expect((amountInput as HTMLInputElement).value).toBe('600');
+    expect((amountInput as HTMLInputElement).value).toBe('6.00');
   });
 
   it('stays in the entry view (and shows confirm) when the running sum hits the subtotal exactly', async () => {

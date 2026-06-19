@@ -224,7 +224,7 @@ describe('PaymentSurface — internal_voucher (Wave 5c coverage)', () => {
     await user.click(screen.getByTestId('tender-voucher'));
     await screen.findByTestId('voucher-entry');
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1000');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '10.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
 
     // 1. bridge.tender.apply was called with voucher shape — proves the

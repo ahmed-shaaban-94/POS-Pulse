@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type JSX } from 'react';
 
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { parseCurrencyToMinor } from './parse-currency-to-minor.js';
 
 /**
  * 006-payments-tender Slice 4 T290 — <VoucherEntry>.
@@ -62,14 +63,6 @@ function formatMinorUnits(minor: number): string {
   return `¤${whole.toString()}.${frac}`;
 }
 
-function parseIntegerMinorUnits(input: string): number | null {
-  if (input === '' || !/^\d+$/.test(input)) {
-    return null;
-  }
-  const parsed = Number.parseInt(input, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
 function generateIdempotencyKey(): string {
   return globalThis.crypto.randomUUID();
 }
@@ -95,10 +88,7 @@ export function VoucherEntry({
   // as secondary UX feedback.
   const submitLockRef = useRef<boolean>(false);
 
-  const amountAppliedMinor = useMemo(
-    () => parseIntegerMinorUnits(rawAmountInput),
-    [rawAmountInput],
-  );
+  const amountAppliedMinor = useMemo(() => parseCurrencyToMinor(rawAmountInput), [rawAmountInput]);
 
   const codeIsWellFormed = voucherCode.length >= 3 && VOUCHER_CODE_PATTERN.test(voucherCode);
   // CR-2 (PR #226): defence-in-depth — a malformed `remainingBalanceMinor`
@@ -190,14 +180,18 @@ export function VoucherEntry({
       </label>
 
       <label className="voucher-entry__field">
-        <span className="voucher-entry__label">Amount to apply</span>
+        <span className="voucher-entry__label">Amount to apply (¤)</span>
         <input
           type="text"
           data-testid="voucher-entry-amount-input"
           value={rawAmountInput}
           onChange={(e) => {
-            setRawAmountInput(e.target.value);
-            if (bridgeRefusal) setBridgeRefusal(false);
+            const next = e.target.value;
+            // Currency keystroke guard: digits + optional single decimal, ≤2 frac.
+            if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
+              setRawAmountInput(next);
+              if (bridgeRefusal) setBridgeRefusal(false);
+            }
           }}
           inputMode="numeric"
           autoComplete="off"

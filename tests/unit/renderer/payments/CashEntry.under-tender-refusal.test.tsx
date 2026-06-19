@@ -32,29 +32,29 @@ function setup(remainingBalanceMinor: number) {
 describe('<CashEntry> — under-tender refusal', () => {
   it('does not call onConfirm when amount is under remaining', () => {
     const { onConfirm, input, confirm } = setup(12550);
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     fireEvent.click(confirm);
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it('shows generic "amount is not enough" copy when amount is under remaining', () => {
     const { input } = setup(12550);
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     // Generic copy from FR-005 / US1-AS3; bridge-internal `tender_underpaid` MUST NOT appear.
     expect(screen.getByTestId('cash-entry-refusal')).toHaveTextContent(/not enough/i);
   });
 
   it('hides the refusal copy when amount becomes sufficient again', () => {
     const { input } = setup(12550);
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     expect(screen.queryByTestId('cash-entry-refusal')).not.toBeNull();
-    fireEvent.change(input, { target: { value: '12550' } });
+    fireEvent.change(input, { target: { value: '125.50' } });
     expect(screen.queryByTestId('cash-entry-refusal')).toBeNull();
   });
 
   it('does not leak the structured reason name `tender_underpaid` to the DOM', () => {
     const { input } = setup(12550);
-    fireEvent.change(input, { target: { value: '10000' } });
+    fireEvent.change(input, { target: { value: '100.00' } });
     expect(document.body.innerHTML).not.toContain('tender_underpaid');
   });
 });
