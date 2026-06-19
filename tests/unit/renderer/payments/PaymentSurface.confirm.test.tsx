@@ -327,6 +327,52 @@ describe('PaymentSurface — payments.confirm button (T152)', () => {
     expect(refusal).toHaveTextContent(/could not be settled|please try again/i);
     expect(refusal.textContent).not.toMatch(/tender_underpaid/);
   });
+
+  // Regression / behaviour-lock (2026-06-19): during a live smoke a settle click
+  // was mislabelled an "onClick no-op". Root cause was NOT a wiring bug — the
+  // click DID fire payments.confirm; the GUI carried a STALE attempt id from a
+  // prior session (after a roster-401 re-sign-in), and the main process correctly
+  // refused it with `wrong_owner` (the ownership guard doing its job). This test
+  // locks in that the click reaches the bridge AND the correct-guard refusal is
+  // surfaced as generic copy — so the behaviour is never "fixed" away as a bug,
+  // and the wiring (click → payments.confirm) stays proven on this path too.
+  it('fires payments.confirm on click and shows generic copy when the attempt is wrong_owner (stale-session guard, NOT a no-op)', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.fn<(req: PaymentsConfirmRequest) => Promise<PaymentsConfirmResponse>>(
+      async () => await Promise.resolve({ kind: 'refused', reason: 'wrong_owner' }),
+    );
+    const bridge = makeBridge({ payments: { confirm } });
+
+    render(<PaymentSurface _testBridge={bridge} />);
+    usePaymentStore.getState().applyAttemptSnapshot(
+      makeAttemptView('started', [
+        {
+          tender_line_id: 'tl-1',
+          tender_type: 'cash',
+          amount_applied_minor: 300,
+          state: 'applied',
+          apply_order: 1,
+          applied_at: '2026-05-23T12:00:02.000Z',
+        },
+      ]),
+    );
+
+    await user.click(await screen.findByTestId('payment-surface-confirm'));
+
+    // The click DID fire the bridge (the disproof of "onClick no-op").
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalledTimes(1);
+    });
+    expect(confirm.mock.calls[0]?.[0]?.payment_attempt_id).toBe('pa-1');
+
+    // The correct-guard refusal surfaces as generic copy; the structured reason
+    // never enters the DOM (FR-005). Surface stays on the payment phase (NOT
+    // settled) so the cashier can start a fresh sale.
+    const refusal = await screen.findByTestId('payment-surface-bridge-refusal');
+    expect(refusal).toHaveTextContent(/could not be settled|please try again/i);
+    expect(refusal.textContent).not.toMatch(/wrong_owner/);
+    expect(screen.queryByTestId('payment-surface-settled')).not.toBeInTheDocument();
+  });
 });
 
 describe('PaymentSurface — backwards compatibility (no _testBridge)', () => {
