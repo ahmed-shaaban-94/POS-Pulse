@@ -3,6 +3,7 @@ import type { ConnectionState } from '../../ui/tokens/connection-state';
 import { IdentityStrip } from './IdentityStrip';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { OperatorSlot } from './OperatorSlot';
+import { ThemeToggle } from './ThemeToggle';
 import { StatusBanner } from '../../ui/primitives/StatusBanner/StatusBanner';
 
 interface TopBarProps {
@@ -55,6 +56,7 @@ export function TopBar({
         </div>
         <div className="top-bar__right">
           <ConnectionIndicator state={connectionState} />
+          <ThemeToggle />
           <OperatorSlot />
         </div>
       </header>

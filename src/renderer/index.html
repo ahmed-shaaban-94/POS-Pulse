@@ -1,5 +1,17 @@
 <!doctype html>
-<html lang="en">
+<!--
+  POS v3.5 Phase 1 (ADR-0004):
+  - lang="ar" dir="rtl"  — the terminal is Arabic-first; RTL is systemic at
+    the root, so component CSS (logical properties throughout) flips without
+    per-leaf dir spot-fixes. Operator copy stays English in this slice
+    (translation is out of scope); the layout direction is what changes.
+  - data-theme="dark"    — dark is the default register; baked statically so
+    dark users get a flash-free boot. main.tsx (initTheme) repaints to light
+    only when the operator persisted that choice. The shipped meta CSP is
+    `script-src 'self'`, so an inline pre-paint script is not an option — the
+    static default attribute is the flash-free path.
+-->
+<html lang="ar" dir="rtl" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

@@ -143,11 +143,13 @@ components:
 
 **Creative North Star: "The Accountable Instrument"**
 
-POS-Pulse is a precision instrument, not a consumer product. Its visual language is calibrated around one question: does the operator know the true state of every operation? The interface is built from clean white surfaces, a commanding navy command rail, and a restrained accent vocabulary that preserves the visual weight of information. Every interaction is keyboard-first; every state change is legible without mouse proximity. The palette is determinedly light — pharmacy floor environments require opaque, well-lit surfaces that read under overhead fluorescent lighting, not atmospheric depth.
+POS-Pulse is a precision instrument, not a consumer product. Its visual language is calibrated around one question: does the operator know the true state of every operation? The interface is built from opaque, well-lit surfaces, a commanding navy command rail, and a restrained accent vocabulary that preserves the visual weight of information. Every interaction is keyboard-first; every state change is legible without mouse proximity.
 
-The system is Arabic-first: RTL layout is the default, and the font stack gracefully degrades from Inter Variable to Segoe UI to system-UI without introducing a proprietary dependency that could cause a visual regression on a paired Windows 10 terminal. Motion is state-change-only: transitions confirm actions, they do not entertain.
+**Two themes — dark is the default (ADR-0004).** The terminal ships with the **Vault Dark** register as its default theme; a **light** toggle (the design-system base register) is always reachable from the TopBar, and the operator's choice persists across launches in `localStorage`. Switching themes flips token *values* only — no component is forked and no new component family is added. Both registers keep surfaces opaque and legible under pharmacy overhead lighting; neither relies on atmospheric depth. Light remains the design-system base from which the dark register is derived as a token override.
 
-The design explicitly rejects consumer SaaS aesthetics, glassmorphism, dark-mode defaults, SaaS metric-hero templates, and generic AI tool aesthetics. If a screen could be mistaken for a Notion dashboard or a startup landing page, something has gone wrong.
+The system is **Arabic-first**: RTL is systemic — set once at the document root (`<html dir="rtl" lang="ar">`) — so component layout flips through CSS logical properties without per-leaf direction spot-fixes. The font stack gracefully degrades from Inter Variable to Segoe UI to system-UI without introducing a proprietary dependency that could cause a visual regression on a paired Windows 10 terminal. Motion is state-change-only: transitions confirm actions, they do not entertain.
+
+The design explicitly rejects consumer SaaS aesthetics, glassmorphism, SaaS metric-hero templates, and generic AI tool aesthetics. If a screen could be mistaken for a Notion dashboard or a startup landing page, something has gone wrong.
 
 **Key Characteristics:**
 - Restrained color strategy: navy primary + teal accent occupy less than 15% of any screen; the rest is neutral surface
@@ -155,7 +157,8 @@ The design explicitly rejects consumer SaaS aesthetics, glassmorphism, dark-mode
 - Inter Variable as the single sans typeface; no secondary display font; weight contrast carries hierarchy
 - All interactive elements meet the 44 × 44 CSS px touch-target floor
 - State banners (status, warnings, errors) are persistent, not toast-based
-- The dark navigation rail is the one intentionally drenched surface; it anchors the layout without darkening the workspace
+- Two themes (dark default, light toggle) via token-value overrides only — never forked components
+- In the **light** register, the dark navigation rail is the one intentionally drenched surface; it anchors the layout without darkening the workspace. In the **dark** register the rail deepens further so it still reads as the anchored command surface against the dark workspace
 
 ## 2. Colors: The Command Palette
 
@@ -180,7 +183,7 @@ A restrained palette built around a single navy primary with a teal accent marke
 - **Recessed** (`#eef2f6`): Sunken well — PIN keypad recess, inset panels. Reads as below surface.
 - **Quiet Edge** (`#d8dfe7`): Default border. Separates without competing.
 - **Whisper Edge** (`#e7ecf2`): Soft divider, subtler than Quiet Edge.
-- **Vault Dark** (`#0e1b2a`): Navigation rail background. The one intentionally dark surface in the system.
+- **Vault Dark** (`#0e1b2a`): Navigation rail background, and the name of the default **dark register** (ADR-0004). In the light register it is the one intentionally dark surface; in the dark register it is the deepest member of a fully dark palette (see the dark token table in `src/renderer/styles/tailwind.css`, `:root[data-theme="dark"]`).
 - **Muted Silver** (`#cdd6e0`): Rail text at rest. Readable on Vault Dark; visually recessive when not hovered.
 
 ### Status Colors
@@ -289,12 +292,14 @@ Badges are pill-shaped inline labels (26px height, 8px inline padding, pill radi
 - **Do** use negative letter-spacing on headings (−0.01em for display, −0.008em for headline) to achieve display density — not Inter Tight or a secondary font.
 - **Do** apply `--shadow-card` to standard cards and `--shadow-overlay` to dialogs. The shadow vocabulary has specific roles; do not mix levels.
 - **Do** use the inset shadow (`--shadow-inset`) for sunken well surfaces — PIN keypad recesses, numeric input backgrounds where tactile depth is needed.
-- **Do** keep the navigation rail as the only intentionally dark surface. The workspace is light; the rail grounds it.
+- **Do** keep the navigation rail as the anchored command surface. In the light register it is the only intentionally dark surface; in the dark register it deepens further so it still reads as the anchor against the dark workspace.
+- **Do** add a theme by overriding token *values* on `:root[data-theme="dark"]` only. Dark is the default; light is the toggle target; the choice persists in `localStorage` and is applied to `<html data-theme>` at boot.
 
 ### Don't:
 - **Don't** use consumer SaaS aesthetics (Notion, Intercom, Loom gradient heroes). The interface is a terminal, not a product landing page.
-- **Don't** use glassmorphism or backdrop-blur decoratively. Surfaces must be opaque and legible under pharmacy overhead lighting.
-- **Don't** apply dark mode by default. The one light theme is deliberate for the pharmacy floor environment; dark mode is out of scope until explicitly reopened by a product decision.
+- **Don't** use glassmorphism or backdrop-blur decoratively. Surfaces must be opaque and legible under pharmacy overhead lighting — in *both* registers.
+- **Don't** fork components per theme. Dark is the default and light is a toggle (ADR-0004), but a theme is reached by overriding token *values* on `:root[data-theme="dark"]` only — never by shipping a second, dark-specific copy of a component or a `.dark .component` selector. If a surface looks wrong in dark, fix the token, not the component.
+- **Don't** assume a light-only world. Both registers are first-class; new surfaces must read correctly under dark (the default) and light. The persisted choice (`localStorage`) is honored at boot.
 - **Don't** build SaaS metric-hero templates (big number, gradient accent, shadow flourish). Every number on screen carries financial weight; no cosmetic framing.
 - **Don't** use identical icon-heading-text card grids. Prefer functional lists, tabular data, and purpose-built surfaces.
 - **Don't** use gradient text (`background-clip: text`). It is decorative, never meaningful in a financial terminal.
