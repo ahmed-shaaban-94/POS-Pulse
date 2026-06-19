@@ -29,3 +29,22 @@ export function parseCurrencyToMinor(input: string): number | null {
   const minor = whole * 100 + frac;
   return Number.isSafeInteger(minor) ? minor : null;
 }
+
+/**
+ * Format integer minor units into a PLAIN, editable currency string ("125.50")
+ * — no ¤ symbol — suitable as an `<input>` value and round-trippable through
+ * `parseCurrencyToMinor`. Used to pre-fill the amount field (e.g. the card
+ * terminal seeds the exact remaining balance). Distinct from the display-only
+ * `formatMinorUnits` which prepends the ¤ symbol.
+ *
+ * Returns '' for an unsafe or negative value — the caller cannot pre-fill an
+ * un-representable amount, and an empty field is the safe fallback.
+ */
+export function formatMinorToInput(minor: number): string {
+  if (!Number.isSafeInteger(minor) || minor < 0) {
+    return '';
+  }
+  const whole = Math.floor(minor / 100);
+  const frac = (minor % 100).toString().padStart(2, '0');
+  return `${whole.toString()}.${frac}`;
+}

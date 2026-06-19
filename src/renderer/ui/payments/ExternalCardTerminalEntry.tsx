@@ -3,6 +3,7 @@ import { useMemo, useState, type JSX } from 'react';
 import { validateExternalReference } from '../../../shared/payments/external-reference-format.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <ExternalCardTerminalEntry>.
@@ -51,14 +52,6 @@ function formatMinorUnits(minor: number): string {
   return `¤${whole.toString()}.${frac}`;
 }
 
-function parseIntegerMinorUnits(input: string): number | null {
-  if (input === '' || !/^\d+$/.test(input)) {
-    return null;
-  }
-  const parsed = Number.parseInt(input, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
 export function ExternalCardTerminalEntry({
   remainingBalanceMinor,
   onConfirm,
@@ -68,15 +61,13 @@ export function ExternalCardTerminalEntry({
   onApplied,
 }: ExternalCardTerminalEntryProps): JSX.Element {
   const [amountInput, setAmountInput] = useState<string>(() =>
-    Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0
-      ? remainingBalanceMinor.toString()
-      : '',
+    formatMinorToInput(remainingBalanceMinor),
   );
   const [referenceInput, setReferenceInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
 
-  const amountAppliedMinor = useMemo(() => parseIntegerMinorUnits(amountInput), [amountInput]);
+  const amountAppliedMinor = useMemo(() => parseCurrencyToMinor(amountInput), [amountInput]);
   const isExactAmount = amountAppliedMinor === remainingBalanceMinor;
   const isOverpay = amountAppliedMinor !== null && amountAppliedMinor > remainingBalanceMinor;
   const isUnderpay = amountAppliedMinor !== null && amountAppliedMinor < remainingBalanceMinor;
@@ -141,7 +132,7 @@ export function ExternalCardTerminalEntry({
         className="external-card-terminal-entry__amount-label"
         htmlFor="external-card-amount-input"
       >
-        Amount applied (minor units)
+        Amount applied (¤)
       </label>
       <input
         id="external-card-amount-input"
@@ -153,7 +144,8 @@ export function ExternalCardTerminalEntry({
         value={amountInput}
         onChange={(e) => {
           const next = e.target.value;
-          if (next === '' || /^\d+$/.test(next)) {
+          // Currency keystroke guard: digits + optional single decimal, ≤2 frac.
+          if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
             setAmountInput(next);
             setBridgeRefusal(false);
           }

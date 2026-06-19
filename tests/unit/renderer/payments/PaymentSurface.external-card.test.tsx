@@ -213,7 +213,7 @@ describe('PaymentSurface — external_card_terminal apply path (coverage)', () =
     //    confirm button is enabled without further input — reference is optional.
     await screen.findByTestId('external-card-terminal-entry');
     const amountInput = screen.getByTestId('external-card-amount-input');
-    expect((amountInput as HTMLInputElement).value).toBe('1000');
+    expect((amountInput as HTMLInputElement).value).toBe('10.00');
 
     // 3. Submit the entry. This invokes the line-354 lambda (tenderApply prop).
     await user.click(screen.getByTestId('external-card-confirm'));

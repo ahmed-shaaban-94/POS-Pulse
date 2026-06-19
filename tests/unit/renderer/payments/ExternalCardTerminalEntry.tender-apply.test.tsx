@@ -157,7 +157,7 @@ describe('ExternalCardTerminalEntry — tender.apply wiring (T151)', () => {
 
     const input = screen.getByTestId('external-card-amount-input');
     await user.clear(input);
-    await user.type(input, '600');
+    await user.type(input, '6.00');
     const button = screen.getByTestId('external-card-confirm');
     expect(button).toBeDisabled();
     await user.click(button);

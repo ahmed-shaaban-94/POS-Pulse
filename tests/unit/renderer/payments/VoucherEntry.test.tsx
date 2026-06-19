@@ -79,7 +79,7 @@ describe('T290 — VoucherEntry happy path', () => {
     expect(confirm).toBeDisabled();
     // Amount only (clear code, type amount) → still disabled.
     await user.clear(screen.getByTestId('voucher-entry-code-input'));
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1000');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '10.00');
     expect(confirm).toBeDisabled();
     // Both well-formed → enabled.
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
@@ -93,7 +93,7 @@ describe('T290 — VoucherEntry happy path', () => {
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-42" tenderApply={bridge} />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
     await waitFor(() => {
       expect(spy).toHaveBeenCalledTimes(1);
@@ -124,7 +124,7 @@ describe('T290 — VoucherEntry happy path', () => {
       />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
     await waitFor(() => {
       expect(onApplied).toHaveBeenCalledTimes(1);
@@ -143,14 +143,19 @@ describe('T290 — VoucherEntry happy path', () => {
       <VoucherEntry remainingBalanceMinor={1000} paymentAttemptId="pa-1" tenderApply={bridge} />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '5000'); // > 1000
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '50.00'); // > the ¤10.00 balance
     expect(screen.getByTestId('voucher-entry-confirm')).toBeDisabled();
   });
 
+  // NOTE: the amount field now accepts a currency amount (e.g. "15.00"), so a
+  // decimal point is VALID and no longer in this refuse-set. The keystroke
+  // guard rejects negatives, alphabetic, and "+". Scientific "1e3" is dropped
+  // from this set: the guard accepts the leading "1" and rejects the "e3"
+  // keystrokes, so the field never holds "1e3" — it holds the valid "1". The
+  // guard prevents the malformed string from ever existing rather than refusing
+  // it after the fact, so asserting "1e3 → disabled" is no longer meaningful.
   it.each([
-    ['decimal point', '15.00'],
     ['negative', '-100'],
-    ['scientific', '1e3'],
     ['alphabetic', 'abc'],
     ['empty', ''],
     ['leading +', '+100'],
@@ -167,6 +172,18 @@ describe('T290 — VoucherEntry happy path', () => {
     expect(screen.getByTestId('voucher-entry-confirm')).toBeDisabled();
   });
 
+  it('accepts a 2-decimal currency amount and enables confirm (decimal point now valid)', async () => {
+    const user = userEvent.setup();
+    const { bridge } = makeBridge(makeOkResponse());
+    render(
+      <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
+    );
+    await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
+    // ¤15.00 (1500 minor) ≤ the ¤50.00 (5000 minor) balance → confirm enables.
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
+    expect(screen.getByTestId('voucher-entry-confirm')).toBeEnabled();
+  });
+
   it.each([
     ['lowercase normalised', 'voucher10', 'VOUCHER10'],
     ['mixed case normalised', 'Voucher10', 'VOUCHER10'],
@@ -178,7 +195,7 @@ describe('T290 — VoucherEntry happy path', () => {
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), typed);
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1000');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '10.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
     await waitFor(() => {
       expect(spy).toHaveBeenCalledTimes(1);
@@ -201,7 +218,7 @@ describe('T290 — VoucherEntry happy path', () => {
     const user = userEvent.setup();
     render(<VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={spy} />);
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
     const confirm = screen.getByTestId('voucher-entry-confirm');
     // Fire two clicks back-to-back without yielding to React.
     await Promise.all([user.click(confirm), user.click(confirm)]);
@@ -236,7 +253,7 @@ describe('T290 — VoucherEntry happy path', () => {
         />,
       );
       await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-      await user.type(screen.getByTestId('voucher-entry-amount-input'), '100');
+      await user.type(screen.getByTestId('voucher-entry-amount-input'), '1.00');
       expect(screen.getByTestId('voucher-entry-confirm')).toBeDisabled();
     },
   );
@@ -252,7 +269,7 @@ describe('T290 — VoucherEntry happy path', () => {
       <VoucherEntry remainingBalanceMinor={5000} paymentAttemptId="pa-1" tenderApply={bridge} />,
     );
     await user.type(screen.getByTestId('voucher-entry-code-input'), 'VOUCHER10');
-    await user.type(screen.getByTestId('voucher-entry-amount-input'), '1500');
+    await user.type(screen.getByTestId('voucher-entry-amount-input'), '15.00');
     await user.click(screen.getByTestId('voucher-entry-confirm'));
     await waitFor(() => {
       expect(screen.queryByTestId('voucher-entry-applying')).toBeInTheDocument();

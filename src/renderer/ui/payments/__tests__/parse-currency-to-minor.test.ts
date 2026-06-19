@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { parseCurrencyToMinor } from '../parse-currency-to-minor.js';
+import { parseCurrencyToMinor, formatMinorToInput } from '../parse-currency-to-minor.js';
 
 describe('parseCurrencyToMinor — currency string → integer minor units', () => {
   it('parses a two-decimal amount: "12.50" → 1250', () => {
@@ -63,5 +63,34 @@ describe('parseCurrencyToMinor — currency string → integer minor units', () 
     const v = parseCurrencyToMinor('0.10');
     expect(v).toBe(10);
     expect(Number.isSafeInteger(v)).toBe(true);
+  });
+});
+
+describe('formatMinorToInput — minor units → plain editable currency string (no ¤ symbol)', () => {
+  it('formats with 2 decimals: 1250 → "12.50"', () => {
+    expect(formatMinorToInput(1250)).toBe('12.50');
+  });
+
+  it('pads single-digit minor: 5 → "0.05"', () => {
+    expect(formatMinorToInput(5)).toBe('0.05');
+  });
+
+  it('formats zero: 0 → "0.00"', () => {
+    expect(formatMinorToInput(0)).toBe('0.00');
+  });
+
+  it('formats a large value: 12550 → "125.50"', () => {
+    expect(formatMinorToInput(12550)).toBe('125.50');
+  });
+
+  it('returns empty string for an unsafe / negative value (cannot prefill)', () => {
+    expect(formatMinorToInput(Number.MAX_SAFE_INTEGER + 1)).toBe('');
+    expect(formatMinorToInput(-1)).toBe('');
+  });
+
+  it('round-trips with parseCurrencyToMinor: parse(format(n)) === n', () => {
+    for (const n of [0, 5, 99, 100, 1250, 12550, 99999]) {
+      expect(parseCurrencyToMinor(formatMinorToInput(n))).toBe(n);
+    }
   });
 });
