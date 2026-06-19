@@ -212,6 +212,24 @@ export function CatalogueDiagnostics(props: CatalogueDiagnosticsProps): JSX.Elem
           )}
         </section>
 
+        {/*
+          POS v3.5 Phase 4 — stock / expiry / availability are part of the
+          v3.5 inventory design but have no renderer-facing data source yet
+          (deferred to POS-013, G2-gated). Surfaced as an honest coming-soon
+          section — never a fabricated figure.
+        */}
+        <section
+          className="diagnostics-section--coming-soon"
+          data-testid="diagnostics-stock-coming-soon"
+          data-functional="false"
+        >
+          <h2>
+            Stock &amp; expiry
+            <span className="diagnostics-badge">Coming soon</span>
+          </h2>
+          <p>On-hand stock, batch expiry, and availability arrive with the inventory contract.</p>
+        </section>
+
         <section data-testid="diagnostics-search">
           <h2>Search local catalogue (read-only)</h2>
           <input

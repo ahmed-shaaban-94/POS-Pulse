@@ -11,6 +11,7 @@
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
+import { SettingsSkeleton } from './SettingsSkeleton';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -45,9 +46,7 @@ export function SettingsHelpPlaceholder(): JSX.Element {
 
   return (
     <Workspace title="Settings / Help">
-      <section className="placeholder-pane">
-        <p>Settings and help functionality coming soon.</p>
-      </section>
+      <SettingsSkeleton />
     </Workspace>
   );
 }

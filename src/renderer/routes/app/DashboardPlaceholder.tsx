@@ -9,6 +9,7 @@
 import type { JSX } from 'react';
 import { LoadingState, EmptyState, ErrorState } from '../../ui/states';
 import { Workspace } from '../../shell/regions/Workspace';
+import { DashboardSkeleton } from './DashboardSkeleton';
 
 function resolveDevState(): string {
   const metaEnv = (import.meta as unknown as { env?: { DEV?: boolean } }).env;
@@ -43,9 +44,7 @@ export function DashboardPlaceholder(): JSX.Element {
 
   return (
     <Workspace title="Dashboard">
-      <section className="placeholder-pane">
-        <p>Welcome to POS Pulse. Select an option from the navigation rail.</p>
-      </section>
+      <DashboardSkeleton />
     </Workspace>
   );
 }
