@@ -46,7 +46,8 @@ export function TenderSelection({
     >
       <h3 className="tender-selection__heading">Payment method</h3>
 
-      <div className="tender-selection__options">
+      {/* POS v3.5 Phase 3: 3-method grid (cash · card · voucher). Not --four. */}
+      <div className="tender-selection__options tender-method-grid">
         <button
           type="button"
           className="tender-selection__option"
