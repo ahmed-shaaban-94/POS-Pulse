@@ -3,9 +3,10 @@ import { useState, type JSX } from 'react';
 import type { ReceiptsBridgeAPI, SalesBridgeAPI, SaleSummary } from '../../../shared/bridge-api.js';
 import type { SaleNumber } from '../../../shared/sales/types.js';
 import { ReprintAffordance } from './ReprintAffordance.js';
+import { ReceiptPreview } from './ReceiptPreview.js';
 
 /**
- * T451 — `<FindSaleReceipt>` (008 Slice 5).
+ * T451 — `<FindSaleReceipt>` (008 Slice 5; POS v3.5 Phase 5 — receipt preview).
  *
  * The receipt-affordance host surface: a minimal find-sale-by-number lookup
  * that renders a finalized sale's summary and mounts `<ReprintAffordance>` in
@@ -16,6 +17,12 @@ import { ReprintAffordance } from './ReprintAffordance.js';
  * affordance's visibility is gated (AD-10) on whether the sale's
  * `latest_print_event` succeeded — a sale that never printed cannot be
  * reprinted, so the affordance is absent.
+ *
+ * POS v3.5 Phase 5 (renderer-only): a "Preview receipt" control mounts the
+ * already-built `<ReceiptPreview>` for the looked-up sale, improving operator
+ * visibility. The preview reads `receipts.preview` (read-only, no side effects)
+ * — this component issues NO new bridge call of its own; the printed-output
+ * path (`src/main/receipts`) is untouched.
  */
 
 export interface FindSaleReceiptProps {
@@ -47,12 +54,15 @@ export function FindSaleReceipt({
 }: FindSaleReceiptProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<LookupState>({ phase: 'idle' });
+  // Phase 5: whether the read-only receipt preview is open for the found sale.
+  const [previewing, setPreviewing] = useState(false);
 
   async function handleFind(): Promise<void> {
     const trimmed = query.trim();
     if (trimmed === '') return; // no empty lookups
     const salesApi = resolveSalesBridge(_testSalesBridge);
     if (salesApi === null) return;
+    setPreviewing(false); // a new lookup closes any open preview
     setState({ phase: 'searching' });
     try {
       const res = await salesApi.findByNumber({ sale_number: trimmed as SaleNumber });
@@ -103,15 +113,39 @@ export function FindSaleReceipt({
           <p className="text-sm text-muted-foreground">
             {state.sale.selling_operator_display_name} · {state.sale.terminal_label}
           </p>
-          <ReprintAffordance
-            sale={{
-              sale_id: state.sale.sale_id,
-              has_successful_print: hasSuccessfulPrint(state.sale),
-            }}
-            // Conditional spread: exactOptionalPropertyTypes rejects passing
-            // an explicit `undefined` to an optional prop.
-            {...(_testReceiptsBridge !== undefined ? { _testReceiptsBridge } : {})}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              // 44×44 touch floor (FR-068); native button ⟹ keyboard-operable.
+              className="min-h-11 min-w-11 rounded-md border border-border px-4 py-2 text-sm font-medium"
+              onClick={() => {
+                setPreviewing(true);
+              }}
+            >
+              Preview receipt
+            </button>
+            <ReprintAffordance
+              sale={{
+                sale_id: state.sale.sale_id,
+                has_successful_print: hasSuccessfulPrint(state.sale),
+              }}
+              // Conditional spread: exactOptionalPropertyTypes rejects passing
+              // an explicit `undefined` to an optional prop.
+              {...(_testReceiptsBridge !== undefined ? { _testReceiptsBridge } : {})}
+            />
+          </div>
+          {previewing ? (
+            <ReceiptPreview
+              saleId={state.sale.sale_id}
+              onClose={() => {
+                setPreviewing(false);
+              }}
+              // ReceiptPreview reads `receipts.preview` itself; forward the
+              // injected test bridge so unit renders use the double, not
+              // window.api. Conditional spread per exactOptionalPropertyTypes.
+              {...(_testReceiptsBridge !== undefined ? { _testBridge: _testReceiptsBridge } : {})}
+            />
+          ) : null}
         </div>
       ) : null}
     </section>
