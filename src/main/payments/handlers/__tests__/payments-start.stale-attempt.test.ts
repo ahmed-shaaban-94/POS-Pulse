@@ -76,7 +76,7 @@ function makeDeps(overrides: Partial<PaymentsStartHandlerDeps>): PaymentsStartHa
     },
     idempotency: {
       checkOrReserve: () => ({ kind: 'fresh', commit: () => {} }),
-    } as PaymentsStartHandlerDeps['idempotency'],
+    },
     auditEmitter: {} as PaymentsStartHandlerDeps['auditEmitter'],
     uuid: () => 'attempt-B',
     clock: () => new Date('2026-06-19T09:00:00.000Z'),

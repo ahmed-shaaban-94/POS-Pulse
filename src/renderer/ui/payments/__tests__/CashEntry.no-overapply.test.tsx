@@ -20,8 +20,8 @@ import type { TenderApplyRequest, TenderApplyResponse } from '../../../../shared
 
 afterEach(cleanup);
 
-const okApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>(
-  async () => ({ kind: 'ok', tender_line_id: 'tl', applied_at: '2026-06-19T09:00:00.000Z' }),
+const okApply = vi.fn<(req: TenderApplyRequest) => Promise<TenderApplyResponse>>(() =>
+  Promise.resolve({ kind: 'ok', tender_line_id: 'tl', applied_at: '2026-06-19T09:00:00.000Z' }),
 );
 
 /** Bridged mode (tenderApply + paymentAttemptId provided). */
@@ -34,7 +34,7 @@ function renderBridged(remainingBalanceMinor: number) {
       onApplied={vi.fn()}
     />,
   );
-  return screen.getByTestId('cash-entry-confirm') as HTMLButtonElement;
+  return screen.getByTestId('cash-entry-confirm');
 }
 
 describe('CashEntry — no over-apply once the balance is fully tendered (Defect B)', () => {

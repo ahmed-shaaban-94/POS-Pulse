@@ -88,10 +88,7 @@ export function VoucherEntry({
   // as secondary UX feedback.
   const submitLockRef = useRef<boolean>(false);
 
-  const amountAppliedMinor = useMemo(
-    () => parseCurrencyToMinor(rawAmountInput),
-    [rawAmountInput],
-  );
+  const amountAppliedMinor = useMemo(() => parseCurrencyToMinor(rawAmountInput), [rawAmountInput]);
 
   const codeIsWellFormed = voucherCode.length >= 3 && VOUCHER_CODE_PATTERN.test(voucherCode);
   // CR-2 (PR #226): defence-in-depth — a malformed `remainingBalanceMinor`
