@@ -210,6 +210,12 @@ export function classifyStatus(status: number): SaleSyncResult {
   // — dead-lettering it would silently lose the sale. Classification UNCHANGED
   // from 011: still transient, retryable, never dead-letter (E-4). Treat as transient.
   if (status === 401 || status === 403) return { kind: 'transient' };
+  // 429 — per-device write rate limit (DP-2 ADR 0009 / audit M-2). This is
+  // TRANSIENT back-pressure: the device was briefly too fast, NOT a contract
+  // defect. The sale is valid and WILL succeed on retry once the window rolls
+  // (Retry-After). Dead-lettering it would permanently lose a good sale — the
+  // same failure mode the 401/403 case above guards against. Treat as transient.
+  if (status === 429) return { kind: 'transient' };
   // Other 4xx (400/404/422/…) is a genuine validation/contract defect — the
   // request will not succeed on retry without intervention; dead-letter it.
   if (status >= 400) return { kind: 'permanent' };

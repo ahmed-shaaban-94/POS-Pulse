@@ -188,6 +188,13 @@ describe('classifyStatus — HTTP → outcome union', () => {
     expect(classifyStatus(401)).toEqual({ kind: 'transient' });
     expect(classifyStatus(403)).toEqual({ kind: 'transient' });
   });
+  it('maps 429 → transient (NOT permanent — a rate-limit throttle must retry, never dead-letter the sale)', () => {
+    // DP-2 ADR 0009 adds a per-device write rate limit that returns 429 on the
+    // sale-capture route. 429 is a TRANSIENT back-pressure signal (retry after
+    // Retry-After), not a contract defect — dead-lettering it would permanently
+    // lose a perfectly valid sale just because the device was briefly too fast.
+    expect(classifyStatus(429)).toEqual({ kind: 'transient' });
+  });
   it('maps genuine validation 4xx (400/404/422) → permanent (dead-letter)', () => {
     expect(classifyStatus(400)).toEqual({ kind: 'permanent' });
     expect(classifyStatus(404)).toEqual({ kind: 'permanent' });
