@@ -133,7 +133,9 @@ describe('capture-sale-request contract conformance (H-1, AD-SALE-CAPTURE-1)', (
   it('value-grammar: occurredAt is RFC3339 (passes DP-2 z.string().datetime())', () => {
     const wire = toWireBody(PAYLOAD, 'EGP');
     // The exact grammar DP-2 enforces: ISO-8601 with `T` and a `Z`/offset zone.
-    expect(wire.occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/);
+    expect(wire.occurredAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/,
+    );
     // Round-trips through Date without loss (Number.isNaN would mean an invalid instant).
     expect(Number.isNaN(Date.parse(wire.occurredAt))).toBe(false);
   });
