@@ -42,7 +42,7 @@ import type { PaymentsStartRequest, PaymentsStartResponse } from '../../../share
 export interface PaymentsStartHandlerDeps {
   getCurrentSession: () => OperatorSessionForPayments | null;
   attemptsRepo: Pick<PaymentAttemptsRepository, 'findStartedByTerminal'>;
-  paymentAttemptFsm: Pick<PaymentAttemptFsm, 'start'>;
+  paymentAttemptFsm: Pick<PaymentAttemptFsm, 'start' | 'cancel'>;
   idempotency: IdempotencyHelper;
   /**
    * Wave-G T100 expects the handler to instantiate the audit emitter
@@ -134,6 +134,26 @@ export function createPaymentsStartHandler(deps: PaymentsStartHandlerDeps): Paym
       // committed outbox row is impossible in production. Refuse generically
       // rather than fabricate a response.
       return await Promise.resolve({ kind: 'refused', reason: 'internal_error' });
+    }
+
+    // 3b. Stale-attempt recovery — a `started` attempt for a DIFFERENT cart on
+    // this terminal must not block (or leak into) a new checkout. The FSM's
+    // partial-unique-index on (terminal_id) WHERE state='started' otherwise
+    // refuses `attempt_already_started_on_terminal`, and PaymentSurface would
+    // reuse the orphan's already-settled balance (remaining=0) → the cashier
+    // can never settle cart B. Discard the orphan (LIFO-reverse + cancel) so a
+    // clean attempt can start. A started attempt for the SAME cart is the
+    // legitimate split-tender / duplicate-start case and is left to the FSM.
+    const existingStarted = attemptsRepo.findStartedByTerminal(session.terminal_id);
+    if (
+      existingStarted !== undefined &&
+      existingStarted.envelope_cart_id !== req.envelope_cart_id
+    ) {
+      paymentAttemptFsm.cancel({
+        payment_attempt_id: existingStarted.payment_attempt_id,
+        cancelled_at: now,
+        action_id: `${req.idempotency_key}:stale-cancel`,
+      });
     }
 
     // 4. Fresh path — invoke the FSM. The FSM itself opens a SQLite
