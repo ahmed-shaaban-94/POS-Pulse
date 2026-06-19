@@ -8,6 +8,7 @@ import './styles/tailwind.css';
 import type { PreloadBridgeAPI } from '../shared/bridge-api';
 import { useFeatureFlagsStore } from './stores/feature-flags-store';
 import { installCartStoreSignOutHook } from './stores/cart-signout-hook';
+import { initTheme } from './stores/theme-store';
 
 /**
  * T068 — initialise renderer-side Sentry BEFORE React mounts.
@@ -22,6 +23,13 @@ import { installCartStoreSignOutHook } from './stores/cart-signout-hook';
  * renderer's init posture independently. We cast the `init` reference
  * — not the argument — so the call site is type-safe.
  */
+// POS v3.5 Phase 1 (ADR-0004) — reconcile the theme store + document root
+// with the persisted selection BEFORE React mounts. index.html bakes the
+// `data-theme="dark"` default for a flash-free dark boot; this only repaints
+// to `light` for operators who chose it. Side-effect-isolated + DOM-guarded,
+// so it is safe ahead of the Sentry/flag bootstrap.
+initTheme();
+
 const sentryInit = Sentry.init as unknown as (opts: BrowserOptions) => void;
 
 // Narrow `window.api` explicitly so ESLint's no-unsafe-call rule doesn't
