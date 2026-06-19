@@ -40,4 +40,30 @@ describe('JwtHolder', () => {
       h.clear('unknown');
     }).not.toThrow();
   });
+
+  // Envelope-retention (sync-gap fix): DP-2's takeover-confirm idempotent replay
+  // returns `envelope: null` meaning "use the one you already hold". POS call
+  // sites normalize that to '' before calling set(). An empty set MUST NOT clobber
+  // a previously-held non-empty value — otherwise the sale-sync drain loses its
+  // operator credential and never POSTs. A real removal goes through clear().
+  it('does NOT overwrite a held non-empty value with an empty string (retain on empty set)', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'real-envelope');
+    h.set('be-1', ''); // replay → '' ; must be ignored, prior value retained
+    expect(h.get('be-1')).toBe('real-envelope');
+  });
+
+  it('stores an empty value when nothing non-empty is held yet (no prior to protect)', () => {
+    const h = createJwtHolder();
+    h.set('be-1', '');
+    expect(h.get('be-1')).toBe('');
+  });
+
+  it('clear still removes a retained value (explicit removal path unaffected)', () => {
+    const h = createJwtHolder();
+    h.set('be-1', 'real-envelope');
+    h.set('be-1', ''); // retained
+    h.clear('be-1');
+    expect(h.get('be-1')).toBeNull();
+  });
 });
