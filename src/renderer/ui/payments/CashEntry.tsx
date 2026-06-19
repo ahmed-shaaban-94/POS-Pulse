@@ -83,7 +83,14 @@ export function CashEntry({
   // stays in force.
   const isBridged = tenderApply !== undefined && paymentAttemptId !== undefined;
   const isPositive = amountAppliedMinor !== null && amountAppliedMinor > 0;
-  const canConfirm = isBridged ? isPositive : isSufficient;
+  // Defect B guard: in bridged mode, only allow applying a cash line while a
+  // balance is still owed (remaining > 0). Once the attempt is fully tendered
+  // (remaining == 0), applying more cash only piles all-change lines — the
+  // cashier must use "Confirm payment" (settle) instead. Split-tender partial
+  // applies remain allowed because they happen while remaining is still > 0.
+  const canConfirm = isBridged
+    ? isPositive && isRemainingValid && remainingBalanceMinor > 0
+    : isSufficient;
 
   // computeChangeDueMinor throws on under-tender; only compute it when the
   // cash amount actually covers the remaining balance.
