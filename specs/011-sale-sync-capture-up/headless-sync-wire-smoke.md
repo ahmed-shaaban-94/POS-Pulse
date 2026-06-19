@@ -57,7 +57,7 @@ state row written, the sale stays eligible. The gate was not weakened to make th
 
 ## Commands run
 
-```
+```bash
 node_modules/.bin/vitest run src/main/sales-sync/__tests__/sync-wire.headless.test.ts   # 6 passed
 node_modules/.bin/vitest run src/main/sales-sync                                         # 80 passed (9 files)
 npm run typecheck                                                                        # clean

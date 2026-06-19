@@ -83,12 +83,14 @@ function captureFetch(status: number | 'reject'): {
   return { fetchImpl, captured };
 }
 
+/** Normalise the `fetch` first argument (string / URL / Request) to its URL string. */
 function stringifyInput(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.toString();
   return input.url;
 }
 
+/** Read a single header off a captured `RequestInit` (case-sensitive), or null. */
 function headerValue(init: RequestInit, name: string): string | null {
   const headers = init.headers as Record<string, string> | undefined;
   return headers?.[name] ?? null;
