@@ -3,6 +3,7 @@ import { useMemo, useState, type JSX } from 'react';
 import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { parseCurrencyToMinor } from './parse-currency-to-minor.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
@@ -53,17 +54,6 @@ function formatMinorUnits(minor: number): string {
   return `¤${whole.toString()}.${frac}`;
 }
 
-function parseIntegerMinorUnits(input: string): number | null {
-  // Allow only an all-digit non-empty string; reject leading minus, decimal
-  // point, alphabetic, scientific notation, anything else. This is the
-  // keystroke-level guard FR-004 / Constitution §II demand.
-  if (input === '' || !/^\d+$/.test(input)) {
-    return null;
-  }
-  const parsed = Number.parseInt(input, 10);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
 export function CashEntry({
   remainingBalanceMinor,
   onConfirm,
@@ -76,7 +66,7 @@ export function CashEntry({
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
 
-  const amountAppliedMinor = useMemo(() => parseIntegerMinorUnits(rawInput), [rawInput]);
+  const amountAppliedMinor = useMemo(() => parseCurrencyToMinor(rawInput), [rawInput]);
 
   const isRemainingValid =
     Number.isSafeInteger(remainingBalanceMinor) && remainingBalanceMinor >= 0;
@@ -150,7 +140,7 @@ export function CashEntry({
       </div>
 
       <label className="cash-entry__amount-label" htmlFor="cash-entry-amount-input">
-        Amount received (minor units)
+        Amount received (¤)
       </label>
       <input
         id="cash-entry-amount-input"
@@ -162,7 +152,12 @@ export function CashEntry({
         value={rawInput}
         onChange={(e) => {
           const next = e.target.value;
-          if (next === '' || /^\d+$/.test(next)) {
+          // Keystroke guard: permit an in-progress currency amount — digits with
+          // an optional single decimal point and up to 2 fractional digits.
+          // Allows partial entries while typing ("12", "12.", "12.5"); the
+          // commit-time parse (parseCurrencyToMinor) is the authoritative gate
+          // (a bare "12." parses to null → cannot confirm).
+          if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
             setRawInput(next);
             setBridgeRefusal(false);
           }

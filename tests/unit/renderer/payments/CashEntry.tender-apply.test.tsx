@@ -61,7 +61,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
       />,
     );
 
-    await user.type(screen.getByTestId('cash-entry-amount-input'), '500');
+    await user.type(screen.getByTestId('cash-entry-amount-input'), '5.00');
     await user.click(screen.getByTestId('cash-entry-confirm'));
 
     expect(tenderApply).toHaveBeenCalledTimes(1);
@@ -96,7 +96,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
       />,
     );
 
-    await user.type(screen.getByTestId('cash-entry-amount-input'), '500');
+    await user.type(screen.getByTestId('cash-entry-amount-input'), '5.00');
     await user.click(screen.getByTestId('cash-entry-confirm'));
     await user.click(screen.getByTestId('cash-entry-confirm'));
 
@@ -129,7 +129,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
       />,
     );
 
-    await user.type(screen.getByTestId('cash-entry-amount-input'), '600');
+    await user.type(screen.getByTestId('cash-entry-amount-input'), '6.00');
     await user.click(screen.getByTestId('cash-entry-confirm'));
 
     expect(onApplied).toHaveBeenCalledTimes(1);
@@ -156,7 +156,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
       />,
     );
 
-    await user.type(screen.getByTestId('cash-entry-amount-input'), '500');
+    await user.type(screen.getByTestId('cash-entry-amount-input'), '5.00');
     await user.click(screen.getByTestId('cash-entry-confirm'));
 
     const bridgeRefusal = await screen.findByTestId('cash-entry-bridge-refusal');
@@ -190,7 +190,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
       />,
     );
 
-    await user.type(screen.getByTestId('cash-entry-amount-input'), '400');
+    await user.type(screen.getByTestId('cash-entry-amount-input'), '4.00');
     const button = screen.getByTestId('cash-entry-confirm');
     expect(button).not.toBeDisabled();
     await user.click(button);
@@ -225,7 +225,7 @@ describe('CashEntry — tender.apply wiring (T151)', () => {
 
     render(<CashEntry remainingBalanceMinor={500} onConfirm={onConfirm} />);
 
-    await user.type(screen.getByTestId('cash-entry-amount-input'), '500');
+    await user.type(screen.getByTestId('cash-entry-amount-input'), '5.00');
     await user.click(screen.getByTestId('cash-entry-confirm'));
 
     expect(onConfirm).toHaveBeenCalledWith({
