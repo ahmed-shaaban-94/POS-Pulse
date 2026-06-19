@@ -2044,6 +2044,92 @@ body {
     }
   }
 
+  /*
+   * POS v3.5 Phase 3 — tender surface (safe tenders only: cash, card, voucher).
+   * Recreated against POS-Pulse tokens from the v3.5 design reference. The
+   * method grid is sized for the THREE safe methods — the v3.5 `--four` variant
+   * is intentionally NOT recreated (credit/insurance are Phase 6 / gated).
+   */
+  .tender-method-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+  }
+
+  @media (max-width: 1023px) {
+    .tender-method-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* Cash keypad (AmountPad). */
+  .amount-pad {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .amount-pad__display {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-card);
+    background-color: var(--color-surface-sunken);
+    border: 1px solid var(--color-border);
+    font-size: var(--font-size-2xl);
+    text-align: end;
+  }
+
+  .amount-pad__quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .amount-pad__quick-key {
+    flex: 1 1 auto;
+    min-block-size: 44px;
+    padding-inline: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background-color: var(--color-primary-soft);
+    color: var(--color-text);
+    cursor: pointer;
+  }
+
+  .amount-pad__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-2);
+  }
+
+  .amount-pad__key {
+    min-block-size: 44px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-size: var(--font-size-lg);
+    cursor: pointer;
+  }
+
+  .amount-pad__key:hover {
+    background-color: var(--color-surface-elevated);
+  }
+
+  .amount-pad__key:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .amount-pad__key--del {
+    color: var(--color-text-muted);
+  }
+
+  /* Animated change-due readout (MoneyRoll). */
+  .money-roll {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+  }
+
   .cart-pane {
     display: flex;
     flex-direction: column;

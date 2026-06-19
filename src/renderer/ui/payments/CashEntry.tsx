@@ -3,6 +3,8 @@ import { useMemo, useState, type JSX } from 'react';
 import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
+import { AmountPad } from './AmountPad.js';
+import { MoneyRoll } from './MoneyRoll.js';
 
 /**
  * 006-payments-tender Slice 2 + S3d T151 — <CashEntry>.
@@ -169,10 +171,33 @@ export function CashEntry({
         }}
       />
 
+      {/*
+        POS v3.5 Phase 3 — the AmountPad is a VIEW over the single `rawInput`
+        source of truth (it reads the parsed value, writes back the string).
+        It introduces no second amount state, so the confirm/bridge/refusal
+        logic keyed on `rawInput` is unchanged. Total drives quick-amounts.
+      */}
+      <AmountPad
+        valueMinor={amountAppliedMinor}
+        totalMinor={isRemainingValid ? remainingBalanceMinor : 0}
+        onChange={(next) => {
+          setRawInput(next.toString());
+          setBridgeRefusal(false);
+        }}
+      />
+
       {changeDueMinor !== null && changeDueMinor > 0 && (
         <div className="cash-entry__change-due" data-testid="cash-entry-change-due">
           <span className="cash-entry__change-due-label">Change due</span>
-          <span className="cash-entry__change-due-value">{formatMinorUnits(changeDueMinor)}</span>
+          {/*
+            v3.5 MoneyRoll animates the change-due value. The `¤` currency mark
+            is kept as a sibling label so the rendered text content stays
+            `¤24.50` (existing display contract). MoneyRoll is fed the already
+            computed `changeDueMinor` — no money math here.
+          */}
+          <span className="cash-entry__change-due-value">
+            ¤<MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" />
+          </span>
         </div>
       )}
 
