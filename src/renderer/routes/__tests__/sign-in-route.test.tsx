@@ -176,7 +176,9 @@ describe('AppRouter + /sign-in (T022)', () => {
     await user.type(screen.getByLabelText(/email or username/i), 'manager@x.test');
     await user.type(screen.getByLabelText(/^password$/i), 'p');
     await user.click(screen.getByTestId('sign-in-submit'));
-    await waitFor(() => expect(screen.getByText(/welcome to pos pulse/i)).toBeInTheDocument());
+    // Phase 4: the dashboard now renders the v3.5 skeleton; assert it mounted
+    // via its stable testid (copy-independent) rather than the old welcome copy.
+    await waitFor(() => expect(screen.getByTestId('dashboard-skeleton')).toBeInTheDocument());
     expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
   });
 
@@ -207,7 +209,7 @@ describe('AppRouter + /sign-in (T022)', () => {
     // Takeover prompt appears; confirm it.
     await waitFor(() => expect(screen.getByTestId('takeover-prompt-confirm')).toBeInTheDocument());
     await user.click(screen.getByTestId('takeover-prompt-confirm'));
-    await waitFor(() => expect(screen.getByText(/welcome to pos pulse/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('dashboard-skeleton')).toBeInTheDocument());
     expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
   });
 
@@ -225,7 +227,8 @@ describe('AppRouter + /sign-in (T022)', () => {
 
     await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
     expect(screen.getAllByText('Section unavailable').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/welcome to pos pulse/i)).not.toBeInTheDocument();
+    // Cashier is blocked → the dashboard skeleton must NOT render.
+    expect(screen.queryByTestId('dashboard-skeleton')).not.toBeInTheDocument();
   });
 
   it('DashboardRoute redirects signed-out access without rendering dashboard content', () => {
@@ -236,7 +239,8 @@ describe('AppRouter + /sign-in (T022)', () => {
     );
 
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
-    expect(screen.queryByText(/welcome to pos pulse/i)).not.toBeInTheDocument();
+    // Signed-out → redirected, no dashboard skeleton rendered.
+    expect(screen.queryByTestId('dashboard-skeleton')).not.toBeInTheDocument();
   });
 
   it('manager and admin can access /app/dashboard', async () => {
@@ -255,7 +259,7 @@ describe('AppRouter + /sign-in (T022)', () => {
       );
 
       await waitFor(() => expect(screen.getByText('Dashboard')).toBeInTheDocument());
-      expect(screen.getByText(/welcome to pos pulse/i)).toBeInTheDocument();
+      expect(screen.getByTestId('dashboard-skeleton')).toBeInTheDocument();
     }
   });
 

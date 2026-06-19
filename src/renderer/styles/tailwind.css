@@ -2130,6 +2130,93 @@ body {
     font-variant-numeric: tabular-nums;
   }
 
+  /*
+   * POS v3.5 Phase 4 — shell surfaces (settings / dashboard / inventory).
+   * A guarded full visual skeleton: functional sections render live; surfaces
+   * whose data/contract is absent carry an honest "Coming soon" badge and a
+   * recessive, non-interactive treatment. Recreated against POS-Pulse tokens.
+   */
+  .settings-skeleton,
+  .dashboard-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-5);
+    max-inline-size: 720px;
+  }
+
+  .dashboard-skeleton {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    max-inline-size: none;
+  }
+
+  .settings-section,
+  .dashboard-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+  }
+
+  .settings-section__title,
+  .dashboard-card__title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+  }
+
+  .settings-section__hint,
+  .dashboard-card__hint {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+
+  /* Coming-soon (presentational-only) treatment — recessive, never alarming. */
+  .settings-section--coming-soon,
+  .dashboard-card--coming-soon,
+  .diagnostics-section--coming-soon {
+    background-color: var(--color-surface-elevated);
+  }
+
+  .settings-section__badge,
+  .dashboard-card__badge,
+  .diagnostics-badge {
+    display: inline-block;
+    margin-inline-start: var(--space-2);
+    padding-inline: var(--space-2);
+    border-radius: 999px;
+    background-color: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .settings-section__control[disabled] {
+    align-self: flex-start;
+    min-block-size: 44px;
+    padding-inline: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background-color: var(--color-surface-sunken);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+  }
+
+  .dashboard-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
   .cart-pane {
     display: flex;
     flex-direction: column;
