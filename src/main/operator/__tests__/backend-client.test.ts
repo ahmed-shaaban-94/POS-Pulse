@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createBackendClient } from '../backend-client.js';
+import { SignInHandler } from '../sign-in-handler.js';
+import { SessionManager } from '../session-manager.js';
+import { createJwtHolder } from '../jwt-holder.js';
+import { ProtoSessionStore } from '../takeover-handler.js';
 
 /**
  * 004-operator-session — production BackendClient request-shape tests.
@@ -188,15 +192,26 @@ describe('createBackendClient — sign-in request shape', () => {
   });
 });
 
-describe('016 C-1 — interpreter preserves pos_operator_envelope (D5)', () => {
+describe('016 C-1 — interpreter preserves the operator-authorization envelope (D5)', () => {
   // The interpreter hand-builds its return via an allowlist (operator +
   // operator_session only) and silently drops unknown fields. The D5 swap is a
-  // no-op unless the interpreter explicitly reads `pos_operator_envelope`. These
-  // tests pin that preservation at the response boundary (both sign-in AND the
+  // no-op unless the interpreter explicitly reads the envelope. These tests pin
+  // that preservation at the response boundary (both sign-in AND the
   // takeover-confirm path, which delegates to the same interpreter).
+  //
+  // AD-SALE-CAPTURE-2: DP-2 returns the envelope NESTED at
+  // `operator_session.envelope` (canonical contract pos-operators.openapi.yaml
+  // PosOperatorSessionSummary; a top-level `pos_operator_envelope` is
+  // contract-illegal under additionalProperties:false). The interpreter reads
+  // it from there and FLATTENS it onto its own top-level `pos_operator_envelope`
+  // (POS's internal `BackendSignInSuccess` shape) — so the INPUT fixture is
+  // nested (wire-true) while the OUTPUT assertion stays top-level (interpreted).
   const withEnvelope = (envelope: unknown): Record<string, unknown> => ({
     ...HAPPY_SIGN_IN_BODY,
-    pos_operator_envelope: envelope,
+    operator_session: {
+      ...HAPPY_SIGN_IN_BODY.operator_session,
+      envelope,
+    },
   });
 
   it('carries a string pos_operator_envelope verbatim on signed_in', async () => {
@@ -262,6 +277,68 @@ describe('016 C-1 — interpreter preserves pos_operator_envelope (D5)', () => {
     if (res.kind === 'signed_in') {
       expect(res.pos_operator_envelope).toBe('takeover-envelope-abc');
     }
+  });
+});
+
+describe('AD-SALE-CAPTURE-2 — envelope survives wire→interpreter→handler→holder (FR-3 regression lock)', () => {
+  // The bug that produced "0 POSTs all session": DP-2 returns the envelope nested
+  // at `operator_session.envelope`, but the interpreter read a contract-illegal
+  // top-level `pos_operator_envelope` → undefined → SignInHandler stored '' →
+  // sale-sync FR-3 gate closed for every role. This test wires the REAL
+  // createBackendClient (+ mocked fetch returning DP-2's real nested wire JSON)
+  // through the REAL SignInHandler into a REAL envelopeHolder — i.e. the exact
+  // seam that broke — and asserts the live operator credential lands in the
+  // holder the sale-sync drain reads. A fake BackendClient would bypass the
+  // interpreter and prove nothing, so we deliberately use the production client.
+  it('a manager sign-in over the real nested wire lands the envelope in envelopeHolder (not "")', async () => {
+    const WIRE_ENVELOPE = 'opaque-pos-operator-envelope-e2e';
+    // DP-2's REAL response shape (nested envelope) — pos-operators.openapi.yaml.
+    const wireBody = {
+      ...HAPPY_SIGN_IN_BODY,
+      operator_session: {
+        ...HAPPY_SIGN_IN_BODY.operator_session,
+        envelope: WIRE_ENVELOPE,
+      },
+    };
+    const { fetchImpl } = captureFetch(
+      new Response(JSON.stringify(wireBody), { status: 200 }),
+    );
+    const backend = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
+
+    const sessionManager = new SessionManager();
+    const jwtHolder = createJwtHolder();
+    const envelopeHolder = createJwtHolder();
+    const handler = new SignInHandler({
+      clerk: {
+        exchange: vi.fn(() =>
+          Promise.resolve({
+            kind: 'ok' as const,
+            jwt: 'eyJ.fake.jwt',
+            operator_id: 'clerk-user-1',
+            display_name: 'Manager One',
+            role: 'manager' as const,
+          }),
+        ),
+      },
+      backend,
+      sessionManager,
+      jwtHolder,
+      envelopeHolder,
+      protoStore: new ProtoSessionStore(),
+      deviceTokenAttestation: () => 'attest-123',
+    });
+
+    const res = await handler.signIn({
+      kind: 'manager_admin',
+      identifier: 'm@x.test',
+      password: 'p',
+    });
+
+    expect(res.kind).toBe('signed_in');
+    // The sale-sync drain reads envelopeHolder.get(backend_session_id); it MUST
+    // hold the live envelope, not the '' absent-sentinel that closed the gate.
+    expect(envelopeHolder.get('be-sess-1')).toBe(WIRE_ENVELOPE);
+    expect(envelopeHolder.get('be-sess-1')).not.toBe('');
   });
 });
 

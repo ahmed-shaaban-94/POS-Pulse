@@ -400,13 +400,20 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   if (typeof sess['id'] !== 'string' || typeof sess['issued_at'] !== 'string') {
     return { kind: 'refused' };
   }
-  // 016 C-1 (D5): explicitly preserve the opaque `pos_operator_envelope`. The
-  // allowlist above silently drops unknown fields, so without this read the D5
-  // credential swap would no-op with a green suite. Validate `string | null |
-  // absent` only (treat the envelope as an unstructured bearer secret — no
-  // parsing, no claim inspection, G7); any other type is a malformed response
-  // and collapses to `refused`, matching the interpreter's existing posture.
-  const rawEnvelope = v['pos_operator_envelope'];
+  // 016 C-1 (D5) / AD-SALE-CAPTURE-2: explicitly preserve the opaque operator-
+  // authorization envelope. DP-2 returns it NESTED at `operator_session.envelope`
+  // (canonical contract `pos-operators.openapi.yaml` PosOperatorSessionSummary;
+  // `additionalProperties:false` makes a top-level field contract-illegal), so we
+  // read it off the already-parsed `sess` object — NOT a top-level `v[...]` field.
+  // The allowlist above silently drops unknown fields, so without this read the D5
+  // credential swap would no-op with a green suite (the prior top-level read did
+  // exactly that — it always saw `undefined` → empty envelope → sale-sync gate
+  // closed for every role; see AD-SALE-CAPTURE-2). We FLATTEN it onto POS's own
+  // top-level `pos_operator_envelope` (the `BackendSignInSuccess` internal shape).
+  // Validate `string | null | absent` only (treat the envelope as an unstructured
+  // bearer secret — no parsing, no claim inspection, G7); any other type is a
+  // malformed response and collapses to `refused`, matching the existing posture.
+  const rawEnvelope = sess['envelope'];
   if (rawEnvelope !== undefined && rawEnvelope !== null && typeof rawEnvelope !== 'string') {
     return { kind: 'refused' };
   }
