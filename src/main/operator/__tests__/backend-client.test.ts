@@ -300,9 +300,7 @@ describe('AD-SALE-CAPTURE-2 — envelope survives wire→interpreter→handler�
         envelope: WIRE_ENVELOPE,
       },
     };
-    const { fetchImpl } = captureFetch(
-      new Response(JSON.stringify(wireBody), { status: 200 }),
-    );
+    const { fetchImpl } = captureFetch(new Response(JSON.stringify(wireBody), { status: 200 }));
     const backend = createBackendClient({ baseUrl: BASE, fetch: fetchImpl });
 
     const sessionManager = new SessionManager();
