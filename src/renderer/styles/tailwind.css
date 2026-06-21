@@ -3946,3 +3946,226 @@ body {
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
 }
+
+/* === POS v3.5 Slice 3 — cart-pane recompose (SaleScreen, cart side;
+ *     docs/design/pos-v3.5/design-reference/{pos-app.jsx,kit.css}) ===========
+ *
+ * VISUAL recompose only — the cart/payment engine + FSM bindings are unchanged.
+ * Rules are token-mapped from kit.css onto the production token set (no raw hex,
+ * no new token names) and appended OUTSIDE `@layer components`, the same additive
+ * posture as Slice 2 above. NO dark-scoped component selector is introduced (the
+ * dark register re-themes through token VALUES; theme-contract.test.ts forbids
+ * component forks under the dark register).
+ *
+ * MONEY HONESTY: there is no VAT/total rule that styles a computed figure — the
+ * VAT row is a tax-pending placeholder (ADR-0003 / spec §12). */
+
+/* Bilingual title companion (LTR "· Cart") — quiet, keeps region-name parity. */
+.cart-pane__title-en {
+  font-weight: var(--font-weight-regular, var(--font-weight-medium));
+  color: var(--color-text-muted);
+}
+
+/* Line-row enrichment: Rx/controlled awareness badges (display only — gate
+ * nothing; mirror the catalogue ControlledFlags register) + per-unit/pack meta. */
+.line-item-row__flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-inline-start: var(--space-2);
+}
+.line-item-row__flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-family-sans);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.03em;
+}
+.line-item-row__flag--rx {
+  background: var(--color-info-soft);
+  color: var(--color-info-emphasis);
+}
+.line-item-row__flag--controlled {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-emphasis);
+}
+.line-item-row__meta-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* Drug-interaction enrichment shell — quiet, dashed, non-interactive; clearly a
+ * slot, not a live alert. Mirrors .catalogue-enrichment-shell. */
+.cart-interaction-shell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-inline: var(--space-3);
+  margin-block-end: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+.cart-interaction-shell__icon {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+.cart-interaction-shell__label {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.cart-interaction-shell__status {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+/* Totals footer (prototype .totals-rows). */
+.totals-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.totals-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.totals-row__label {
+  font-weight: var(--font-weight-semibold);
+}
+.totals-row .mono,
+.totals-row .cart-pane__subtotal-value {
+  color: var(--color-text);
+}
+/* Tax-pending VAT row: a muted placeholder, NOT a money figure. */
+.totals-row__pending {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+}
+.totals-row__pending-note {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-2xs, 0.625rem);
+  color: var(--color-text-muted);
+}
+.totals-row--grand {
+  margin-block-start: var(--space-1);
+  padding-block-start: var(--space-2);
+  border-block-start: 1px solid var(--color-border-soft);
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+.totals-row--grand .cart-pane__subtotal-value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Action row: hold (disabled shell) + hand-off (primary, flexes to fill). */
+.cart-actions-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.cart-actions-row > .cart-pane__handoff {
+  flex: 1;
+}
+.cart-pane__hold {
+  min-block-size: 44px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-1) var(--ease-out),
+    border-color var(--duration-1) var(--ease-out);
+}
+.cart-pane__hold:hover:not(:disabled) {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-border-strong);
+}
+.cart-pane__hold:disabled,
+.cart-pane__hold[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Branded empty cart (prototype .cart-empty). */
+.cart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+  block-size: 100%;
+}
+.cart-empty__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 64px;
+  block-size: 64px;
+  border-radius: 18px;
+  background: var(--color-surface-sunken);
+  color: var(--color-primary);
+  font-size: 2rem;
+  line-height: 1;
+}
+.cart-empty__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  margin: 0;
+}
+.cart-empty__hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0;
+  max-inline-size: 32ch;
+}
+.cart-empty__keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-block-start: var(--space-2);
+}
+.cart-empty__keys .kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-elevated);
+  font-family: var(--font-family-mono);
+  font-size: 0.6875rem;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+.cart-empty__keys .kbd small {
+  font-family: var(--font-family-sans);
+  color: var(--color-text-muted);
+}
