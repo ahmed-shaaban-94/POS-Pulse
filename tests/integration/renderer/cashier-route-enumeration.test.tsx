@@ -178,8 +178,13 @@ describe('SC-003 path 5 — /app/manager/stuck-shifts?shift=abc123', () => {
 describe('SC-003 path 6 — /app/manager/stuck-shifts app-shell absent', () => {
   it('app-shell is not in the DOM after guard redirect', async () => {
     await renderAsCashier('/app/manager/stuck-shifts');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
-    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    // The guard redirect mounts route-sign-in and unmounts app-shell on
+    // separate commits; poll until BOTH have settled so we never observe the
+    // transient window where they co-exist (D-001 root cause).
+    await waitFor(() => {
+      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -225,8 +230,12 @@ describe('SC-003 path 11 — /app/manager/cashiers?action=unlock', () => {
 describe('SC-003 path 12 — /app/manager/cashiers app-shell absent', () => {
   it('app-shell is not in the DOM after guard redirect', async () => {
     await renderAsCashier('/app/manager/cashiers');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
-    expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    // Poll until both states settle (see path 6) — avoids the transient
+    // co-existence window during the async guard redirect (D-001).
+    await waitFor(() => {
+      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -235,40 +244,50 @@ describe('SC-003 path 12 — /app/manager/cashiers app-shell absent', () => {
 describe('SC-003 path 13 — /app/sales (✅ cashier)', () => {
   it('cashier reaches /app/sales without redirect', async () => {
     await renderAsCashier('/app/sales');
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    });
   });
 });
 
 describe('SC-003 path 14 — /app/cart (✅ cashier)', () => {
   it('cashier reaches /app/cart without redirect', async () => {
     await renderAsCashier('/app/cart');
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    });
   });
 });
 
 describe('SC-003 path 15 — /app/checkout (✅ cashier)', () => {
   it('cashier reaches /app/checkout without redirect', async () => {
     await renderAsCashier('/app/checkout');
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    });
   });
 });
 
 describe('SC-003 path 16 — /app/inventory (✅ cashier)', () => {
   it('cashier reaches /app/inventory without redirect', async () => {
     await renderAsCashier('/app/inventory');
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    });
   });
 });
 
 describe('SC-003 path 17 — /app/settings (🔒 cashier)', () => {
   it('cashier reaches /app/settings without route-guard redirect', async () => {
     await renderAsCashier('/app/settings');
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -289,10 +308,12 @@ describe('SC-003 path 18 — cashier session preserved after stuck-shifts redire
 describe('SC-003 path 19 — /app/dashboard (⛔ cashier — shows unavailable surface)', () => {
   it('cashier reaches /app/dashboard without route-guard redirect; sees unavailable surface', async () => {
     await renderAsCashier('/app/dashboard');
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
-    // DashboardRoute itself renders an ErrorState for cashier role (not a route-guard redirect).
-    expect(screen.getByText(/this section is not available for your role/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      // DashboardRoute itself renders an ErrorState for cashier role (not a route-guard redirect).
+      expect(screen.getByText(/this section is not available for your role/i)).toBeInTheDocument();
+    });
   });
 });
 
@@ -313,17 +334,21 @@ describe('SC-003 path 21 — /app index route (cashier)', () => {
     await renderAsCashier('/app');
     // /app has { index: true, element: <Navigate to="dashboard"> } so it redirects to
     // /app/dashboard which renders the "Section unavailable" surface for cashier.
-    await waitFor(() => expect(screen.getByTestId('app-shell')).toBeInTheDocument());
-    expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+    });
   });
 });
 
 describe('SC-003 path 22 — stuck-shift-surface not in DOM after guard redirect', () => {
   it('no stuck-shift content is rendered when cashier hits /app/manager/stuck-shifts', async () => {
     await renderAsCashier('/app/manager/stuck-shifts');
-    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
-    // The ForcedCloseSurface / StuckShiftSurface must not render for cashier.
-    expect(screen.queryByTestId('stuck-shifts-surface')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('forced-close-surface')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      // The ForcedCloseSurface / StuckShiftSurface must not render for cashier.
+      expect(screen.queryByTestId('stuck-shifts-surface')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('forced-close-surface')).not.toBeInTheDocument();
+    });
   });
 });
