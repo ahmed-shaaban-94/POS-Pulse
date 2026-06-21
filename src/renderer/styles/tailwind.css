@@ -4169,3 +4169,178 @@ body {
   font-family: var(--font-family-sans);
   color: var(--color-text-muted);
 }
+
+/* === POS v3.5 Slice 4 — tender-screen visual recompose =====================
+ *
+ * ADDITIVE CSS block: classes from the v3.5 prototype (kit.css) that were not
+ * present in earlier slices. Rules are token-mapped — NO raw hex, NO new
+ * custom-property names. Token values re-theme through :root[data-theme='dark']
+ * (ADR-0004). NO dark-forked component selectors (theme-contract.test.ts
+ * forbids them). Classes already present above (.tender-slots, .method-card,
+ * .method-grid, .account-row, .tender-method-grid) are left as-is.
+ *
+ * Sources: kit.css lines 400-555 (tender screen section), token-mapped.
+ * =========================================================================*/
+
+/* ── Amount-due card (kit.css 400-423) ─────────────────────────────────── */
+.amount-due-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-inset);
+}
+.amount-due-card__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+.amount-due-card__value {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+/* ── Tender rows (kit.css 461-473) ─────────────────────────────────────── */
+/*
+ * .tender-slots is already defined above; these are the row-level classes.
+ */
+.tender-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  min-height: 56px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.tender-row:last-child {
+  border-bottom: none;
+}
+.tender-row--totals {
+  background: var(--color-surface-elevated);
+}
+.tender-row__label {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  min-width: 140px;
+}
+.tender-row__value {
+  margin-inline-start: auto;
+}
+.tender-row__body {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+/* Muted value modifier — used for deferred/informational amounts. */
+.tender-row__value--muted {
+  color: var(--color-text-muted);
+}
+/* Deferred balance highlight (kit.css 608). */
+.tender-row__value--deferred {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-warning-emphasis);
+}
+
+/* ── Quick-amount chips (kit.css 475-504) ───────────────────────────────── */
+.quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.quick-amount-btn {
+  min-block-size: 52px;
+  min-inline-size: 96px;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-1) var(--ease-out),
+    border-color var(--duration-1) var(--ease-out);
+}
+.quick-amount-btn:hover {
+  background: var(--color-primary-soft);
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+.quick-amount-btn--selected {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary);
+  color: var(--color-primary-emphasis);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+/* Label chip uses sans-serif (Arabic "بالضبط" exact label). */
+.quick-amount-btn--label {
+  font-family: var(--font-family-sans);
+}
+.quick-amount-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+/* Change-due positive value (success register). */
+.change-row__value--positive {
+  color: var(--color-success-emphasis);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ── Voucher-field wrapper (kit.css 511-524) ────────────────────────────── */
+.voucher-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+}
+.voucher-field input {
+  flex: 1;
+  font-family: var(--font-family-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  min-block-size: 44px;
+}
+
+/* ── Voucher applied indicator (kit.css 525-538) ────────────────────────── */
+.voucher-applied {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-success-emphasis);
+  white-space: nowrap;
+}
+.voucher-applied--ok {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--color-success) 16%, transparent);
+  color: var(--color-success-emphasis);
+  font-size: 0.8rem;
+}
+
+/* ── Voucher error + hint (kit.css 554-555) ────────────────────────────── */
+.voucher-error {
+  font-size: var(--font-size-xs);
+  color: var(--color-danger);
+  margin: 4px 2px 0;
+}
+.voucher-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}

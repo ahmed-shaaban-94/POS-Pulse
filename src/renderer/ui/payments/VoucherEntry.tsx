@@ -77,6 +77,7 @@ export function VoucherEntry({
   const [rawAmountInput, setRawAmountInput] = useState<string>('');
   const [bridgeRefusal, setBridgeRefusal] = useState<boolean>(false);
   const [isApplying, setIsApplying] = useState<boolean>(false);
+  const [appliedOk, setAppliedOk] = useState<boolean>(false);
 
   // CR-1 (PR #226): React's `disabled` reflects state asynchronously,
   // so two rapid clicks can dispatch two bridge calls before
@@ -135,6 +136,7 @@ export function VoucherEntry({
           idempotency_key: generateIdempotencyKey(),
         });
         if (response.kind === 'ok') {
+          setAppliedOk(true);
           onApplied?.(response);
           return;
         }
@@ -155,49 +157,99 @@ export function VoucherEntry({
 
   return (
     <section className="voucher-entry" data-testid="voucher-entry" aria-label="Apply voucher">
-      <div className="voucher-entry__remaining" data-testid="voucher-entry-remaining">
-        Remaining: {formatMinorUnits(remainingBalanceMinor)}
+      {/*
+        POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
+        Value is dir="ltr" mono (D-006 — money is never bidi-reordered).
+      */}
+      <div className="amount-due-card">
+        <span className="amount-due-card__label">المطلوب دفعه (Amount due)</span>
+        <span className="amount-due-card__value" dir="ltr" data-testid="voucher-entry-remaining">
+          {formatMinorUnits(remainingBalanceMinor)}
+        </span>
       </div>
 
-      <label className="voucher-entry__field">
-        <span className="voucher-entry__label">Voucher code</span>
-        <input
-          type="text"
-          data-testid="voucher-entry-code-input"
-          value={voucherCode}
-          onChange={(e) => {
-            // Voucher codes are case-sensitive per the OpenAPI snapshot;
-            // the cashier types them in upper-case per receipt convention.
-            setVoucherCode(e.target.value.toUpperCase());
-            if (bridgeRefusal) setBridgeRefusal(false);
-          }}
-          maxLength={64}
-          autoComplete="off"
-          spellCheck={false}
-          inputMode="text"
-          aria-invalid={voucherCode.length > 0 && !codeIsWellFormed ? 'true' : undefined}
-        />
-      </label>
+      {/*
+        v3.5 tender-slots / tender-row layout for the voucher path.
+        SECURITY invariants (F-A4B-003 / FR-017):
+          - The voucher code IS rendered (cashier's own input).
+          - No voucher balance, holder PII, or campaign metadata in props or DOM.
+          - All 8 refusal reasons collapse to GENERIC_VOUCHER_REFUSAL_COPY only.
+          - Client-side voucher lookup is FORBIDDEN — validity is resolved
+            MAIN-SIDE via the V-A client. No VOUCHERS table, no voucherKnown.
+      */}
+      <div className="tender-slots">
+        {/* Voucher code row — voucher-field wraps the input + applied indicator */}
+        <div className="tender-row">
+          <span className="tender-row__label">رمز القسيمة</span>
+          <span className="tender-row__value">
+            <span className="voucher-field">
+              <input
+                type="text"
+                data-testid="voucher-entry-code-input"
+                dir="ltr"
+                placeholder="VCH-000"
+                aria-label="رمز القسيمة"
+                value={voucherCode}
+                onChange={(e) => {
+                  // Voucher codes are upper-case per receipt convention.
+                  setVoucherCode(e.target.value.toUpperCase());
+                  if (bridgeRefusal) setBridgeRefusal(false);
+                  if (appliedOk) setAppliedOk(false);
+                }}
+                maxLength={64}
+                autoComplete="off"
+                spellCheck={false}
+                inputMode="text"
+                aria-invalid={voucherCode.length > 0 && !codeIsWellFormed ? 'true' : undefined}
+              />
+              {/* SECURITY: appliedOk is set only by the bridge ok response.
+                  It does NOT reflect any client-side table lookup. */}
+              {appliedOk && (
+                <span className="voucher-applied voucher-applied--ok" aria-label="Voucher applied">
+                  ✓
+                </span>
+              )}
+            </span>
+          </span>
+        </div>
 
-      <label className="voucher-entry__field">
-        <span className="voucher-entry__label">Amount to apply (¤)</span>
-        <input
-          type="text"
-          data-testid="voucher-entry-amount-input"
-          value={rawAmountInput}
-          onChange={(e) => {
-            const next = e.target.value;
-            // Currency keystroke guard: digits + optional single decimal, ≤2 frac.
-            if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
-              setRawAmountInput(next);
-              if (bridgeRefusal) setBridgeRefusal(false);
-            }
-          }}
-          inputMode="numeric"
-          autoComplete="off"
-          aria-invalid={rawAmountInput.length > 0 && !amountIsWellFormed ? 'true' : undefined}
-        />
-      </label>
+        {/* Amount-to-apply row */}
+        <div className="tender-row">
+          <label className="tender-row__label voucher-entry__label" htmlFor="voucher-amount-input">
+            المبلغ المطبّق (Amount to apply ¤)
+          </label>
+          <span className="tender-row__value">
+            <input
+              id="voucher-amount-input"
+              type="text"
+              data-testid="voucher-entry-amount-input"
+              value={rawAmountInput}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
+                  setRawAmountInput(next);
+                  if (bridgeRefusal) setBridgeRefusal(false);
+                }
+              }}
+              inputMode="numeric"
+              autoComplete="off"
+              aria-invalid={rawAmountInput.length > 0 && !amountIsWellFormed ? 'true' : undefined}
+            />
+          </span>
+        </div>
+      </div>
+
+      {/* Voucher code error: shown when code length >= 2 but malformed (not well-formed).
+          SECURITY: this is a FORMAT error only, NOT a validity signal.
+          The bridge is the only authority on voucher validity (F-A4B-003). */}
+      {voucherCode.length > 0 && !codeIsWellFormed && (
+        <p className="voucher-error" role="status">
+          رمز القسيمة غير صالح — يجب ألا يقل عن ٣ أحرف.
+        </p>
+      )}
+
+      {/* Voucher hint: generic input guidance, no demo codes (SECURITY). */}
+      <p className="voucher-hint">أدخل رمز القسيمة والمبلغ المطلوب تطبيقه، ثم اضغط «تطبيق».</p>
 
       <button
         type="button"
@@ -208,12 +260,12 @@ export function VoucherEntry({
         aria-disabled={!canSubmit ? 'true' : undefined}
         onClick={handleSubmit}
       >
-        Apply voucher
+        تطبيق القسيمة (Apply voucher)
       </button>
 
       {isApplying && (
         <div data-testid="voucher-entry-applying" aria-busy="true">
-          Applying…
+          جارٍ التطبيق… (Applying…)
         </div>
       )}
 
