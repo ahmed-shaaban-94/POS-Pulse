@@ -67,7 +67,7 @@ export function SearchResultList({
   }
 
   return (
-    <div className="catalogue-results" data-testid="search-result-list">
+    <div className="catalogue-results" data-testid="search-result-list" dir="rtl">
       {items.length === 0 ? (
         <p className="catalogue-results__empty">لا توجد نتائج لعرضها</p>
       ) : (

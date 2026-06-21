@@ -16,6 +16,7 @@ import { NotFoundState } from './NotFoundState.js';
 import { AmbiguousBarcodeState } from './AmbiguousBarcodeState.js';
 import { CatalogueUnavailableState } from './CatalogueUnavailableState.js';
 import { CatalogueFreshness } from './CatalogueFreshness.js';
+import { CatalogueEnrichmentShell } from './CatalogueEnrichmentShell.js';
 
 /**
  * 009 Slice S5 (T049a) — the live catalogue sale surface.
@@ -178,7 +179,7 @@ export function CatalogueSalePane({
   const truncated = state.kind === 'results' ? state.truncated : false;
 
   return (
-    <div className="catalogue-sale-pane" data-testid="catalogue-sale-pane">
+    <div className="catalogue-sale-pane" data-testid="catalogue-sale-pane" dir="rtl">
       {/* 010 — catalogue freshness header (FR-16): the truthful last-updated
           line + manual refresh. Reads window.api.catalogue itself; in tests a
           `catalogueBridge` is injected, so honour the same seam to avoid hitting
@@ -217,6 +218,15 @@ export function CatalogueSalePane({
       {state.kind === 'not_found' && <NotFoundState query={state.query} onEdit={recoverToInput} />}
       {state.kind === 'ambiguous' && <AmbiguousBarcodeState onEdit={recoverToInput} />}
       {state.kind === 'catalogue_unavailable' && <CatalogueUnavailableState />}
+      {/* POS v3.5 — deferred-enrichment honesty shell. The prototype fills this
+          zone (below the search, when idle/not searching) with category chips +
+          a quick-item browse grid. The live `catalogue` contract has NO
+          list/browse/by-category method and NO stock/expiry/interaction/
+          bought-together data (POS-013, deferred), so this holds the layout slot
+          with a truthful "not available yet" placeholder rather than fabricating
+          data. Shown only in idle — the search/error surfaces own the pane
+          otherwise. */}
+      {state.kind === 'idle' && <CatalogueEnrichmentShell />}
       {effectiveCartId !== '' && (
         <CatalogueAddController
           cartId={effectiveCartId}
