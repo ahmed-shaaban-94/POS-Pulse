@@ -1,9 +1,12 @@
 /**
  * 005-sales-cart T049 — LineItemRow component.
+ * POS v3.5 Slice 3 — recomposed to the prototype `.cart-pane__line-list-item`.
  *
- * Renders a single cart line per the S0 contact sheet §Surface 3:
- *   - display_name (text).
+ * Renders a single cart line per the S0 contact sheet §Surface 3 / the v3.5
+ * prototype line row:
+ *   - display_name (text), with an optional Rx/controlled awareness badge.
  *   - [×] remove button (≥ 44 × 44 px touch target).
+ *   - optional per-unit/pack label (LTR-isolated, display only).
  *   - QuantityStepper ([−] qty [+]).
  *   - unit price (mono, ¤ prefix, 2 decimal places).
  *   - line subtotal (mono, ¤ prefix, 2 decimal places).
@@ -11,6 +14,12 @@
  *
  * Currency format: integer minor units / 100, rendered with ¤ prefix.
  * No floats are produced — formatting only divides by 100 for display.
+ *
+ * The Rx/controlled badge and the pack label are DISPLAY-ONLY enrichment:
+ * they are sourced from product flags the caller already holds, they gate
+ * nothing (mirroring the catalogue `ControlledFlags` posture), and they
+ * default OFF so every existing call site renders unchanged. These are
+ * renderer-local props — no contract/api-types surface is touched.
  *
  * SECURITY: Note chip displays raw note text — this is display-only and does
  * not feed back into any IPC call. No note content is logged (NFR-006).
@@ -28,6 +37,22 @@ export interface LineItemRowProps {
   lineSubtotalMinor: number;
   note: string | null;
   hasNote: boolean;
+  /**
+   * Display-only awareness flag (prescription-required). Renders a non-blocking
+   * Rx badge; gates nothing. Defaults to false. Sourced from product flags the
+   * caller already holds — not part of the cart contract.
+   */
+  prescriptionRequired?: boolean;
+  /**
+   * Display-only awareness flag (controlled substance). Renders a non-blocking
+   * controlled badge; gates nothing. Defaults to false.
+   */
+  controlledSubstance?: boolean;
+  /**
+   * Display-only per-unit/pack label (e.g. "×20 أقراص"). LTR-isolated so the
+   * leading numeral/× never bidi-reorders under the RTL shell. Omitted → no row.
+   */
+  packLabel?: string;
   onQuantityIncrement: () => void;
   onQuantityDecrement: () => void;
   onRemove: () => void;
@@ -58,6 +83,9 @@ export function LineItemRow({
   lineSubtotalMinor,
   note,
   hasNote,
+  prescriptionRequired = false,
+  controlledSubstance = false,
+  packLabel,
   onQuantityIncrement,
   onQuantityDecrement,
   onRemove,
@@ -66,7 +94,29 @@ export function LineItemRow({
   return (
     <div className="line-item-row" data-testid="line-item-row" data-line-id={lineId}>
       <div className="line-item-row__main">
-        <span className="line-item-row__name">{displayName}</span>
+        <span className="line-item-row__name">
+          {displayName}
+          {(prescriptionRequired || controlledSubstance) && (
+            <span className="line-item-row__flags">
+              {controlledSubstance && (
+                <span
+                  className="line-item-row__flag line-item-row__flag--controlled"
+                  data-testid="line-flag-controlled"
+                >
+                  مادة خاضعة للرقابة (controlled)
+                </span>
+              )}
+              {prescriptionRequired && (
+                <span
+                  className="line-item-row__flag line-item-row__flag--rx"
+                  data-testid="line-flag-rx"
+                >
+                  بوصفة طبية (Rx)
+                </span>
+              )}
+            </span>
+          )}
+        </span>
         <button
           type="button"
           className="line-item-row__remove"
@@ -78,6 +128,11 @@ export function LineItemRow({
           ×
         </button>
       </div>
+      {packLabel !== undefined && (
+        <span className="line-item-row__meta-line" data-testid="line-pack-label" dir="ltr">
+          {packLabel}
+        </span>
+      )}
       <div className="line-item-row__qty-price">
         <QuantityStepper
           quantity={quantity}

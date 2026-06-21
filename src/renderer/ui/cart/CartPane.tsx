@@ -35,6 +35,7 @@ import { useState, useEffect, useCallback, type JSX } from 'react';
 import type { CartBridgeAPI, PreloadBridgeAPI } from '../../../shared/bridge-api.js';
 import type { PaymentIntentEnvelope } from '../../../shared/cart/handoff-envelope.js';
 import { EmptyCartPlaceholder } from './EmptyCartPlaceholder.js';
+import { CartInteractionShell } from './CartInteractionShell.js';
 import { LineItemRow } from './LineItemRow.js';
 import { LineNotePopover } from './LineNotePopover.js';
 import { VoidConfirmation } from './VoidConfirmation.js';
@@ -292,6 +293,8 @@ export function CartPane({
   }
 
   const cartSubtotalMinor = lines.reduce((acc, l) => acc + l.lineSubtotalMinor, 0);
+  // Display-only line-count for the subtotal row caption (prototype parity).
+  const cartItemCount = lines.reduce((acc, l) => acc + l.quantity, 0);
 
   // Group discount placeholders by their associated line for inline rendering
   // (contact-sheet Surface 2 / Surface 7). A placeholder is rendered inline
@@ -417,7 +420,10 @@ export function CartPane({
   }
 
   return (
-    <section className="cart-pane" data-testid="cart-pane" aria-label="Cart">
+    // dir="rtl": Arabic-first systemic direction (standard HTML attribute, not a
+    // new prop). Money + line codes inside re-isolate to dir="ltr" so numerals
+    // never bidi-reorder (Slice-1 review fix, preserved + extended below).
+    <section className="cart-pane" data-testid="cart-pane" aria-label="Cart" dir="rtl">
       {voidDialogOpen && (
         <VoidConfirmation
           onConfirm={() => {
@@ -429,7 +435,15 @@ export function CartPane({
         />
       )}
       <header className="cart-pane__header">
-        <h2 className="cart-pane__title">Cart</h2>
+        {/* Arabic-first title; the LTR "Cart" companion preserves the pane's
+            accessible/region-name parity (the section keeps aria-label="Cart"). */}
+        <h2 className="cart-pane__title">
+          نقطة البيع · السلة
+          <span className="cart-pane__title-en" dir="ltr">
+            {' '}
+            · Cart
+          </span>
+        </h2>
         {showVoidInHeader && (
           <button
             type="button"
@@ -440,7 +454,7 @@ export function CartPane({
               setVoidDialogOpen(true);
             }}
           >
-            Void
+            إلغاء البيع
           </button>
         )}
       </header>
@@ -490,88 +504,140 @@ export function CartPane({
             {showEmpty ? (
               <EmptyCartPlaceholder />
             ) : (
-              <ol className="cart-pane__line-list" aria-label="Cart items">
-                {lines.map((line) => {
-                  const lineDiscounts = discountsByLine.get(line.lineId) ?? [];
-                  return (
-                    <li key={line.lineId} className="cart-pane__line-list-item">
-                      <LineItemRow
-                        lineId={line.lineId}
-                        displayName={line.displayName}
-                        quantity={line.quantity}
-                        unitPriceMinor={line.unitPriceMinor}
-                        lineSubtotalMinor={line.lineSubtotalMinor}
-                        note={line.note}
-                        hasNote={line.note !== null}
-                        onQuantityIncrement={() => {
-                          void handleIncrementLine(line.lineId, line.version);
-                        }}
-                        onQuantityDecrement={() => {
-                          void handleDecrementLine(line.lineId, line.version);
-                        }}
+              <>
+                {/* Drug-interaction callout — ENRICHMENT SHELL only. Interaction
+                    data is not in the cart/catalogue contract (POS-013 deferred),
+                    so this holds the prototype's callout footprint with a
+                    truthful "not available yet" placeholder; it never asserts a
+                    live interaction. */}
+                <CartInteractionShell />
+                <ol className="cart-pane__line-list" aria-label="Cart items">
+                  {lines.map((line) => {
+                    const lineDiscounts = discountsByLine.get(line.lineId) ?? [];
+                    return (
+                      <li key={line.lineId} className="cart-pane__line-list-item">
+                        <LineItemRow
+                          lineId={line.lineId}
+                          displayName={line.displayName}
+                          quantity={line.quantity}
+                          unitPriceMinor={line.unitPriceMinor}
+                          lineSubtotalMinor={line.lineSubtotalMinor}
+                          note={line.note}
+                          hasNote={line.note !== null}
+                          onQuantityIncrement={() => {
+                            void handleIncrementLine(line.lineId, line.version);
+                          }}
+                          onQuantityDecrement={() => {
+                            void handleDecrementLine(line.lineId, line.version);
+                          }}
+                          onRemove={() => {
+                            void handleRemoveLine(line.lineId, line.version);
+                          }}
+                          onNoteOpen={() => {
+                            setNoteError(null);
+                            setNoteOpenLineId(line.lineId);
+                          }}
+                        />
+                        {noteOpenLineId === line.lineId && (
+                          <LineNotePopover
+                            open={true}
+                            currentNote={line.note}
+                            error={noteError}
+                            onSave={(note) => {
+                              void handleSaveNote(line.lineId, line.version, note);
+                            }}
+                            onClose={() => {
+                              setNoteError(null);
+                              setNoteOpenLineId(null);
+                            }}
+                          />
+                        )}
+                        {lineDiscounts.map((dp) => (
+                          <DiscountPlaceholderRow
+                            key={dp.placeholderId}
+                            placeholderId={dp.placeholderId}
+                            onRemove={() => {
+                              void handleRemoveDiscount(dp.placeholderId);
+                            }}
+                          />
+                        ))}
+                      </li>
+                    );
+                  })}
+                  {orphanDiscounts.map((dp) => (
+                    <li key={dp.placeholderId} className="cart-pane__line-list-item">
+                      <DiscountPlaceholderRow
+                        placeholderId={dp.placeholderId}
                         onRemove={() => {
-                          void handleRemoveLine(line.lineId, line.version);
-                        }}
-                        onNoteOpen={() => {
-                          setNoteError(null);
-                          setNoteOpenLineId(line.lineId);
+                          void handleRemoveDiscount(dp.placeholderId);
                         }}
                       />
-                      {noteOpenLineId === line.lineId && (
-                        <LineNotePopover
-                          open={true}
-                          currentNote={line.note}
-                          error={noteError}
-                          onSave={(note) => {
-                            void handleSaveNote(line.lineId, line.version, note);
-                          }}
-                          onClose={() => {
-                            setNoteError(null);
-                            setNoteOpenLineId(null);
-                          }}
-                        />
-                      )}
-                      {lineDiscounts.map((dp) => (
-                        <DiscountPlaceholderRow
-                          key={dp.placeholderId}
-                          placeholderId={dp.placeholderId}
-                          onRemove={() => {
-                            void handleRemoveDiscount(dp.placeholderId);
-                          }}
-                        />
-                      ))}
                     </li>
-                  );
-                })}
-                {orphanDiscounts.map((dp) => (
-                  <li key={dp.placeholderId} className="cart-pane__line-list-item">
-                    <DiscountPlaceholderRow
-                      placeholderId={dp.placeholderId}
-                      onRemove={() => {
-                        void handleRemoveDiscount(dp.placeholderId);
-                      }}
-                    />
-                  </li>
-                ))}
-              </ol>
+                  ))}
+                </ol>
+              </>
             )}
           </div>
           <footer className="cart-pane__footer">
-            <div className="cart-pane__subtotal">
-              <span className="cart-pane__subtotal-label">Subtotal</span>
-              {showEmpty ? (
-                <span className="cart-pane__subtotal-value" aria-label="subtotal placeholder">
-                  —
+            {/* Totals (prototype .totals-rows). MONEY HONESTY (ADR-0003 / spec
+                §12 tax-pending): the cart engine computes ONLY the subtotal
+                (Σ lineSubtotalMinor). There is NO VAT field and NO grand-total
+                in the engine, and tax is NOT asserted. So:
+                  • Subtotal = REAL (cartSubtotalMinor).
+                  • VAT      = a tax-pending PLACEHOLDER ("—") — NEVER a computed
+                               14% figure (the prototype's live VAT is a mock).
+                  • Total    = the subtotal (no fake VAT added until tax lands).
+                Money figures re-isolate to dir="ltr" mono. */}
+            <div className="totals-rows" data-testid="cart-totals">
+              <div className="totals-row">
+                <span className="totals-row__label">
+                  المجموع · Subtotal{showEmpty ? '' : ` · ${String(cartItemCount)} صنف`}
                 </span>
-              ) : (
+                {showEmpty ? (
+                  <span className="cart-pane__subtotal-value" aria-label="subtotal placeholder">
+                    —
+                  </span>
+                ) : (
+                  <span
+                    className="cart-pane__subtotal-value mono"
+                    data-testid="cart-subtotal-value"
+                    aria-label="cart subtotal"
+                    dir="ltr"
+                  >
+                    {formatMinorUnits(cartSubtotalMinor)}
+                  </span>
+                )}
+              </div>
+              <div className="totals-row totals-row--vat-pending">
+                <span className="totals-row__label">ض.ق.م (VAT)</span>
+                {/* tax-pending: an honest placeholder, never a 14% computation. */}
                 <span
-                  className="cart-pane__subtotal-value mono"
-                  data-testid="cart-subtotal-value"
-                  aria-label="cart subtotal"
+                  className="totals-row__pending"
+                  data-testid="cart-vat-value"
+                  aria-label="VAT tax-pending"
+                  dir="ltr"
                 >
-                  {formatMinorUnits(cartSubtotalMinor)}
+                  — <small className="totals-row__pending-note">قيد الإضافة · tax-pending</small>
                 </span>
-              )}
+              </div>
+              <div className="totals-row totals-row--grand">
+                <span className="totals-row__label">الإجمالي المطلوب · Total</span>
+                {showEmpty ? (
+                  <span className="cart-pane__subtotal-value" aria-label="total placeholder">
+                    —
+                  </span>
+                ) : (
+                  // Tax-pending: total == subtotal until tax lands. No fake VAT.
+                  <span
+                    className="cart-pane__subtotal-value mono"
+                    data-testid="cart-total-value"
+                    aria-label="cart total"
+                    dir="ltr"
+                  >
+                    {formatMinorUnits(cartSubtotalMinor)}
+                  </span>
+                )}
+              </div>
             </div>
             {handoffError !== null && (
               <p className="cart-pane__handoff-error" data-testid="cart-handoff-error" role="alert">
@@ -579,18 +645,34 @@ export function CartPane({
               </p>
             )}
             {showHandoffButton && (
-              <button
-                type="button"
-                className="cart-pane__handoff"
-                disabled={!canHandoff || isHandingOff}
-                aria-disabled={!canHandoff || isHandingOff ? 'true' : undefined}
-                data-testid="cart-handoff-button"
-                onClick={() => {
-                  void handleHandoff();
-                }}
-              >
-                {isHandingOff ? 'Handing off…' : 'Hand off to payment'}
-              </button>
+              <div className="cart-actions-row">
+                {/* Hold sale (prototype F3) — SHELL ONLY. There is no
+                    suspend/park/hold action in the cart engine, so this is
+                    rendered permanently disabled (an enrichment affordance the
+                    real flow can light up later). It is wired to nothing. */}
+                <button
+                  type="button"
+                  className="cart-pane__hold"
+                  data-testid="cart-hold-button"
+                  disabled
+                  aria-disabled="true"
+                  title="تعليق البيع غير متاح بعد · hold not available yet"
+                >
+                  تعليق · Hold
+                </button>
+                <button
+                  type="button"
+                  className="cart-pane__handoff"
+                  disabled={!canHandoff || isHandingOff}
+                  aria-disabled={!canHandoff || isHandingOff ? 'true' : undefined}
+                  data-testid="cart-handoff-button"
+                  onClick={() => {
+                    void handleHandoff();
+                  }}
+                >
+                  {isHandingOff ? 'جارٍ الانتقال…' : 'الانتقال للدفع · Hand off to payment'}
+                </button>
+              </div>
             )}
           </footer>
         </>

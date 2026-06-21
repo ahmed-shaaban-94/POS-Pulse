@@ -149,3 +149,45 @@ describe('T049 — LineItemRow zero-price edge case', () => {
     expect(screen.getByTestId('line-subtotal')).toHaveTextContent('¤0.00');
   });
 });
+
+// ── POS v3.5 Slice 3 recompose — display-only enrichment on the line row ─────
+//
+// The prototype line row carries (a) an Rx/controlled awareness badge and
+// (b) a per-unit/pack label. These are DISPLAY-ONLY props sourced from product
+// flags the caller already holds — they gate nothing, and default OFF so every
+// existing call site renders unchanged. No contract/api-types surface is
+// involved (these are renderer-local LineItemRowProps).
+describe('v3.5 recompose — LineItemRow display-only enrichment', () => {
+  it('renders the Rx awareness badge when prescriptionRequired is set (display-only)', () => {
+    render(<LineItemRow {...BASE_PROPS} prescriptionRequired={true} />);
+    expect(screen.getByTestId('line-flag-rx')).toBeInTheDocument();
+  });
+
+  it('renders the controlled-substance badge when controlledSubstance is set (display-only)', () => {
+    render(<LineItemRow {...BASE_PROPS} controlledSubstance={true} />);
+    expect(screen.getByTestId('line-flag-controlled')).toBeInTheDocument();
+  });
+
+  it('renders NO awareness badge by default (flags omitted)', () => {
+    render(<LineItemRow {...BASE_PROPS} />);
+    expect(screen.queryByTestId('line-flag-rx')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('line-flag-controlled')).not.toBeInTheDocument();
+  });
+
+  it('the Rx badge gates nothing — the remove affordance is still enabled', () => {
+    render(<LineItemRow {...BASE_PROPS} prescriptionRequired={true} />);
+    expect(screen.getByTestId('line-remove-btn')).not.toBeDisabled();
+  });
+
+  it('renders a per-unit/pack label when packLabel is supplied (LTR-isolated)', () => {
+    render(<LineItemRow {...BASE_PROPS} packLabel="×20 أقراص" />);
+    const pack = screen.getByTestId('line-pack-label');
+    expect(pack).toHaveTextContent('×20 أقراص');
+    expect(pack).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('renders NO pack label when packLabel is omitted', () => {
+    render(<LineItemRow {...BASE_PROPS} />);
+    expect(screen.queryByTestId('line-pack-label')).not.toBeInTheDocument();
+  });
+});
