@@ -27,6 +27,7 @@ import { render, screen, cleanup, fireEvent, within, act } from '@testing-librar
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
+import type { PaymentIntentEnvelope } from '../../../../shared/cart/handoff-envelope.js';
 import { TenderSelection } from '../TenderSelection.js';
 import { CashEntry } from '../CashEntry.js';
 import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
@@ -38,11 +39,24 @@ afterEach(cleanup);
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeEnvelope(subtotalMinor = 5000) {
+// A complete, correctly-typed envelope. TenderSelection only reads
+// subtotal_minor, but the prop type is the full PaymentIntentEnvelope, so the
+// helper returns every field (annotated, so tsc enforces the shape — a partial
+// object compiles under Vitest's esbuild transform but fails `tsc --noEmit`).
+function makeEnvelope(subtotalMinor = 5000): PaymentIntentEnvelope {
   return {
-    handoff_action_id: 'hid-001',
+    envelope_version: 'v1',
     cart_id: 'cart-001',
+    operator_session_id: 'sess-001',
+    owning_operator_id: 'op-001',
+    tenant_id: 'tenant-001',
+    branch_id: 'branch-001',
+    terminal_id: 'terminal-001',
+    lines: [],
+    discount_placeholders: [],
     subtotal_minor: subtotalMinor,
+    created_at: '2026-06-21T00:00:00.000Z',
+    handoff_action_id: 'hid-001',
   };
 }
 
