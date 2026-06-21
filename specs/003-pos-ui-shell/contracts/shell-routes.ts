@@ -12,6 +12,8 @@
  * `src/renderer/router.tsx` and `src/renderer/routes/app/*Placeholder.tsx`.
  */
 
+import type { Role } from '../../../src/shared/operator/role';
+
 /* ────────────────────────────────────────────────────────────────────────── */
 /*  Route map                                                                 */
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -68,6 +70,15 @@ export interface ShellNavEntry {
     | 'audit'
     | 'inventory'
     | 'settings';
+  /**
+   * PR #434 FIX 2 — optional role gate. When present, the NavRail renders this
+   * entry ONLY for an operator whose role is in this list; when absent, the
+   * entry is visible to every signed-in role. Mirrors the router's per-route
+   * `<OperatorRouteGuard allow={…}>` (FIX 1) so the rail never links a cashier
+   * to a surface they cannot reach. `returns` and `audit` are manager/admin
+   * only; the other five are unrestricted.
+   */
+  readonly allow?: ReadonlyArray<Role>;
 }
 
 /**
@@ -79,8 +90,8 @@ export const shellNavEntries: ReadonlyArray<ShellNavEntry> = [
   { id: 'dashboard', path: '/app/dashboard', label: 'لوحة المتابعة', labelEn: 'Dashboard', iconKey: 'dashboard' },
   { id: 'cart',      path: '/app/cart',      label: 'نقطة البيع',    labelEn: 'Sale',      iconKey: 'cart'      },
   { id: 'sales',     path: '/app/sales',     label: 'المبيعات',      labelEn: 'Sales',     iconKey: 'sales'     },
-  { id: 'returns',   path: '/app/returns',   label: 'المرتجعات',     labelEn: 'Returns',   iconKey: 'returns'   },
-  { id: 'audit',     path: '/app/audit',     label: 'سجل المراجعة',  labelEn: 'Audit',     iconKey: 'audit'     },
+  { id: 'returns',   path: '/app/returns',   label: 'المرتجعات',     labelEn: 'Returns',   iconKey: 'returns',   allow: ['manager', 'admin'] },
+  { id: 'audit',     path: '/app/audit',     label: 'سجل المراجعة',  labelEn: 'Audit',     iconKey: 'audit',     allow: ['manager', 'admin'] },
   { id: 'inventory', path: '/app/inventory', label: 'المخزون',       labelEn: 'Inventory', iconKey: 'inventory' },
   { id: 'settings',  path: '/app/settings',  label: 'الإعدادات',     labelEn: 'Settings',  iconKey: 'settings'  },
 ] as const;

@@ -86,10 +86,10 @@ export function LineItemRow({
           onDecrement={onQuantityDecrement}
           onRemoveRequest={onRemove}
         />
-        <span className="line-item-row__unit-price mono" data-testid="line-unit-price">
+        <span className="line-item-row__unit-price mono" data-testid="line-unit-price" dir="ltr">
           {formatMinorUnits(unitPriceMinor)}
         </span>
-        <span className="line-item-row__subtotal mono" data-testid="line-subtotal">
+        <span className="line-item-row__subtotal mono" data-testid="line-subtotal" dir="ltr">
           {formatMinorUnits(lineSubtotalMinor)}
         </span>
       </div>

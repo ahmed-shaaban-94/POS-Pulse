@@ -50,11 +50,17 @@ export function SearchResultRow({
       {product.display_name_en !== undefined && (
         <span className="catalogue-result-row__name-en">{product.display_name_en}</span>
       )}
-      <span className="catalogue-result-row__price">{formatPriceMinor(product.price_minor)}</span>
+      <span className="catalogue-result-row__price" dir="ltr">
+        {formatPriceMinor(product.price_minor)}
+      </span>
       {product.unit_pack_label !== undefined && (
         <span className="catalogue-result-row__pack">{product.unit_pack_label}</span>
       )}
-      {code !== undefined && <span className="catalogue-result-row__code">{code}</span>}
+      {code !== undefined && (
+        <span className="catalogue-result-row__code" dir="ltr">
+          {code}
+        </span>
+      )}
       <ControlledFlags product={product} className="catalogue-result-row__flags" />
     </div>
   );

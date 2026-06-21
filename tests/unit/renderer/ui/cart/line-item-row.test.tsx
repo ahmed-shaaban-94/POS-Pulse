@@ -58,6 +58,16 @@ describe('T049 — LineItemRow rendering', () => {
     expect(screen.getByTestId('line-item-row')).toBeInTheDocument();
   });
 
+  it('PR #434 FIX 3: unit price is dir="ltr" (money must not bidi-reorder under RTL shell)', () => {
+    render(<LineItemRow {...BASE_PROPS} />);
+    expect(screen.getByTestId('line-unit-price')).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('PR #434 FIX 3: line subtotal is dir="ltr" (money must not bidi-reorder under RTL shell)', () => {
+    render(<LineItemRow {...BASE_PROPS} />);
+    expect(screen.getByTestId('line-subtotal')).toHaveAttribute('dir', 'ltr');
+  });
+
   it('passes quantity to QuantityStepper', () => {
     render(<LineItemRow {...BASE_PROPS} quantity={5} />);
     expect(screen.getByTestId('qty-display')).toHaveTextContent('5');

@@ -102,10 +102,26 @@ function makeOperatorBridge(overrides?: Partial<OperatorBridgeAPI>): OperatorBri
   };
 }
 
+const MANAGER_SESSION: OperatorSessionView = {
+  id: 'sess-t088-mgr',
+  operator_id: 'manager-t088',
+  display_name: 'Morgan Manager',
+  role: 'manager',
+  tenant_id: 't1',
+  branch_id: 'b1',
+  started_at: '2026-05-14T09:00:00.000Z',
+};
+
 /** Pre-populate the store as a signed-in cashier (simulates a session in progress). */
 function signInAsCashier(): void {
   useOperatorSessionStore.getState().beginSignIn();
   useOperatorSessionStore.getState().resolveSignedIn(CASHIER_SESSION);
+}
+
+/** Pre-populate the store as a signed-in operator with the given session. */
+function signInAs(session: OperatorSessionView): void {
+  useOperatorSessionStore.getState().beginSignIn();
+  useOperatorSessionStore.getState().resolveSignedIn(session);
 }
 
 /**
@@ -122,6 +138,22 @@ async function renderAsCashier(initialEntry: string): Promise<void> {
     />,
   );
   // Wait for the async boot to complete (pairing.getStatus resolves).
+  await waitFor(() => expect(screen.queryByTestId('route-loading')).not.toBeInTheDocument());
+}
+
+/**
+ * Render AppRouter with the given operator session pre-signed-in and an initial
+ * path, then wait until the boot loading spinner is gone.
+ */
+async function renderAsSession(session: OperatorSessionView, initialEntry: string): Promise<void> {
+  signInAs(session);
+  render(
+    <AppRouter
+      pairing={pairedBridge()}
+      operator={makeOperatorBridge()}
+      initialEntry={initialEntry}
+    />,
+  );
   await waitFor(() => expect(screen.queryByTestId('route-loading')).not.toBeInTheDocument());
 }
 
@@ -349,6 +381,116 @@ describe('SC-003 path 22 — stuck-shift-surface not in DOM after guard redirect
       // The ForcedCloseSurface / StuckShiftSurface must not render for cashier.
       expect(screen.queryByTestId('stuck-shifts-surface')).not.toBeInTheDocument();
       expect(screen.queryByTestId('forced-close-surface')).not.toBeInTheDocument();
+    });
+  });
+});
+
+// ── PR #434 FIX 1 — /app/returns + /app/audit are manager/admin only ──────
+//
+// CodeRabbit (PR #434): `returns` and `audit` previously sat directly under the
+// parent `/app` guard with NO `allow` filter, so a signed-in CASHIER could reach
+// `/app/audit` (role-visibility-matrix marks Audit ⛔ cashier) and `/app/returns`
+// (Phase-7 blocked). OWNER DECISION: gate BOTH to manager/admin via the same
+// nested `<OperatorRouteGuard allow={['manager','admin']}>` pattern used by the
+// `/app/manager/*` surfaces. Cashier deep-link → /sign-in; manager/admin reach
+// the existing placeholder.
+
+describe('SC-003 path 23 — /app/returns direct deep-link (⛔ cashier)', () => {
+  it('redirects cashier to /sign-in', async () => {
+    await renderAsCashier('/app/returns');
+    // Poll until both states settle (mirrors path 6/12) — avoids the transient
+    // co-existence window during the async guard redirect (D-001).
+    await waitFor(() => {
+      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('SC-003 path 24 — /app/returns window.location (⛔ cashier)', () => {
+  it('window.location.pathname is /sign-in after redirect', async () => {
+    await renderAsCashier('/app/returns');
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/sign-in');
+    });
+  });
+});
+
+describe('SC-003 path 25 — /app/audit direct deep-link (⛔ cashier)', () => {
+  it('redirects cashier to /sign-in', async () => {
+    await renderAsCashier('/app/audit');
+    await waitFor(() => {
+      expect(screen.getByTestId('route-sign-in')).toBeInTheDocument();
+      expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('SC-003 path 26 — /app/audit window.location (⛔ cashier)', () => {
+  it('window.location.pathname is /sign-in after redirect', async () => {
+    await renderAsCashier('/app/audit');
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/sign-in');
+    });
+  });
+});
+
+describe('SC-003 path 27 — /app/returns?ref=sale123 query string (⛔ cashier)', () => {
+  it('query string variant cannot bypass the guard', async () => {
+    await renderAsCashier('/app/returns?ref=sale123');
+    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+  });
+});
+
+describe('SC-003 path 28 — /app/audit?from=nav query string (⛔ cashier)', () => {
+  it('query string variant cannot bypass the guard', async () => {
+    await renderAsCashier('/app/audit?from=nav');
+    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+  });
+});
+
+// ── PR #434 FIX 1 (positive) — manager + admin CAN reach returns + audit ───
+
+describe('SC-003 path 29 — /app/returns (✅ manager)', () => {
+  it('manager reaches /app/returns without redirect; placeholder shown', async () => {
+    await renderAsSession(MANAGER_SESSION, '/app/returns');
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      expect(screen.getByText(/Returns are not yet available/i)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('SC-003 path 30 — /app/audit (✅ manager)', () => {
+  it('manager reaches /app/audit without redirect; placeholder shown', async () => {
+    await renderAsSession(MANAGER_SESSION, '/app/audit');
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      expect(screen.getByText(/audit log view is not yet available/i)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('SC-003 path 31 — /app/returns (✅ admin)', () => {
+  it('admin reaches /app/returns without redirect; placeholder shown', async () => {
+    await renderAsSession({ ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' }, '/app/returns');
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      expect(screen.getByText(/Returns are not yet available/i)).toBeInTheDocument();
+    });
+  });
+});
+
+describe('SC-003 path 32 — /app/audit (✅ admin)', () => {
+  it('admin reaches /app/audit without redirect; placeholder shown', async () => {
+    await renderAsSession({ ...MANAGER_SESSION, id: 'sess-admin', role: 'admin' }, '/app/audit');
+    await waitFor(() => {
+      expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+      expect(screen.queryByTestId('route-sign-in')).not.toBeInTheDocument();
+      expect(screen.getByText(/audit log view is not yet available/i)).toBeInTheDocument();
     });
   });
 });

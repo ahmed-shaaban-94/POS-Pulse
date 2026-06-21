@@ -5,8 +5,28 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { NavRail } from '../NavRail';
 import { shellNavEntries } from '../../../../../specs/003-pos-ui-shell/contracts/shell-routes';
+import {
+  useOperatorSessionStore,
+  type OperatorSessionView,
+} from '../../../stores/operator-session-store';
+import type { Role } from '../../../../shared/operator/role';
 
 afterEach(cleanup);
+
+/** Pre-populate the operator-session store as a signed-in operator of `role`. */
+function signInAs(role: Role): void {
+  const session: OperatorSessionView = {
+    id: `sess-${role}`,
+    operator_id: `op-${role}`,
+    display_name: `${role} user`,
+    role,
+    tenant_id: 't1',
+    branch_id: 'b1',
+    started_at: '2026-06-21T09:00:00.000Z',
+  };
+  useOperatorSessionStore.getState().beginSignIn();
+  useOperatorSessionStore.getState().resolveSignedIn(session);
+}
 
 function mockMatchMedia(width: number): void {
   vi.stubGlobal(
@@ -34,10 +54,17 @@ function mockMatchMedia(width: number): void {
 
 beforeEach(() => {
   mockMatchMedia(1920);
+  // PR #434 FIX 2 — the rail is now role-filtered. The base-case tests below
+  // assert all 7 entries, so they run as a manager (manager/admin see all 7).
+  // The cashier-specific filtering is asserted in the dedicated block at the
+  // bottom of this file.
+  useOperatorSessionStore.getState().reset();
+  signInAs('manager');
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  useOperatorSessionStore.getState().reset();
 });
 
 /**
@@ -144,5 +171,61 @@ describe('NavRail (T036)', () => {
       </MemoryRouter>,
     );
     expect(container.querySelector('[data-testid="hamburger"]')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * PR #434 FIX 2 — role-filtered NavRail.
+ *
+ * `shellNavEntries` carries an optional `allow` field; `returns` and `audit`
+ * are gated to manager/admin (mirrors router FIX 1). The rail reads the current
+ * operator role and renders only entries the role may reach:
+ *   - cashier  → 5 entries (no Returns, no Audit)
+ *   - manager  → all 7
+ *   - admin    → all 7
+ * Entries without `allow` are visible to everyone.
+ */
+describe('NavRail — role-filtered entries (PR #434 FIX 2)', () => {
+  it('cashier sees 5 entries — no Returns, no Audit', () => {
+    useOperatorSessionStore.getState().reset();
+    signInAs('cashier');
+    render(
+      <MemoryRouter initialEntries={['/app/dashboard']}>
+        <NavRail />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(5);
+    expect(screen.queryByRole('link', { name: 'Returns' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Audit' })).not.toBeInTheDocument();
+    // The 5 cashier-visible entries are present.
+    for (const name of ['Dashboard', 'Sale', 'Sales', 'Inventory', 'Settings']) {
+      expect(screen.getByRole('link', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('manager sees all 7 entries — including Returns + Audit', () => {
+    useOperatorSessionStore.getState().reset();
+    signInAs('manager');
+    render(
+      <MemoryRouter initialEntries={['/app/dashboard']}>
+        <NavRail />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(7);
+    expect(screen.getByRole('link', { name: 'Returns' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Audit' })).toBeInTheDocument();
+  });
+
+  it('admin sees all 7 entries — including Returns + Audit', () => {
+    useOperatorSessionStore.getState().reset();
+    signInAs('admin');
+    render(
+      <MemoryRouter initialEntries={['/app/dashboard']}>
+        <NavRail />
+      </MemoryRouter>,
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(7);
+    expect(screen.getByRole('link', { name: 'Returns' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Audit' })).toBeInTheDocument();
   });
 });

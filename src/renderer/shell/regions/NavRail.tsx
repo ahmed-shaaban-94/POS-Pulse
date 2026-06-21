@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { NavLink } from 'react-router-dom';
 import { shellNavEntries } from '../../../../specs/003-pos-ui-shell/contracts/shell-routes';
 import { useViewportTier } from '../viewport/useViewportTier';
+import { useOperatorSessionStore } from '../../stores/operator-session-store';
 
 /**
  * NavRail — responsive primary navigation (POS v3.5 `POS_NAV`, 7 entries).
@@ -19,17 +20,30 @@ import { useViewportTier } from '../viewport/useViewportTier';
  *
  * Hard exclusion: NO mobile hamburger drawer at any width.
  * (contracts/shell-regions.md §"NavRail" + Spec Clarifications §2)
+ *
+ * PR #434 FIX 2 — role-filtered. Each entry may carry an optional `allow`
+ * role list; the rail renders an entry only when it is unrestricted
+ * (`allow === undefined`) or the current operator's role is in `allow`.
+ * This keeps a cashier from seeing links to manager/admin-only surfaces
+ * (Returns, Audit) that the router guard (FIX 1) would redirect away anyway.
  */
 export function NavRail(): JSX.Element | null {
   const tier = useViewportTier();
+  const role = useOperatorSessionStore((s) =>
+    s.state.kind === 'signedIn' ? s.state.session.role : undefined,
+  );
 
   if (tier === 'too-small') return null;
 
   const iconOnly = tier === 'icon-only';
 
+  const visibleEntries = shellNavEntries.filter(
+    (entry) => entry.allow === undefined || (role !== undefined && entry.allow.includes(role)),
+  );
+
   return (
     <nav aria-label="Primary" className="nav-rail">
-      {shellNavEntries.map((entry) => (
+      {visibleEntries.map((entry) => (
         <NavLink
           key={entry.id}
           to={entry.path}
