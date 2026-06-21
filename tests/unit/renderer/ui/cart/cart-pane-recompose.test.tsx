@@ -94,7 +94,7 @@ function makeEnvelope() {
   };
 }
 
-const ONE_LINE: CartLineItem[] = [
+const oneLine: CartLineItem[] = [
   {
     lineId: 'line-1',
     displayName: 'باراسيتامول 500 مجم',
@@ -144,7 +144,7 @@ describe('v3.5 cart recompose — totals footer (tax-pending, NOT a computed 14%
   function renderWithLines() {
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge()} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={oneLine} />);
   }
 
   it('renders the prototype .totals-rows footer with three rows', () => {
@@ -201,7 +201,7 @@ describe('v3.5 cart recompose — drug-interaction enrichment shell (no contract
   it('renders an honest "not available yet" interaction shell when lines are present', () => {
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge()} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={oneLine} />);
     const shell = screen.getByTestId('cart-interaction-shell');
     expect(shell).toBeInTheDocument();
     expect(shell).toHaveTextContent(/غير متاح بعد/u);
@@ -211,7 +211,7 @@ describe('v3.5 cart recompose — drug-interaction enrichment shell (no contract
   it('the interaction shell does NOT assert a live interaction warning (no fabricated data)', () => {
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge()} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={oneLine} />);
     const shell = screen.getByTestId('cart-interaction-shell');
     // It is a placeholder note, never an active alert claiming a real interaction.
     expect(shell).not.toHaveAttribute('role', 'alert');
@@ -224,14 +224,14 @@ describe('v3.5 cart recompose — hold-sale is a disabled shell (no engine path)
   it('renders the cart-actions row with hold + hand-off', () => {
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge()} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={oneLine} />);
     expect(document.querySelector('.cart-actions-row')).not.toBeNull();
   });
 
   it('the hold-sale affordance is rendered DISABLED (never functional — no suspend/park action exists)', () => {
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge()} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={oneLine} />);
     const hold = screen.getByTestId('cart-hold-button');
     expect(hold).toBeDisabled();
   });
@@ -242,7 +242,7 @@ describe('v3.5 cart recompose — hold-sale is a disabled shell (no engine path)
     const bridge = makeBridge({ void: voidFn, handoff: handoffFn });
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={bridge} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={bridge} _testInitialLines={oneLine} />);
     const hold = screen.getByTestId('cart-hold-button');
     // Disabled button: the click is a no-op. Assert no cart bridge method fired.
     await userEvent.click(hold);
@@ -258,7 +258,7 @@ describe('v3.5 cart recompose — hand-off binds to the existing cart.handoff', 
     const handoff = vi.fn().mockResolvedValue({ kind: 'ok', envelope: makeEnvelope() });
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge({ handoff })} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge({ handoff })} _testInitialLines={oneLine} />);
     await userEvent.click(screen.getByTestId('cart-handoff-button'));
     expect(handoff).toHaveBeenCalledTimes(1);
   });
@@ -266,7 +266,7 @@ describe('v3.5 cart recompose — hand-off binds to the existing cart.handoff', 
   it('the hand-off button carries Arabic-first copy', () => {
     setSignedIn();
     setCartEditing();
-    render(<CartPane _testBridge={makeBridge()} _testInitialLines={ONE_LINE} />);
+    render(<CartPane _testBridge={makeBridge()} _testInitialLines={oneLine} />);
     expect(screen.getByTestId('cart-handoff-button').textContent).toMatch(/الدفع|انتقال/u);
   });
 });
