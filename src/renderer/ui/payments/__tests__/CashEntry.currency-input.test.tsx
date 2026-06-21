@@ -62,8 +62,9 @@ describe('CashEntry — currency-amount input (¤), not minor units', () => {
     expect(screen.getByTestId('cash-entry-confirm')).toBeDisabled();
   });
 
-  it('the amount label reads "Amount received (¤)", not minor units', () => {
+  it('the amount label reads "Amount received ¤" (Arabic-first v3.5 copy), not minor units', () => {
     renderCash();
-    expect(screen.getByText('Amount received (¤)')).toBeInTheDocument();
+    // v3.5 recompose: Arabic-first label — "المبلغ المستلم (Amount received ¤)"
+    expect(screen.getByText('المبلغ المستلم (Amount received ¤)')).toBeInTheDocument();
   });
 });

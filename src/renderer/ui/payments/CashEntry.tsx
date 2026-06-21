@@ -4,6 +4,7 @@ import { computeChangeDueMinor } from '../../../shared/payments/money-math.js';
 import type { TenderApplyRequest, TenderApplyResponse } from '../../../shared/bridge-api.js';
 import { touchTarget } from '../tokens/touch.js';
 import { parseCurrencyToMinor, formatMinorToInput } from './parse-currency-to-minor.js';
+import { quickAmounts } from '../../../shared/payments/quick-amounts.js';
 import { AmountPad } from './AmountPad.js';
 import { MoneyRoll } from './MoneyRoll.js';
 
@@ -139,82 +140,135 @@ export function CashEntry({
 
   return (
     <section className="cash-entry" data-testid="cash-entry" aria-label="Cash entry">
-      <h3 className="cash-entry__heading">Cash payment</h3>
-
-      <div className="cash-entry__remaining">
-        <span className="cash-entry__remaining-label">Amount due</span>
-        <span className="cash-entry__remaining-value" data-testid="cash-entry-remaining">
+      {/*
+        POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
+        Value is dir="ltr" mono so money is never bidi-reordered (D-006 rule).
+        remainingBalanceMinor from the engine — no client-side money math here.
+      */}
+      <div className="amount-due-card">
+        <span className="amount-due-card__label">المطلوب دفعه (Amount due)</span>
+        <span className="amount-due-card__value" dir="ltr" data-testid="cash-entry-remaining">
           {formatMinorUnits(remainingBalanceMinor)}
         </span>
       </div>
 
-      <label className="cash-entry__amount-label" htmlFor="cash-entry-amount-input">
-        Amount received (¤)
-      </label>
-      <input
-        id="cash-entry-amount-input"
-        data-testid="cash-entry-amount-input"
-        className="cash-entry__amount-input"
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        value={rawInput}
-        onChange={(e) => {
-          const next = e.target.value;
-          // Keystroke guard: permit an in-progress currency amount — digits with
-          // an optional single decimal point and up to 2 fractional digits.
-          // Allows partial entries while typing ("12", "12.", "12.5"); the
-          // commit-time parse (parseCurrencyToMinor) is the authoritative gate
-          // (a bare "12." parses to null → cannot confirm).
-          if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
-            setRawInput(next);
-            setBridgeRefusal(false);
-          }
-        }}
-      />
-
       {/*
-        POS v3.5 Phase 3 — the AmountPad is a VIEW over the single `rawInput`
-        source of truth (it reads the parsed value, writes back the string).
-        It introduces no second amount state, so the confirm/bridge/refusal
-        logic keyed on `rawInput` is unchanged. Total drives quick-amounts.
-
-        MERGE RECONCILIATION (fix/pos-payment-due-calculation × v3.5 Phase 3):
-        AmountPad's `onChange` emits integer MINOR UNITS (`valueMinor` contract),
-        but after the currency-input fix `rawInput` holds a CURRENCY-AMOUNT string
-        ("12.50"), parsed back by `parseCurrencyToMinor`. Writing `next.toString()`
-        ("1250") directly would be parsed as ¤1250.00 — a 100× bug. Convert the
-        pad's minor-units output to the currency-amount string with
-        `formatMinorToInput` so both the keypad and free-type paths share one
-        consistent `rawInput` contract.
+        v3.5 tender-slots / tender-row layout.
+        The amount-received row wraps the AmountPad + quick-amount chips.
+        The totals row shows the change-due via MoneyRoll (engine-computed,
+        no client-side subtraction — computeChangeDueMinor owns the math).
       */}
-      <AmountPad
-        valueMinor={amountAppliedMinor}
-        totalMinor={isRemainingValid ? remainingBalanceMinor : 0}
-        onChange={(next) => {
-          setRawInput(formatMinorToInput(next));
-          setBridgeRefusal(false);
-        }}
-      />
+      <div className="tender-slots">
+        <div
+          className="tender-row"
+          style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}
+        >
+          <label
+            className="tender-row__label cash-entry__amount-label"
+            htmlFor="cash-entry-amount-input"
+          >
+            المبلغ المستلم (Amount received ¤)
+          </label>
+          <span className="tender-row__value" style={{ minWidth: 240, flex: 1 }}>
+            <input
+              id="cash-entry-amount-input"
+              data-testid="cash-entry-amount-input"
+              className="cash-entry__amount-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={rawInput}
+              onChange={(e) => {
+                const next = e.target.value;
+                // Keystroke guard: digits + optional single decimal, ≤2 frac.
+                if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
+                  setRawInput(next);
+                  setBridgeRefusal(false);
+                }
+              }}
+            />
+            {/*
+              POS v3.5 — AmountPad is a VIEW over the single `rawInput` source
+              of truth. Writes back via formatMinorToInput to avoid the 100×
+              parse bug (see Merge Reconciliation note in original component).
+            */}
+            <AmountPad
+              valueMinor={amountAppliedMinor}
+              totalMinor={isRemainingValid ? remainingBalanceMinor : 0}
+              onChange={(next) => {
+                setRawInput(formatMinorToInput(next));
+                setBridgeRefusal(false);
+              }}
+            />
 
-      {changeDueMinor !== null && changeDueMinor > 0 && (
-        <div className="cash-entry__change-due" data-testid="cash-entry-change-due">
-          <span className="cash-entry__change-due-label">Change due</span>
-          {/*
-            v3.5 MoneyRoll animates the change-due value. The `¤` currency mark
-            is kept as a sibling label so the rendered text content stays
-            `¤24.50` (existing display contract). MoneyRoll is fed the already
-            computed `changeDueMinor` — no money math here.
-          */}
-          <span className="cash-entry__change-due-value">
-            ¤<MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" />
+            {/*
+              Quick-amount chips (prototype .quick-amounts / .quick-amount-btn).
+              The first chip is the "exact" label (بالضبط), subsequent chips are
+              rounded-up suggestions. All values dir="ltr" mono (D-006).
+              AmountPad already includes quick-keys, but we also surface the
+              prototype-style quick-amount chips here so the visual layer matches.
+            */}
+            <span className="quick-amounts" style={{ marginTop: 'var(--space-2)' }}>
+              {/* Exact-amount chip */}
+              <button
+                type="button"
+                className={`quick-amount-btn quick-amount-btn--label${amountAppliedMinor === remainingBalanceMinor ? ' quick-amount-btn--selected' : ''}`}
+                onClick={() => {
+                  setRawInput(formatMinorToInput(remainingBalanceMinor));
+                  setBridgeRefusal(false);
+                }}
+              >
+                بالضبط
+              </button>
+              {/* Rounded-up suggestion chips (prototype pos-app.jsx:783-789).
+                  `quickAmounts` returns ascending banknote roll-ups with the
+                  exact total first; we already rendered the exact total as the
+                  بالضبط chip above, so drop the leading exact value and render
+                  the rounded suggestions. Each chip writes the value back as a
+                  currency STRING via `formatMinorToInput` — no money arithmetic
+                  here (settlement math stays in computeChangeDueMinor). Values
+                  are dir="ltr" mono (D-006). */}
+              {isRemainingValid &&
+                quickAmounts(remainingBalanceMinor)
+                  .filter((v) => v > remainingBalanceMinor)
+                  .map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={`quick-amount-btn${
+                        amountAppliedMinor === v ? ' quick-amount-btn--selected' : ''
+                      }`}
+                      onClick={() => {
+                        setRawInput(formatMinorToInput(v));
+                        setBridgeRefusal(false);
+                      }}
+                    >
+                      <span dir="ltr">{formatMinorUnits(v)}</span>
+                    </button>
+                  ))}
+            </span>
           </span>
         </div>
-      )}
 
-      {/* Slice-2 under-tender banner. In S3d bridged mode the cashier may
-          apply a partial cash line (split tender), so the banner is hidden;
-          the main process owns the settlement invariant. */}
+        {/* Totals row: change-due animated via MoneyRoll (engine-computed).
+            Only rendered when change is actually owed (> 0); exact cash
+            produces changeDueMinor = 0 which should not show the row. */}
+        {changeDueMinor !== null && changeDueMinor > 0 && (
+          <div
+            className="tender-row tender-row--totals cash-entry__change-due"
+            data-testid="cash-entry-change-due"
+          >
+            <span className="tender-row__label">الباقي للعميل (Change due)</span>
+            <span className="tender-row__value cash-entry__change-due-value change-row__value--positive">
+              ¤<MoneyRoll valueMinor={changeDueMinor} className="cash-entry__change-roll" />
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Slice-2 under-tender banner. In S3d bridged mode the cashier may apply
+          a partial cash line (split tender), so the banner is hidden; the main
+          process owns the settlement invariant. */}
       {isUnderTender && !isBridged && (
         <div
           className="cash-entry__refusal"
@@ -249,7 +303,7 @@ export function CashEntry({
             void handleConfirm();
           }}
         >
-          Confirm cash payment
+          تأكيد الدفع النقدي (Confirm cash payment)
         </button>
         {onBack !== undefined && (
           <button

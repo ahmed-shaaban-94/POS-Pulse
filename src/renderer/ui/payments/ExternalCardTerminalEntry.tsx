@@ -122,35 +122,72 @@ export function ExternalCardTerminalEntry({
       data-testid="external-card-terminal-entry"
       aria-label="External card terminal entry"
     >
-      <h3 className="external-card-terminal-entry__heading">Card terminal payment</h3>
+      {/*
+        POS v3.5 Slice 4 — amount-due-card (prototype TenderScreen structure).
+        Value is dir="ltr" mono (D-006 — money is never bidi-reordered).
+      */}
+      <div className="amount-due-card">
+        <span className="amount-due-card__label">المطلوب دفعه (Amount due)</span>
+        <span className="amount-due-card__value" dir="ltr">
+          {formatMinorUnits(remainingBalanceMinor)}
+        </span>
+      </div>
 
-      <p className="external-card-terminal-entry__instructional">
-        Process {formatMinorUnits(remainingBalanceMinor)} on the card terminal, then confirm here.
-      </p>
+      {/*
+        v3.5 tender-slots / tender-row layout for the card terminal path.
+        Row 1: instruction (tender-row__body — Arabic + English).
+        Row 2: exact-amount input field.
+        Row 3 (totals): the charged amount in a dir="ltr" mono span.
+        The card reference input is below the slots (not part of the
+        prototype's tender-row structure; kept as a functional field).
+      */}
+      <div className="tender-slots">
+        {/* Instruction row */}
+        <div className="tender-row">
+          <span className="tender-row__label">جهاز الدفع</span>
+          <span className="tender-row__body">
+            أكمل العملية على جهاز البطاقات ثم أكّد. (Complete on the card terminal, then confirm.)
+          </span>
+        </div>
 
-      <label
-        className="external-card-terminal-entry__amount-label"
-        htmlFor="external-card-amount-input"
-      >
-        Amount applied (¤)
-      </label>
-      <input
-        id="external-card-amount-input"
-        data-testid="external-card-amount-input"
-        className="external-card-terminal-entry__amount-input"
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        value={amountInput}
-        onChange={(e) => {
-          const next = e.target.value;
-          // Currency keystroke guard: digits + optional single decimal, ≤2 frac.
-          if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
-            setAmountInput(next);
-            setBridgeRefusal(false);
-          }
-        }}
-      />
+        {/* Amount input row */}
+        <div className="tender-row" style={{ flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <label
+            className="tender-row__label external-card-terminal-entry__amount-label"
+            htmlFor="external-card-amount-input"
+          >
+            المبلغ المخصوم (Amount applied ¤)
+          </label>
+          <span className="tender-row__value">
+            <input
+              id="external-card-amount-input"
+              data-testid="external-card-amount-input"
+              className="external-card-terminal-entry__amount-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={amountInput}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (next === '' || /^\d*\.?\d{0,2}$/.test(next)) {
+                  setAmountInput(next);
+                  setBridgeRefusal(false);
+                }
+              }}
+            />
+          </span>
+        </div>
+
+        {/* Totals row: the amount in a dir="ltr" mono span (D-006). */}
+        <div className="tender-row tender-row--totals">
+          <span className="tender-row__label">المبلغ المُقتطع</span>
+          <span className="tender-row__value">
+            <span dir="ltr" className="mono">
+              {formatMinorUnits(remainingBalanceMinor)}
+            </span>
+          </span>
+        </div>
+      </div>
 
       {isOverpay && (
         <div
@@ -178,8 +215,11 @@ export function ExternalCardTerminalEntry({
         className="external-card-terminal-entry__reference-label"
         htmlFor="external-card-reference-input"
       >
-        Reference (optional, 6 chars max)
+        المرجع (Reference, optional, 6 chars max)
       </label>
+      {/* SECURITY: the reference field accepts up to 6 chars ^[A-Z0-9]{0,6}$.
+          This pattern makes a PAN literally unrepresentable in this field
+          (FR-007 / Constitution §P6). */}
       <input
         id="external-card-reference-input"
         data-testid="external-card-reference-input"
@@ -189,6 +229,7 @@ export function ExternalCardTerminalEntry({
         autoComplete="off"
         maxLength={6}
         placeholder="e.g. T1A2B3"
+        dir="ltr"
         value={referenceInput}
         onChange={(e) => {
           setReferenceInput(e.target.value);
@@ -230,7 +271,7 @@ export function ExternalCardTerminalEntry({
             void handleConfirm();
           }}
         >
-          Confirm terminal processed payment
+          تأكيد معالجة جهاز البطاقات (Confirm terminal processed payment)
         </button>
         {onBack !== undefined && (
           <button
