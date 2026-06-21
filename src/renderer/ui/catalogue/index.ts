@@ -20,3 +20,5 @@ export type { AmbiguousBarcodeStateProps } from './AmbiguousBarcodeState.js';
 export { CatalogueAddController } from './CatalogueAddController.js';
 export type { CatalogueAddControllerProps } from './CatalogueAddController.js';
 export { ControlledFlags } from './ControlledFlags.js';
+// POS v3.5 Slice 2 — deferred-enrichment honesty shell (POS-013 browse/stock/expiry).
+export { CatalogueEnrichmentShell } from './CatalogueEnrichmentShell.js';

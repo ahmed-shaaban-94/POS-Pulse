@@ -44,24 +44,38 @@ export function SearchResultRow({
         onSelect(product);
       }}
     >
+      {/* Primary line (grid area "name"): Arabic-first name + the LTR-isolated
+          English name as a secondary `small`, plus the non-blocking Rx/controlled
+          awareness badge inline (display only — gates nothing, FR C1). Mirrors
+          the prototype `.catalogue-result-row .name` composition. */}
       <span className="catalogue-result-row__name" dir="rtl">
         {product.display_name_ar}
+        {product.display_name_en !== undefined && (
+          <small className="catalogue-result-row__name-en" dir="ltr">
+            {product.display_name_en}
+          </small>
+        )}
+        <ControlledFlags product={product} className="catalogue-result-row__flags" />
       </span>
-      {product.display_name_en !== undefined && (
-        <span className="catalogue-result-row__name-en">{product.display_name_en}</span>
-      )}
+      {/* Price (grid area "price"): LTR-isolated mono numeral — the digits never
+          mirror under the RTL pane. */}
       <span className="catalogue-result-row__price" dir="ltr">
         {formatPriceMinor(product.price_minor)}
       </span>
-      {product.unit_pack_label !== undefined && (
-        <span className="catalogue-result-row__pack">{product.unit_pack_label}</span>
-      )}
-      {code !== undefined && (
-        <span className="catalogue-result-row__code" dir="ltr">
-          {code}
+      {/* Meta (grid area "meta"): barcode/SKU + pack label, LTR-isolated. */}
+      {(code !== undefined || product.unit_pack_label !== undefined) && (
+        <span className="catalogue-result-row__meta" dir="ltr">
+          {code !== undefined && (
+            <span className="catalogue-result-row__code" dir="ltr">
+              {code}
+            </span>
+          )}
+          {code !== undefined && product.unit_pack_label !== undefined && ' · '}
+          {product.unit_pack_label !== undefined && (
+            <span className="catalogue-result-row__pack">{product.unit_pack_label}</span>
+          )}
         </span>
       )}
-      <ControlledFlags product={product} className="catalogue-result-row__flags" />
     </div>
   );
 }

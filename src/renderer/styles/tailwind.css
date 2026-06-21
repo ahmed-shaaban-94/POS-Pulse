@@ -3721,3 +3721,228 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* === POS v3.5 Slice 2 — catalogue sale-pane recompose (SaleScreen, catalogue
+ *     side; docs/design/pos-v3.5/design-reference/{pos-app.jsx,kit.css}) ====
+ *
+ * VISUAL recompose only — the search/scan/add engine + FSM are unchanged. Rules
+ * are token-mapped from kit.css onto the production token set (no raw hex, no new
+ * token names) and appended OUTSIDE `@layer components`, the same additive
+ * posture as the Phase-0 tender port above. The dark register re-themes through
+ * the token VALUES keyed on the root attribute (ADR-0004) — these rules add NO
+ * dark-scoped component selector (theme-contract.test.ts forbids component forks
+ * under the dark register; the token values re-theme everything below).
+ */
+
+/* The sale pane: a vertical column, RTL/Arabic-first (dir is set on the node). */
+.catalogue-sale-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+/* Search input — the taller wedge-friendly target from the prototype. */
+.catalogue-search__input {
+  width: 100%;
+  min-height: 52px;
+  padding-inline: var(--space-4);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.catalogue-search__input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+}
+.catalogue-search__hint {
+  margin: 4px 2px 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+/* In-flight (searching) status line — quiet, no spin glyph (reduced-motion by
+ * construction). */
+.catalogue-searching {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Result list container (kit.css .catalogue-results). */
+.catalogue-results {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.catalogue-results__empty,
+.catalogue-results__refine {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Result row (kit.css .catalogue-result-row): a 2-col grid — name + price on the
+ * first line, meta spanning the second. ≥ 56px touch target. */
+.catalogue-result-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name price'
+    'meta meta';
+  gap: 2px var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-height: 56px;
+  border-bottom: 1px solid var(--color-border-soft);
+  cursor: pointer;
+  text-align: start;
+  background: transparent;
+  transition: background-color var(--duration-2) var(--ease-out);
+}
+.catalogue-result-row:last-child {
+  border-bottom: none;
+}
+.catalogue-result-row:hover {
+  background: var(--color-primary-soft);
+}
+.catalogue-result-row[aria-selected='true'] {
+  background: var(--color-primary-soft);
+  box-shadow: inset 2px 0 0 0 var(--color-primary);
+}
+.catalogue-result-row:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+.catalogue-result-row__name {
+  grid-area: name;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+.catalogue-result-row__name-en {
+  font-weight: var(--font-weight-regular);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+.catalogue-result-row__price {
+  grid-area: price;
+  align-self: center;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+.catalogue-result-row__meta {
+  grid-area: meta;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Controlled / Rx awareness badges (display only — gate nothing, C1). Each
+ * carries its own text label (never colour-only). Mapped from kit.css .rx-badge:
+ * Rx = info register, controlled = warning register (the stronger awareness). */
+.catalogue-result-row__flags,
+.catalogue-confirm__flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.catalogue-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-family-sans);
+  font-size: 0.625rem;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.03em;
+}
+.catalogue-flag--rx {
+  background: var(--color-info-soft);
+  color: var(--color-info-emphasis);
+}
+.catalogue-flag--controlled {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-emphasis);
+}
+
+/* Error/empty state surfaces (SC-10 — three visually-distinct treatments; the
+ * heading text always carries the meaning, never colour alone). */
+.catalogue-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+.catalogue-state__icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+.catalogue-state__heading {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+.catalogue-state__value {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+.catalogue-state__hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.catalogue-state--not-found .catalogue-state__icon {
+  color: var(--color-text-muted);
+}
+.catalogue-state--ambiguous .catalogue-state__icon {
+  color: var(--color-warning);
+}
+.catalogue-state--unavailable .catalogue-state__icon {
+  color: var(--color-danger);
+}
+
+/* Deferred-enrichment honesty shell (POS-013): holds the prototype's
+ * browse/stock/expiry/interaction footprint with a truthful "not available yet"
+ * placeholder. Quiet, dashed, non-interactive — clearly a slot, not live data. */
+.catalogue-enrichment-shell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+.catalogue-enrichment-shell__icon {
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+.catalogue-enrichment-shell__label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.catalogue-enrichment-shell__status {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
