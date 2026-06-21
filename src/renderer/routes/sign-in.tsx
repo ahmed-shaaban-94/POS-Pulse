@@ -206,12 +206,16 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
 
         <div className="sign-in-route__split sign-in-split">
           <section className="sign-in-route__manager-admin">
-            <p className="sign-in-route__section-label ws-section__label">كود الموظف · Staff code</p>
+            <p className="sign-in-route__section-label ws-section__label">
+              كود الموظف · Staff code
+            </p>
             <ManagerAdminSignInForm operator={operator} />
           </section>
 
           <aside className="sign-in-route__roster" aria-label="Cashier roster">
-            <h2 className="sign-in-route__sub-heading">صيادلة هذا الفرع · Cashiers on this branch</h2>
+            <h2 className="sign-in-route__sub-heading">
+              صيادلة هذا الفرع · Cashiers on this branch
+            </h2>
             {rosterError !== undefined && (
               <p className="sign-in-route__roster-error" role="alert">
                 {rosterError}
