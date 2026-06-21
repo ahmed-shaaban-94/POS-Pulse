@@ -3242,6 +3242,155 @@ body {
     cursor: not-allowed;
   }
 
+  /* ── SignInRoute v3.5 recompose (RTL pane, additive — existing tokens only) ── */
+
+  .sign-in-route {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 100%;
+    padding: var(--space-6);
+  }
+
+  .sign-in-pane {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    inline-size: 100%;
+    max-inline-size: 880px;
+    padding: var(--space-6);
+    background-color: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-md);
+  }
+
+  .sign-in-pane__head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .sign-in-pane__title {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .sign-in-pane__sub {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .sign-in-split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  @media (max-width: 1023px) {
+    .sign-in-split {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .sign-in-route__manager-admin,
+  .sign-in-route__roster {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .sign-in-route__section-label,
+  .sign-in-route__sub-heading {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .sign-in-route__roster-error {
+    font-size: var(--font-size-sm);
+    color: var(--color-danger);
+    font-weight: var(--font-weight-medium);
+    margin: 0;
+  }
+
+  .sign-in-route__pin-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background-color: var(--color-surface-sunken);
+    transition:
+      border-color var(--duration-2) var(--ease-out),
+      box-shadow var(--duration-2) var(--ease-out);
+  }
+
+  /* Wrong-PIN halo: rendered at the ROUTE level (PinPad prop API is frozen). */
+  .sign-in-route__pin-section[data-error] {
+    border-color: var(--color-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 18%, transparent);
+  }
+
+  .sign-in-route__pin-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text);
+    margin: 0;
+    text-align: center;
+  }
+
+  .sign-in-route__pin-role {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-muted);
+  }
+
+  .sign-in-route__pin-feedback {
+    min-block-size: 1.25rem;
+    font-size: var(--font-size-sm);
+  }
+
+  .sign-in-route__pin-error {
+    color: var(--color-danger);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .sign-in-route__pin-cancel {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    cursor: pointer;
+    transition: color var(--duration-2) var(--ease-out);
+  }
+
+  .sign-in-route__pin-cancel:hover:not(:disabled) {
+    color: var(--color-primary);
+  }
+
+  .sign-in-route__pin-cancel:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  .sign-in-route__pin-cancel:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
   /* ─── 010 catalogue freshness (FR-16) ──────────────────────────────────
    * A compact INLINE status line, not a card (DESIGN.md bans metric/hero
    * cards). Muted body text + a small status DOT (icon + text, never

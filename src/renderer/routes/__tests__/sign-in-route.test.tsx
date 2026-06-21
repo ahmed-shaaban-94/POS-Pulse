@@ -285,6 +285,42 @@ describe('AppRouter + /sign-in (T022)', () => {
   });
 });
 
+// ─── v3.5 prototype recompose (visual / RTL / Arabic-first) ──────────────────
+// These assert the prototype's VISUAL LANGUAGE only: RTL shell, Arabic-first
+// copy, the "كود الموظف · Staff code" section label, and the role→Arabic map on
+// a selected cashier row. They must NOT assert any client-side credential
+// logic — production keeps IPC-backed auth (operator.signIn) unchanged.
+describe('SignInRoute — v3.5 prototype recompose', () => {
+  it('route shell is RTL and carries the Arabic-first title + section label', async () => {
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() => expect(screen.getByTestId('route-sign-in')).toBeInTheDocument());
+
+    // RTL shell (Arabic-first layout).
+    expect(screen.getByTestId('route-sign-in')).toHaveAttribute('dir', 'rtl');
+
+    // Arabic title + section label lifted from the prototype.
+    expect(screen.getByText('تسجيل دخول الصيدلي')).toBeInTheDocument();
+    expect(screen.getByText('كود الموظف · Staff code')).toBeInTheDocument();
+  });
+
+  it('a selected cashier row shows the Arabic role name (role→Arabic map)', async () => {
+    const user = userEvent.setup();
+    const bridge = operatorBridge({
+      listBranchRoster: () => Promise.resolve({ kind: 'roster' as const, cashiers: [CASHIER] }),
+    });
+    renderSignInRoute(bridge);
+    await waitFor(() => expect(screen.getByTestId(`roster-item-0`)).toBeInTheDocument());
+    await user.click(screen.getByTestId(`roster-item-0`));
+
+    // cashier → "صيدلي" per the prototype's ROLE_NAMES map.
+    expect(screen.getByTestId('pin-section')).toBeInTheDocument();
+    expect(screen.getByText('صيدلي')).toBeInTheDocument();
+  });
+});
+
 describe('AppRouter + sign-out (T024)', () => {
   it('store reset returns the FSM to signedOut (1 s budget — synchronous in test)', () => {
     // Pre-populate signedIn state, then exercise the sign-out path

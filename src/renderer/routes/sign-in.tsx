@@ -2,6 +2,7 @@ import { useEffect, useState, type JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type { OperatorBridgeAPI, BranchRosterCashier } from '../../shared/bridge-api.js';
+import type { Role } from '../../shared/operator/role.js';
 import { useOperatorSessionStore } from '../stores/operator-session-store.js';
 import { RosterList, type RosterEntry } from '../ui/operator/RosterList.js';
 import { ManagerAdminSignInForm } from '../ui/operator/ManagerAdminSignInForm.js';
@@ -30,6 +31,20 @@ import { SIGN_IN_REFUSAL_COPY } from '../ui/operator/messages.js';
 export interface SignInRouteProps {
   operator: OperatorBridgeAPI;
 }
+
+/**
+ * Role → Arabic business name (Arabic-first copy, v3.5 recompose).
+ *
+ * The prototype `SignInScreen` carries a `ROLE_NAMES` map; we re-declare the
+ * mapping locally (do NOT import prototype code) so the route renders the
+ * operator's role in Arabic. This is purely presentational — it never feeds
+ * auth, which stays IPC-backed (`operator.signIn`).
+ */
+const ROLE_NAME_AR: Readonly<Record<Role, string>> = Object.freeze({
+  cashier: 'صيدلي',
+  manager: 'مدير الصيدلية',
+  admin: 'مشرف',
+});
 
 export function SignInRoute(props: SignInRouteProps): JSX.Element {
   const { operator } = props;
@@ -166,7 +181,7 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   // TakeoverPrompt overlay — rendered when FSM is in takeoverPrompt state.
   if (fsm.kind === 'takeoverPrompt') {
     return (
-      <main data-testid="route-sign-in" className="sign-in-route">
+      <main data-testid="route-sign-in" className="sign-in-route" dir="rtl">
         <TakeoverPrompt operator={operator} pending_takeover_id={fsm.pending_takeover_id} />
       </main>
     );
@@ -179,69 +194,87 @@ export function SignInRoute(props: SignInRouteProps): JSX.Element {
   }));
 
   return (
-    <main data-testid="route-sign-in" className="sign-in-route">
-      <div className="sign-in-route__layout">
-        <section className="sign-in-route__manager-admin">
-          <h1 className="sign-in-route__heading">Sign in</h1>
-          <ManagerAdminSignInForm operator={operator} />
-        </section>
-        <aside className="sign-in-route__roster" aria-label="Cashier roster">
-          <h2 className="sign-in-route__sub-heading">Cashiers on this branch</h2>
-          {rosterError !== undefined && (
-            <p className="sign-in-route__roster-error" role="alert">
-              {rosterError}
-            </p>
-          )}
-          <RosterList
-            cashiers={rosterEntries}
-            inert={cashiers.length === 0}
-            onSelect={handleCashierSelect}
-            selectedId={selectedCashier?.id}
-          />
-          {selectedCashier !== undefined && (
-            <div className="sign-in-route__pin-section" data-testid="pin-section">
-              <p className="sign-in-route__pin-label">
-                Enter PIN for{' '}
-                <strong data-testid="pin-cashier-name">{selectedCashier.display_name}</strong>
+    <main data-testid="route-sign-in" className="sign-in-route" dir="rtl">
+      <div className="sign-in-route__pane sign-in-pane">
+        <header className="sign-in-pane__head">
+          <h1 className="sign-in-pane__title">تسجيل دخول الصيدلي</h1>
+          <p className="sign-in-pane__sub">
+            أدخل كود الموظف ثم الرقم السري المكوّن من ٦ أرقام — كل عمليات الوردية تُسجَّل باسمك.
+            (Staff code, then 6-digit PIN.)
+          </p>
+        </header>
+
+        <div className="sign-in-route__split sign-in-split">
+          <section className="sign-in-route__manager-admin">
+            <p className="sign-in-route__section-label ws-section__label">كود الموظف · Staff code</p>
+            <ManagerAdminSignInForm operator={operator} />
+          </section>
+
+          <aside className="sign-in-route__roster" aria-label="Cashier roster">
+            <h2 className="sign-in-route__sub-heading">صيادلة هذا الفرع · Cashiers on this branch</h2>
+            {rosterError !== undefined && (
+              <p className="sign-in-route__roster-error" role="alert">
+                {rosterError}
               </p>
-
-              <div className="sign-in-route__pin-feedback" role="status" aria-live="polite">
-                {isSigningIn ? (
-                  <span data-testid="cashier-sign-in-spinner">Signing in…</span>
-                ) : cashierError !== undefined ? (
-                  <span
-                    role="alert"
-                    data-testid="cashier-sign-in-error"
-                    className="sign-in-route__pin-error"
-                  >
-                    {cashierError}
-                  </span>
-                ) : null}
-              </div>
-
-              <PinPad
-                value={pin}
-                onChange={handlePinChange}
-                onSubmit={handleCashierSubmit}
-                disabled={isSigningIn}
-              />
-
-              <button
-                type="button"
-                className="sign-in-route__pin-cancel"
-                data-testid="cashier-pin-cancel"
-                disabled={isSigningIn}
-                onClick={() => {
-                  setSelectedCashier(undefined);
-                  setPin('');
-                  setCashierError(undefined);
-                }}
+            )}
+            <RosterList
+              cashiers={rosterEntries}
+              inert={cashiers.length === 0}
+              onSelect={handleCashierSelect}
+              selectedId={selectedCashier?.id}
+            />
+            {selectedCashier !== undefined && (
+              <div
+                className="sign-in-route__pin-section"
+                data-testid="pin-section"
+                data-error={cashierError !== undefined || undefined}
               >
-                Back
-              </button>
-            </div>
-          )}
-        </aside>
+                <p className="sign-in-route__pin-label">
+                  الرقم السري لـ{' '}
+                  <strong data-testid="pin-cashier-name">{selectedCashier.display_name}</strong>{' '}
+                  <span className="sign-in-route__pin-role">
+                    {ROLE_NAME_AR[selectedCashier.role]}
+                  </span>
+                </p>
+
+                <div className="sign-in-route__pin-feedback" role="status" aria-live="polite">
+                  {isSigningIn ? (
+                    <span data-testid="cashier-sign-in-spinner">جارٍ تسجيل الدخول…</span>
+                  ) : cashierError !== undefined ? (
+                    <span
+                      role="alert"
+                      data-testid="cashier-sign-in-error"
+                      className="sign-in-route__pin-error"
+                    >
+                      {cashierError}
+                    </span>
+                  ) : null}
+                </div>
+
+                <PinPad
+                  value={pin}
+                  onChange={handlePinChange}
+                  onSubmit={handleCashierSubmit}
+                  disabled={isSigningIn}
+                />
+
+                <button
+                  type="button"
+                  className="sign-in-route__pin-cancel"
+                  data-testid="cashier-pin-cancel"
+                  disabled={isSigningIn}
+                  onClick={() => {
+                    setSelectedCashier(undefined);
+                    setPin('');
+                    setCashierError(undefined);
+                  }}
+                >
+                  رجوع · Back
+                </button>
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </main>
   );
