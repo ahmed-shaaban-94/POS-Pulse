@@ -212,7 +212,7 @@ export function CashEntry({
               {/* Exact-amount chip */}
               <button
                 type="button"
-                className={`quick-amount-btn quick-amount-btn--label${amountAppliedMinor === remainingBalanceMinor && amountAppliedMinor !== null ? ' quick-amount-btn--selected' : ''}`}
+                className={`quick-amount-btn quick-amount-btn--label${amountAppliedMinor === remainingBalanceMinor ? ' quick-amount-btn--selected' : ''}`}
                 onClick={() => {
                   setRawInput(formatMinorToInput(remainingBalanceMinor));
                   setBridgeRefusal(false);

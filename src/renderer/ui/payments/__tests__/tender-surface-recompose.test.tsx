@@ -23,7 +23,7 @@
  *       (computeChangeDueMinor, which CashEntry already calls)
  */
 
-import { render, screen, cleanup, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 
@@ -34,6 +34,20 @@ import { ExternalCardTerminalEntry } from '../ExternalCardTerminalEntry.js';
 import { VoucherEntry } from '../VoucherEntry.js';
 
 afterEach(cleanup);
+
+/**
+ * Query a single element by CSS selector and narrow it to non-null. `querySelector`
+ * is typed `T | null`; `expect(...).not.toBeNull()` is not a TS type guard, so this
+ * helper throws (narrowing the return) instead of using a non-null assertion
+ * (`@typescript-eslint/no-non-null-assertion` forbids `el!`).
+ */
+function queryOrThrow(selector: string): HTMLElement {
+  const el = document.querySelector<HTMLElement>(selector);
+  if (el === null) {
+    throw new Error(`expected an element matching "${selector}", found none`);
+  }
+  return el;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,10 +135,9 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
 
   it('amount-due-card label contains Arabic copy for "amount due"', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const label = document.querySelector('.amount-due-card__label');
-    expect(label).not.toBeNull();
+    const label = queryOrThrow('.amount-due-card__label');
     // Must contain Arabic text — المطلوب or similar prototype copy
-    expect(label!.textContent).toMatch(/[ا-ي]/);
+    expect(label.textContent).toMatch(/[ا-ي]/);
   });
 
   it('renders tender-slots container with a tender-row for cash input', () => {
@@ -155,7 +168,7 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
     // dir="ltr" mono money values. The next banknote roll-up above 12.30 is
     // 50.00 (¤5000 minor) — it must appear as a chip value.
     const chipText = Array.from(chips)
-      .map((c) => c.textContent ?? '')
+      .map((c) => c.textContent)
       .join(' ');
     expect(chipText).toContain('بالضبط');
     expect(chipText).toContain('50.00');
@@ -191,22 +204,20 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
 
   it('quick-amount-btn--label chip (exact-change shortcut) is rendered', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const exactBtn = document.querySelector('.quick-amount-btn--label');
-    expect(exactBtn).toBeInTheDocument();
+    const exactBtn = queryOrThrow('.quick-amount-btn--label');
     // Must contain Arabic "بالضبط" (exact) label
-    expect(exactBtn!.textContent).toMatch(/[ا-ي]/);
+    expect(exactBtn.textContent).toMatch(/[ا-ي]/);
   });
 
   it('clicking the exact (بالضبط) chip fills the amount input with the exact balance', () => {
     render(<CashEntry remainingBalanceMinor={5000} />);
-    const exactBtn = document.querySelector<HTMLButtonElement>('.quick-amount-btn--label');
-    expect(exactBtn).not.toBeNull();
-    fireEvent.click(exactBtn!);
+    const exactBtn = queryOrThrow('.quick-amount-btn--label');
+    fireEvent.click(exactBtn);
     // 5000 minor → "50.00" currency string (formatMinorToInput round-trip).
     expect(screen.getByTestId('cash-entry-amount-input')).toHaveValue('50.00');
     // Once the exact amount is entered, the chip carries the --selected modifier
     // (space-delimited token alongside --label, not a concatenated class).
-    expect(exactBtn!.className).toContain('quick-amount-btn--selected');
+    expect(exactBtn.className).toContain('quick-amount-btn--selected');
   });
 
   it('clicking a rounded-banknote suggestion chip fills the input with that amount', () => {
@@ -214,12 +225,14 @@ describe('CashEntry — v3.5 visual recompose (amount-due-card, tender-rows)', (
     // The first suggestion chip above the exact 12.30 is 50.00 (¤5000 roll-up).
     const suggestionChip = Array.from(
       document.querySelectorAll<HTMLButtonElement>('.quick-amount-btn'),
-    ).find((c) => !c.className.includes('--label') && (c.textContent ?? '').includes('50.00'));
-    expect(suggestionChip).toBeDefined();
-    fireEvent.click(suggestionChip!);
+    ).find((c) => !c.className.includes('--label') && c.textContent.includes('50.00'));
+    if (suggestionChip === undefined) {
+      throw new Error('expected a rounded-banknote suggestion chip showing 50.00');
+    }
+    fireEvent.click(suggestionChip);
     expect(screen.getByTestId('cash-entry-amount-input')).toHaveValue('50.00');
     // The clicked suggestion now carries the --selected modifier.
-    expect(suggestionChip!.className).toContain('quick-amount-btn--selected');
+    expect(suggestionChip.className).toContain('quick-amount-btn--selected');
   });
 });
 
@@ -244,18 +257,16 @@ describe('ExternalCardTerminalEntry — v3.5 visual recompose (card tender-slots
 
   it('card instruction row uses tender-row__body for the instructional text', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    const body = document.querySelector('.tender-row__body');
-    expect(body).toBeInTheDocument();
+    const body = queryOrThrow('.tender-row__body');
     // Must contain Arabic instruction copy
-    expect(body!.textContent).toMatch(/[ا-ي]/);
+    expect(body.textContent).toMatch(/[ا-ي]/);
   });
 
   it('card totals row (tender-row--totals) shows the amount in a dir=ltr mono span', () => {
     render(<ExternalCardTerminalEntry remainingBalanceMinor={5000} />);
-    const totalsRow = document.querySelector('.tender-row--totals');
-    expect(totalsRow).toBeInTheDocument();
+    const totalsRow = queryOrThrow('.tender-row--totals');
     // The value span must be dir="ltr"
-    const value = totalsRow!.querySelector('[dir="ltr"]');
+    const value = totalsRow.querySelector('[dir="ltr"]');
     expect(value).toBeInTheDocument();
   });
 });
