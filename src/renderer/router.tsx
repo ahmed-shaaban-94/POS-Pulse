@@ -13,6 +13,8 @@ import { AppShell } from './shell/AppShell';
 import { DashboardRoute } from './routes/app/DashboardRoute';
 import { SalesPlaceholder } from './routes/app/SalesPlaceholder';
 import { CartPlaceholder } from './routes/app/CartPlaceholder';
+import { ReturnsPlaceholder } from './routes/app/ReturnsPlaceholder';
+import { AuditPlaceholder } from './routes/app/AuditPlaceholder';
 import { InventoryPlaceholder } from './routes/app/InventoryPlaceholder';
 import { CatalogueDiagnostics } from './routes/app/CatalogueDiagnostics';
 import { SettingsHelpPlaceholder } from './routes/app/SettingsHelpPlaceholder';
@@ -175,6 +177,11 @@ export function AppRouter(props: AppRouterProps): JSX.Element {
         { path: 'sales', element: <SalesPlaceholder /> },
         { path: 'cart', element: <CartPlaceholder /> },
         { path: 'checkout', element: <CheckoutRoute /> },
+        // POS v3.5 Slice 1 — new nav entries route to thin "coming soon"
+        // placeholders. Returns is Phase-7 blocked; Audit is a later display
+        // slice. Both are navigation-only (no data, no IPC).
+        { path: 'returns', element: <ReturnsPlaceholder /> },
+        { path: 'audit', element: <AuditPlaceholder /> },
         { path: 'inventory', element: <InventoryPlaceholder /> },
         { path: 'inventory/diagnostics', element: <CatalogueDiagnostics /> },
         { path: 'settings', element: <SettingsHelpPlaceholder /> },

@@ -62,7 +62,7 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
 
   if (tier === 'too-small') {
     return (
-      <div className="app-shell" data-testid="app-shell">
+      <div className="app-shell" data-testid="app-shell" dir="rtl">
         <TopBar
           tenantId={tenantId}
           branchId={branchId}
@@ -75,7 +75,10 @@ export function AppShell({ pairedStatus }: AppShellProps): JSX.Element {
   }
 
   return (
-    <div className="app-shell" data-testid="app-shell">
+    // POS v3.5 Slice 1: the whole terminal shell is RTL (Arabic-first). IDs,
+    // SKUs, money and mono identifiers re-isolate to dir="ltr" inside their own
+    // child components (IdentityStrip terminal chip, etc.), not here.
+    <div className="app-shell" data-testid="app-shell" dir="rtl">
       <TopBar
         tenantId={tenantId}
         branchId={branchId}

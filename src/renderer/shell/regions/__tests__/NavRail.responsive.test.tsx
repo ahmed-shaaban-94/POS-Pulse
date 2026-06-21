@@ -36,14 +36,16 @@ function mockMatchMedia(width: number): void {
  * T046 — NavRail responsive matrix.
  */
 describe('NavRail responsive (T046)', () => {
-  it('≥1280px: shows label text (expanded)', () => {
+  it('≥1280px: shows Arabic label text + English accessible name (expanded)', () => {
     mockMatchMedia(1280);
     render(
       <MemoryRouter>
         <NavRail />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Dashboard')).toBeVisible();
+    // POS v3.5: Arabic is the visible label; English is the accessible name.
+    expect(screen.getByText('لوحة المتابعة')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
   it('1024–1279px: aria-label on links (icon-only)', () => {

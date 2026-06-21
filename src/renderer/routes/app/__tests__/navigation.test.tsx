@@ -67,10 +67,13 @@ describe('navigation test (T038)', () => {
     );
   });
 
-  it('clicking Cart nav entry shows CartPlaceholder', async () => {
+  it('clicking the Sale (cart) nav entry shows CartPlaceholder', async () => {
+    // POS v3.5: the cart entry's English accessible name is "Sale" (Arabic
+    // visible label "نقطة البيع"); it still routes to /app/cart → CartPlaceholder
+    // whose Workspace heading remains "Cart".
     const user = userEvent.setup();
     renderApp();
-    await user.click(screen.getByRole('link', { name: 'Cart' }));
+    await user.click(screen.getByRole('link', { name: 'Sale' }));
     await waitFor(() => expect(screen.getByRole('heading', { name: /cart/i })).toBeInTheDocument());
   });
 

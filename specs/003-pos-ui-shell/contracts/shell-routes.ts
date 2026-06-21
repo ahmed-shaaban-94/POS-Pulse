@@ -29,40 +29,60 @@
 
 export type ShellRoutePath =
   | '/app/dashboard'
-  | '/app/sales'
   | '/app/cart'
-  | '/app/checkout'
+  | '/app/sales'
+  | '/app/returns'
+  | '/app/audit'
   | '/app/inventory'
   | '/app/settings';
 
 export type ShellNavEntryId =
   | 'dashboard'
-  | 'sales'
   | 'cart'
-  | 'receipts'
+  | 'sales'
+  | 'returns'
+  | 'audit'
   | 'inventory'
   | 'settings';
 
 export interface ShellNavEntry {
   readonly id: ShellNavEntryId;
   readonly path: ShellRoutePath;
-  /** Accessible name in BOTH expanded and icon-only rail modes. */
+  /**
+   * POS v3.5: the Arabic-first VISIBLE label. The rail renders this as the
+   * visible `.nav-rail__label` text (Arabic-first terminal copy).
+   */
   readonly label: string;
+  /**
+   * English name. Used as the link's accessible name in BOTH expanded and
+   * icon-only rail modes (language-stable for screen readers + tests), while
+   * the operator sees the Arabic `label`.
+   */
+  readonly labelEn: string;
   /** Stable icon identifier — concrete icon component decided in Phase 2. */
-  readonly iconKey: 'dashboard' | 'sales' | 'cart' | 'receipt' | 'inventory' | 'settings';
+  readonly iconKey:
+    | 'dashboard'
+    | 'cart'
+    | 'sales'
+    | 'returns'
+    | 'audit'
+    | 'inventory'
+    | 'settings';
 }
 
 /**
- * Fixed display order. NavRail iterates this constant; tests assert array length === 6 and that
- * each `path` is reachable from the router.
+ * Fixed display order (POS v3.5 `POS_NAV`). NavRail iterates this constant; tests assert array
+ * length === 7 and that each `path` is reachable from the router. `returns` is Phase-7 blocked and
+ * `audit` is a later display slice — both route to thin "coming soon" placeholders for now.
  */
 export const shellNavEntries: ReadonlyArray<ShellNavEntry> = [
-  { id: 'dashboard', path: '/app/dashboard', label: 'Dashboard',          iconKey: 'dashboard' },
-  { id: 'sales',     path: '/app/sales',     label: 'Sales',              iconKey: 'sales'     },
-  { id: 'cart',      path: '/app/cart',      label: 'Cart',               iconKey: 'cart'      },
-  { id: 'receipts',  path: '/app/checkout',  label: 'Receipts / Checkout', iconKey: 'receipt'  },
-  { id: 'inventory', path: '/app/inventory', label: 'Inventory',          iconKey: 'inventory' },
-  { id: 'settings',  path: '/app/settings',  label: 'Settings / Help',    iconKey: 'settings'  },
+  { id: 'dashboard', path: '/app/dashboard', label: 'لوحة المتابعة', labelEn: 'Dashboard', iconKey: 'dashboard' },
+  { id: 'cart',      path: '/app/cart',      label: 'نقطة البيع',    labelEn: 'Sale',      iconKey: 'cart'      },
+  { id: 'sales',     path: '/app/sales',     label: 'المبيعات',      labelEn: 'Sales',     iconKey: 'sales'     },
+  { id: 'returns',   path: '/app/returns',   label: 'المرتجعات',     labelEn: 'Returns',   iconKey: 'returns'   },
+  { id: 'audit',     path: '/app/audit',     label: 'سجل المراجعة',  labelEn: 'Audit',     iconKey: 'audit'     },
+  { id: 'inventory', path: '/app/inventory', label: 'المخزون',       labelEn: 'Inventory', iconKey: 'inventory' },
+  { id: 'settings',  path: '/app/settings',  label: 'الإعدادات',     labelEn: 'Settings',  iconKey: 'settings'  },
 ] as const;
 
 /* ────────────────────────────────────────────────────────────────────────── */
@@ -189,8 +209,9 @@ export type ReservedSlotProps = {
  *  - `placeholders.test.tsx` (parametrised) — for each entry × each `PaneStateVariant`, the
  *    `?state=…` search param renders the matching state and triggers no fetch / IPC / persistence
  *    call.
- *  - `NavRail.test.tsx` — `shellNavEntries.length === 6`; the order is the documented order;
- *    each entry's accessible name equals its `label` in both expanded and icon-only rail modes.
+ *  - `NavRail.test.tsx` — `shellNavEntries.length === 7` (POS v3.5 `POS_NAV`); the order is the
+ *    documented order; the Arabic `label` is the visible text and the English `labelEn` is the
+ *    link's accessible name in both expanded and icon-only rail modes.
  *  - `useViewportTier.test.ts` — boundary widths (1024, 1279, 1280, 1920) map to the documented
  *    tier.
  *  - `useConnectionState.test.ts` — `ConnectionState` enum has exactly four members; default

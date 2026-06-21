@@ -52,4 +52,9 @@ describe('AppShell (T032)', () => {
     renderShell();
     expect(screen.getByTestId('app-shell')).toBeInTheDocument();
   });
+
+  it('app-shell root is RTL (POS v3.5 Arabic-first terminal)', () => {
+    renderShell();
+    expect(screen.getByTestId('app-shell')).toHaveAttribute('dir', 'rtl');
+  });
 });
