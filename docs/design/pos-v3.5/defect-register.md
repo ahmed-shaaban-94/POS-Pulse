@@ -7,7 +7,7 @@ and STOP at the architecture boundary — never fixed unilaterally.
 
 | id | slice | screen / area | description | evidence (file:line) | severity | class (internal\|contract) | status (open\|fixed-with-test\|escalated) |
 |----|-------|---------------|-------------|----------------------|----------|----------------------------|-------------------------------------------|
-| _none yet_ | | | | | | | |
+| D-001 | Phase 0 | integration / route-guard test | Flaky test: `cashier-route-enumeration.test.tsx` fails intermittently (2/22 then 22/22 pass with no code change). Pre-existing (introduced PR #398, commit 424a424); touches 0 CSS — unrelated to convergence work. Non-deterministic route-guard `data-testid` assertions. | `tests/integration/renderer/cashier-route-enumeration.test.tsx` | low | internal | open (deferred — out of slice scope; flagged for separate look) |
 
 ## Primitive API baseline (Task 2)
 
