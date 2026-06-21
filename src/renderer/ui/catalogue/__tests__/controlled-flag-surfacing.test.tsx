@@ -88,3 +88,23 @@ describe('SearchResultRow — controlled/Rx surfacing (C1)', () => {
     expect(screen.queryByTestId('flag-prescription-required')).not.toBeInTheDocument();
   });
 });
+
+describe('SearchResultRow — LTR-isolated numerics under RTL shell (PR #434 FIX 3)', () => {
+  function renderRow(p: ProductSnapshotDisplay) {
+    return render(<SearchResultRow product={p} id="opt-1" active={false} onSelect={vi.fn()} />);
+  }
+
+  it('the price span is dir="ltr" (money is Latin/mono — must not bidi-reorder)', () => {
+    const { container } = renderRow(product({ price_minor: 12345 }));
+    const price = container.querySelector('.catalogue-result-row__price');
+    expect(price).not.toBeNull();
+    expect(price).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('the code (barcode/SKU) span is dir="ltr" (Latin/mono — must not bidi-reorder)', () => {
+    const { container } = renderRow(product({ selling_barcode: '6224000123456' }));
+    const code = container.querySelector('.catalogue-result-row__code');
+    expect(code).not.toBeNull();
+    expect(code).toHaveAttribute('dir', 'ltr');
+  });
+});

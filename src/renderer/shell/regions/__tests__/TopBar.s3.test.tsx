@@ -2,7 +2,7 @@
  * T057 [S3] — TopBar S3 restyle assertions.
  *
  * Covers:
- * - SmartDataPulse wordmark present in left cluster
+ * - POS Pulse wordmark present in left cluster
  * - Left cluster (.top-bar__left) and right cluster (.top-bar__right)
  * - IdentityStrip inside left cluster
  * - ConnectionIndicator + OperatorSlot in right cluster
@@ -35,12 +35,12 @@ function renderTopBar(connectionState: ConnectionState = 'online') {
 }
 
 describe('TopBar S3 restyle (T057)', () => {
-  it('renders SmartDataPulse wordmark in left cluster', () => {
+  it('renders POS Pulse wordmark in left cluster', () => {
     const { container } = renderTopBar();
     const left = container.querySelector('.top-bar__left');
     expect(left).toBeInTheDocument();
     expect(left?.querySelector('.top-bar__wordmark')).toBeInTheDocument();
-    expect(screen.getByText('SmartDataPulse')).toBeInTheDocument();
+    expect(screen.getByText('POS Pulse')).toBeInTheDocument();
   });
 
   it('renders IdentityStrip inside left cluster', () => {
@@ -74,6 +74,21 @@ describe('TopBar S3 restyle (T057)', () => {
     expect(container.querySelector('[data-state="degraded"]')).toBeInTheDocument();
   });
 
+  it('connection banner copy is Arabic-first (POS v3.5)', () => {
+    // degraded → amber "الاتصال بطيء — Connection slow"
+    expect(renderTopBar('degraded').container.textContent).toContain(
+      'الاتصال بطيء — Connection slow',
+    );
+    cleanup();
+    // offline → red "غير متصل — البيع من قائمة الانتظار المحلية"
+    expect(renderTopBar('offline').container.textContent).toContain(
+      'غير متصل — البيع من قائمة الانتظار المحلية',
+    );
+    cleanup();
+    // syncing → teal "جارٍ المزامنة…"
+    expect(renderTopBar('syncing').container.textContent).toContain('جارٍ المزامنة…');
+  });
+
   it('no device_token visible in DOM', () => {
     const { container } = renderTopBar();
     const text = container.textContent;
@@ -83,7 +98,7 @@ describe('TopBar S3 restyle (T057)', () => {
 
   it('wordmark has accessible label', () => {
     renderTopBar();
-    const wordmark = screen.getByLabelText('SmartDataPulse');
+    const wordmark = screen.getByLabelText('POS Pulse');
     expect(wordmark).toBeInTheDocument();
   });
 

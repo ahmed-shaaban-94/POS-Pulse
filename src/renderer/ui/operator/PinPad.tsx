@@ -102,7 +102,7 @@ export function PinPad(props: PinPadProps): JSX.Element {
         {dots}
       </div>
 
-      <div className="pin-pad__grid" role="group" aria-label="PIN entry">
+      <div className="pin-pad__grid" role="group" aria-label="PIN entry" dir="ltr">
         {DIGIT_KEYS.map((key, idx) => {
           if (key === '⌫') {
             return (

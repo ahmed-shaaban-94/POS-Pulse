@@ -39,3 +39,9 @@ scripts/openapi-snapshot.json
 # keeps the lint job green without a churny full-file reformat that could
 # re-break on the next edit.
 docs/architecture/pos-pulse-live-map.html
+
+# Vendored POS v3.5 design handoff — a design REFERENCE committed verbatim
+# (prototype HTML/JSX/CSS + assets). It is the authoritative spec we measure
+# against; Prettier must never reformat it (that would corrupt the design
+# source). Same rationale as `_reference/` and `src/shared/api-types.ts` above.
+docs/design/

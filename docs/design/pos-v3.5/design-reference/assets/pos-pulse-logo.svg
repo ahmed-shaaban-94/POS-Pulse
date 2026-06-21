@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="POS-Pulse logo: point-of-sale terminal in blue">
+  <title>POS-Pulse</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e3a8a"></stop><stop offset="1" stop-color="#0b1c52"></stop>
+    </linearGradient>
+    <linearGradient id="hi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop>
+    </linearGradient>
+    <radialGradient id="gl" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#60a5fa" stop-opacity="0.55"></stop><stop offset="1" stop-color="#60a5fa" stop-opacity="0"></stop>
+    </radialGradient>
+    <linearGradient id="chrome" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"></stop><stop offset="1" stop-color="#cbd5e1" stop-opacity="0.78"></stop>
+    </linearGradient>
+    <filter id="ds" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.45"></feDropShadow>
+    </filter>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="54" fill="url(#bg)" filter="url(#ds)"></rect>
+  <rect x="16" y="16" width="224" height="120" rx="54" fill="url(#hi)"></rect>
+  <circle cx="128" cy="130" r="78" fill="url(#gl)"></circle>
+  <g transform="translate(78,80)" fill="url(#chrome)">
+    <rect x="0" y="0" width="100" height="64" rx="9" fill="#0b1c52" stroke="url(#chrome)" stroke-width="3"></rect>
+    <rect x="11" y="11" width="78" height="34" rx="4" fill="#60a5fa" opacity="0.9"></rect>
+    <rect x="40" y="64" width="20" height="18" fill="url(#chrome)"></rect>
+    <rect x="18" y="82" width="64" height="12" rx="5"></rect>
+  </g>
+  <rect x="16.5" y="16.5" width="223" height="223" rx="53.5" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="2"></rect>
+</svg>

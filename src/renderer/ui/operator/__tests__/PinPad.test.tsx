@@ -60,6 +60,16 @@ describe('PinPad — rendering', () => {
     expect(dots).toHaveLength(PIN_MAX_LENGTH);
   });
 
+  it('PR #434 FIX 3: keypad grid is LTR-isolated (dir="ltr") under an RTL shell', () => {
+    // The app shell root is dir="rtl"; the 1-2-3 / 4-5-6 / 7-8-9 / ⌫-0-↵ keypad
+    // must auto-place left-to-right regardless of inherited direction, else the
+    // grid mirrors. dir is a standard HTML attribute, not a new component prop.
+    const { container } = renderPinPad();
+    const grid = container.querySelector('.pin-pad__grid');
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveAttribute('dir', 'ltr');
+  });
+
   it('PR-1: PIN value is never rendered as plaintext in the dot region', () => {
     // The dot region must show ONLY data-state markers — no digit text.
     // Digit buttons render their label (0–9) as accessible text — that's
