@@ -239,7 +239,6 @@ function registerSignInHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
       }
     },
   );
-
 }
 
 function registerSessionHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
@@ -322,6 +321,10 @@ function registerAuditHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
       }
     },
   );
+}
+
+function registerAuditSmokeHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { sessionManager, pairingStore, auditEmitter } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE,
@@ -364,7 +367,6 @@ function registerAuditHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): voi
       }
     },
   );
-
 }
 
 function registerRosterHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
@@ -412,7 +414,6 @@ function registerTakeoverHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): 
       return takeoverHandler.cancelTakeover(req);
     },
   );
-
 }
 
 function registerPinManagementHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
@@ -465,7 +466,6 @@ function registerPinManagementHandlers(ipcMain: IpcMain, deps: OperatorHandlerDe
       }
     },
   );
-
 }
 
 function registerShiftAdminHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
@@ -503,6 +503,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   registerSignInHandler(ipcMain, deps);
   registerSessionHandlers(ipcMain, deps);
   registerAuditHandlers(ipcMain, deps);
+  registerAuditSmokeHandler(ipcMain, deps);
   registerRosterHandler(ipcMain, deps);
   registerTakeoverHandlers(ipcMain, deps);
   registerPinManagementHandlers(ipcMain, deps);

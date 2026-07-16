@@ -267,7 +267,11 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
 
   return {
     signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse> {
-      return fetchAndInterpret(`${root}${SIGN_IN_PATH}`, jsonPost(jwt, req), interpretSignInResponse);
+      return fetchAndInterpret(
+        `${root}${SIGN_IN_PATH}`,
+        jsonPost(jwt, req),
+        interpretSignInResponse,
+      );
     },
 
     async signOut(req: BackendSignOutRequest, jwt: string): Promise<BackendSignOutResponse> {
@@ -303,10 +307,7 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
       );
     },
 
-    getActiveSession(
-      operatorId: string,
-      branchId: string,
-    ): Promise<BackendActiveSessionResponse> {
+    getActiveSession(operatorId: string, branchId: string): Promise<BackendActiveSessionResponse> {
       return fetchAndInterpret(
         `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}&branch_id=${encodeURIComponent(branchId)}`,
         { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
@@ -330,29 +331,24 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
 
 // ─── Response interpreters ────────────────────────────────────────────────────
 
+/** Operator-summary fields that must all be strings (allowlist). */
+const OPERATOR_STRING_FIELDS = ['id', 'user_id', 'display_name', 'tenant_id', 'branch_id'];
+
 /** Allowlist-parse the operator summary; null on any shape miss. */
 function parseOperatorSummary(
   op: Record<string, unknown> | undefined,
 ): BackendSignInOperator | null {
   if (op === undefined) return null;
-  if (
-    typeof op['id'] !== 'string' ||
-    typeof op['user_id'] !== 'string' ||
-    typeof op['display_name'] !== 'string' ||
-    typeof op['tenant_id'] !== 'string' ||
-    typeof op['branch_id'] !== 'string'
-  ) {
-    return null;
-  }
+  if (!OPERATOR_STRING_FIELDS.every((f) => typeof op[f] === 'string')) return null;
   const role = op['role'];
   if (role !== 'cashier' && role !== 'manager' && role !== 'admin') return null;
   return {
-    id: op['id'],
-    user_id: op['user_id'],
-    display_name: op['display_name'],
+    id: op['id'] as string,
+    user_id: op['user_id'] as string,
+    display_name: op['display_name'] as string,
     role,
-    tenant_id: op['tenant_id'],
-    branch_id: op['branch_id'],
+    tenant_id: op['tenant_id'] as string,
+    branch_id: op['branch_id'] as string,
   };
 }
 
