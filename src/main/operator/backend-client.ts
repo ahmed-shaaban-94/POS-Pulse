@@ -229,44 +229,51 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const root = baseUrl.replace(/\/$/, '');
 
+  /**
+   * Shared request skeleton (resolve-on-reachable / reject-only-on-transport):
+   * transport error → no_connection; non-2xx → refused (PR-2 failure-mode
+   * collapse); unparseable JSON body → refused; else the endpoint interpreter.
+   */
+  async function fetchAndInterpret<T>(
+    url: string,
+    init: RequestInit,
+    interpret: (parsed: unknown) => T,
+  ): Promise<T | { kind: 'refused' } | { kind: 'no_connection' }> {
+    let response: Response;
+    try {
+      response = await fetchImpl(url, init);
+    } catch {
+      return { kind: 'no_connection' };
+    }
+    if (!response.ok) return { kind: 'refused' };
+    let parsed: unknown;
+    try {
+      parsed = (await response.json()) as unknown;
+    } catch {
+      return { kind: 'refused' };
+    }
+    return interpret(parsed);
+  }
+
+  const jsonPost = (jwt: string, body: unknown): RequestInit => ({
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${jwt}`,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
   return {
-    async signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse> {
-      let response: Response;
-      try {
-        response = await fetchImpl(`${root}${SIGN_IN_PATH}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${jwt}`,
-          },
-          body: JSON.stringify(req),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch {
-        return { kind: 'no_connection' };
-      }
-      if (!response.ok) return { kind: 'refused' };
-      let parsed: unknown;
-      try {
-        parsed = (await response.json()) as unknown;
-      } catch {
-        return { kind: 'refused' };
-      }
-      return interpretSignInResponse(parsed);
+    signIn(req: BackendSignInRequest, jwt: string): Promise<BackendSignInResponse> {
+      return fetchAndInterpret(`${root}${SIGN_IN_PATH}`, jsonPost(jwt, req), interpretSignInResponse);
     },
 
     async signOut(req: BackendSignOutRequest, jwt: string): Promise<BackendSignOutResponse> {
       let response: Response;
       try {
-        response = await fetchImpl(`${root}${SIGN_OUT_PATH}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${jwt}`,
-          },
-          body: JSON.stringify(req),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
+        response = await fetchImpl(`${root}${SIGN_OUT_PATH}`, jsonPost(jwt, req));
       } catch {
         return { kind: 'no_connection' };
       }
@@ -277,126 +284,89 @@ export function createBackendClient(deps: CreateBackendClientDeps): BackendClien
       return { kind: 'signed_out' };
     },
 
-    async listRoster(branchId: string): Promise<BackendRosterResponse> {
-      let response: Response;
-      try {
-        response = await fetchImpl(
-          `${root}${ROSTER_PATH}?branch_id=${encodeURIComponent(branchId)}`,
-          { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
-        );
-      } catch {
-        return { kind: 'no_connection' };
-      }
-      if (!response.ok) return { kind: 'refused' };
-      let parsed: unknown;
-      try {
-        parsed = (await response.json()) as unknown;
-      } catch {
-        return { kind: 'refused' };
-      }
-      return interpretRosterResponse(parsed);
+    listRoster(branchId: string): Promise<BackendRosterResponse> {
+      return fetchAndInterpret(
+        `${root}${ROSTER_PATH}?branch_id=${encodeURIComponent(branchId)}`,
+        { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
+        interpretRosterResponse,
+      );
     },
 
-    async confirmTakeover(
+    confirmTakeover(
       req: BackendTakeoverConfirmRequest,
       jwt: string,
     ): Promise<BackendTakeoverConfirmResponse> {
-      let response: Response;
-      try {
-        response = await fetchImpl(`${root}${TAKEOVER_CONFIRM_PATH}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${jwt}`,
-          },
-          body: JSON.stringify(req),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-      } catch {
-        return { kind: 'no_connection' };
-      }
-      if (!response.ok) return { kind: 'refused' };
-      let parsed: unknown;
-      try {
-        parsed = (await response.json()) as unknown;
-      } catch {
-        return { kind: 'refused' };
-      }
-      return interpretTakeoverConfirmResponse(parsed);
+      return fetchAndInterpret(
+        `${root}${TAKEOVER_CONFIRM_PATH}`,
+        jsonPost(jwt, req),
+        interpretTakeoverConfirmResponse,
+      );
     },
 
-    async getActiveSession(
+    getActiveSession(
       operatorId: string,
       branchId: string,
     ): Promise<BackendActiveSessionResponse> {
-      let response: Response;
-      try {
-        response = await fetchImpl(
-          `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}&branch_id=${encodeURIComponent(branchId)}`,
-          { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
-        );
-      } catch {
-        return { kind: 'no_connection' };
-      }
-      if (!response.ok) return { kind: 'refused' };
-      let parsed: unknown;
-      try {
-        parsed = (await response.json()) as unknown;
-      } catch {
-        return { kind: 'refused' };
-      }
-      return interpretActiveSessionResponse(parsed);
+      return fetchAndInterpret(
+        `${root}${ACTIVE_SESSION_PATH}?operator_id=${encodeURIComponent(operatorId)}&branch_id=${encodeURIComponent(branchId)}`,
+        { method: 'GET', signal: AbortSignal.timeout(timeoutMs) },
+        interpretActiveSessionResponse,
+      );
     },
 
-    async getStuckShifts(branchId: string, jwt: string): Promise<BackendStuckShiftsResponse> {
-      let response: Response;
-      try {
-        response = await fetchImpl(
-          `${root}${STUCK_SHIFTS_PATH}?branch_id=${encodeURIComponent(branchId)}`,
-          {
-            method: 'GET',
-            headers: { Authorization: `Bearer ${jwt}` },
-            signal: AbortSignal.timeout(timeoutMs),
-          },
-        );
-      } catch {
-        return { kind: 'no_connection' };
-      }
-      if (!response.ok) return { kind: 'refused' };
-      let parsed: unknown;
-      try {
-        parsed = (await response.json()) as unknown;
-      } catch {
-        return { kind: 'refused' };
-      }
-      return interpretStuckShiftsResponse(parsed);
+    getStuckShifts(branchId: string, jwt: string): Promise<BackendStuckShiftsResponse> {
+      return fetchAndInterpret(
+        `${root}${STUCK_SHIFTS_PATH}?branch_id=${encodeURIComponent(branchId)}`,
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${jwt}` },
+          signal: AbortSignal.timeout(timeoutMs),
+        },
+        interpretStuckShiftsResponse,
+      );
     },
   };
 }
 
 // ─── Response interpreters ────────────────────────────────────────────────────
 
+/** Allowlist-parse the operator summary; null on any shape miss. */
+function parseOperatorSummary(
+  op: Record<string, unknown> | undefined,
+): BackendSignInOperator | null {
+  if (op === undefined) return null;
+  if (
+    typeof op['id'] !== 'string' ||
+    typeof op['user_id'] !== 'string' ||
+    typeof op['display_name'] !== 'string' ||
+    typeof op['tenant_id'] !== 'string' ||
+    typeof op['branch_id'] !== 'string'
+  ) {
+    return null;
+  }
+  const role = op['role'];
+  if (role !== 'cashier' && role !== 'manager' && role !== 'admin') return null;
+  return {
+    id: op['id'],
+    user_id: op['user_id'],
+    display_name: op['display_name'],
+    role,
+    tenant_id: op['tenant_id'],
+    branch_id: op['branch_id'],
+  };
+}
+
 function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
   const v = parsed as Record<string, unknown>;
   if (v['kind'] === 'takeover_required') return { kind: 'takeover_required' };
   if (v['kind'] !== 'signed_in') return { kind: 'refused' };
-  const op = v['operator'] as Record<string, unknown> | undefined;
+
+  const operator = parseOperatorSummary(v['operator'] as Record<string, unknown> | undefined);
+  if (operator === null) return { kind: 'refused' };
+
   const sess = v['operator_session'] as Record<string, unknown> | undefined;
-  if (op === undefined || sess === undefined) return { kind: 'refused' };
-  if (
-    typeof op['id'] !== 'string' ||
-    typeof op['user_id'] !== 'string' ||
-    typeof op['display_name'] !== 'string' ||
-    typeof op['role'] !== 'string' ||
-    typeof op['tenant_id'] !== 'string' ||
-    typeof op['branch_id'] !== 'string'
-  ) {
-    return { kind: 'refused' };
-  }
-  if (op['role'] !== 'cashier' && op['role'] !== 'manager' && op['role'] !== 'admin') {
-    return { kind: 'refused' };
-  }
+  if (sess === undefined) return { kind: 'refused' };
   if (typeof sess['id'] !== 'string' || typeof sess['issued_at'] !== 'string') {
     return { kind: 'refused' };
   }
@@ -419,14 +389,7 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   }
   return {
     kind: 'signed_in',
-    operator: {
-      id: op['id'],
-      user_id: op['user_id'],
-      display_name: op['display_name'],
-      role: op['role'],
-      tenant_id: op['tenant_id'],
-      branch_id: op['branch_id'],
-    },
+    operator,
     operator_session: {
       id: sess['id'],
       issued_at: sess['issued_at'],
@@ -437,27 +400,36 @@ function interpretSignInResponse(parsed: unknown): BackendSignInResponse {
   };
 }
 
+/**
+ * Allowlist-parse one roster entry; null on any shape miss. Allowlist: id,
+ * display_name, role, and the OPTIONAL 019 user_id — every other field
+ * (email/phone/password_hash/…) is stripped by construction. user_id is
+ * threaded only when the backend actually supplies it (string); absent →
+ * omitted, so pre-DP-2 entries stay {id, display_name, role}.
+ */
+function parseRosterCashier(entry: unknown): BackendRosterCashier | null {
+  if (typeof entry !== 'object' || entry === null) return null;
+  const e = entry as Record<string, unknown>;
+  if (typeof e['id'] !== 'string') return null;
+  if (typeof e['display_name'] !== 'string') return null;
+  if (e['role'] !== 'cashier') return null;
+  const cashier: BackendRosterCashier = {
+    id: e['id'],
+    display_name: e['display_name'],
+    role: 'cashier',
+  };
+  if (typeof e['user_id'] === 'string') cashier.user_id = e['user_id'];
+  return cashier;
+}
+
 function interpretRosterResponse(parsed: unknown): BackendRosterResponse {
   if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
   const v = parsed as Record<string, unknown>;
   if (!Array.isArray(v['cashiers'])) return { kind: 'refused' };
   const cashiers: BackendRosterCashier[] = [];
   for (const entry of v['cashiers']) {
-    if (typeof entry !== 'object' || entry === null) return { kind: 'refused' };
-    const e = entry as Record<string, unknown>;
-    if (typeof e['id'] !== 'string') return { kind: 'refused' };
-    if (typeof e['display_name'] !== 'string') return { kind: 'refused' };
-    if (e['role'] !== 'cashier') return { kind: 'refused' };
-    // Allowlist: id, display_name, role, and the OPTIONAL 019 user_id — every
-    // other field (email/phone/password_hash/…) is stripped by construction.
-    // user_id is threaded only when the backend actually supplies it (string);
-    // absent → omitted, so pre-DP-2 entries stay {id, display_name, role}.
-    const cashier: BackendRosterCashier = {
-      id: e['id'],
-      display_name: e['display_name'],
-      role: 'cashier',
-    };
-    if (typeof e['user_id'] === 'string') cashier.user_id = e['user_id'];
+    const cashier = parseRosterCashier(entry);
+    if (cashier === null) return { kind: 'refused' };
     cashiers.push(cashier);
   }
   return { kind: 'roster', cashiers };
@@ -478,6 +450,27 @@ function interpretActiveSessionResponse(parsed: unknown): BackendActiveSessionRe
   return { kind: 'refused' };
 }
 
+/**
+ * Allowlist-parse one stuck-shift row; null on any shape miss. Only the five
+ * documented fields cross this layer (FR-032).
+ */
+function parseStuckShiftRow(entry: unknown): BackendStuckShiftRow | null {
+  if (typeof entry !== 'object' || entry === null) return null;
+  const e = entry as Record<string, unknown>;
+  if (typeof e['shift_id'] !== 'string') return null;
+  if (typeof e['cashier_display_name'] !== 'string') return null;
+  if (typeof e['terminal_label'] !== 'string') return null;
+  if (typeof e['opened_at'] !== 'string') return null;
+  if (typeof e['duration_minutes'] !== 'number') return null;
+  return {
+    shift_id: e['shift_id'],
+    cashier_display_name: e['cashier_display_name'],
+    terminal_label: e['terminal_label'],
+    opened_at: e['opened_at'],
+    duration_minutes: e['duration_minutes'],
+  };
+}
+
 function interpretStuckShiftsResponse(parsed: unknown): BackendStuckShiftsResponse {
   if (typeof parsed !== 'object' || parsed === null) return { kind: 'refused' };
   const v = parsed as Record<string, unknown>;
@@ -485,21 +478,9 @@ function interpretStuckShiftsResponse(parsed: unknown): BackendStuckShiftsRespon
   if (!Array.isArray(v['shifts'])) return { kind: 'refused' };
   const shifts: BackendStuckShiftRow[] = [];
   for (const entry of v['shifts']) {
-    if (typeof entry !== 'object' || entry === null) return { kind: 'refused' };
-    const e = entry as Record<string, unknown>;
-    if (typeof e['shift_id'] !== 'string') return { kind: 'refused' };
-    if (typeof e['cashier_display_name'] !== 'string') return { kind: 'refused' };
-    if (typeof e['terminal_label'] !== 'string') return { kind: 'refused' };
-    if (typeof e['opened_at'] !== 'string') return { kind: 'refused' };
-    if (typeof e['duration_minutes'] !== 'number') return { kind: 'refused' };
-    // Allowlist: only the five documented fields cross this layer (FR-032).
-    shifts.push({
-      shift_id: e['shift_id'],
-      cashier_display_name: e['cashier_display_name'],
-      terminal_label: e['terminal_label'],
-      opened_at: e['opened_at'],
-      duration_minutes: e['duration_minutes'],
-    });
+    const row = parseStuckShiftRow(entry);
+    if (row === null) return { kind: 'refused' };
+    shifts.push(row);
   }
   return { kind: 'ok', shifts };
 }

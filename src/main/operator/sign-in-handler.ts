@@ -324,77 +324,14 @@ export class CashierSignInHandler {
       cashier_clerk_user_id: req.cashier_clerk_user_id,
     };
 
-    // 2. Fetch sealed pin row
-    type SelectStmt = { get(...p: unknown[]): CashierPinDbRow | undefined };
-    const sealedRow = (
-      this.deps.db.prepare(
-        `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id,
-                pin_hash, pin_salt, failed_attempt_count, lockout_until
-           FROM cashier_pin_records
-          WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND cashier_clerk_user_id = ?`,
-      ) as SelectStmt
-    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, scope.cashier_clerk_user_id);
-
-    if (sealedRow === undefined) {
-      this.logRefusal('invalid_input', 'not_found');
-      return REFUSE_INVALID;
-    }
-
-    // 3. PR-4 scope guard — defense-in-depth: queried row must match the scope
-    if (!rowMatchesScope(sealedRow, scope)) {
-      this.logRefusal('invalid_input', 'scope_mismatch');
-      return REFUSE_INVALID;
-    }
-
-    // 4. Unseal pin material (DPAPI on Windows; throws if ciphertext is tampered/corrupt).
-    // Catch any decrypt error and return a generic refusal — raw storage errors must not
-    // propagate out of the sign-in path (PR-1: no ciphertext, hash, salt, or cashier id
-    // in logs or returned values).
-    let pinRow: PinRow;
-    try {
-      const unsealed = unsealPinMaterial(
-        { pin_hash: sealedRow.pin_hash, pin_salt: sealedRow.pin_salt },
-        this.deps.safeStorage,
-      );
-      pinRow = {
-        pin_hash: unsealed.pin_hash,
-        pin_salt: unsealed.pin_salt,
-        failed_attempt_count: sealedRow.failed_attempt_count,
-        lockout_until: sealedRow.lockout_until,
-      };
-    } catch {
-      this.logRefusal('invalid_input', 'pin_unseal');
-      return REFUSE_INVALID;
-    }
+    // 2–4. Fetch sealed pin row, PR-4 scope guard, unseal pin material.
+    const loaded = this.loadPinRow(scope);
+    if ('kind' in loaded) return loaded;
+    const pinRow = loaded;
 
     // 5. Verify PIN — verifyPinWithWindow handles PR-3 expired-lockout reset
-    const result = await verifyPinWithWindow(req.pin, pinRow);
-
-    if (result.kind === 'locked_out') {
-      // Active lockout — do NOT write to DB (lockout_until is already set)
-      this.logRefusal('rate_limited', 'locked_out');
-      return REFUSE_RATE_LIMITED;
-    }
-
-    if (result.kind === 'no_match') {
-      // Persist only the safe lockout-state columns (PR-1: no PIN in DB write)
-      this.persistLockoutState(scope, result.newFailedCount, result.newLockoutUntil);
-      if (result.newLockoutUntil !== null) {
-        // T081: lockout was triggered by this failed attempt.
-        this.logInfo('operator.cashier_sign_in.lockout_triggered');
-      }
-      this.logRefusal('invalid_input', 'wrong_pin');
-      return REFUSE_INVALID;
-    }
-
-    // result.kind === 'match' — reset failure counter in DB
-    const hadActiveLockout =
-      pinRow.lockout_until !== null && new Date(pinRow.lockout_until) <= new Date();
-    this.persistLockoutState(scope, 0, null);
-    if (hadActiveLockout) {
-      // T081: expired lockout was released on successful sign-in.
-      this.logInfo('operator.cashier_sign_in.lockout_released');
-    }
+    const pinRefusal = await this.verifyPinAndUpdateLockout(req.pin, pinRow, scope);
+    if (pinRefusal !== null) return pinRefusal;
 
     // 6. Check for an existing active session for this cashier (T069b)
     const activeCheck = await this.deps.checkActiveSession.checkActiveSession(
@@ -433,51 +370,7 @@ export class CashierSignInHandler {
     });
 
     // T091 — check for an undismissed forced-close shift on this cashier.
-    // Only `closed_at` crosses the bridge; no financial totals, manager
-    // reason, annotation, shift_id, or IDs (FR-013 minimum-disclosure).
-    interface ShiftRow {
-      closed_at: string;
-    }
-    type ShiftSelectStmt = { get(...p: unknown[]): ShiftRow | undefined };
-    const shiftRow = (
-      this.deps.db.prepare(
-        `SELECT closed_at FROM shifts
-         WHERE lifecycle_state = 'closed_forced'
-           AND tenant_id = ?
-           AND branch_id = ?
-           AND originating_terminal_id = ?
-           AND opening_operator_id = ?
-          ORDER BY closed_at DESC
-          LIMIT 1`,
-      ) as ShiftSelectStmt
-    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, req.cashier_clerk_user_id);
-
-    let forced_close_notice: { closed_at: string } | undefined;
-    if (shiftRow !== undefined && typeof shiftRow.closed_at === 'string') {
-      if (this.deps.secretStore !== undefined) {
-        const dismissKey = makeShiftDismissKey(
-          scope.tenant_id,
-          scope.branch_id,
-          scope.terminal_id,
-          req.cashier_clerk_user_id,
-        );
-        const dismissRaw = await this.deps.secretStore.get(dismissKey);
-        if (dismissRaw !== null) {
-          try {
-            const parsed = JSON.parse(dismissRaw) as { dismissed_closed_at?: unknown };
-            if (parsed.dismissed_closed_at !== shiftRow.closed_at) {
-              forced_close_notice = { closed_at: shiftRow.closed_at };
-            }
-          } catch {
-            forced_close_notice = { closed_at: shiftRow.closed_at };
-          }
-        } else {
-          forced_close_notice = { closed_at: shiftRow.closed_at };
-        }
-      } else {
-        forced_close_notice = { closed_at: shiftRow.closed_at };
-      }
-    }
+    const forced_close_notice = await this.resolveForcedCloseNotice(scope);
 
     this.logSuccess('signed_in');
     if (forced_close_notice !== undefined) {
@@ -496,6 +389,139 @@ export class CashierSignInHandler {
       },
       ...(forced_close_notice !== undefined ? { forced_close_notice } : {}),
     } satisfies SignInSuccessResponse;
+  }
+
+  /**
+   * Steps 2–4 of cashier sign-in: fetch the sealed pin row, enforce the PR-4
+   * scope guard (defense-in-depth: queried row must match the scope), and
+   * unseal the pin material (DPAPI on Windows; throws if ciphertext is
+   * tampered/corrupt). Any decrypt error returns a generic refusal — raw
+   * storage errors must not propagate out of the sign-in path (PR-1: no
+   * ciphertext, hash, salt, or cashier id in logs or returned values).
+   */
+  private loadPinRow(scope: PinScope): PinRow | OperatorRefusal {
+    type SelectStmt = { get(...p: unknown[]): CashierPinDbRow | undefined };
+    const sealedRow = (
+      this.deps.db.prepare(
+        `SELECT tenant_id, branch_id, terminal_id, cashier_clerk_user_id,
+                pin_hash, pin_salt, failed_attempt_count, lockout_until
+           FROM cashier_pin_records
+          WHERE tenant_id = ? AND branch_id = ? AND terminal_id = ? AND cashier_clerk_user_id = ?`,
+      ) as SelectStmt
+    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, scope.cashier_clerk_user_id);
+
+    if (sealedRow === undefined) {
+      this.logRefusal('invalid_input', 'not_found');
+      return REFUSE_INVALID;
+    }
+
+    if (!rowMatchesScope(sealedRow, scope)) {
+      this.logRefusal('invalid_input', 'scope_mismatch');
+      return REFUSE_INVALID;
+    }
+
+    try {
+      const unsealed = unsealPinMaterial(
+        { pin_hash: sealedRow.pin_hash, pin_salt: sealedRow.pin_salt },
+        this.deps.safeStorage,
+      );
+      return {
+        pin_hash: unsealed.pin_hash,
+        pin_salt: unsealed.pin_salt,
+        failed_attempt_count: sealedRow.failed_attempt_count,
+        lockout_until: sealedRow.lockout_until,
+      };
+    } catch {
+      this.logRefusal('invalid_input', 'pin_unseal');
+      return REFUSE_INVALID;
+    }
+  }
+
+  /**
+   * Step 5 of cashier sign-in: verify the PIN and persist lockout-state
+   * transitions (PR-1: only the safe lockout-state columns are written —
+   * never the PIN). Returns the refusal to surface, or null on a match.
+   */
+  private async verifyPinAndUpdateLockout(
+    pin: string,
+    pinRow: PinRow,
+    scope: PinScope,
+  ): Promise<OperatorRefusal | null> {
+    const result = await verifyPinWithWindow(pin, pinRow);
+
+    if (result.kind === 'locked_out') {
+      // Active lockout — do NOT write to DB (lockout_until is already set)
+      this.logRefusal('rate_limited', 'locked_out');
+      return REFUSE_RATE_LIMITED;
+    }
+
+    if (result.kind === 'no_match') {
+      this.persistLockoutState(scope, result.newFailedCount, result.newLockoutUntil);
+      if (result.newLockoutUntil !== null) {
+        // T081: lockout was triggered by this failed attempt.
+        this.logInfo('operator.cashier_sign_in.lockout_triggered');
+      }
+      this.logRefusal('invalid_input', 'wrong_pin');
+      return REFUSE_INVALID;
+    }
+
+    // result.kind === 'match' — reset failure counter in DB
+    const hadActiveLockout =
+      pinRow.lockout_until !== null && new Date(pinRow.lockout_until) <= new Date();
+    this.persistLockoutState(scope, 0, null);
+    if (hadActiveLockout) {
+      // T081: expired lockout was released on successful sign-in.
+      this.logInfo('operator.cashier_sign_in.lockout_released');
+    }
+    return null;
+  }
+
+  /**
+   * T091 — resolve whether an undismissed forced-close notice should surface
+   * for this cashier. Only `closed_at` crosses the bridge; no financial
+   * totals, manager reason, annotation, shift_id, or IDs (FR-013
+   * minimum-disclosure).
+   */
+  private async resolveForcedCloseNotice(
+    scope: PinScope,
+  ): Promise<{ closed_at: string } | undefined> {
+    interface ShiftRow {
+      closed_at: string;
+    }
+    type ShiftSelectStmt = { get(...p: unknown[]): ShiftRow | undefined };
+    const shiftRow = (
+      this.deps.db.prepare(
+        `SELECT closed_at FROM shifts
+         WHERE lifecycle_state = 'closed_forced'
+           AND tenant_id = ?
+           AND branch_id = ?
+           AND originating_terminal_id = ?
+           AND opening_operator_id = ?
+          ORDER BY closed_at DESC
+          LIMIT 1`,
+      ) as ShiftSelectStmt
+    ).get(scope.tenant_id, scope.branch_id, scope.terminal_id, scope.cashier_clerk_user_id);
+
+    if (shiftRow === undefined || typeof shiftRow.closed_at !== 'string') return undefined;
+    const notice = { closed_at: shiftRow.closed_at };
+
+    if (this.deps.secretStore === undefined) return notice;
+
+    const dismissKey = makeShiftDismissKey(
+      scope.tenant_id,
+      scope.branch_id,
+      scope.terminal_id,
+      scope.cashier_clerk_user_id,
+    );
+    const dismissRaw = await this.deps.secretStore.get(dismissKey);
+    if (dismissRaw === null) return notice;
+
+    try {
+      const parsed = JSON.parse(dismissRaw) as { dismissed_closed_at?: unknown };
+      return parsed.dismissed_closed_at !== shiftRow.closed_at ? notice : undefined;
+    } catch {
+      return notice;
+    }
   }
 
   /**
