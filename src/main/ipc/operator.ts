@@ -79,6 +79,17 @@ function refuseInvalid(): OperatorRefusal {
   return { kind: 'refused', category: 'invalid_input' };
 }
 
+/**
+ * True when every named field on the untrusted payload is a non-empty
+ * string. Shared shape check for the PIN / takeover / shift-admin requests.
+ */
+function hasNonEmptyStringFields(v: Record<string, unknown>, fields: string[]): boolean {
+  return fields.every((f) => {
+    const raw = v[f];
+    return typeof raw === 'string' && raw.length > 0;
+  });
+}
+
 function asManagerAdminRequest(value: unknown): ManagerAdminSignInRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
@@ -95,18 +106,13 @@ function asCashierRequest(value: unknown): CashierSignInRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
   if (v['kind'] !== 'cashier') return null;
-  if (
-    typeof v['cashier_clerk_user_id'] !== 'string' ||
-    v['cashier_clerk_user_id'].length === 0 ||
-    typeof v['pin'] !== 'string' ||
-    v['pin'].length === 0 ||
-    typeof v['display_name'] !== 'string'
-  )
-    return null;
+  if (!hasNonEmptyStringFields(v, ['cashier_clerk_user_id', 'pin'])) return null;
+  // display_name is required but may be empty.
+  if (typeof v['display_name'] !== 'string') return null;
   return {
     kind: 'cashier',
-    cashier_clerk_user_id: v['cashier_clerk_user_id'],
-    pin: v['pin'],
+    cashier_clerk_user_id: v['cashier_clerk_user_id'] as string,
+    pin: v['pin'] as string,
     display_name: v['display_name'],
   };
 }
@@ -134,10 +140,8 @@ function asEmitAuditEventRequest(value: unknown): EmitAuditEventRequest | null {
 function asConfirmTakeoverRequest(value: unknown): ConfirmTakeoverRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (typeof v['pending_takeover_id'] !== 'string' || v['pending_takeover_id'].length === 0) {
-    return null;
-  }
-  return { pending_takeover_id: v['pending_takeover_id'] };
+  if (!hasNonEmptyStringFields(v, ['pending_takeover_id'])) return null;
+  return { pending_takeover_id: v['pending_takeover_id'] as string };
 }
 
 function asCancelTakeoverRequest(value: unknown): CancelTakeoverRequest | null {
@@ -150,93 +154,66 @@ function asCancelTakeoverRequest(value: unknown): CancelTakeoverRequest | null {
 function asResetCashierPinRequest(value: unknown): ResetCashierPinRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (
-    typeof v['event_id'] !== 'string' ||
-    v['event_id'].length === 0 ||
-    typeof v['target_cashier_id'] !== 'string' ||
-    v['target_cashier_id'].length === 0 ||
-    typeof v['new_pin'] !== 'string' ||
-    v['new_pin'].length === 0
-  )
-    return null;
+  if (!hasNonEmptyStringFields(v, ['event_id', 'target_cashier_id', 'new_pin'])) return null;
   return {
-    event_id: v['event_id'],
-    target_cashier_id: v['target_cashier_id'],
-    new_pin: v['new_pin'],
+    event_id: v['event_id'] as string,
+    target_cashier_id: v['target_cashier_id'] as string,
+    new_pin: v['new_pin'] as string,
   };
 }
 
 function asProvisionCashierPinRequest(value: unknown): ProvisionCashierPinRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (
-    typeof v['event_id'] !== 'string' ||
-    v['event_id'].length === 0 ||
-    typeof v['target_user_id'] !== 'string' ||
-    v['target_user_id'].length === 0 ||
-    typeof v['initial_pin'] !== 'string' ||
-    v['initial_pin'].length === 0
-  )
-    return null;
+  if (!hasNonEmptyStringFields(v, ['event_id', 'target_user_id', 'initial_pin'])) return null;
   return {
-    event_id: v['event_id'],
-    target_user_id: v['target_user_id'],
-    initial_pin: v['initial_pin'],
+    event_id: v['event_id'] as string,
+    target_user_id: v['target_user_id'] as string,
+    initial_pin: v['initial_pin'] as string,
   };
 }
 
 function asUnlockCashierRequest(value: unknown): UnlockCashierRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
-  if (
-    typeof v['event_id'] !== 'string' ||
-    v['event_id'].length === 0 ||
-    typeof v['target_cashier_id'] !== 'string' ||
-    v['target_cashier_id'].length === 0
-  )
-    return null;
+  if (!hasNonEmptyStringFields(v, ['event_id', 'target_cashier_id'])) return null;
   return {
-    event_id: v['event_id'],
-    target_cashier_id: v['target_cashier_id'],
+    event_id: v['event_id'] as string,
+    target_cashier_id: v['target_cashier_id'] as string,
   };
 }
 
 function asForceCloseShiftRequest(value: unknown): ForceCloseShiftRequest | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
+  if (!hasNonEmptyStringFields(v, ['event_id', 'shift_id'])) return null;
   if (
-    typeof v['event_id'] !== 'string' ||
-    v['event_id'].length === 0 ||
-    typeof v['shift_id'] !== 'string' ||
-    v['shift_id'].length === 0 ||
     typeof v['reason'] !== 'string' ||
     !(FORCED_CLOSE_REASONS as readonly string[]).includes(v['reason'])
   )
     return null;
   const req: ForceCloseShiftRequest = {
-    event_id: v['event_id'],
-    shift_id: v['shift_id'],
+    event_id: v['event_id'] as string,
+    shift_id: v['shift_id'] as string,
     reason: v['reason'] as ForceCloseShiftRequest['reason'],
   };
   if (typeof v['annotation'] === 'string') req.annotation = v['annotation'];
   return req;
 }
 
-export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
-  const {
-    signInHandler,
-    cashierSignInHandler,
-    signOutHandler,
-    rosterHandler,
-    sessionManager,
-    inactivityMonitor,
-    auditEmitter,
-    pairingStore,
-    takeoverHandler,
-    pinManagementHandler,
-    forcedCloseHandler,
-    stuckShiftsHandler,
-  } = deps;
+// ---------------------------------------------------------------------------
+// Per-concern registration blocks. Split from one monolithic register
+// function; registration order is not significant (distinct channels).
+// ---------------------------------------------------------------------------
+
+/** Trusted enrichment: terminal_id comes from pairing state ('' when unpaired). */
+async function resolveOriginatingTerminalId(pairingStore: PairingStore): Promise<string> {
+  const pairingStatus = await pairingStore.getStatus();
+  return pairingStatus.kind === 'paired' ? pairingStatus.terminal_id : '';
+}
+
+function registerSignInHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { signInHandler, cashierSignInHandler } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.SIGN_IN,
@@ -262,6 +239,11 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       }
     },
   );
+}
+
+function registerSessionHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { signOutHandler, sessionManager, inactivityMonitor, cashierSignInHandler, pairingStore } =
+    deps;
 
   ipcMain.handle(OPERATOR_IPC_CHANNELS.SIGN_OUT, async (): Promise<SignOutResponse> => {
     return signOutHandler.signOut();
@@ -277,6 +259,27 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
   ipcMain.handle(OPERATOR_IPC_CHANNELS.REPORT_ACTIVITY, (): void => {
     inactivityMonitor.reportActivity();
   });
+
+  ipcMain.handle(OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE, async (): Promise<void> => {
+    try {
+      const session = sessionManager.getCurrent();
+      if (session === null) return;
+      const pairingStatus = await pairingStore.getStatus();
+      if (pairingStatus.kind !== 'paired') return;
+      await cashierSignInHandler.dismissForcedCloseNotice(
+        pairingStatus.tenant_id,
+        pairingStatus.branch_id,
+        pairingStatus.terminal_id,
+        session.operator_id,
+      );
+    } catch {
+      return;
+    }
+  });
+}
+
+function registerAuditHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { sessionManager, pairingStore, auditEmitter } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT,
@@ -295,10 +298,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
         return refuseInvalid();
       }
 
-      // Trusted enrichment: terminal_id comes from pairing state.
-      const pairingStatus = await pairingStore.getStatus();
-      const originating_terminal_id =
-        pairingStatus.kind === 'paired' ? pairingStatus.terminal_id : '';
+      const originating_terminal_id = await resolveOriginatingTerminalId(pairingStore);
 
       try {
         auditEmitter.emit({
@@ -321,20 +321,10 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       }
     },
   );
+}
 
-  ipcMain.handle(
-    OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
-    async (): Promise<ListBranchRosterResponse> => {
-      // Pre-sign-in roster: sourced from pairing state, not an operator session.
-      // The /sign-in route fetches the roster before any operator has signed in;
-      // the paired terminal_id provides the branch scope.
-      const pairingStatus = await pairingStore.getStatus();
-      if (pairingStatus.kind !== 'paired') {
-        return refuseInvalid();
-      }
-      return rosterHandler.listRoster(pairingStatus.branch_id);
-    },
-  );
+function registerAuditSmokeHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { sessionManager, pairingStore, auditEmitter } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.EMIT_AUDIT_EVENT_SMOKE,
@@ -354,9 +344,7 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
         return { kind: 'refused', category: 'role_mismatch' };
       }
 
-      const pairingStatus = await pairingStore.getStatus();
-      const originating_terminal_id =
-        pairingStatus.kind === 'paired' ? pairingStatus.terminal_id : '';
+      const originating_terminal_id = await resolveOriginatingTerminalId(pairingStore);
 
       const event_id = randomUUID();
       try {
@@ -379,6 +367,28 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       }
     },
   );
+}
+
+function registerRosterHandler(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { pairingStore, rosterHandler } = deps;
+
+  ipcMain.handle(
+    OPERATOR_IPC_CHANNELS.LIST_BRANCH_ROSTER,
+    async (): Promise<ListBranchRosterResponse> => {
+      // Pre-sign-in roster: sourced from pairing state, not an operator session.
+      // The /sign-in route fetches the roster before any operator has signed in;
+      // the paired terminal_id provides the branch scope.
+      const pairingStatus = await pairingStore.getStatus();
+      if (pairingStatus.kind !== 'paired') {
+        return refuseInvalid();
+      }
+      return rosterHandler.listRoster(pairingStatus.branch_id);
+    },
+  );
+}
+
+function registerTakeoverHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { takeoverHandler } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.TAKEOVER_CONFIRM,
@@ -404,6 +414,10 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       return takeoverHandler.cancelTakeover(req);
     },
   );
+}
+
+function registerPinManagementHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { pinManagementHandler } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.RESET_CASHIER_PIN,
@@ -452,6 +466,10 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       }
     },
   );
+}
+
+function registerShiftAdminHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  const { forcedCloseHandler, stuckShiftsHandler } = deps;
 
   ipcMain.handle(
     OPERATOR_IPC_CHANNELS.FORCE_CLOSE_SHIFT,
@@ -479,21 +497,15 @@ export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandler
       }
     },
   );
+}
 
-  ipcMain.handle(OPERATOR_IPC_CHANNELS.DISMISS_SHIFT_CLOSED_NOTICE, async (): Promise<void> => {
-    try {
-      const session = sessionManager.getCurrent();
-      if (session === null) return;
-      const pairingStatus = await pairingStore.getStatus();
-      if (pairingStatus.kind !== 'paired') return;
-      await cashierSignInHandler.dismissForcedCloseNotice(
-        pairingStatus.tenant_id,
-        pairingStatus.branch_id,
-        pairingStatus.terminal_id,
-        session.operator_id,
-      );
-    } catch {
-      return;
-    }
-  });
+export function registerOperatorHandlers(ipcMain: IpcMain, deps: OperatorHandlerDeps): void {
+  registerSignInHandler(ipcMain, deps);
+  registerSessionHandlers(ipcMain, deps);
+  registerAuditHandlers(ipcMain, deps);
+  registerAuditSmokeHandler(ipcMain, deps);
+  registerRosterHandler(ipcMain, deps);
+  registerTakeoverHandlers(ipcMain, deps);
+  registerPinManagementHandlers(ipcMain, deps);
+  registerShiftAdminHandlers(ipcMain, deps);
 }

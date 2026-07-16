@@ -812,31 +812,31 @@ app
 
     const paymentsIdempotency = createIdempotencyHelper({ outbox: paymentsOutboxRepo });
 
-    // Adapter — payments emitter writes its own `PaymentAuditEvent` shape;
-    // we forward to 004's `audit_events` table via the shared
-    // `AuditEventsStore.insertIgnore`. F-006: 004's `ActionCategory` union
-    // does not yet include the 7 payment categories at the TypeScript
-    // level (migration 0017 extends the SQL CHECK only). The cast lives
-    // at this single seam and is bounded by the migration's CHECK; a
-    // future PR by 004's owner should extend `AUDIT_ACTION_CATEGORIES`.
+    // Adapter — the payments and sales emitters write their own event shapes;
+    // both forward to 004's `audit_events` table via the shared
+    // `AuditEventsStore.insertIgnore` with the same field mapping. F-006:
+    // 004's `ActionCategory` union does not yet include the 7 payment
+    // categories at the TypeScript level (migration 0017 extends the SQL
+    // CHECK only). The cast lives at this single seam and is bounded by the
+    // migration's CHECK; a future PR by 004's owner should extend
+    // `AUDIT_ACTION_CATEGORIES`.
+    const forwardAuditEvent = (evt: PaymentAuditEvent | SaleAuditEvent): void => {
+      auditEventsStore.insertIgnore({
+        event_id: randomUUID(),
+        tenant_id: evt.tenant_id,
+        branch_id: evt.branch_id,
+        originating_terminal_id: evt.originating_terminal_id,
+        acting_operator_id: evt.attribution_operator_id,
+        session_id: evt.session_id,
+        shift_id: null,
+        action_category: evt.action_category as unknown as Audit004ActionCategory,
+        created_at: evt.created_at,
+        approving_supervisor_id: null,
+        payload: evt.payload,
+      });
+    };
     const paymentAuditEmitter = createPaymentAuditEmitter({
-      sink: {
-        write: (evt: PaymentAuditEvent): void => {
-          auditEventsStore.insertIgnore({
-            event_id: randomUUID(),
-            tenant_id: evt.tenant_id,
-            branch_id: evt.branch_id,
-            originating_terminal_id: evt.originating_terminal_id,
-            acting_operator_id: evt.attribution_operator_id,
-            session_id: evt.session_id,
-            shift_id: null,
-            action_category: evt.action_category as unknown as Audit004ActionCategory,
-            created_at: evt.created_at,
-            approving_supervisor_id: null,
-            payload: evt.payload,
-          });
-        },
-      },
+      sink: { write: forwardAuditEvent },
     });
 
     const paymentsSessionAdapter = (): OperatorSessionForPayments | null =>
@@ -851,74 +851,48 @@ app
     const paymentsClock = (): Date => new Date();
     const paymentsUuid = (): string => randomUUID();
 
-    const paymentsStart = createPaymentsStartHandler({
+    // Shared dependency bundles for the payments/tender handler factories —
+    // each factory destructures only the keys it declares.
+    const paymentsReadDeps = {
       getCurrentSession: paymentsSessionAdapter,
       attemptsRepo: paymentsAttemptsRepo,
-      paymentAttemptFsm,
+      linesRepo: paymentsLinesRepo,
+    };
+    const paymentsWriteDeps = {
+      ...paymentsReadDeps,
       idempotency: paymentsIdempotency,
       auditEmitter: paymentAuditEmitter,
-      uuid: paymentsUuid,
       clock: paymentsClock,
+    };
+
+    const paymentsStart = createPaymentsStartHandler({
+      ...paymentsWriteDeps,
+      paymentAttemptFsm,
+      uuid: paymentsUuid,
     });
     const paymentsConfirm = createPaymentsConfirmHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
+      ...paymentsWriteDeps,
       paymentAttemptFsm,
-      idempotency: paymentsIdempotency,
-      auditEmitter: paymentAuditEmitter,
-      clock: paymentsClock,
     });
     const paymentsCancel = createPaymentsCancelHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
+      ...paymentsWriteDeps,
       paymentAttemptFsm,
-      idempotency: paymentsIdempotency,
-      auditEmitter: paymentAuditEmitter,
-      clock: paymentsClock,
     });
-    const paymentsSubscribe = createPaymentsSubscribeHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
-    });
-    const paymentsRead = createPaymentsReadHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
-    });
+    const paymentsSubscribe = createPaymentsSubscribeHandler(paymentsReadDeps);
+    const paymentsRead = createPaymentsReadHandler(paymentsReadDeps);
     const tenderApply = createTenderApplyHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
+      ...paymentsWriteDeps,
       tenderLineFsm,
-      idempotency: paymentsIdempotency,
-      auditEmitter: paymentAuditEmitter,
       uuid: paymentsUuid,
-      clock: paymentsClock,
     });
     const tenderReverse = createTenderReverseHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
+      ...paymentsWriteDeps,
       tenderLineFsm,
-      idempotency: paymentsIdempotency,
-      auditEmitter: paymentAuditEmitter,
-      clock: paymentsClock,
     });
-    const tenderRead = createTenderReadHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
-      linesRepo: paymentsLinesRepo,
-    });
+    const tenderRead = createTenderReadHandler(paymentsReadDeps);
     const paymentsForceFail = createPaymentsForceFailHandler({
-      getCurrentSession: paymentsSessionAdapter,
-      attemptsRepo: paymentsAttemptsRepo,
+      ...paymentsWriteDeps,
       paymentAttemptFsm,
-      idempotency: paymentsIdempotency,
-      auditEmitter: paymentAuditEmitter,
-      clock: paymentsClock,
     });
 
     registerPaymentsHandlers(guardedIpcMain, {
@@ -1084,23 +1058,7 @@ app
       // of which are pairing-specific; the paired branch reuses it for the
       // finalize-listener wiring.
       const saleAuditEmitter = createSaleAuditEmitter({
-        sink: {
-          write: (evt: SaleAuditEvent): void => {
-            auditEventsStore.insertIgnore({
-              event_id: randomUUID(),
-              tenant_id: evt.tenant_id,
-              branch_id: evt.branch_id,
-              originating_terminal_id: evt.originating_terminal_id,
-              acting_operator_id: evt.attribution_operator_id,
-              session_id: evt.session_id,
-              shift_id: null,
-              action_category: evt.action_category,
-              created_at: evt.created_at,
-              approving_supervisor_id: null,
-              payload: evt.payload,
-            });
-          },
-        },
+        sink: { write: forwardAuditEvent },
       });
       // 008 §A3 print transports.
       //
@@ -1392,35 +1350,25 @@ app
     app.exit(1);
   });
 
+/** Runs a stored stop callback (if set), logging failures rather than throwing. */
+function runStopper(stop: (() => void) | null, what: string): null {
+  if (stop !== null) {
+    try {
+      stop();
+    } catch (err) {
+      console.error(`[pos-pulse] failed to stop ${what}:`, err);
+    }
+  }
+  return null;
+}
+
 function closeDbHandle(): void {
-  // 008 (T094c) — stop the AD-2 finalize worker BEFORE closing the DB so a
-  // mid-flight tick cannot run against a closed handle.
-  if (finalizeListenerStop !== null) {
-    try {
-      finalizeListenerStop();
-    } catch (err) {
-      console.error('[pos-pulse] failed to stop finalize listener:', err);
-    }
-    finalizeListenerStop = null;
-  }
-  // 010 read-down driver + 011 sale-sync interval — stop BEFORE closing the DB so
-  // a mid-flight background tick cannot run against a closed handle.
-  if (readDownDriverStop !== null) {
-    try {
-      readDownDriverStop();
-    } catch (err) {
-      console.error('[pos-pulse] failed to stop read-down driver:', err);
-    }
-    readDownDriverStop = null;
-  }
-  if (saleSyncIntervalStop !== null) {
-    try {
-      saleSyncIntervalStop();
-    } catch (err) {
-      console.error('[pos-pulse] failed to stop sale-sync interval:', err);
-    }
-    saleSyncIntervalStop = null;
-  }
+  // 008 (T094c) — stop the AD-2 finalize worker, 010 read-down driver, and
+  // 011 sale-sync interval BEFORE closing the DB so a mid-flight background
+  // tick cannot run against a closed handle.
+  finalizeListenerStop = runStopper(finalizeListenerStop, 'finalize listener');
+  readDownDriverStop = runStopper(readDownDriverStop, 'read-down driver');
+  saleSyncIntervalStop = runStopper(saleSyncIntervalStop, 'sale-sync interval');
   if (dbHandle !== null) {
     try {
       dbHandle.close();

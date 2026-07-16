@@ -175,6 +175,43 @@ function refuse(reason: CartRefusalReason): { kind: 'refused'; reason: CartRefus
   return { kind: 'refused', reason };
 }
 
+type StoredCart = NonNullable<ReturnType<CartStore['getCart']>>;
+
+/** Successful shared-gate payload for a mutating cart handler. */
+interface MutableCartContext {
+  session: OperatorSessionRecord;
+  store: CartStore;
+  cart: StoredCart;
+}
+
+/**
+ * FR-016 quantity ops: increment/decrement default to delta 1; decrement
+ * past zero and absolute zero delegate to line removal. Invalid deltas keep
+ * the generic `stale_version` refusal posture.
+ */
+function computeUpdatedQuantity(
+  req: CartLinesUpdateRequest,
+  currentQuantity: number,
+):
+  | { kind: 'ok'; newQuantity: number }
+  | { kind: 'remove' }
+  | { kind: 'refused'; reason: CartRefusalReason } {
+  if (req.op === 'increment') {
+    const delta = req.delta ?? 1;
+    if (!Number.isInteger(delta) || delta <= 0) return refuse('stale_version');
+    return { kind: 'ok', newQuantity: currentQuantity + delta };
+  }
+  if (req.op === 'decrement') {
+    const delta = req.delta ?? 1;
+    if (!Number.isInteger(delta) || delta <= 0) return refuse('stale_version');
+    const newQuantity = currentQuantity - delta;
+    return newQuantity <= 0 ? { kind: 'remove' } : { kind: 'ok', newQuantity };
+  }
+  const abs = req.absolute;
+  if (abs === undefined || !Number.isInteger(abs) || abs < 0) return refuse('stale_version');
+  return abs === 0 ? { kind: 'remove' } : { kind: 'ok', newQuantity: abs };
+}
+
 export class CartBridgeHandlers {
   /** S1 fallback — used only when deps.cartStore is omitted. */
   private readonly inMemCarts: Map<string, InMemoryCartRecord>;
@@ -267,54 +304,13 @@ export class CartBridgeHandlers {
   // ── cart.lines.add ──────────────────────────────────────────────────
 
   async linesAdd(req: CartLinesAddRequest): Promise<CartLinesAddResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      // S1-compat path: gate then refuse not_implemented.
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-      requireMutable: true,
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { store } = gated;
 
     // Idempotency: replay-safe.
     const replay = store.getOutboxRow(req.idempotency_key);
-    if (replay !== undefined) {
-      if (replay.action_kind !== 'cart.line.add' && replay.action_kind !== 'cart.line.merge') {
-        return refuse('idempotency_payload_mismatch');
-      }
-      const replayLineId = replay.line_id;
-      if (replayLineId === null) return refuse('idempotency_payload_mismatch');
-      const replayLine = store.getLine(req.cart_id, replayLineId);
-      if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
-      return {
-        kind: 'ok',
-        line_id: replayLineId,
-        merged: replay.action_kind === 'cart.line.merge',
-        version: replayLine.version,
-        display_name: replayLine.display_name,
-        unit_price_minor: replayLine.unit_price_minor,
-        line_subtotal_minor: replayLine.line_subtotal_minor,
-        quantity: replayLine.quantity,
-      };
-    }
+    if (replay !== undefined) return this.replayLinesAdd(req, store, replay);
 
     if (!Number.isInteger(req.quantity) || req.quantity <= 0) {
       return refuse('not_implemented'); // generic-refusal posture; bridge contract has no 'invalid_quantity' reason
@@ -332,53 +328,94 @@ export class CartBridgeHandlers {
     const existing = store.findActiveLineByItemRef(req.cart_id, req.item_ref);
     const now = this.clock().toISOString();
 
-    if (existing !== undefined) {
-      const newQuantity = existing.quantity + req.quantity;
-      let newSubtotal: number;
-      try {
-        newSubtotal = computeLineSubtotal(newQuantity, existing.unit_price_minor);
-      } catch (err) {
-        if (err instanceof LineSubtotalError) return refuse('not_implemented');
-        throw err;
-      }
-      store.mergeLineAndOutbox(
-        {
-          line_id: existing.line_id,
-          quantity: newQuantity,
-          line_subtotal_minor: newSubtotal,
-          last_action_id: req.idempotency_key,
-          updated_at: now,
-        },
-        {
-          action_id: req.idempotency_key,
-          cart_id: req.cart_id,
-          line_id: existing.line_id,
-          action_kind: 'cart.line.merge',
-          acting_operator_id: session.operator_id,
-          attribution_operator_id: null,
-          operator_session_id: session.id,
-          payload_json: JSON.stringify(
-            scrubPayloadForOutbox({
-              item_ref: req.item_ref,
-              quantity_added: req.quantity,
-            }),
-          ),
-          applied_at: now,
-        },
-      );
-      return {
-        kind: 'ok',
-        line_id: existing.line_id,
-        merged: true,
-        version: existing.version + 1,
-        display_name: existing.display_name,
-        unit_price_minor: existing.unit_price_minor,
-        line_subtotal_minor: newSubtotal,
-        quantity: newQuantity,
-      };
-    }
+    if (existing !== undefined) return this.mergeLineOnAdd(req, gated, existing, now);
+    return this.insertNewLine(req, gated, resolved, now);
+  }
 
-    // New-line path.
+  /** Replay path for linesAdd — returns the previously-applied result. */
+  private replayLinesAdd(
+    req: CartLinesAddRequest,
+    store: CartStore,
+    replay: NonNullable<ReturnType<CartStore['getOutboxRow']>>,
+  ): CartLinesAddResponse {
+    if (replay.action_kind !== 'cart.line.add' && replay.action_kind !== 'cart.line.merge') {
+      return refuse('idempotency_payload_mismatch');
+    }
+    const replayLineId = replay.line_id;
+    if (replayLineId === null) return refuse('idempotency_payload_mismatch');
+    const replayLine = store.getLine(req.cart_id, replayLineId);
+    if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
+    return {
+      kind: 'ok',
+      line_id: replayLineId,
+      merged: replay.action_kind === 'cart.line.merge',
+      version: replayLine.version,
+      display_name: replayLine.display_name,
+      unit_price_minor: replayLine.unit_price_minor,
+      line_subtotal_minor: replayLine.line_subtotal_minor,
+      quantity: replayLine.quantity,
+    };
+  }
+
+  /** Q4 merge path — add quantity onto the existing active line for the item_ref. */
+  private mergeLineOnAdd(
+    req: CartLinesAddRequest,
+    ctx: MutableCartContext,
+    existing: NonNullable<ReturnType<CartStore['findActiveLineByItemRef']>>,
+    now: string,
+  ): CartLinesAddResponse {
+    const newQuantity = existing.quantity + req.quantity;
+    let newSubtotal: number;
+    try {
+      newSubtotal = computeLineSubtotal(newQuantity, existing.unit_price_minor);
+    } catch (err) {
+      if (err instanceof LineSubtotalError) return refuse('not_implemented');
+      throw err;
+    }
+    ctx.store.mergeLineAndOutbox(
+      {
+        line_id: existing.line_id,
+        quantity: newQuantity,
+        line_subtotal_minor: newSubtotal,
+        last_action_id: req.idempotency_key,
+        updated_at: now,
+      },
+      {
+        action_id: req.idempotency_key,
+        cart_id: req.cart_id,
+        line_id: existing.line_id,
+        action_kind: 'cart.line.merge',
+        acting_operator_id: ctx.session.operator_id,
+        attribution_operator_id: null,
+        operator_session_id: ctx.session.id,
+        payload_json: JSON.stringify(
+          scrubPayloadForOutbox({
+            item_ref: req.item_ref,
+            quantity_added: req.quantity,
+          }),
+        ),
+        applied_at: now,
+      },
+    );
+    return {
+      kind: 'ok',
+      line_id: existing.line_id,
+      merged: true,
+      version: existing.version + 1,
+      display_name: existing.display_name,
+      unit_price_minor: existing.unit_price_minor,
+      line_subtotal_minor: newSubtotal,
+      quantity: newQuantity,
+    };
+  }
+
+  /** New-line path for linesAdd. */
+  private insertNewLine(
+    req: CartLinesAddRequest,
+    ctx: MutableCartContext,
+    resolved: { display_name: string; unit_price_minor: number },
+    now: string,
+  ): CartLinesAddResponse {
     let subtotal: number;
     try {
       subtotal = computeLineSubtotal(req.quantity, resolved.unit_price_minor);
@@ -388,7 +425,7 @@ export class CartBridgeHandlers {
       throw err;
     }
     const line_id = randomUUID();
-    store.insertLineAndOutbox(
+    ctx.store.insertLineAndOutbox(
       {
         line_id,
         cart_id: req.cart_id,
@@ -406,9 +443,9 @@ export class CartBridgeHandlers {
         cart_id: req.cart_id,
         line_id,
         action_kind: 'cart.line.add',
-        acting_operator_id: session.operator_id,
+        acting_operator_id: ctx.session.operator_id,
         attribution_operator_id: null,
-        operator_session_id: session.id,
+        operator_session_id: ctx.session.id,
         payload_json: JSON.stringify(
           scrubPayloadForOutbox({ item_ref: req.item_ref, quantity: req.quantity }),
         ),
@@ -431,31 +468,9 @@ export class CartBridgeHandlers {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async linesUpdate(req: CartLinesUpdateRequest): Promise<CartLinesUpdateResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-      requireMutable: true,
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { session, store } = gated;
 
     // Idempotency replay (mirrors linesAdd).
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -465,8 +480,6 @@ export class CartBridgeHandlers {
       }
       const replayLine = store.getLine(req.cart_id, req.line_id);
       if (replayLine === undefined) return refuse('idempotency_payload_mismatch');
-      if (replay.action_kind === 'cart.line.remove')
-        return { kind: 'ok', version: replayLine.version };
       return { kind: 'ok', version: replayLine.version };
     }
 
@@ -475,47 +488,18 @@ export class CartBridgeHandlers {
     if (line.removed_at !== null) return refuse('wrong_owner');
     if (line.version !== req.version) return refuse('stale_version');
 
-    let newQty: number;
-    if (req.op === 'increment') {
-      const delta = req.delta ?? 1;
-      if (!Number.isInteger(delta) || delta <= 0) return refuse('stale_version');
-      newQty = line.quantity + delta;
-    } else if (req.op === 'decrement') {
-      const delta = req.delta ?? 1;
-      if (!Number.isInteger(delta) || delta <= 0) return refuse('stale_version');
-      newQty = line.quantity - delta;
-      if (newQty <= 0) {
-        // set(0) / decrement-past-zero → delegate to remove (FR-016).
-        const r = this.removeLineInternal(
-          req.cart_id,
-          req.line_id,
-          req.version,
-          req.idempotency_key,
-          session,
-        );
-        if (r.kind !== 'ok') return r;
-        return { kind: 'ok', version: line.version + 1 };
-      }
-    } else {
-      const abs = req.absolute;
-      if (abs === undefined || !Number.isInteger(abs) || abs < 0) return refuse('stale_version');
-      if (abs === 0) {
-        const r = this.removeLineInternal(
-          req.cart_id,
-          req.line_id,
-          req.version,
-          req.idempotency_key,
-          session,
-        );
-        if (r.kind !== 'ok') return r;
-        return { kind: 'ok', version: line.version + 1 };
-      }
-      newQty = abs;
+    const qty = computeUpdatedQuantity(req, line.quantity);
+    if (qty.kind === 'refused') return qty;
+    if (qty.kind === 'remove') {
+      // set(0) / decrement-past-zero → delegate to remove (FR-016).
+      const r = this.removeLineInternal(req, session);
+      if (r.kind !== 'ok') return r;
+      return { kind: 'ok', version: line.version + 1 };
     }
 
     let newSubtotal: number;
     try {
-      newSubtotal = computeLineSubtotal(newQty, line.unit_price_minor);
+      newSubtotal = computeLineSubtotal(qty.newQuantity, line.unit_price_minor);
     } catch (err) {
       if (err instanceof LineSubtotalError) return refuse('stale_version');
       /* v8 ignore next */
@@ -526,7 +510,7 @@ export class CartBridgeHandlers {
     store.updateLineQuantityAndOutbox(
       {
         line_id: req.line_id,
-        quantity: newQty,
+        quantity: qty.newQuantity,
         line_subtotal_minor: newSubtotal,
         last_action_id: req.idempotency_key,
         updated_at: now,
@@ -539,7 +523,9 @@ export class CartBridgeHandlers {
         acting_operator_id: session.operator_id,
         attribution_operator_id: null,
         operator_session_id: session.id,
-        payload_json: JSON.stringify(scrubPayloadForOutbox({ op: req.op, new_quantity: newQty })),
+        payload_json: JSON.stringify(
+          scrubPayloadForOutbox({ op: req.op, new_quantity: qty.newQuantity }),
+        ),
         applied_at: now,
       },
     );
@@ -550,52 +536,19 @@ export class CartBridgeHandlers {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async linesRemove(req: CartLinesRemoveRequest): Promise<CartLinesRemoveResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-      requireMutable: true,
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
-
-    return this.removeLineInternal(
-      req.cart_id,
-      req.line_id,
-      req.version,
-      req.idempotency_key,
-      session,
-    );
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    return this.removeLineInternal(req, gated.session);
   }
 
   private removeLineInternal(
-    cart_id: string,
-    line_id: string,
-    version: number,
-    idempotency_key: string,
+    keys: { cart_id: string; line_id: string; version: number; idempotency_key: string },
     session: OperatorSessionRecord,
   ): { kind: 'ok' } | { kind: 'refused'; reason: CartRefusalReason } {
     const store = this.deps.cartStore;
     if (store === undefined) return refuse('not_implemented');
 
-    const replay = store.getOutboxRow(idempotency_key);
+    const replay = store.getOutboxRow(keys.idempotency_key);
     if (replay !== undefined) {
       if (replay.action_kind !== 'cart.line.remove') {
         return refuse('idempotency_payload_mismatch');
@@ -603,25 +556,25 @@ export class CartBridgeHandlers {
       return { kind: 'ok' };
     }
 
-    const line = store.getLine(cart_id, line_id);
+    const line = store.getLine(keys.cart_id, keys.line_id);
     if (line === undefined) return refuse('wrong_owner');
     if (line.removed_at !== null) {
       // Replay-equivalent: line already removed; idempotent no-op.
       return { kind: 'ok' };
     }
-    if (line.version !== version) return refuse('stale_version');
+    if (line.version !== keys.version) return refuse('stale_version');
 
     const now = this.clock().toISOString();
     store.softRemoveLineAndOutbox(
       {
-        line_id,
+        line_id: keys.line_id,
         removed_at: now,
-        last_action_id: idempotency_key,
+        last_action_id: keys.idempotency_key,
       },
       {
-        action_id: idempotency_key,
-        cart_id,
-        line_id,
+        action_id: keys.idempotency_key,
+        cart_id: keys.cart_id,
+        line_id: keys.line_id,
         action_kind: 'cart.line.remove',
         acting_operator_id: session.operator_id,
         attribution_operator_id: null,
@@ -637,31 +590,9 @@ export class CartBridgeHandlers {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async linesSetNote(req: CartLinesSetNoteRequest): Promise<CartLinesSetNoteResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-      requireMutable: true,
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { session, store } = gated;
 
     // Idempotency replay.
     const replay = store.getOutboxRow(req.idempotency_key);
@@ -721,31 +652,9 @@ export class CartBridgeHandlers {
   async discountPlaceholdersAdd(
     req: CartDiscountPlaceholdersAddRequest,
   ): Promise<CartDiscountPlaceholdersAddResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-      requireMutable: true,
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { session, store, cart } = gated;
 
     // Threshold: percent_NN where NN > 10 is above-threshold.
     const pctMatch = /^percent_(\d+)$/.exec(req.placeholder_kind);
@@ -785,21 +694,23 @@ export class CartBridgeHandlers {
       created_at: now,
     };
 
+    const outboxRow = {
+      action_id: req.idempotency_key,
+      cart_id: req.cart_id,
+      line_id: req.line_id,
+      action_kind: 'cart.discount_placeholder.add' as const,
+      acting_operator_id: session.operator_id,
+      attribution_operator_id: null as string | null,
+      operator_session_id: session.id,
+      payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
+      applied_at: now,
+    };
+
     if (isAboveThreshold && attributionOperatorId !== null) {
       const event_id = randomUUID();
       store.insertDiscountPlaceholderAndOutbox(
         placeholder,
-        {
-          action_id: req.idempotency_key,
-          cart_id: req.cart_id,
-          line_id: req.line_id,
-          action_kind: 'cart.discount_placeholder.add',
-          acting_operator_id: session.operator_id,
-          attribution_operator_id: attributionOperatorId,
-          operator_session_id: session.id,
-          payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
-          applied_at: now,
-        },
+        { ...outboxRow, attribution_operator_id: attributionOperatorId },
         () => {
           this.deps.auditEmitter?.emit({
             event_id,
@@ -817,17 +728,7 @@ export class CartBridgeHandlers {
         },
       );
     } else {
-      store.insertDiscountPlaceholderAndOutbox(placeholder, {
-        action_id: req.idempotency_key,
-        cart_id: req.cart_id,
-        line_id: req.line_id,
-        action_kind: 'cart.discount_placeholder.add',
-        acting_operator_id: session.operator_id,
-        attribution_operator_id: null,
-        operator_session_id: session.id,
-        payload_json: JSON.stringify({ cart_id: req.cart_id, cart_line_id: req.line_id }),
-        applied_at: now,
-      });
+      store.insertDiscountPlaceholderAndOutbox(placeholder, outboxRow);
     }
 
     return {
@@ -841,31 +742,9 @@ export class CartBridgeHandlers {
   async discountPlaceholdersRemove(
     req: CartDiscountPlaceholdersRemoveRequest,
   ): Promise<CartDiscountPlaceholdersRemoveResponse> {
-    const session = this.deps.getCurrentSession();
-    if (session === null) return refuse('no_session');
-
-    if (this.deps.cartStore === undefined) {
-      const guard = this.gateMutatingInMem(req.cart_id);
-      return guard ?? refuse('not_implemented');
-    }
-
-    const store = this.deps.cartStore;
-    const cart = store.getCart(req.cart_id);
-    if (cart === undefined) return refuse('wrong_owner');
-
-    const gate = requireOperatorSession({
-      session,
-      allowedRoles: ['cashier', 'manager', 'admin'],
-      cart: {
-        operator_session_id: cart.operator_session_id,
-        tenant_id: cart.tenant_id,
-        branch_id: cart.branch_id,
-        state: cart.state as CartState,
-      },
-      requireMutable: true,
-    });
-    if (gate.kind !== 'ok') return refuse(gate.reason);
-    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+    const gated = this.resolveMutableCart(req.cart_id);
+    if (gated.kind !== 'ok') return gated;
+    const { session, store } = gated;
 
     const replay = store.getOutboxRow(req.idempotency_key);
     if (replay !== undefined) {
@@ -1264,16 +1143,27 @@ export class CartBridgeHandlers {
     return null;
   }
 
-  /* v8 ignore next 22 — scaffolded in S2, superseded by inline guards in each handler */
-  /** S2 DB-aware gate for handlers that aren't yet implemented (discount/void/handoff). */
-  private gateMutatingS2(cart_id: string): { kind: 'refused'; reason: CartRefusalReason } | null {
-    if (this.deps.cartStore === undefined) {
-      return this.gateMutatingInMem(cart_id);
-    }
+  /**
+   * Shared trust-boundary preamble for the mutating line/discount handlers
+   * (AD-1): live session → S1 in-mem fallback gate → cart lookup →
+   * role/ownership/mutability gate → handing_off freeze.
+   */
+  private resolveMutableCart(
+    cart_id: string,
+  ): { kind: 'refused'; reason: CartRefusalReason } | ({ kind: 'ok' } & MutableCartContext) {
     const session = this.deps.getCurrentSession();
     if (session === null) return refuse('no_session');
-    const cart = this.deps.cartStore.getCart(cart_id);
+
+    if (this.deps.cartStore === undefined) {
+      // S1-compat path: gate then refuse not_implemented.
+      const guard = this.gateMutatingInMem(cart_id);
+      return guard ?? refuse('not_implemented');
+    }
+
+    const store = this.deps.cartStore;
+    const cart = store.getCart(cart_id);
     if (cart === undefined) return refuse('wrong_owner');
+
     const gate = requireOperatorSession({
       session,
       allowedRoles: ['cashier', 'manager', 'admin'],
@@ -1286,6 +1176,8 @@ export class CartBridgeHandlers {
       requireMutable: true,
     });
     if (gate.kind !== 'ok') return refuse(gate.reason);
-    return null;
+    if ((cart.state as CartState) === CartState.handing_off) return refuse('frozen');
+
+    return { kind: 'ok', session, store, cart };
   }
 }
